@@ -95,12 +95,12 @@ it('reloads encrypted explicit Z.ai hosts and preserves native C policy across l
       expect(call.body.thinking).toEqual(enabled ? { type: 'enabled', clear_thinking: false } : { type: 'disabled' }); expect(call.body.reasoning_effort).toBe(enabled ? 'low' : undefined);
       expect(call.body.max_completion_tokens).toBeUndefined(); expect(call.body.max_tokens).toBeGreaterThan(0); expect(call.body.store).toBeUndefined();
       expect(call.body.tool_stream).toBe(call.body.tools?.length ? true : undefined);
-      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(true);
+      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(false);
       for (const message of call.body.messages) expect(message.role).not.toBe('developer');
       for (const name of ['x-api-key', 'api-key', 'anthropic-version', 'cf-aig-authorization']) expect(call.headers[name]).toBeUndefined();
     }
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const secret of [...keys, headerSecret]) expect(await readFile(path.join(dataDir, file), 'utf8')).not.toContain(secret);
   } finally {
-    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(resolve)); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 30_000);
