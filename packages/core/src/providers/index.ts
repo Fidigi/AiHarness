@@ -5271,21 +5271,23 @@ class OpenCodeNativeClassifierProvider extends NativeClassifierProvider {
 
 /** Zen Google REST owns native levels/auth/terminal authority;generic Gemini remains unchanged. */
 class OpenCodeGoogleProvider extends AiProvider {
+  constructor(config: ProviderConfig, private readonly ownsReplay = false) { super(config); }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override getModelApi(): string { return 'google-generative-ai'; }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> { return this.execute(messages, options); }
   override async streamChat(messages: Message[], chunk: StreamChunkCallback, complete?: (response?: ChatResponse) => void, error?: (error: Error) => void, options?: ChatOptions): Promise<void> {
-    try { const response = await this.execute(messages, options, chunk); complete?.(response); }
+    try { const response = await this.execute(messages, options, chunk); if (this.ownsReplay) await complete?.(response); else complete?.(response); }
     catch (failure) { if (error) error(failure instanceof Error ? failure : new Error('Invalid OpenCode response.')); else throw failure; }
   }
   private async execute(messages: Message[], options?: ChatOptions, chunk?: StreamChunkCallback): Promise<ChatResponse> {
-    const model = options?.model || this.config.model!, active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); }; const invalid: () => never = () => { throw new Error('Invalid OpenCode response.'); };
+    const model = options?.model || this.config.model!, native = this.ownsReplay && opencodeProfile(model).api === 'google-generative-ai', owner = native ? { provider: this.getProviderType(), api: 'google-generative-ai', model } : undefined;
+    const active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); }; const invalid: () => never = () => { throw new Error('Invalid OpenCode response.'); };
     const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
-    active(); const body = opencodeGoogleBody(model, toolImageMessages(messages), options), response = await this.request(`${this.config.baseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: opencodeHeaders(this.config, options, 'google-generative-ai'), body: serializeProviderBody(body), signal: options?.signal });
+    active(); const body = opencodeGoogleBody(model, toolImageMessages(messages), options, owner?.provider), response = await this.request(`${this.config.baseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: opencodeHeaders(this.config, options, 'google-generative-ai'), body: serializeProviderBody(body), signal: options?.signal });
     if (!response.ok) rejectProviderResponse(response, `OpenCode API error (${response.status}).`);
     if (!response.headers.get('content-type')?.toLowerCase().includes('text/event-stream') || !response.body) { void response.body?.cancel().catch(() => undefined); invalid(); }
     const reader = response.body!.getReader(), decoder = new TextDecoder('utf-8', { fatal: true }); let buffer = '', transportBytes = 0, outputBytes = 0, events = 0, content = '', reasoning = '', finished = false, length = false, rawUsage: unknown;
-    const tools: ToolCall[] = [];
+    const tools: ToolCall[] = [], blocks: MessageContentBlock[] = [];
     const add = (value: string) => { outputBytes += Buffer.byteLength(value); if (outputBytes > MAX_PROVIDER_STREAM_OUTPUT_BYTES) throw new Error('OpenCode response exceeded the output limit.'); };
     const consume = async (frame: string) => {
       if (Buffer.byteLength(frame) > MAX_PROVIDER_STREAM_EVENT_BYTES || ++events > MAX_PROVIDER_STREAM_EVENTS) throw new Error('OpenCode response exceeded the output limit.');
@@ -5299,13 +5301,19 @@ class OpenCodeGoogleProvider extends AiProvider {
         if (candidate.content !== undefined && !record(candidate.content)) invalid(); const parts = record(candidate.content) ? candidate.content.parts : undefined;
         if (parts !== undefined && !Array.isArray(parts)) invalid();
         for (const part of (parts ?? []) as unknown[]) {
-          active(); if (!record(part)) invalid(); if (part.thoughtSignature !== undefined && part.thoughtSignature !== '') throw new Error('Unsupported OpenCode reasoning replay.');
+          active(); if (!record(part)) invalid();
+          if (native) { if (part.thoughtSignature !== undefined && typeof part.thoughtSignature !== 'string' || part.thought !== undefined && typeof part.thought !== 'boolean') invalid(); }
+          else if (part.thoughtSignature !== undefined && part.thoughtSignature !== '') throw new Error('Unsupported OpenCode reasoning replay.');
+          const opaque = native && typeof part.thoughtSignature === 'string' && part.thoughtSignature ? part.thoughtSignature : undefined; if (opaque) add(opaque);
           if (part.text !== undefined) { if (typeof part.text !== 'string') invalid(); add(part.text);
+            if (native) appendGoogleResponseBlocks(blocks, googleResponseBlocks([{ text: part.text, thought: part.thought === true, thoughtSignature: opaque }]));
             if (part.thought === true) { reasoning += part.text; await chunk?.('', { type: 'reasoning_delta', data: { content: part.text } }); }
             else { content += part.text; await chunk?.(part.text, { type: 'text_delta', data: part.text }); } active();
-          } else if (part.functionCall !== undefined) { const call = part.functionCall; if (!record(call) || typeof call.name !== 'string' || !call.name || call.name.length > 256 || !record(call.args) || tools.length >= MAX_PROVIDER_STREAM_TOOL_CALLS) invalid();
-            add(JSON.stringify(call.args)); const id = typeof call.id === 'string' && call.id.length > 0 && call.id.length <= 256 ? call.id : `google-tool-${tools.length}`; tools.push({ id, name: call.name, input: call.args });
-          } else invalid();
+          }
+          if (part.functionCall !== undefined && (native || part.text === undefined)) { const call = part.functionCall; if (!record(call) || typeof call.name !== 'string' || !call.name || call.name.length > 256 || !record(call.args) || tools.length >= MAX_PROVIDER_STREAM_TOOL_CALLS) invalid();
+            add(JSON.stringify(call.args)); const id = typeof call.id === 'string' && call.id.length > 0 && call.id.length <= 256 ? call.id : `google-tool-${tools.length}`, tool = { id, name: call.name, input: call.args, ...(opaque ? { thoughtSignature: opaque } : {}) }; tools.push(tool);
+            if (native) appendGoogleResponseBlocks(blocks, [{ type: 'tool_call', ...tool }]);
+          } else if (part.text === undefined) invalid();
         }
         if (terminal !== undefined) { finished = true; length = terminal === 'MAX_TOKENS'; }
       }
@@ -5317,7 +5325,7 @@ class OpenCodeGoogleProvider extends AiProvider {
       }
       buffer += decoder.decode(); if (buffer.trim()) await consume(buffer); active(); if (!finished) invalid();
       for (const tool of tools) { active(); await chunk?.('', { type: 'tool_call', data: tool }); active(); }
-      return { content, ...(reasoning ? { reasoning } : {}), ...(tools.length ? { toolCalls: tools } : {}), model, provider: this.getProviderType(), api: 'google-generative-ai', usage: opencodeUsage(rawUsage, model), ...(length ? { stopReason: 'length' as const } : {}) };
+      return { content, ...(reasoning ? { reasoning } : {}), ...(tools.length ? { toolCalls: tools } : {}), ...(native ? { blocks } : {}), model, provider: owner?.provider ?? this.getProviderType(), api: 'google-generative-ai', usage: opencodeUsage(rawUsage, model), ...(length ? { stopReason: 'length' as const } : {}) };
     } finally { try { await reader.cancel(); } catch { /* Preserve the owned failure,including abort. */ } reader.releaseLock(); }
   }
 }
@@ -5356,7 +5364,7 @@ export class OpenCodeProvider extends AiProvider {
   private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
     if (!this.validateConfig()) throw new Error('OpenCode API key is required.'); const profile = opencodeProfile(model);
     for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode image input.'); }
-    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config) : new OpenCodeResponsesProvider(config, options, native);
+    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config) : new OpenCodeResponsesProvider(config, options, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model }; if (opencodeProfile(model).api === 'anthropic-messages' && !nativeOpenCodeReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
@@ -5364,13 +5372,13 @@ export class OpenCodeProvider extends AiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; const result = await delegate.chat(messages, owned);
-      if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); return nativeOpenCodeReplay.has(this) && (api === 'anthropic-messages' || api === 'openai-responses') ? result : { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); return nativeOpenCodeReplay.has(this) && api !== 'openai-completions' ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw opencodeFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); };
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; active();
-      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeReplay.has(this) && (api === 'anthropic-messages' || api === 'openai-responses')) return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeReplay.has(this) && api !== 'openai-completions') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
     } catch (error) { const failure = opencodeFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }

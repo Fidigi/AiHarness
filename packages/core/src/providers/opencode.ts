@@ -4,6 +4,8 @@ import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel, type PublishedT
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
 import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 import { ProviderContextOverflowError } from './context-overflow.js';
+import { googleReplayParts } from './google-replay.js';
+import { projectAssistantReplay } from './message-replay.js';
 
 export interface OpenCodeProfile {
   readonly id: string; readonly name: string; readonly api: 'anthropic-messages' | 'google-generative-ai' | 'openai-completions' | 'openai-responses';
@@ -253,17 +255,24 @@ export function opencodeFailure(error: unknown, signal?: AbortSignal): Error {
   return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'OpenCode chat request failed.');
 }
 
-/** REST Google payload only;not Pi context estimation,media resize or opaque thought-signature replay. */
-export function opencodeGoogleBody(model: string, messages: Message[], options?: ChatOptions): Record<string, unknown> {
-  const profile = opencodeProfile(model), level = opencodeThinking(model, options), maximum = explicitLimit(profile, options), system = [options?.systemPrompt, ...messages.filter(message => message.role === 'system').map(message => message.content)].filter(Boolean).join('\n\n');
+/** REST Google payload; optional private owner is supplied only by the admitted G delegate. */
+export function opencodeGoogleBody(model: string, messages: Message[], options?: ChatOptions, nativeOwner?: string): Record<string, unknown> {
+  const profile = opencodeProfile(model), level = opencodeThinking(model, options), maximum = explicitLimit(profile, options), native = nativeOwner !== undefined;
+  if (native) messages = messages.filter(message => message.role !== 'assistant' || !message.metadata?.outputError).map(message => projectAssistantReplay(message, nativeOwner, model, 'google-generative-ai'));
+  const system = [options?.systemPrompt, ...messages.filter(message => message.role === 'system').map(message => message.content)].filter(Boolean).join('\n\n'), ids = new Map<string, string>();
   const contents = messages.filter(message => message.role !== 'system').map(message => {
-    if (message.role === 'tool') return { role: 'user', parts: [{ functionResponse: { name: message.name || 'tool', response: { content: message.content, isError: Boolean(message.isError) } } }] };
+    if (message.role === 'tool') return { role: 'user', parts: [{ functionResponse: { name: message.name || 'tool', response: native ? { [message.isError ? 'error' : 'output']: message.content } : { content: message.content, isError: Boolean(message.isError) }, ...(native ? { id: ids.get(message.toolCallId!) ?? message.toolCallId } : {}) } }] };
+    if (native && message.role === 'assistant' && !message.blocks?.some(block => block.type === 'image')) {
+      const parts = googleReplayParts(message), foreign = message.provider !== nativeOwner || message.api !== 'google-generative-ai' || message.model !== model;
+      if (foreign) for (const part of parts) if (record(part.functionCall) && typeof part.functionCall.id === 'string') { const original = part.functionCall.id, normalized = original.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64); ids.set(original, normalized); part.functionCall.id = normalized; }
+      return { role: 'model', parts };
+    }
     const parts: Record<string, unknown>[] = []; if (message.content) parts.push({ text: message.content });
     for (const block of message.blocks ?? []) if (block.type === 'image') { const image = block.url?.match(/^data:(image\/[^;,]+);base64,([A-Za-z0-9+/=]+)$/u); if (!image) throw new Error('Invalid OpenCode image input.'); parts.push({ inlineData: { mimeType: image[1], data: image[2] } }); }
     for (const call of message.toolCalls ?? []) parts.push({ functionCall: { name: call.name, args: call.input } });
     return { role: message.role === 'assistant' ? 'model' : 'user', parts };
-  });
-  return { contents, ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}), generationConfig: { ...(options?.temperature === undefined ? {} : { temperature: options.temperature }), ...(maximum === undefined ? {} : { maxOutputTokens: maximum }), thinkingConfig: { includeThoughts: true, thinkingLevel: String(profile.thinkingLevelMap[level] ?? level).toUpperCase() } }, ...(options?.tools?.length ? { tools: [{ functionDeclarations: options.tools.map(tool => ({ name: tool.name, description: tool.description, parametersJsonSchema: tool.parameters })) }] } : {}) };
+  }).filter(content => !native || content.role !== 'model' || content.parts.length);
+  return { contents, ...(system ? { systemInstruction: { parts: [{ text: system }], ...(native ? { role: 'user' } : {}) } } : {}), generationConfig: { ...(options?.temperature === undefined ? {} : { temperature: options.temperature }), ...(maximum === undefined ? {} : { maxOutputTokens: maximum }), thinkingConfig: { includeThoughts: true, thinkingLevel: String(profile.thinkingLevelMap[level] ?? level).toUpperCase() } }, ...(options?.tools?.length ? { tools: [{ functionDeclarations: options.tools.map(tool => ({ name: tool.name, description: tool.description, parametersJsonSchema: tool.parameters })) }] } : {}) };
 }
 function opencodeGoogleUsage(value: Record<string, unknown>, profile: OpenCodeProfile): ChatResponse['usage'] {
   const token = (v: unknown): number | undefined => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : undefined;

@@ -21,6 +21,8 @@ import type { Message } from '../types/index.js';
 
 const continuation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/opencode-continuation-reference-ar.json', import.meta.url), 'utf8'));
 const continuationModels: string[] = continuation.rows.map((row: { model: string }) => row.model);
+const googleContinuation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/opencode-continuation-reference-google.json', import.meta.url), 'utf8'));
+const googleContinuationModels: string[] = googleContinuation.rows.map((row: { model: string }) => row.model);
 const a = 'claude-haiku-5-5', g = 'gemini-3.1-pro', c = 'glm-5.3', r = 'gpt-6-luna';
 const models = [a, g, c, r];
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
@@ -46,6 +48,144 @@ async function fixture(override?: (api: Api, body: Record<string, any>, response
 }
 
 describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
+  it.each(googleContinuationModels)('compares independently bound whole private Zen Google bodies for %s', async model => {
+    const reference = googleContinuation.rows.find((row: { model: string }) => row.model === model);
+    let reply = reference.seedResponseFrames;
+    const { calls, baseUrl } = await fixture((_api, _body, response) => sse(response, reply));
+    for (const facade of ['chat', 'stream']) {
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', model, apiKey: 'disposable-zen-google-private', baseUrl });
+      const user: Message = { id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) };
+      const options: providers.ChatOptions = { ...reference.coreOptions, model, systemPrompt: 'owned OpenCode Zen Google reference system', tools: googleContinuation.tools };
+      const invoke = async (messages: Message[], selected: providers.ChatOptions = options) => { if (facade === 'chat') return provider.chat(messages, selected); let complete: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, () => {}, value => { complete = value; }, error => { throw error; }, selected); expect(complete).toBeDefined(); return complete!;
+      };
+      reply = reference.seedResponseFrames;
+      const first = await invoke([user]); expect(first).toMatchObject({ provider: 'opencode', api: reference.api, model, content: 'left!right?', reasoning: 'firstsecond' });
+      expect(first.blocks).toEqual(reference.expectedBlocks); expect(first.toolCalls).toEqual(reference.expectedToolCalls); expect(calls.at(-1)!.body).toEqual(reference.expectedInitialBody);
+      for (const projection of reference.cases) {
+        const source: Message = { id: 'a', role: 'assistant', content: first.content, timestamp: new Date(0), provider: projection.source.provider, api: projection.source.api, model: projection.source.model, blocks: structuredClone(first.blocks), toolCalls: structuredClone(first.toolCalls) };
+        if (projection.case === 'expurgated' || projection.case === 'malformed-signatures') {
+          const expurgated = projection.case === 'expurgated';
+          for (const block of source.blocks!) {
+            if (block.type === 'text') { if (expurgated) delete block.textSignature; else block.textSignature = 'invalid-signature'; }
+            if (block.type === 'reasoning') { if (expurgated) delete block.thinkingSignature; else block.thinkingSignature = 'invalid-signature'; }
+            if (block.type === 'tool_call') { if (expurgated) delete block.thoughtSignature; else block.thoughtSignature = 'invalid-signature'; }
+          }
+          for (const call of source.toolCalls!) { if (expurgated) delete call.thoughtSignature; else call.thoughtSignature = 'invalid-signature'; }
+        }
+        const failed = projection.case.startsWith('failed-'); if (failed) source.metadata = { outputError: 'Failed Zen Google producer' };
+        const results: Message[] = failed ? [] : [{ id: 'r', role: 'tool', name: 'echo', toolCallId: first.toolCalls![0].id, content: projection.case === 'empty-result' ? '' : 'result', isError: projection.case === 'tool-error', timestamp: new Date(0) }];
+        const history = [user, source, ...results, { ...user, id: 'next', content: 'continue' }], before = structuredClone(history); reply = projection.responseFrames;
+        expect((await invoke(history)).content).toBe('ok'); expect(calls.at(-1)!.body).toEqual(projection.expectedBody); expect(history).toEqual(before);
+      }
+      const withSystem: Message[] = [{ id: 'sys', role: 'system', content: 'Leading system', timestamp: new Date(0) }, user], systemBefore = structuredClone(withSystem);
+      await invoke(withSystem, { ...options, systemPrompt: undefined }); expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, systemInstruction: { parts: [{ text: 'Leading system' }], role: 'user' } });
+      await invoke(withSystem); expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, systemInstruction: { parts: [{ text: 'owned OpenCode Zen Google reference system\n\nLeading system' }], role: 'user' } }); expect(withSystem).toEqual(systemBefore);
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-zen-google-replay-')), credential: string = googleContinuation.signatures.thinking, redactor = new CredentialRedactor([credential, 'disposable-zen-google-private']);
+      const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'Zen Google private replay' }), registry = new ExtensionRegistry();
+      const finalBlocks = [{ type: 'text', text: 'ok' }], finalItem = { role: 'model', parts: [{ text: 'ok' }] }, retained = structuredClone(reference.cases[0].expectedBody.contents.slice(0, -1));
+      // Credential redaction invalidates this base64 carrier; raw retention is not replay authority.
+      expect(retained[1].parts[1].thoughtSignature).toBe(credential); delete retained[1].parts[1].thoughtSignature;
+      let effects = 0;
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; reply = reference.cases[0].responseFrames; return { content: 'result' }; } }));
+      reply = reference.seedResponseFrames;
+      try {
+        await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'opencode', tools: googleContinuation.tools,
+          toolContext: { sessionManager: manager, notify: () => {} }, redactText,
+          streamTurn: messages => facade === 'chat' ? provider.chat(messages, options) : streamProviderTurn({ provider, providerName: 'opencode', model, messages,
+            tools: googleContinuation.tools, systemPrompt: options.systemPrompt, extensionRegistry: registry, maxRetries: 0, maxTokens: options.maxTokens, thinking: options.thinking, cacheRetention: 'none', redactText, redactJson,
+            createTextRedactor: () => redactor.createStream() }) });
+        expect(effects).toBe(1); expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, contents: retained });
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8'), history = session.messages.filter(item => item.role === 'assistant');
+        expect(history.map(item => item.blocks)).toEqual([redactJson(reference.expectedBlocks), finalBlocks]); expect(bytes).not.toContain(credential); expect(bytes).not.toContain('disposable-zen-google-private'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+        expect(loaded.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toMatch(/Signature/); expect(JSON.stringify(complete.session)).toContain('[REDACTED]'); expect(JSON.stringify(complete.session)).toContain(googleContinuation.signatures.tool); expect(JSON.stringify(complete.session)).not.toContain(credential);
+        await invoke(loaded.messages); expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, contents: [...retained, finalItem] }); expect(await readFile(file, 'utf8')).toBe(bytes);
+        await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+        const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
+        expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, contents: [retained[0], { role: 'model', parts: [retained[1].parts[3], { text: 'edited answer' }] }, retained[2], finalItem] });
+        const raw = (await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(raw).toHaveLength(history.length); expect(raw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
+        expect((await restarted.getActiveBranchEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks)); expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical); expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|b3BhcXVl/); expect(canonical).toEqual(beforeSummary);
+        const kept = clone.messages.filter(item => item.role === 'assistant').at(-1)!, sourceBytes = await readFile(file, 'utf8'); await restarted.applyCompaction(clone.id, 'PUBLIC_ZEN_GOOGLE_COMPACTED_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }); expect(await compactedManager.loadFromStore(clone.id)).toBeTruthy(); const compacted = getCompactionModelMessages(compactedManager, clone.id);
+        expect(compacted.map(item => ({ role: item.role, content: item.content }))).toEqual([{ role: 'system', content: '[Context Summary] PUBLIC_ZEN_GOOGLE_COMPACTED_PREFIX' }, { role: 'assistant', content: 'ok' }]); expect(compacted.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual([finalBlocks]);
+        const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+        const retainedRaw = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(retainedRaw).toHaveLength(history.length); expect(retainedRaw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
+        expect((await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
+        await invoke(compacted); expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, systemInstruction: { parts: [{ text: 'owned OpenCode Zen Google reference system\n\n[Context Summary] PUBLIC_ZEN_GOOGLE_COMPACTED_PREFIX' }], role: 'user' }, contents: [finalItem] });
+        expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+    }
+    expect(calls).toHaveLength(38);
+    for (const call of calls) { expect(call.url).toBe('/owned%2Fzen/v1/models/' + encodeURIComponent(model) + ':streamGenerateContent?alt=sse'); expect(call.headers['x-goog-api-key']).toBe('disposable-zen-google-private'); expect(call.headers.authorization).toBeUndefined(); expect(call.headers['x-opencode-session']).toBeUndefined(); }
+  });
+
+  it('pins private Google body identity and prices, awaits publication and refuses generic or derived grants', async () => {
+    const reference = googleContinuation.rows[0], foreignReference = googleContinuation.rows[1], model: string = reference.model;
+    let reply = reference.seedResponseFrames;
+    const { calls, baseUrl } = await fixture((api, _body, response) => {
+      if (api === 'C') { response.end(JSON.stringify({ choices: [{ message: { content: 'Ready' }, finish_reason: 'stop' }] })); return; }
+      if (response.req.url?.includes(':generateContent')) response.end(JSON.stringify({ candidates: [{ content: { role: 'model', parts: reply.flatMap((frame: Record<string, any>) => frame.candidates[0].content.parts) }, finishReason: 'STOP' }] }));
+      else sse(response, reply);
+    });
+    const user: Message = { ...input, content: 'probe' }, base = { ...reference.coreOptions, systemPrompt: 'owned OpenCode Zen Google reference system', sessionId: 'zen-google-bound', tools: googleContinuation.tools };
+    for (const facade of ['chat', 'stream']) {
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-google-private', model, baseUrl }); provider.getProviderType = () => 'forged-zen-google-provider'; provider.getModelApi = () => 'forged-zen-google-api';
+      let reads = 0, captured: providers.ChatResponse | undefined; const options = { ...base, get model() { return ++reads === 1 ? model : c; } }; reply = reference.seedResponseFrames;
+      if (facade === 'chat') captured = await provider.chat([user], options); else await provider.streamChat([user], async text => { if (text) { await Promise.resolve(); provider.setConfiguredModel(c); } }, value => { captured = value; }, error => { throw error; }, options);
+      expect(calls.at(-1)!.body).toEqual(reference.expectedInitialBody); expect(captured).toMatchObject({ provider: 'opencode', api: reference.api, model, blocks: reference.expectedBlocks });
+      const rates = providers.OPENCODE_MODELS.find(profile => profile.id === model)!.pricing!; expect(captured!.usage?.costUsd).toBeCloseTo((6 * rates.inputPerMillion + 5 * rates.outputPerMillion + 4 * rates.cacheReadPerMillion) / 1e6, 12);
+      const history: Message[] = [user, { id: 'getter-a', role: 'assistant', content: captured!.content, provider: captured!.provider, api: captured!.api, model: captured!.model, blocks: captured!.blocks, toolCalls: captured!.toolCalls, timestamp: new Date(0) },
+        { id: 'getter-r', role: 'tool', name: 'echo', toolCallId: 'call/zen', content: 'result', timestamp: new Date(0) }, { ...user, id: 'next', content: 'continue' }], before = structuredClone(history);
+      reply = reference.cases[0].responseFrames; await provider.chat(history, { ...base, model }); expect(calls.at(-1)!.body).toEqual(reference.cases[0].expectedBody);
+      await provider.chat(history, { ...base, model: foreignReference.model }); expect(calls.at(-1)!.body).toEqual(foreignReference.cases.find((projection: { case: string }) => projection.case === 'model').expectedBody); expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(6); for (const call of calls) { expect(call.headers['x-opencode-session']).toBe('zen-google-bound'); expect(call.headers['x-client-request-id']).toBeUndefined(); }
+    const errors: Error[] = []; reply = reference.seedResponseFrames;
+    await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-google-private', model, baseUrl }).streamChat([user], () => {}, async () => { await Promise.resolve(); throw new Error('PRIVATE_ZEN_GOOGLE_COMPLETION_FAILURE'); }, error => { errors.push(error); }, reference.coreOptions);
+    expect(errors.map(error => error.message)).toEqual(['OpenCode chat request failed.']);
+    class DerivedZen extends providers.OpenCodeProvider {}
+    const source: Message = { ...user, role: 'assistant', provider: 'opencode', api: reference.api, model, content: 'left!right?', blocks: structuredClone(reference.expectedBlocks), toolCalls: structuredClone(reference.expectedToolCalls) }, before = structuredClone(source), config = { type: 'opencode', model, apiKey: 'disposable-zen-google-private', baseUrl };
+    for (const facade of ['chat', 'stream']) {
+      const generic = new providers.GeminiProvider(config); let result: providers.ChatResponse | undefined;
+      if (facade === 'chat') result = await generic.chat([source, user], reference.coreOptions); else await generic.streamChat([source, user], () => {}, value => { result = value; }, error => { throw error; }, reference.coreOptions);
+      expect(result?.blocks).toBeUndefined();
+      const derived = new DerivedZen(config); if (facade === 'chat') await expect(derived.chat([source, user], reference.coreOptions)).rejects.toThrow('Unsupported OpenCode reasoning replay.'); else await expect(derived.streamChat([source, user], () => {}, undefined, undefined, reference.coreOptions)).rejects.toThrow('Unsupported OpenCode reasoning replay.');
+      for (const call of calls.slice(-2)) for (const opaque of Object.values(googleContinuation.signatures)) expect(JSON.stringify(call.body)).not.toContain(opaque);
+    }
+    expect((await new providers.OpenCodeProvider({ ...config, model: c }).chat([source, user])).blocks).toBeUndefined(); for (const opaque of Object.values(googleContinuation.signatures)) expect(JSON.stringify(calls.at(-1)!.body)).not.toContain(opaque); expect(source).toEqual(before); expect(calls).toHaveLength(12);
+  });
+
+  it('keeps existing Google tool-image attribution once without granting native decoding or preparation', async () => {
+    const { calls, baseUrl } = await fixture();
+    for (const row of googleContinuation.rows) for (const facade of ['chat', 'stream']) {
+      const history: Message[] = [{ ...input, content: 'before' }, { id: 'image-a', role: 'assistant', content: 'called', provider: 'opencode', api: row.api, model: row.model, timestamp: new Date(0), toolCalls: [{ id: 'image-call', name: 'read', input: {} }] },
+        { id: 'image-r', role: 'tool', name: 'read', toolCallId: 'image-call', content: 'result', timestamp: new Date(0), blocks: [{ type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=' }] }, { ...input, id: 'after', content: 'after' }], before = structuredClone(history);
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: row.model, baseUrl });
+      if (facade === 'chat') await provider.chat(history, row.coreOptions); else await provider.streamChat(history, () => {}, undefined, error => { throw error; }, row.coreOptions);
+      expect(calls.at(-1)!.body).toEqual({ contents: [{ role: 'user', parts: [{ text: 'before' }] }, { role: 'model', parts: [{ text: 'called' }, { functionCall: { id: 'image-call', name: 'read', args: {} } }] },
+        { role: 'user', parts: [{ functionResponse: { name: 'read', response: { output: 'result' }, id: 'image-call' } }] }, { role: 'user', parts: [{ text: 'Tool images for image-call' }, { inlineData: { mimeType: 'image/png', data: 'aGVsbG8=' } }] }, { role: 'user', parts: [{ text: 'after' }] }],
+        generationConfig: { maxOutputTokens: 64, thinkingConfig: { includeThoughts: true, thinkingLevel: 'HIGH' } } }); expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(14);
+  });
+
+  it('withdraws private Google output on EOF,error or awaited abort before pending tools and completion', async () => {
+    const reference = googleContinuation.rows[0]; let mode = 'eof';
+    const { calls, baseUrl } = await fixture((_api, _body, response) => sse(response, mode === 'abort' ? reference.seedResponseFrames : [...reference.seedResponseFrames.slice(0, -1), ...(mode === 'error' ? [{ error: { message: 'PRIVATE_ZEN_GOOGLE_TRANSPORT_FAILURE' } }] : [])]));
+    for (mode of ['eof', 'error', 'abort']) {
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: reference.model, baseUrl }), abort = new AbortController(), complete = vi.fn(), seen: unknown[] = [];
+      await expect(provider.streamChat([input], async (text, event) => { seen.push({ text, event }); if (mode === 'abort' && text) { await Promise.resolve(); abort.abort(); } }, complete, undefined, { ...reference.coreOptions, signal: abort.signal })).rejects.toThrow(/OpenCode/);
+      expect(complete).not.toHaveBeenCalled(); expect(JSON.stringify(seen)).not.toContain('tool_call'); for (const opaque of Object.values(googleContinuation.signatures)) expect(JSON.stringify(seen)).not.toContain(opaque);
+    }
+    expect(calls).toHaveLength(3);
+  });
+
   it.each(continuationModels)('compares independently bound whole private Zen A/R bodies for %s', async model => {
     const reference = continuation.rows.find((row: { model: string }) => row.model === model), isA = reference.kind === 'A';
     let replyEvents = reference.seedResponseEvents, reply = reference.syntheticJsonResponse;
@@ -161,7 +301,7 @@ describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
     }
     const cSource: Message = { ...user, role: 'assistant', provider: 'opencode', api: 'anthropic-messages', model: a, blocks: [{ type: 'reasoning', text: 'visible thought', thinkingSignature: 'forged-zen-private' }] };
     expect((await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-private', model: c, baseUrl }).chat([cSource, user])).blocks).toBeUndefined(); expect(JSON.stringify(calls.at(-1)!.body)).not.toContain('forged-zen-private'); expect(calls).toHaveLength(19);
-    const google = await fixture(); expect((await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: g, baseUrl: google.baseUrl }).chat([cSource, user])).blocks).toBeUndefined(); expect(JSON.stringify(google.calls[0].body)).not.toContain('forged-zen-private');
+    const google = await fixture(); expect((await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: g, baseUrl: google.baseUrl }).chat([cSource, user])).blocks).toEqual([{ type: 'text', text: 'Ready' }]); expect(JSON.stringify(google.calls[0].body)).not.toContain('forged-zen-private');
   });
 
   it('keeps existing A/R tool-image attribution once without granting decode or persistence preparation', async () => {
@@ -236,10 +376,10 @@ describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
     try { await provider.classifyQuestions({ model: 'jev-1.13', state: {}, questions: { level: { type: 'score', prompt: 'Level', values: [0, 2, 4] } } }); expect.fail('A scalar answer is not a finite distribution.'); } catch (error) { expect(error).toBeInstanceOf(SpecializedModelError); expect((error as SpecializedModelError).usage).toMatchObject({ inputTokens: 10, outputTokens: 2, totalTokens: 12, costUsd: 10 * 0.042 / 1e6 }); }
   });
 
-  it('separates unsigned Google visible thoughts from output and rejects unrepresentable Zen reasoning signatures', async () => {
+  it('separates native Google visible thoughts and signatures from output without granting C replay', async () => {
     let opaque = false;
     const { baseUrl } = await fixture((api, _body, response) => api === 'G' ? sse(response, [{ candidates: [{ content: { role: 'model', parts: [{ text: 'Plan', thought: true, ...(opaque ? { thoughtSignature: 'opaque-native-signature' } : {}) }, { text: 'Ready' }] }, finishReason: 'STOP' }], usageMetadata: usage.G }]) : response.end(JSON.stringify({ choices: [{ message: { content: 'Ready', reasoning: 'Foreign field signature' }, finish_reason: 'stop' }], usage: usage.C }))), provider = new providers.OpenCodeProvider({ type: 'operator', apiKey: 'disposable', baseUrl }), events: string[] = []; let result: providers.ChatResponse | undefined;
-    await provider.streamChat([input], (_text, event) => { if (event) events.push(event.type); }, answer => { result = answer; }, undefined, { model: g }); expect(result).toMatchObject({ content: 'Ready', reasoning: 'Plan', usage: { completionTokens: 5 } }); expect(events).toContain('reasoning_delta'); opaque = true; await expect(provider.chat([input], { model: g })).rejects.toThrow('Unsupported OpenCode reasoning replay.'); await expect(provider.chat([input], { model: c })).rejects.toThrow('Unsupported OpenCode reasoning replay.'); expect((await new providers.OpenCodeGoProvider({ type: 'operator', apiKey: 'disposable', baseUrl }).chat([input], { model: c })).reasoning).toBe('Foreign field signature');
+    await provider.streamChat([input], (_text, event) => { if (event) events.push(event.type); }, answer => { result = answer; }, undefined, { model: g }); expect(result).toMatchObject({ content: 'Ready', reasoning: 'Plan', usage: { completionTokens: 5 } }); expect(events).toContain('reasoning_delta'); opaque = true; expect((await provider.chat([input], { model: g })).blocks).toEqual([{ type: 'reasoning', text: 'Plan', thinkingSignature: 'opaque-native-signature' }, { type: 'text', text: 'Ready' }]); await expect(provider.chat([input], { model: c })).rejects.toThrow('Unsupported OpenCode reasoning replay.'); expect((await new providers.OpenCodeGoProvider({ type: 'operator', apiKey: 'disposable', baseUrl }).chat([input], { model: c })).reasoning).toBe('Foreign field signature');
   });
 
   it('prices Google inclusive-cache/thought usage at strict gross-input tiers without inventing partial or invalid counters', async () => {
