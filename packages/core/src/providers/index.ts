@@ -1291,6 +1291,8 @@ export class HuggingFaceProvider extends OpenAiProvider {
   }
 }
 
+const nativeTogetherReplay = new WeakSet<AiProvider>();
+
 /** Explicit supplied-key Together C SDK; shared model IDs never select another adapter's policy. */
 export class TogetherProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1298,6 +1300,7 @@ export class TogetherProvider extends OpenAiProvider {
     const model = config.model ?? TOGETHER_MODELS[0].id; togetherProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.together.ai/v1', 'chat/completions', 'Together');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === TogetherProvider) nativeTogetherReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1320,10 +1323,17 @@ export class TogetherProvider extends OpenAiProvider {
     try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
     catch { throw new Error('Invalid Together request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareTogetherChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateTogetherChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return togetherStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return togetherReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareTogetherChat(body, options, messages);
+    if (nativeTogetherReplay.has(this)) {
+      const profile = togetherProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Together chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, false, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateTogetherChat(value, nativeTogetherReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return togetherStreamValidator(nativeTogetherReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return togetherReasoning(value, nativeTogetherReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return togetherUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Together request aborted.');
@@ -1336,7 +1346,7 @@ export class TogetherProvider extends OpenAiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
     try { if (!this.validateConfig()) throw new Error('Together API key is required.'); const result = await super.chat(messages, options);
-      if (options?.signal?.aborted) throw new Error('Together request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+      if (options?.signal?.aborted) throw new Error('Together request aborted.'); return nativeTogetherReplay.has(this) ? result : { ...result, provider, model, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1344,7 +1354,7 @@ export class TogetherProvider extends OpenAiProvider {
     const provider = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Together request aborted.'); };
     try { if (!this.validateConfig()) throw new Error('Together API key is required.'); active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+        response => { active(); if (nativeTogetherReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); }, error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }

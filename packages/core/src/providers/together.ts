@@ -69,26 +69,26 @@ export function togetherUsage(value: unknown, model: string): ChatResponse['usag
     ...(usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), costUsd: usage.costUsd };
 }
-export function togetherReasoning(value: unknown): string | undefined {
+export function togetherReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
   const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string') || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Together chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Together reasoning replay.');
+  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || !nativeReplay && value.reasoning_details.length)) throw new Error('Unsupported Together reasoning replay.');
   return fields.map(field => value[field]).find((text): text is string => typeof text === 'string' && text.length > 0);
 }
 const validFinish = (value: unknown) => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
-export function validateTogetherChat(value: unknown): void {
+export function validateTogetherChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message) || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)) throw new Error('Invalid Together chat response.');
-  togetherReasoning(value.choices[0].message);
+  togetherReasoning(value.choices[0].message, nativeReplay);
 }
-export function togetherStreamValidator(): (value?: unknown) => void {
+export function togetherStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Together chat response.'); return; }
     if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Together chat response.');
     const choice = value.choices[0]; if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Together chat response.');
-    togetherReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Together chat response.');
+    togetherReasoning(choice.delta, nativeReplay); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Together chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Together chat response.'); finished = true; }
   };
 }
