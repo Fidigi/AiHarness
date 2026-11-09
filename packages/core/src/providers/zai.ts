@@ -45,7 +45,7 @@ const record = (value: unknown): value is Record<string, unknown> => value !== n
 export function zaiProfile(model: string): ZaiProfile {
   const profile = profiles.get(model); if (!profile) throw new Error('Z.ai chat model is not supported.'); return profile;
 }
-export function prepareZaiChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+export function prepareZaiChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
   const profile = zaiProfile(String(body.model)), requested = options?.thinking ?? 'off';
   if (!levels.includes(requested)) throw new Error('Invalid Z.ai thinking level.');
   const selected = clampPublishedThinkingLevel(requested, levels.filter(level => profile.thinkingLevelMap?.[level] !== null
@@ -79,7 +79,7 @@ export function prepareZaiChat(body: Record<string, unknown>, options?: ChatOpti
     body.messages = body.messages.filter(message => !record(message) || message.role !== 'assistant' || message.content || message.tool_calls);
   }
   if (Array.isArray(body.tools) && body.tools.length) {
-    for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = true;
+    for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = !nativeReplay;
     body.tool_stream = true;
   }
   if (body.tools === undefined && messages.some(message => message.role === 'assistant' && message.toolCalls?.length)) body.tools = [];
@@ -93,29 +93,29 @@ export function zaiUsage(value: unknown, model: string): ChatResponse['usage'] {
     ...(usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }) };
 }
-export function zaiReasoning(value: unknown): string | undefined {
+export function zaiReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
-  const fields = ['reasoning_content', 'reasoning', 'reasoning_text', 'reasoning_summary'];
+  const fields = nativeReplay ? ['reasoning_content', 'reasoning', 'reasoning_text'] : ['reasoning_content', 'reasoning', 'reasoning_text', 'reasoning_summary'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
     || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Z.ai chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Z.ai reasoning replay.');
+  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || !nativeReplay && value.reasoning_details.length)) throw new Error('Unsupported Z.ai reasoning replay.');
   return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
 }
 const validFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
-export function validateZaiChat(value: unknown): void {
+export function validateZaiChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)
     || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Z.ai chat response.');
-  zaiReasoning(value.choices[0].message);
+  zaiReasoning(value.choices[0].message, nativeReplay);
 }
-export function zaiStreamValidator(): (value?: unknown) => void {
+export function zaiStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Z.ai chat response.'); return; }
     if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Z.ai chat response.');
     const choice = value.choices[0]; if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Z.ai chat response.');
-    zaiReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Z.ai chat response.');
+    zaiReasoning(choice.delta, nativeReplay); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Z.ai chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Z.ai chat response.'); finished = true; }
   };
 }

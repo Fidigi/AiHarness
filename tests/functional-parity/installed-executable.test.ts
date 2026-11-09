@@ -3758,17 +3758,21 @@ it('dispatches native Z.ai through installed public declarations and captured C 
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'zai-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'zai-continuation-reference-completions.json'), await readFile(new URL('../fixtures/zai-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'zai-public.mjs'), `
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
+    import { readFile } from 'node:fs/promises';
     import { ZaiProvider, ZAI_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const calls = [], model = 'glm-5.3-flash';
+    const calls = [], model = 'glm-5.3-flash', key = 'disposable-installed-zai';
+    const completions = JSON.parse(await readFile(new URL('./zai-continuation-reference-completions.json', import.meta.url), 'utf8')); let privateReply;
     const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4 } };
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
-      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], body });
+      const body = JSON.parse(text); calls.push({ url: request.url, authorization: request.headers.authorization, apiKey: request.headers['api-key'], headers: request.headers, body });
+      if (privateReply) { const { row, projection, raw } = privateReply, events = raw ? row.rawSeed.responseEvents : projection?.responseEvents ?? row.seedResponseEvents, reply = raw ? row.rawSeed.syntheticJsonResponse : projection?.syntheticJsonResponse ?? row.syntheticJsonResponse; if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end(events.map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'); } else response.end(JSON.stringify(reply)); return; }
       if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { reasoning_content: 'Thought', content: 'Installed Z.ai' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
       else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: '{"label":"safe"}' }, finish_reason: 'stop' }], usage }));
     });
@@ -3796,10 +3800,18 @@ it('dispatches native Z.ai through installed public declarations and captured C 
       const sdk = new SpecializedModels(provider); assert.deepEqual(sdk.getModelsOfType('image'), []);
       const result = await sdk.classify({ model: 'glm-5.2:classifier', input: 'Approve', labels: ['safe','review'] });
       assert.equal(result.label, 'safe'); assert.equal(result.usage.totalTokens, 12);
-      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, true); assert.equal(calls[0].body.tool_stream, true);
+      assert.equal(calls.length, 2); assert.equal(calls[0].body.max_tokens, 64); assert.equal(calls[0].body.tools[0].function.strict, false); assert.equal(calls[0].body.tool_stream, true);
       assert.equal(calls[0].body.reasoning_effort, 'low'); assert.equal(calls[0].body.messages[0].role, 'system'); assert.deepEqual(calls[0].body.thinking, { type:'enabled', clear_thinking:false });
       assert.equal(calls[1].body.reasoning_effort, undefined); assert.deepEqual(calls[1].body.thinking, { type:'disabled' }); assert.equal(calls[1].body.tool_stream, undefined);
       for (const call of calls) { assert.equal(call.url, '/owned%2Fzai/api/coding/paas/v4/chat/completions'); assert.equal(call.authorization, 'Bearer disposable-installed-zai'); assert.equal(call.apiKey, undefined); assert.equal(call.body.max_completion_tokens, undefined); assert.equal(call.body.store, undefined); }
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new ZaiProvider({type:'zai',apiKey:key,model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fzai/api/coding/paas/v4'}),options={...row.options,model:row.model,systemPrompt:'owned Z.ai C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-zai-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'zai');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed Z.ai C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,282);for(const call of calls.slice(2)){assert.equal(call.url,'/owned%2Fzai/api/coding/paas/v4/chat/completions');assert.equal(call.authorization,'Bearer '+key);for(const field of['x-api-key','anthropic-version','anthropic-beta','session_id','x-client-request-id','x-session-affinity'])assert.equal(call.headers[field],undefined);}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Z.ai OK');
   `);
