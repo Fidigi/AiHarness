@@ -96,6 +96,32 @@ export function applyResponsesWholeIdHistory(body: Record<string, unknown>, mess
   }
 }
 
+/** Independently bound Zen policy: split call IDs, hash foreign item IDs, drop cross-model item IDs. No replay grant. */
+export function applyResponsesSplitIdHistory(body: Record<string, unknown>, messages: Message[], owner: ResponsesReplayOwner): void {
+  if (!Array.isArray(body.input)) return;
+  const ids = new Map<string, { callId: string; itemId?: string }>();
+  const normalize = (id: string) => id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64).replace(/_+$/, '');
+  for (const message of messages) if (message.role === 'assistant') for (const call of [
+    ...(message.toolCalls ?? []), ...(message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? []),
+  ]) {
+    const parts = call.id.split('|'); let callId = parts[0]!;
+    let itemId: string | undefined = parts[1];
+    const sameProviderApi = message.provider === owner.provider && message.api === owner.api;
+    if (!sameProviderApi || message.model !== owner.model) {
+      callId = normalize(callId);
+      if (itemId !== undefined) { itemId = sameProviderApi ? normalize(itemId) : `fc_${responseItemHash(itemId)}`; if (!itemId.startsWith('fc_')) itemId = normalize(`fc_${itemId}`); }
+    }
+    if (sameProviderApi && message.model !== owner.model || !itemId?.startsWith('fc_')) itemId = undefined;
+    ids.set(call.id, { callId, ...(itemId === undefined ? {} : { itemId }) });
+  }
+  for (const item of body.input) {
+    if (!record(item) || typeof item.call_id !== 'string' || !['function_call', 'function_call_output'].includes(String(item.type))) continue;
+    const id = ids.get(item.call_id); if (!id) continue; item.call_id = id.callId;
+    if (item.type === 'function_call') { if (id.itemId) item.id = id.itemId; else delete item.id; }
+    else if (item.output === '') item.output = '(no tool output)';
+  }
+}
+
 /** Replace only native rich assistant slots; all existing user/tool/image preparation remains owning code. */
 export function applyResponsesReplay(body: { input: Item[] }, messages: Message[], owner: ResponsesReplayOwner): void {
   const input: Item[] = [];

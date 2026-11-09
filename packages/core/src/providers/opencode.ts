@@ -125,7 +125,7 @@ export function opencodeThinking(model: string, options?: ChatOptions): Publishe
 function explicitLimit(profile: OpenCodeProfile, options?: ChatOptions): number | undefined {
   const maximum = options?.maxTokens; if (maximum !== undefined && (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > profile.maxOutputTokens)) throw new Error('Invalid OpenCode output limit.'); return maximum;
 }
-export function prepareOpenCodeMessage(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+export function prepareOpenCodeMessage(body: Record<string, unknown>, options?: ChatOptions, nativeReplay = false): Record<string, unknown> {
   const model = String(body.model), profile = opencodeProfile(model), level = opencodeThinking(model, options), maximum = explicitLimit(profile, options) ?? profile.maxOutputTokens;
   body.max_tokens = maximum; delete body.output_config;
   if (level === 'off') body.thinking = { type: 'disabled' };
@@ -135,7 +135,7 @@ export function prepareOpenCodeMessage(body: Record<string, unknown>, options?: 
   for (const field of ['max_completion_tokens', 'reasoning_effort', 'reasoning', 'store', 'prompt_cache_key', 'prompt_cache_retention', 'tool_stream']) delete body[field];
   const control = options?.cacheRetention === 'none' ? undefined : { type: 'ephemeral', ...(options?.cacheRetention === 'long' ? { ttl: '1h' } : {}) };
   if (typeof body.system === 'string') body.system = [{ type: 'text', text: body.system, ...(control ? { cache_control: control } : {}) }];
-  if (Array.isArray(body.tools)) body.tools = body.tools.map((tool: Record<string, unknown>, index: number) => { const result = { ...tool, eager_input_streaming: true }; delete (result as Record<string, unknown>).strict; delete (result as Record<string, unknown>).cache_control; return { ...result, ...(control && index === (body.tools as unknown[]).length - 1 ? { cache_control: control } : {}) }; });
+  if (Array.isArray(body.tools)) body.tools = body.tools.map((tool: Record<string, unknown>, index: number) => { const result: Record<string, unknown> = { ...tool, eager_input_streaming: true }; if (nativeReplay) { const schema = record(result.input_schema) ? result.input_schema : {}; result.input_schema = { type: 'object', properties: schema.properties ?? {}, required: schema.required ?? [] }; } delete result.strict; delete result.cache_control; return { ...result, ...(control && index === (body.tools as unknown[]).length - 1 ? { cache_control: control } : {}) }; });
   if (Array.isArray(body.messages)) {
     const messages = body.messages as Array<Record<string, unknown>>;
     for (const message of messages) if (Array.isArray(message.content)) message.content = message.content.map((block: Record<string, unknown>) => { const result = { ...block }; delete result.cache_control; return result.type === 'thinking' && result.signature === '' && !profile.allowEmptySignature ? { type: 'text', text: result.thinking } : result; });
@@ -166,11 +166,12 @@ export function prepareOpenCodeChat(body: Record<string, unknown>, options?: Cha
   if (options?.cacheRetention === 'long' && profile.supportsLongCacheRetention) { body.prompt_cache_retention = '24h'; if (options.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join(''); }
   return body;
 }
-export function prepareOpenCodeResponse(body: Record<string, unknown>, options?: ChatOptions): void {
+export function prepareOpenCodeResponse(body: Record<string, unknown>, options?: ChatOptions, nativeReplay = false): void {
   const profile = opencodeProfile(String(body.model)), level = opencodeThinking(profile.id, options), maximum = explicitLimit(profile, options); delete body.reasoning; delete body.include;
   if (profile.supportsReasoningEffort) { if (level !== 'off') { body.reasoning = { effort: profile.thinkingLevelMap[level] ?? level, summary: 'auto' }; body.include = ['reasoning.encrypted_content']; } else body.reasoning = { effort: profile.offEffort ?? 'none' }; }
   if (Array.isArray(body.input)) { for (const item of body.input) if (record(item) && item.role === 'system') item.role = 'developer'; if (typeof body.instructions === 'string') { body.input.unshift({ role: 'developer', content: body.instructions }); delete body.instructions; } }
-  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) tool.strict = false;
+  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) { if (nativeReplay) delete tool.strict; else tool.strict = false; }
+  if (nativeReplay) { if (Array.isArray(body.input)) body.input = body.input.map(item => record(item) && item.role === 'user' && typeof item.content === 'string' ? { ...item, content: [{ type: 'input_text', text: item.content }] } : item); if (body.tool_choice === 'auto') delete body.tool_choice; }
   if (maximum !== undefined) body.max_output_tokens = Math.max(16, maximum);
   if (options?.cacheRetention !== 'none' && options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join(''); else delete body.prompt_cache_key;
   if (options?.cacheRetention === 'long') body.prompt_cache_retention = '24h'; else delete body.prompt_cache_retention; delete body.prompt_cache_options;
@@ -222,15 +223,15 @@ export function opencodeReasoning(value: unknown): string | undefined {
 }
 const aFinish = (value: unknown): boolean => ['end_turn','stop_sequence','tool_use','max_tokens'].includes(String(value));
 const cFinish = (value: unknown): boolean => ['stop','end','length','tool_calls','function_call'].includes(String(value));
-export function validateOpenCodeMessage(value: unknown): void {
+export function validateOpenCodeMessage(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || value.type === 'error' || !Array.isArray(value.content) || !aFinish(value.stop_reason) || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid OpenCode chat response.');
-  for (const block of value.content) { if (!record(block)) throw new Error('Invalid OpenCode chat response.'); if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid OpenCode chat response.'); } else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && block.signature !== '')) throw new Error('Unsupported OpenCode reasoning replay.'); } else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid OpenCode chat response.'); } else throw new Error('Unsupported OpenCode reasoning replay.'); }
+  for (const block of value.content) { if (!record(block)) throw new Error('Invalid OpenCode chat response.'); if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid OpenCode chat response.'); } else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== ''))) throw new Error('Unsupported OpenCode reasoning replay.'); } else if (block.type === 'redacted_thinking' && nativeReplay) { if (typeof block.data !== 'string') throw new Error('Invalid OpenCode chat response.'); } else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid OpenCode chat response.'); } else throw new Error('Unsupported OpenCode reasoning replay.'); }
 }
 export function opencodeMessageText(content: unknown): string { return Array.isArray(content) ? content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('') : ''; }
 export function validateOpenCodeChat(value: unknown): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message) || value.choices[0].message.refusal || !cFinish(value.choices[0].finish_reason) || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid OpenCode chat response.'); opencodeReasoning(value.choices[0].message);
 }
-export function opencodeStreamValidator(api: OpenCodeProfile['api']): (value?: unknown) => void {
+export function opencodeStreamValidator(api: OpenCodeProfile['api'], nativeReplay = false): (value?: unknown) => void {
   let started = false, stopped = false, finished = false;
   return value => {
     if (value === undefined) { if (!finished || (api === 'anthropic-messages' && (!started || !stopped))) throw new Error('Invalid OpenCode chat response.'); return; }
@@ -240,8 +241,8 @@ export function opencodeStreamValidator(api: OpenCodeProfile['api']): (value?: u
     if (value.type === 'message_start') { if (started || !record(value.message)) throw new Error('Invalid OpenCode chat response.'); started = true; }
     else if (value.type === 'message_delta') { if (!started || !record(value.delta)) throw new Error('Invalid OpenCode chat response.'); if (value.delta.stop_reason !== undefined && value.delta.stop_reason !== null) { if (!aFinish(value.delta.stop_reason)) throw new Error('Invalid OpenCode chat response.'); finished = true; } }
     else if (value.type === 'message_stop') { if (!started || !finished) throw new Error('Invalid OpenCode chat response.'); stopped = true; }
-    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text','thinking','tool_use'].includes(String(block.type))) throw new Error('Invalid OpenCode chat response.'); if (block.type === 'thinking' && block.signature !== undefined && block.signature !== '') throw new Error('Unsupported OpenCode reasoning replay.'); }
-    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta','thinking_delta','input_json_delta'].includes(String(delta.type))) throw new Error('Unsupported OpenCode reasoning replay.'); const field = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : 'partial_json'; if (typeof delta[field] !== 'string') throw new Error('Invalid OpenCode chat response.'); }
+    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text','thinking','tool_use'].includes(String(block.type)) && !(nativeReplay && block.type === 'redacted_thinking')) throw new Error('Invalid OpenCode chat response.'); if (block.type === 'thinking' && block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== '')) throw new Error('Unsupported OpenCode reasoning replay.'); }
+    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta','thinking_delta','input_json_delta'].includes(String(delta.type)) && !(nativeReplay && delta.type === 'signature_delta')) throw new Error('Unsupported OpenCode reasoning replay.'); const field = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : delta.type === 'signature_delta' ? 'signature' : 'partial_json'; if (typeof delta[field] !== 'string') throw new Error('Invalid OpenCode chat response.'); }
     else if (!['ping','content_block_stop'].includes(value.type)) throw new Error('Invalid OpenCode chat response.');
   };
 }

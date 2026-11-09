@@ -1,5 +1,17 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
+import { CredentialRedactor } from './credentials.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
 import * as providers from './index.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
 import { getSupportedThinkingLevels } from './model-metadata.js';
@@ -7,6 +19,8 @@ import { captureNativeOutputBudget } from './provider-output-budget.js';
 import { SpecializedModels, SpecializedModelError } from './specialized-models.js';
 import type { Message } from '../types/index.js';
 
+const continuation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/opencode-continuation-reference-ar.json', import.meta.url), 'utf8'));
+const continuationModels: string[] = continuation.rows.map((row: { model: string }) => row.model);
 const a = 'claude-haiku-5-5', g = 'gemini-3.1-pro', c = 'glm-5.3', r = 'gpt-6-luna';
 const models = [a, g, c, r];
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
@@ -32,6 +46,139 @@ async function fixture(override?: (api: Api, body: Record<string, any>, response
 }
 
 describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
+  it.each(continuationModels)('compares independently bound whole private Zen A/R bodies for %s', async model => {
+    const reference = continuation.rows.find((row: { model: string }) => row.model === model), isA = reference.kind === 'A';
+    let replyEvents = reference.seedResponseEvents, reply = reference.syntheticJsonResponse;
+    const { calls, baseUrl } = await fixture((api, body, response) => {
+      if (api === 'A' && !body.stream) { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(reply)); } else sse(response, replyEvents, api === 'R');
+    });
+    for (const facade of ['chat', 'stream']) {
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', model, apiKey: 'disposable-zen-private', baseUrl });
+      const user: Message = { id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) };
+      const options: providers.ChatOptions = { ...reference.coreOptions, model, systemPrompt: 'owned OpenCode Zen reference system', tools: continuation.tools };
+      const expected = (body: Record<string, unknown>) => ({ ...structuredClone(body), stream: isA ? facade === 'stream' : true });
+      const invoke = async (messages: Message[], selected: providers.ChatOptions = options) => { if (facade === 'chat') return provider.chat(messages, selected); let complete: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, (text, event) => { expect(text).not.toContain('PRIVATE_ZEN_HEADER'); expect(JSON.stringify(event ?? {})).not.toContain('PRIVATE_ZEN_HEADER'); },
+          value => { complete = value; }, error => { throw error; }, selected); expect(complete).toBeDefined(); return complete!;
+      };
+      replyEvents = reference.seedResponseEvents.map((event: Record<string, any>) => isA && event.type === 'message_start' ? { ...event, message: { ...event.message, content: [{ type: 'text', text: 'PRIVATE_ZEN_HEADER' }] } } : event); reply = reference.syntheticJsonResponse;
+      const first = await invoke([user]); expect(first).toMatchObject({ provider: 'opencode', api: reference.api, model, content: isA ? 'left!right?' : 'leftright' });
+      expect(first.blocks).toEqual(reference.expectedBlocks); expect(first.toolCalls).toEqual(reference.expectedToolCalls); expect(calls.at(-1)!.body).toEqual(expected(reference.expectedInitialBody));
+      for (const projection of reference.cases) {
+        const source: Message = { id: 'a', role: 'assistant', content: first.content, timestamp: new Date(0), provider: projection.source.provider, api: projection.source.api, model: projection.source.model, blocks: structuredClone(first.blocks), toolCalls: structuredClone(first.toolCalls) };
+        if (isA) { const thought = source.blocks!.find(block => block.type === 'reasoning' && !block.redacted)!; if (thought.type !== 'reasoning') throw new Error('Missing reference thought');
+          if (projection.case === 'unsigned') delete thought.thinkingSignature; if (projection.case === 'empty-thinking') thought.text = ''; if (projection.case === 'blank-thinking') thought.text = ' \t'; if (projection.case === 'empty-signature') thought.thinkingSignature = ''; if (projection.case === 'blank-signature') thought.thinkingSignature = ' \t';
+        } else if (projection.case === 'expurgated') for (const block of source.blocks!) { if (block.type === 'text') delete block.textSignature; if (block.type === 'reasoning') delete block.thinkingSignature; }
+        const failed = projection.case.startsWith('failed-') || projection.case === 'failed'; if (failed) source.metadata = { outputError: 'Failed OpenCode Zen producer' };
+        const results: Message[] = failed ? [] : [{ id: 'r', role: 'tool', name: 'echo', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(0) }];
+        const history = [user, source, ...results, { ...user, id: 'next', content: 'continue' }], before = structuredClone(history); replyEvents = projection.responseEvents; reply = projection.syntheticJsonResponse;
+        expect((await invoke(history)).content).toBe('ok'); expect(calls.at(-1)!.body).toEqual(expected(projection.expectedBody)); expect(history).toEqual(before);
+      }
+      const withSystem: Message[] = [{ id: 'sys', role: 'system', content: 'Leading system', timestamp: new Date(0) }, user], systemBefore = structuredClone(withSystem);
+      await invoke(withSystem, { ...options, systemPrompt: undefined });
+      expect(calls.at(-1)!.body).toEqual(isA ? { ...expected(reference.expectedInitialBody), system: [{ type: 'text', text: 'Leading system' }] }
+        : { ...expected(reference.expectedInitialBody), input: [{ role: 'developer', content: 'Leading system' }, ...reference.expectedInitialBody.input.slice(1)] });
+      await invoke(withSystem); expect(calls.at(-1)!.body).toEqual(isA ? { ...expected(reference.expectedInitialBody), system: [{ type: 'text', text: 'owned OpenCode Zen reference system\n\nLeading system' }] }
+        : { ...expected(reference.expectedInitialBody), input: [reference.expectedInitialBody.input[0], { role: 'developer', content: 'Leading system' }, ...reference.expectedInitialBody.input.slice(1)] }); expect(withSystem).toEqual(systemBefore);
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-zen-replay-')), credential = isA ? 'opaque-zen-signature' : 'sensitive', redactor = new CredentialRedactor([credential, 'disposable-zen-private']);
+      const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'OpenCode Zen private replay' }), registry = new ExtensionRegistry();
+      const finalBlocks = isA ? [{ type: 'text', text: 'ok' }] : [{ type: 'text', text: 'ok', textSignature: '{"v":1,"id":"msg_ok","phase":"final_answer"}' }];
+      const finalItem = isA ? { role: 'assistant', content: finalBlocks } : { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'ok', annotations: [] }], status: 'completed', id: 'msg_ok', phase: 'final_answer' };
+      const field = isA ? 'messages' : 'input', same = reference.cases[0].expectedBody[field], native = () => calls.at(-1)!.body[field]; let effects = 0;
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; replyEvents = reference.cases[0].responseEvents; reply = reference.cases[0].syntheticJsonResponse; return { content: 'result' }; } }));
+      replyEvents = reference.seedResponseEvents; reply = reference.syntheticJsonResponse;
+      try {
+        await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'opencode', tools: continuation.tools,
+          toolContext: { sessionManager: manager, notify: () => {} }, redactText,
+          streamTurn: messages => facade === 'chat' ? provider.chat(messages, options) : streamProviderTurn({ provider, providerName: 'opencode', model, messages,
+            tools: continuation.tools, systemPrompt: options.systemPrompt, extensionRegistry: registry, maxRetries: 0, maxTokens: options.maxTokens, thinking: options.thinking, cacheRetention: 'none', redactText, redactJson,
+            createTextRedactor: () => redactor.createStream() }) });
+        expect(effects).toBe(1); expect(native()).toEqual(redactJson(same.slice(0, -1)));
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8'), history = session.messages.filter(item => item.role === 'assistant');
+        expect(history.map(item => item.blocks)).toEqual([redactJson(reference.expectedBlocks), finalBlocks]); expect(bytes).not.toContain(credential); expect(bytes).not.toContain('disposable-zen-private'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+        expect(loaded.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toContain('opaque-zen-'); expect(JSON.stringify(complete.session)).toContain('[REDACTED]'); expect(JSON.stringify(complete.session)).not.toContain(credential);
+        await invoke(loaded.messages); expect(native()).toEqual([...redactJson(same.slice(0, -1)), finalItem]); expect(await readFile(file, 'utf8')).toBe(bytes);
+        await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+        const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
+        expect(native()).toEqual(isA ? [same[0], { role: 'assistant', content: [{ type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }, { type: 'text', text: 'edited answer' }] }, same.at(-2), finalItem]
+          : [...same.slice(0, 2), { type: 'function_call', call_id: 'call_native', id: 'fc_native', name: 'echo', arguments: '{"x":1}' }, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }], status: 'completed', id: 'msg_pi_1' }, same.at(-2), finalItem]);
+        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks)); expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical); expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-zen-/); expect(canonical).toEqual(beforeSummary);
+        const kept = clone.messages.filter(item => item.role === 'assistant').at(-1)!, sourceBytes = await readFile(file, 'utf8'); await restarted.applyCompaction(clone.id, 'PUBLIC_ZEN_COMPACTED_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }); expect(await compactedManager.loadFromStore(clone.id)).toBeTruthy(); const compacted = getCompactionModelMessages(compactedManager, clone.id);
+        expect(compacted.map(item => ({ role: item.role, content: item.content }))).toEqual([{ role: 'system', content: '[Context Summary] PUBLIC_ZEN_COMPACTED_PREFIX' }, { role: 'assistant', content: 'ok' }]); expect(compacted.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual([finalBlocks]);
+        const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+        const retained = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant');
+        expect(retained).toHaveLength(history.length); expect(retained.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
+        expect((await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
+        await invoke(compacted); expect(calls.at(-1)!.body).toEqual(isA ? { ...expected(reference.expectedInitialBody), system: [{ type: 'text', text: 'owned OpenCode Zen reference system\n\n[Context Summary] PUBLIC_ZEN_COMPACTED_PREFIX' }], messages: [finalItem] }
+          : { ...expected(reference.expectedInitialBody), input: [same[0], { role: 'developer', content: '[Context Summary] PUBLIC_ZEN_COMPACTED_PREFIX' }, finalItem] });
+        expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+    }
+    expect(calls).toHaveLength(isA ? 40 : 30);
+    for (const call of calls) { expect(call.url).toBe('/owned%2Fzen/v1/' + (isA ? 'messages' : 'responses')); expect(call.headers[isA ? 'x-api-key' : 'authorization']).toBe(isA ? 'disposable-zen-private' : 'Bearer disposable-zen-private'); expect(call.headers[isA ? 'authorization' : 'x-api-key']).toBeUndefined(); expect(call.headers['anthropic-beta']).toBe(reference.sdkBeta ?? undefined); }
+  });
+
+  it('pins private A/R body identity and prices, awaits publication and refuses forged or derived admission', async () => {
+    let reference = continuation.rows[0];
+    const { calls, baseUrl } = await fixture((api, body, response) => { if (api === 'C') { response.end(JSON.stringify({ choices: [{ message: { content: 'Ready' }, finish_reason: 'stop' }] })); return; }
+      if (api === 'A' && !body.stream) { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(reference.syntheticJsonResponse)); } else sse(response, reference.seedResponseEvents, api === 'R'); });
+    const user: Message = { ...input, content: 'probe' };
+    for (const model of [a, r]) for (const facade of ['chat', 'stream']) {
+      reference = continuation.rows.find((row: { model: string }) => row.model === model); const isA = reference.kind === 'A', selectedReference = reference;
+      const foreignReference = continuation.rows.find((row: { model: string; kind: string }) => row.kind === reference.kind && row.model !== model);
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-private', baseUrl, model });
+      provider.getProviderType = () => 'forged-public-provider'; provider.getModelApi = () => 'forged-public-api'; let reads = 0, captured: providers.ChatResponse | undefined;
+      const base = { ...reference.coreOptions, systemPrompt: 'owned OpenCode Zen reference system', sessionId: 'zen-bound', tools: continuation.tools };
+      const options = { ...base, get model() { return ++reads === 1 ? model : isA ? r : a; } };
+      if (facade === 'chat') captured = await provider.chat([user], options); else await provider.streamChat([user], () => {}, value => { captured = value; }, error => { throw error; }, options);
+      expect(calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, stream: isA ? facade === 'stream' : true }); expect(captured).toMatchObject({ provider: 'opencode', api: reference.api, model, blocks: reference.expectedBlocks });
+      const rates = providers.OPENCODE_MODELS.find(profile => profile.id === model)!.pricing!;
+      expect(captured!.usage?.costUsd).toBeCloseTo((5 * rates.inputPerMillion + 2 * rates.outputPerMillion + 4 * rates.cacheReadPerMillion + (isA ? 3 : 1) * rates.cacheWritePerMillion) / 1e6, 12);
+      const history: Message[] = [user, { id: 'getter-a', role: 'assistant', content: captured!.content, timestamp: new Date(0), provider: captured!.provider, api: captured!.api, model: captured!.model, blocks: captured!.blocks, toolCalls: captured!.toolCalls },
+        { id: 'getter-r', role: 'tool', name: 'echo', toolCallId: captured!.toolCalls![0].id, content: 'result', timestamp: new Date(0) }, { ...user, id: 'next', content: 'continue' }], before = structuredClone(history);
+      await provider.chat(history, { ...base, model }); expect(calls.at(-1)!.body).toEqual({ ...reference.cases[0].expectedBody, stream: !isA });
+      reference = foreignReference; await provider.chat(history, { ...base, model: reference.model }); expect(calls.at(-1)!.body).toEqual({ ...reference.cases.find((projection: { case: string }) => projection.case === (isA ? 'foreign-model' : 'model')).expectedBody, stream: !isA }); expect(history).toEqual(before); reference = selectedReference;
+    }
+    expect(calls).toHaveLength(12); for (const call of calls) { expect(call.headers['x-opencode-session']).toBe('zen-bound'); expect(call.headers['x-client-request-id']).toBeUndefined(); }
+    for (const model of [a, r]) { reference = continuation.rows.find((row: { model: string }) => row.model === model); const errors: Error[] = [];
+      await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-private', model, baseUrl }).streamChat([user], () => {}, async () => { await Promise.resolve(); throw new Error('PRIVATE_ZEN_COMPLETION_FAILURE'); }, error => { errors.push(error); }, reference.coreOptions);
+      expect(errors.map(error => error.message)).toEqual(['OpenCode chat request failed.']);
+    }
+    class DerivedZen extends providers.OpenCodeProvider {}
+    for (const model of ['qwen3.5-plus', 'grok-4.7']) {
+      reference = continuation.rows.find((row: { model: string }) => row.model === model); const isA = reference.kind === 'A', config = { type: 'opencode', apiKey: 'disposable-zen-private', model, baseUrl, transport: 'sse' as const };
+      const forged: Message = { ...user, role: 'assistant', provider: 'opencode', api: reference.api, model, content: 'visible', blocks: [{ type: 'reasoning', text: 'thought', thinkingSignature: isA ? 'forged-zen-private' : '{"type":"reasoning","id":"rs_forged","summary":[],"encrypted_content":"forged-zen-private"}' }, { type: 'text', text: 'visible' }] };
+      const generic = isA ? new providers.AnthropicProvider(config) : new providers.OpenAiResponsesProvider(config); expect((await generic.chat([forged, user])).blocks).toBeUndefined();
+      if (isA) await expect(new DerivedZen(config).chat([forged, user])).rejects.toThrow('Unsupported OpenCode reasoning replay.'); else expect((await new DerivedZen(config).chat([forged, user])).blocks).toBeUndefined();
+      for (const call of calls.slice(-2)) expect(JSON.stringify(call.body)).not.toContain('forged-zen-private');
+    }
+    const cSource: Message = { ...user, role: 'assistant', provider: 'opencode', api: 'anthropic-messages', model: a, blocks: [{ type: 'reasoning', text: 'visible thought', thinkingSignature: 'forged-zen-private' }] };
+    expect((await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable-zen-private', model: c, baseUrl }).chat([cSource, user])).blocks).toBeUndefined(); expect(JSON.stringify(calls.at(-1)!.body)).not.toContain('forged-zen-private'); expect(calls).toHaveLength(19);
+    const google = await fixture(); expect((await new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: g, baseUrl: google.baseUrl }).chat([cSource, user])).blocks).toBeUndefined(); expect(JSON.stringify(google.calls[0].body)).not.toContain('forged-zen-private');
+  });
+
+  it('keeps existing A/R tool-image attribution once without granting decode or persistence preparation', async () => {
+    const { calls, baseUrl } = await fixture();
+    for (const row of continuation.rows) for (const facade of ['chat', 'stream']) {
+      const isA = row.kind === 'A', history: Message[] = [{ ...input, content: 'before' }, { id: 'image-a', role: 'assistant', content: 'called', timestamp: new Date(0), provider: 'opencode', api: row.api, model: row.model, toolCalls: [{ id: 'image-call', name: 'read', input: {} }] },
+        { id: 'image-r', role: 'tool', name: 'read', toolCallId: 'image-call', content: 'result', timestamp: new Date(0), blocks: [{ type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=' }] }, { ...input, id: 'after', content: 'after' }], before = structuredClone(history);
+      const provider = new providers.OpenCodeProvider({ type: 'opencode', apiKey: 'disposable', model: row.model, baseUrl });
+      if (facade === 'chat') await provider.chat(history, row.coreOptions); else await provider.streamChat(history, () => {}, undefined, error => { throw error; }, row.coreOptions);
+      expect(calls.at(-1)!.body[isA ? 'messages' : 'input']).toEqual(isA ? [{ role: 'user', content: 'before' }, { role: 'assistant', content: [{ type: 'text', text: 'called' }, { type: 'tool_use', id: 'image-call', name: 'read', input: {} }] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'image-call', content: 'result', is_error: false }] }, { role: 'user', content: [{ type: 'text', text: 'Tool images for image-call' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } }] }, { role: 'user', content: 'after' }]
+        : [{ role: 'user', content: [{ type: 'input_text', text: 'before' }] }, { role: 'assistant', content: 'called' }, { type: 'function_call', call_id: 'image-call', name: 'read', arguments: '{}' },
+          { type: 'function_call_output', call_id: 'image-call', output: 'result' }, { role: 'user', content: [{ type: 'input_text', text: 'Tool images for image-call' }, { type: 'input_image', image_url: 'data:image/png;base64,aGVsbG8=' }] }, { role: 'user', content: [{ type: 'input_text', text: 'after' }] }]); expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(96);
+  });
+
   it('does not grant Zen policy to generic adapters or the separate Go SDK', async () => {
     const { calls, baseUrl } = await fixture(); await new providers.OpenAiProvider({ type: 'opencode', apiKey: 'disposable', model: c, baseUrl: baseUrl + '/v1' }).chat([input], { sessionId: 'generic' }); expect(calls[0].headers['x-opencode-session']).toBeUndefined(); expect(getProviderPublishedModel('opencode', g, new providers.OpenCodeGoProvider({ type: 'opencode' }))).toBeUndefined();
   });
@@ -48,7 +195,7 @@ describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
     const { calls, baseUrl } = await fixture(), provider = new providers.OpenCodeProvider({ type: 'operator-zen', apiKey: 'disposable', baseUrl });
     for (const p of providers.OPENCODE_MODELS) { const options = { model: p.id, thinking: 'high' as const, sessionId: 'zen-session', systemPrompt: 'System', tools: [{ name: 'read', description: 'Read', parameters: { type: 'object', properties: {}, required: [] } }] }, done = vi.fn(), answer = await provider.chat([input], options); await provider.streamChat([input], () => {}, done, error => { throw error; }, options); const google = p.api === 'google-generative-ai', prompt = google ? 6 : 5, completion = google ? 5 : 2, write = google ? 0 : 1, cost = p.pricing ? (prompt * p.pricing.inputPerMillion + completion * p.pricing.outputPerMillion + 4 * p.pricing.cacheReadPerMillion + write * p.pricing.cacheWritePerMillion) / 1e6 : undefined;
       for (const result of [answer, done.mock.calls[0][0]]) { expect(result).toMatchObject({ provider: 'operator-zen', model: p.id, api: p.api, content: 'Ready', usage: { promptTokens: prompt, completionTokens: completion, cacheReadTokens: 4, totalTokens: google ? 15 : 12 } }); expect(result.usage.costUsd).toBe(cost); }
-      for (const call of calls.slice(-2)) { expect(call.model).toBe(p.id); expect(call.headers['x-opencode-session']).toBe('zen-session'); expect(call.headers['session-id']).toBeUndefined(); if (google) { expect(call.url).toBe('/owned%2Fzen/v1/models/' + encodeURIComponent(p.id) + ':streamGenerateContent?alt=sse'); expect(call.headers['x-goog-api-key']).toBe('disposable'); expect(call.headers.authorization).toBeUndefined(); expect(call.body.generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'HIGH' }); expect(call.body.tools[0].functionDeclarations[0].parametersJsonSchema).toEqual(options.tools[0].parameters); expect(call.body).not.toHaveProperty('toolConfig'); } else if (p.api === 'anthropic-messages') { expect(call.headers['x-api-key']).toBe('disposable'); expect(call.body.max_tokens).toBe(p.maxOutputTokens); expect(call.body.tools[0].eager_input_streaming).toBe(true); expect(call.body.tools[0]).not.toHaveProperty('strict'); } else { expect(call.headers.authorization).toBe('Bearer disposable'); expect(call.body).not.toHaveProperty('max_completion_tokens'); if (p.api === 'openai-completions') { expect(call.body).not.toHaveProperty('store'); expect(call.body.tools[0].function.strict).toBe(false); } else { expect(call.body.store).toBe(false); expect(call.body.tools[0].strict).toBe(false); expect(call.body.input[0].role).toBe('developer'); expect(call.body).not.toHaveProperty('instructions'); } } }
+      for (const call of calls.slice(-2)) { expect(call.model).toBe(p.id); expect(call.headers['x-opencode-session']).toBe('zen-session'); expect(call.headers['session-id']).toBeUndefined(); if (google) { expect(call.url).toBe('/owned%2Fzen/v1/models/' + encodeURIComponent(p.id) + ':streamGenerateContent?alt=sse'); expect(call.headers['x-goog-api-key']).toBe('disposable'); expect(call.headers.authorization).toBeUndefined(); expect(call.body.generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: 'HIGH' }); expect(call.body.tools[0].functionDeclarations[0].parametersJsonSchema).toEqual(options.tools[0].parameters); expect(call.body).not.toHaveProperty('toolConfig'); } else if (p.api === 'anthropic-messages') { expect(call.headers['x-api-key']).toBe('disposable'); expect(call.body.max_tokens).toBe(p.maxOutputTokens); expect(call.body.tools[0].eager_input_streaming).toBe(true); expect(call.body.tools[0]).not.toHaveProperty('strict'); } else { expect(call.headers.authorization).toBe('Bearer disposable'); expect(call.body).not.toHaveProperty('max_completion_tokens'); if (p.api === 'openai-completions') { expect(call.body).not.toHaveProperty('store'); expect(call.body.tools[0].function.strict).toBe(false); } else { expect(call.body.store).toBe(false); expect(call.body.tools[0]).not.toHaveProperty('strict'); expect(call.body.input[0].role).toBe('developer'); expect(call.body).not.toHaveProperty('instructions'); } } }
     } expect(calls).toHaveLength(166);
   });
 
