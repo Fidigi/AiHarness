@@ -93,12 +93,12 @@ it('reloads encrypted explicit Groq hosts and preserves native C policy across l
       const reasoning = call.body.model === chats[1];
       expect(call.body.thinking).toBeUndefined(); expect(call.body.reasoning_effort).toBe(reasoning ? 'none' : undefined);
       expect(call.body.max_tokens).toBeUndefined(); expect(call.body.max_completion_tokens).toBeGreaterThan(0); expect(call.body.store).toBe(false);
-      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(true);
+      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(false);
       for (const message of call.body.messages) if (message.role === 'system' || message.role === 'developer') expect(message.role).toBe(reasoning ? 'developer' : 'system');
       for (const name of ['x-api-key', 'api-key', 'anthropic-version', 'cf-aig-authorization']) expect(call.headers[name]).toBeUndefined();
     }
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const secret of [...keys, headerSecret]) expect(await readFile(path.join(dataDir, file), 'utf8')).not.toContain(secret);
   } finally {
-    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(resolve)); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 30_000);

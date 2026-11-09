@@ -42,7 +42,7 @@ const record = (value: unknown): value is Record<string, unknown> => value !== n
 export function groqProfile(model: string): GroqProfile {
   const profile = profiles.get(model); if (!profile) throw new Error('Groq chat model is not supported.'); return profile;
 }
-export function prepareGroqChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+export function prepareGroqChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
   const profile = groqProfile(String(body.model)), requested = options?.thinking ?? 'off';
   if (!levels.includes(requested)) throw new Error('Invalid Groq thinking level.');
   const selected = clampPublishedThinkingLevel(requested, profile.reasoning ? levels.filter(level => profile.thinkingLevelMap?.[level] !== null
@@ -66,7 +66,7 @@ export function prepareGroqChat(body: Record<string, unknown>, options?: ChatOpt
     if (message.role === 'developer' || message.role === 'system') message.role = profile.reasoning ? 'developer' : 'system';
     if (!profile.declaredInput.includes('image') && Array.isArray(message.content) && message.content.some(part => record(part) && part.type === 'image_url')) throw new Error('Groq chat model does not support images.');
   }
-  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = true;
+  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = !nativeReplay;
   if (body.tools === undefined && messages.some(message => message.role === 'assistant' && message.toolCalls?.length)) body.tools = [];
   return body;
 }
@@ -78,29 +78,29 @@ export function groqUsage(value: unknown, model: string): ChatResponse['usage'] 
     ...(usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), costUsd: usage.costUsd };
 }
-export function groqReasoning(value: unknown): string | undefined {
+export function groqReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
-  const fields = ['reasoning_content','reasoning','reasoning_text','reasoning_summary'];
+  const fields = nativeReplay ? ['reasoning_content','reasoning','reasoning_text'] : ['reasoning_content','reasoning','reasoning_text','reasoning_summary'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
     || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Groq chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Groq reasoning replay.');
+  if (!nativeReplay && value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Groq reasoning replay.');
   return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
 }
 const validFinish = (value: unknown): boolean => ['stop','end','length','tool_calls','function_call'].includes(String(value));
-export function validateGroqChat(value: unknown): void {
+export function validateGroqChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)
     || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Groq chat response.');
-  groqReasoning(value.choices[0].message);
+  groqReasoning(value.choices[0].message, nativeReplay);
 }
-export function groqStreamValidator(): (value?: unknown) => void {
+export function groqStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Groq chat response.'); return; }
     if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Groq chat response.');
     const choice = value.choices[0]; if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Groq chat response.');
-    groqReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Groq chat response.');
+    groqReasoning(choice.delta, nativeReplay); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Groq chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Groq chat response.'); finished = true; }
   };
 }

@@ -1653,6 +1653,8 @@ export class DeepSeekProvider extends OpenAiProvider {
   }
 }
 
+const nativeGroqReplay = new WeakSet<AiProvider>();
+
 /** Explicit native Groq C policy; logical aliases and proxy URLs do not select compatibility. */
 export class GroqProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1660,6 +1662,7 @@ export class GroqProvider extends OpenAiProvider {
     const model = config.model ?? GROQ_MODELS[0].id; groqProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.groq.com/openai/v1', 'chat/completions', 'Groq');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === GroqProvider) nativeGroqReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1688,10 +1691,18 @@ export class GroqProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid Groq request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareGroqChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateGroqChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return groqStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return groqReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    if (nativeGroqReplay.has(this)) applyCompletionHistory(body, messages, this.config.type, false, false);
+    const prepared = prepareGroqChat(body, options, messages, nativeGroqReplay.has(this));
+    if (nativeGroqReplay.has(this)) {
+      const profile = groqProfile(String(prepared.model));
+      nativeCompletionsOwners.set(prepared, { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Groq chat response.' });
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateGroqChat(value, nativeGroqReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return groqStreamValidator(nativeGroqReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return groqReasoning(value, nativeGroqReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return groqUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Groq request aborted.');
@@ -1707,7 +1718,7 @@ export class GroqProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Groq API key is required.');
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('Groq request aborted.');
-      return { ...result, provider, api: 'openai-completions' };
+      return nativeGroqReplay.has(this) ? result : { ...result, provider, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1717,7 +1728,7 @@ export class GroqProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Groq API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        response => { active(); if (nativeGroqReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
