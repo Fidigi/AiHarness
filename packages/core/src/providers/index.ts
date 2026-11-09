@@ -4539,6 +4539,7 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 }
 
 const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
+const nativeOpenRouterReplay = new WeakSet<AiProvider>();
 
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
@@ -4613,6 +4614,7 @@ export class AnthropicProvider extends AiProvider {
     else applyAnthropicThinking(body, options);
   }
   protected validateMessageResponse(_value: unknown, _nativeReplay = false): void {}
+  protected messageThinkingLevel(_body: Record<string, unknown>): ChatResponse['providerThinkingLevel'] { return undefined; }
   protected createMessageStreamValidator(_nativeReplay = false): (value?: unknown) => void { return () => {}; }
   protected messageText(content: AnthropicResponse['content']): string {
     return (content?.find(block => block.type === 'text') as AnthropicTextContent | undefined)?.text || '';
@@ -4648,10 +4650,11 @@ export class AnthropicProvider extends AiProvider {
     return this.ownsNativeProfiles && hasAnthropicProfile(model)
       || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model)
       || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
-      || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model);
+      || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
+      || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model);
   }
 
-  private nativeMessageHistory(messages: Message[], model: string): Message[] {
+  protected nativeMessageHistory(messages: Message[], model: string): Message[] {
     return messages.filter(message => {
       if (message.role !== 'assistant') return true;
       if (message.metadata?.outputError) return false;
@@ -4765,7 +4768,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
-    const providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
+    let providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
       headers: this.messageHeaders(options, model),
@@ -4774,6 +4777,7 @@ export class AnthropicProvider extends AiProvider {
     });
 
     if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
+    providerThinkingLevel ??= this.messageThinkingLevel(body);
 
     const data = await readProviderJson<AnthropicResponse>(response);
     const responseContent = native ? data?.content : data.content;
@@ -4854,7 +4858,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
-    const providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
+    let providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     try {
       const response = await this.request(url, {
         method: 'POST',
@@ -4864,6 +4868,7 @@ export class AnthropicProvider extends AiProvider {
       });
 
       if (!response.ok) await rejectProviderHttpResponse(response, `Anthropic API error (${response.status}).`);
+      providerThinkingLevel ??= this.messageThinkingLevel(body);
 
       let fullContent = '';
       let fullReasoning = '';
@@ -5601,6 +5606,7 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
     openRouterMessageProfile(model);
     const endpoint = openRouterMessagesEndpoint(config.baseUrl || 'https://openrouter.ai/api');
     super({ ...config, model }); this.endpoint = endpoint;
+    if (new.target === OpenRouterMessagesProvider) nativeOpenRouterReplay.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override setConfiguredModel(model: string): void { openRouterMessageProfile(model); super.setConfiguredModel(model); }
@@ -5614,8 +5620,8 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
         cacheReadPerMillion: profile.pricing.cacheReadPerMillion, cacheWritePerMillion: profile.pricing.cacheWritePerMillion } }];
   }
   protected override getMessagesUrl(): string { return this.endpoint; }
-  protected override messageHeaders(options?: ChatOptions): Record<string, string> {
-    const betas = openRouterMessageBetas(options?.model || this.getConfiguredModel()!, options);
+  protected override messageHeaders(options?: ChatOptions, model?: string): Record<string, string> {
+    const betas = openRouterMessageBetas(model ?? options?.model ?? this.getConfiguredModel()!, options);
     try {
       const headers = new Headers(configuredHeaders(this.config));
       headers.set('content-type', 'application/json'); headers.set('x-api-key', String(this.config.apiKey));
@@ -5630,10 +5636,23 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
     } catch { throw new Error('Invalid OpenRouter request headers.'); }
   }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
-  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
-    return prepareOpenRouterMessage(body, options);
+  protected override nativeMessageHistory(messages: Message[], model: string): Message[] { return toolImageMessages(super.nativeMessageHistory(messages, model)); }
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages, native, model);
+    if (native) for (const [index, message] of messages.filter(message => message.role !== 'system').entries()) {
+      if (message.role === 'tool') (converted[index].content as Array<Record<string, unknown>>)[0].is_error = message.isError === true;
+    }
+    return converted;
   }
-  protected override validateMessageResponse(value: unknown): void { validateOpenRouterMessage(value); }
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    return prepareOpenRouterMessage(body, options, nativeOpenRouterReplay.has(this) ? { messages, owner: this.config.type } : undefined);
+  }
+  protected override messageThinkingLevel(body: Record<string, unknown>): ChatResponse['providerThinkingLevel'] {
+    if (!nativeOpenRouterReplay.has(this) || !openRouterMessageProfile(String(body.model)).compat?.supportsMidConvoEffort) return undefined;
+    const messages = body.messages as Array<{ output_config?: { effort?: unknown } }>, effort = messages.at(-1)?.output_config?.effort;
+    return effort === 'low' || effort === 'medium' || effort === 'high' || effort === 'xhigh' || effort === 'max' ? effort : undefined;
+  }
+  protected override validateMessageResponse(value: unknown, native = false): void { validateOpenRouterMessage(value, native); }
   protected override messageText(content: unknown): string { return openRouterMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenRouterMessageUsage(previous, value, start); }
   protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterMessageUsage(value, model); }
@@ -5641,7 +5660,7 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
     if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
     const result = await super.chat(messages, options);
     if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.');
-    return { ...result, api: this.getModelApi() };
+    return nativeOpenRouterReplay.has(this) ? result : { ...result, api: this.getModelApi() };
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -5650,7 +5669,11 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
       if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, api: this.getModelApi() } : response); }, error => { throw error; }, options);
+        async response => {
+          active();
+          if (nativeOpenRouterReplay.has(this)) { try { await onComplete?.(response); } catch { throw new Error('OpenRouter message request failed.'); } }
+          else onComplete?.(response ? { ...response, api: this.getModelApi() } : response);
+        }, error => { throw error; }, options);
     } catch (error) {
       const failure = options?.signal?.aborted ? new Error('OpenRouter request aborted.') : error instanceof Error ? error : new Error('OpenRouter message request failed.');
       if (onError) onError(failure); else throw failure;
@@ -5745,6 +5768,7 @@ export class OpenRouterProvider extends AiProvider {
     const model = config.model ?? 'openai/gpt-4o';
     openRouterConversationApi(model);
     super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') });
+    if (new.target === OpenRouterProvider) nativeOpenRouterReplay.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
@@ -5767,7 +5791,9 @@ export class OpenRouterProvider extends AiProvider {
   }
   private conversation(model: string): AiProvider {
     const config = { ...this.config, model };
-    return openRouterConversationApi(model) === 'anthropic-messages' ? new OpenRouterMessagesProvider(config) : new OpenRouterCompletionsProvider(config);
+    const provider = openRouterConversationApi(model) === 'anthropic-messages' ? new OpenRouterMessagesProvider(config) : new OpenRouterCompletionsProvider(config);
+    if (!nativeOpenRouterReplay.has(this)) nativeOpenRouterReplay.delete(provider);
+    return provider;
   }
   override getSpecializedModels(): SpecializedModel[] {
     const native = { ...this.config, model: undefined };
@@ -5776,7 +5802,8 @@ export class OpenRouterProvider extends AiProvider {
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
-    return { ...await this.conversation(model).chat(messages, { ...options, model }), provider: providerName };
+    const result = await this.conversation(model).chat(messages, { ...options, model });
+    return nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages' ? result : { ...result, provider: providerName };
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -5789,8 +5816,8 @@ export class OpenRouterProvider extends AiProvider {
       throw failure;
     }
     const providerName = this.getProviderType();
-    return provider.streamChat(messages, onChunk, response => onComplete?.(response ? { ...response, provider: providerName } : response),
-      onError, { ...options, model });
+    return provider.streamChat(messages, onChunk, response => onComplete?.(response && !(nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages')
+      ? { ...response, provider: providerName } : response), onError, { ...options, model });
   }
   override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
     validateClassificationRequest(request);

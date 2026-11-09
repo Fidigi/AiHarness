@@ -1,8 +1,9 @@
-import type { ModelPricing } from '../types/index.js';
+import type { Message, ModelPricing } from '../types/index.js';
 import type { ChatOptions, ChatResponse } from './index.js';
 import { OPENROUTER_MESSAGE_MODELS, type OpenRouterMessageProfile } from './openrouter-messages-metadata.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-metadata.js';
 import { resolveThinkingBudget } from './thinking-budgets.js';
+import { applyAnthropicManagedHistory } from './anthropic-thinking.js';
 
 const profiles = new Map(OPENROUTER_MESSAGE_MODELS.map(profile => [profile.id, profile]));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -22,7 +23,7 @@ export function openRouterMessagesEndpoint(baseUrl: string): string {
   } catch { throw new Error('Invalid OpenRouter messages endpoint.'); }
 }
 
-export function prepareOpenRouterMessage(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+export function prepareOpenRouterMessage(body: Record<string, unknown>, options?: ChatOptions, native?: { messages: readonly Message[]; owner: string }): Record<string, unknown> {
   const profile = openRouterMessageProfile(String(body.model));
   if (options?.thinking !== undefined && !PUBLISHED_THINKING_LEVELS.includes(options.thinking)) throw new Error('Invalid OpenRouter thinking level.');
   const maximum = options?.maxTokens ?? profile.maxOutputTokens;
@@ -43,7 +44,10 @@ export function prepareOpenRouterMessage(body: Record<string, unknown>, options?
     const effort = selected === undefined ? 'high' : profile.thinkingLevelMap?.[selected] ?? selected;
     body.thinking = { type: 'adaptive', display: 'summarized', block_binding: { prefix_mismatch_behavior: 'drop_block' } };
     body.output_config = { effort: 'high' };
-    if (Array.isArray(body.messages)) body.messages.push({ role: 'system', content: [], output_config: { effort } });
+    if (native) {
+      if (effort !== 'low' && effort !== 'medium' && effort !== 'high' && effort !== 'xhigh' && effort !== 'max') throw new Error('Invalid OpenRouter thinking level.');
+      applyAnthropicManagedHistory(body, options, native.messages.filter(message => message.role !== 'system'), native.owner, effort);
+    } else if (Array.isArray(body.messages)) body.messages.push({ role: 'system', content: [], output_config: { effort } });
   } else if (active && adaptive) {
     body.thinking = { type: 'adaptive', display: 'summarized' };
     body.output_config = { effort: profile.thinkingLevelMap?.[selected] ?? selected };
@@ -54,6 +58,10 @@ export function prepareOpenRouterMessage(body: Record<string, unknown>, options?
     body.thinking = { type: 'enabled', budget_tokens: budget, display: 'summarized' };
   } else if (profile.thinkingLevelMap?.off !== null) body.thinking = { type: 'disabled' };
   if (active || managed || profile.compat?.supportsTemperature === false) delete body.temperature;
+  if (native && Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) {
+    const schema = record(tool.input_schema) ? tool.input_schema : {};
+    tool.input_schema = { type: 'object', properties: schema.properties ?? {}, required: schema.required ?? [] }; tool.eager_input_streaming = true;
+  }
   return body;
 }
 
@@ -80,7 +88,7 @@ export function mergeOpenRouterMessageUsage(previous: unknown, value: unknown, s
   return merged;
 }
 
-export function validateOpenRouterMessage(value: unknown): void {
+export function validateOpenRouterMessage(value: unknown, native = false): void {
   const invalid = (): never => { throw new Error('Invalid OpenRouter message response.'); };
   if (!record(value) || value.error || value.type === 'error' || !Array.isArray(value.content)) return invalid();
   if (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500
@@ -88,7 +96,8 @@ export function validateOpenRouterMessage(value: unknown): void {
   for (const block of value.content) {
     if (!record(block)) return invalid();
     if (block.type === 'text') { if (typeof block.text !== 'string') return invalid(); }
-    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string') return invalid(); }
+    else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || native && block.signature !== undefined && typeof block.signature !== 'string') return invalid(); }
+    else if (block.type === 'redacted_thinking' && native) { if (typeof block.data !== 'string') return invalid(); }
     else if (block.type === 'tool_use') {
       if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) return invalid();
     } else throw new Error('Unsupported OpenRouter message content.');

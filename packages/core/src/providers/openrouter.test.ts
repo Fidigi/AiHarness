@@ -37,7 +37,7 @@ describe('explicit mixed OpenRouter SDK', () => {
       let text = ''; for await (const chunk of incoming) text += chunk;
       const body = JSON.parse(text); calls.push({ url: incoming.url, headers: incoming.headers, body });
       response.setHeader('content-type', 'application/json');
-      if (incoming.url?.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: 'A ready' }],
+      if (incoming.url?.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'A ready' }],
         usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1, cache_creation: { ephemeral_1h_input_tokens: 1 } } }));
       else if (incoming.url?.endsWith('/systemone')) response.end(JSON.stringify({ answers: { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
       else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.modalities ? 'Caption' : 'C ready',
@@ -47,7 +47,7 @@ describe('explicit mixed OpenRouter SDK', () => {
     servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const provider = new providers.OpenRouterProvider({ type: 'azure', apiKey: 'disposable-mixed-key', model: overlap,
       baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/proxy%2Fprefix/api/v1` });
-    const messages = [{ id: 'user-1', role: 'user' as const, content: 'Hello', timestamp: 1 }];
+    const messages = [{ id: 'user-1', role: 'user' as const, content: 'Hello', timestamp: new Date(1) }];
     const nativeA = await provider.chat(messages, { model: a, thinking: 'high', maxTokens: 64 });
     expect(nativeA).toMatchObject({ provider: 'azure', api: 'anthropic-messages', content: 'A ready', usage: { promptTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, costUsd: 0.0000522 } });
     const nativeC = await provider.chat(messages, { model: overlap });
@@ -88,7 +88,7 @@ describe('explicit mixed OpenRouter SDK', () => {
     servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const provider = new providers.OpenRouterProvider({ type: 'operator-router', model: a, apiKey: 'disposable-stream-key',
       baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/api/v1` });
-    const completions: providers.ChatResponse[] = [], messages = [{ id: 'user-1', role: 'user' as const, content: 'Hello', timestamp: 1 }];
+    const completions: providers.ChatResponse[] = [], messages = [{ id: 'user-1', role: 'user' as const, content: 'Hello', timestamp: new Date(1) }];
     await provider.streamChat(messages, async text => { if (text) provider.setConfiguredModel(overlap); await Promise.resolve(); },
       value => { if (value) completions.push(value); }, error => { throw error; }, { maxTokens: 64 });
     expect(provider.getModelApi()).toBe('openai-completions');

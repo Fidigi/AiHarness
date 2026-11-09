@@ -1,6 +1,22 @@
 import { createServer, type Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { JsonlSessionStore, SessionManager } from '../sessions/session-manager.js';
+import { serializeSessionForExport } from '../sessions/serialization.js';
+import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
+import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
+import { CredentialRedactor } from './credentials.js';
+import { ExtensionRegistry } from '../extensions/extension-registry.js';
+import { runToolLoop } from '../agent/tool-loop.js';
+import { streamProviderTurn } from '../agent/provider-turn.js';
+import type { Message } from '../types/index.js';
 import * as providers from './index.js';
+
+const continuation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/openrouter-continuation-reference.json', import.meta.url), 'utf8'));
+const continuationModels: string[] = continuation.rows.map((row: { model: string }) => row.model);
 
 const model = 'anthropic/claude-sonnet-4.6';
 const servers: Server[] = [];
@@ -29,13 +45,117 @@ async function fixture(reply?: (body: Record<string, unknown>, response: import(
         { type: 'message_stop' },
       ];
       response.end(events.map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''));
-    } else response.end(JSON.stringify({ model: body.model, content: [{ type: 'thinking', thinking: 'Plan' }, { type: 'text', text: 'Ready' }], usage }));
+    } else response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: 'Plan' }, { type: 'text', text: 'Ready' }], usage }));
   });
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   return { calls, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/proxy%2Fprefix/api/v1/messages` };
 }
 
 describe('native OpenRouter Anthropic Messages', () => {
+  it.each(continuationModels)('compares independent whole private A arrays through both owning SDKs for %s', async model => {
+    const reference = continuation.rows.find((row: { model: string }) => row.model === model);
+    let responseEvents = continuation.seedEvents, responseContent = continuation.syntheticJsonContent, responseStop = 'tool_use';
+    const { calls, baseUrl } = await fixture((body, response) => {
+      response.setHeader('content-type', body.stream ? 'text/event-stream' : 'application/json');
+      if (body.stream) response.end(responseEvents.map((event: Record<string, unknown>) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''));
+      else response.end(JSON.stringify({ model: 'untrusted-response-alias', stop_reason: responseStop, content: responseContent,
+        usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 3 } }));
+    });
+    for (const Provider of [providers.OpenRouterMessagesProvider, providers.OpenRouterProvider]) for (const facade of ['chat', 'stream']) {
+      const provider = new Provider({ type: 'openrouter', model, apiKey: 'disposable-openrouter-private', baseUrl });
+      const user: Message = { id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) };
+      const options = { model, thinking: 'low' as const, thinkingBudgets: { low: 2048 }, maxTokens: 4096, cacheRetention: 'none' as const,
+        systemPrompt: 'owned OpenRouter reference system', tools: continuation.tools };
+      const expected = (body: Record<string, unknown>) => ({ ...structuredClone(body), stream: facade === 'stream' });
+      const invoke = async (messages: Message[], requestOptions: providers.ChatOptions = options) => {
+        if (facade === 'chat') return provider.chat(messages, requestOptions);
+        let complete: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, (text, event) => { expect(text).not.toContain('PRIVATE_OPENROUTER_HEADER'); expect(JSON.stringify(event ?? {})).not.toContain('PRIVATE_OPENROUTER_HEADER'); },
+          response => { complete = response; }, error => { throw error; }, requestOptions);
+        expect(complete).toBeDefined(); return complete!;
+      };
+      responseEvents = continuation.seedEvents.map((event: Record<string, any>) => event.type === 'message_start'
+        ? { ...event, message: { ...event.message, content: [{ type: 'text', text: 'PRIVATE_OPENROUTER_HEADER' }] } } : event);
+      responseContent = continuation.syntheticJsonContent; responseStop = 'tool_use';
+      const first = await invoke([user]); expect(first).toMatchObject({ provider: 'openrouter', api: 'anthropic-messages', model, content: 'left!right?' });
+      expect(first.blocks).toEqual(continuation.expectedBlocks); expect(first.providerThinkingLevel).toBe(reference.published.compat?.supportsMidConvoEffort ? 'low' : undefined); expect(first.toolCalls).toEqual([{ id: 'call', name: 'echo', input: { x: 1 } }]);
+      expect(calls.at(-1)!.body).toEqual(expected(reference.expectedInitialBody));
+      for (const projection of reference.cases) {
+        const source: Message = { id: 'a', role: 'assistant', content: first.content, timestamp: new Date(0), provider: projection.source.provider,
+          api: projection.source.api, model: projection.source.model, blocks: structuredClone(first.blocks), toolCalls: structuredClone(first.toolCalls),
+          metadata: projection.source.providerThinkingLevel ? { providerThinkingLevel: projection.source.providerThinkingLevel } : undefined };
+        const thought = source.blocks!.find(block => block.type === 'reasoning' && !block.redacted)!; expect(thought.type).toBe('reasoning'); if (thought.type !== 'reasoning') throw new Error('Missing reference thought');
+        if (projection.case === 'unsigned') delete thought.thinkingSignature;
+        if (projection.case === 'empty-thinking') thought.text = ''; if (projection.case === 'blank-thinking') thought.text = ' \t';
+        if (projection.case === 'empty-signature') thought.thinkingSignature = ''; if (projection.case === 'blank-signature') thought.thinkingSignature = ' \t';
+        if (projection.case.startsWith('failed-')) source.metadata = { ...source.metadata, outputError: 'Failed OpenRouter producer' };
+        const results: Message[] = projection.case.startsWith('failed-') ? [] : [{ id: 'r', role: 'tool', name: 'echo', toolCallId: 'call', content: 'result', timestamp: new Date(0) }];
+        const history = [user, source, ...results, { ...user, id: 'next', content: 'continue' }], before = structuredClone(history);
+        responseEvents = projection.responseEvents; responseContent = [{ type: 'text', text: 'ok' }]; responseStop = 'end_turn';
+        expect((await invoke(history)).content).toBe('ok'); expect(calls.at(-1)!.body).toEqual(expected(projection.expectedBody)); expect(history).toEqual(before);
+      }
+      const withSystem: Message[] = [{ id: 'sys', role: 'system', content: 'Leading system', timestamp: new Date(0) }, user], systemBefore = structuredClone(withSystem);
+      await invoke(withSystem, { ...options, systemPrompt: undefined }); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), system: [{ type: 'text', text: 'Leading system' }] });
+      await invoke(withSystem); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), system: [{ type: 'text', text: 'owned OpenRouter reference system\n\nLeading system' }] }); expect(withSystem).toEqual(systemBefore);
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-openrouter-replay-')), redactor = new CredentialRedactor(['opaque-signature', 'disposable-openrouter-private']);
+      const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'OpenRouter replay' }), registry = new ExtensionRegistry();
+      let effects = 0; const finalContent = [{ type: 'text', text: 'ok' }];
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; responseEvents = reference.cases[0].responseEvents; responseContent = finalContent; responseStop = 'end_turn'; return { content: 'result' }; } }));
+      responseEvents = continuation.seedEvents; responseContent = continuation.syntheticJsonContent; responseStop = 'tool_use';
+      try {
+        await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'openrouter', tools: continuation.tools,
+          toolContext: { sessionManager: manager, notify: () => {} }, redactText,
+          streamTurn: messages => facade === 'chat' ? provider.chat(messages, options) : streamProviderTurn({ provider, providerName: 'openrouter', model, messages,
+            tools: continuation.tools, extensionRegistry: registry, maxRetries: 0, maxTokens: 4096, thinking: 'low', thinkingBudgets: { low: 2048 }, cacheRetention: 'none', redactText, redactJson,
+            createTextRedactor: () => redactor.createStream() }) });
+        expect(effects).toBe(1);
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8'), assistants = session.messages.filter(item => item.role === 'assistant');
+        expect(assistants.map(item => item.blocks)).toEqual([redactJson(continuation.expectedBlocks), finalContent]);
+        const managed = reference.published.compat?.supportsMidConvoEffort === true, level = managed ? 'low' : undefined;
+        expect(assistants.map(item => item.metadata?.providerThinkingLevel)).toEqual([level, level]);
+        expect(bytes).not.toContain('opaque-signature'); expect(bytes).not.toContain('disposable-openrouter-private'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+        expect(loaded.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(assistants.map(item => item.blocks));
+        const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toContain('opaque-'); expect(JSON.stringify(complete.session)).toContain('[REDACTED]'); expect(JSON.stringify(complete.session)).not.toContain('opaque-signature');
+        const control = { role: 'system', content: [], output_config: { effort: 'low' } }, finalMessage = { role: 'assistant', content: finalContent };
+        const prefix = reference.cases[0].expectedBody.messages.slice(0, managed ? -2 : -1), tail = [...(managed ? [control] : []), finalMessage, ...(managed ? [control] : [])];
+        const loadedMessages = [...redactJson(prefix), ...tail];
+        await invoke(loaded.messages); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: loadedMessages }); expect(await readFile(file, 'utf8')).toBe(bytes);
+        await restarted.appendContextEdit(session.id, { targetEntryId: assistants[0].id, replacement: 'edited answer' });
+        const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy();
+        const edited = getCompactionModelMessages(restarted, clone.id); expect(edited.filter(item => item.role === 'assistant').map(item => item.metadata?.providerThinkingLevel)).toEqual([undefined, level]);
+        await invoke(edited);
+        expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [
+          { role: 'user', content: 'probe' }, { role: 'assistant', content: [{ type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }, { type: 'text', text: 'edited answer' }] },
+          { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call', content: 'result', is_error: false }] }, ...tail] });
+        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(assistants.map(item => item.blocks));
+        expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(assistants.map(item => item.blocks));
+        expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.metadata?.providerThinkingLevel)).toEqual([level, level]);
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
+        expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-/); expect(canonical).toEqual(beforeSummary);
+        const kept = clone.messages.filter(item => item.role === 'assistant').at(-1)!, sourceBytes = await readFile(file, 'utf8');
+        await restarted.applyCompaction(clone.id, 'PUBLIC_OPENROUTER_COMPACTED_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }); expect(await compactedManager.loadFromStore(clone.id)).toBeTruthy();
+        const compacted = getCompactionModelMessages(compactedManager, clone.id); expect(compacted.some(item => item.content.includes('PUBLIC_OPENROUTER_COMPACTED_PREFIX'))).toBe(true);
+        expect(compacted.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual([finalContent]); expect(compacted.filter(item => item.role === 'tool')).toEqual([]);
+        const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+        expect((await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(assistants.map(item => item.blocks));
+        await invoke(compacted); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: tail,
+          system: [{ type: 'text', text: 'owned OpenRouter reference system\n\n[Context Summary] PUBLIC_OPENROUTER_COMPACTED_PREFIX' }] });
+        expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+    }
+    expect(calls).toHaveLength(80);
+    for (const call of calls) {
+      expect(call.url).toBe('/proxy%2Fprefix/api/v1/messages'); expect(call.headers['x-api-key']).toBe('disposable-openrouter-private');
+      expect(call.headers.authorization).toBeUndefined(); expect(call.headers['anthropic-version']).toBe('2023-06-01');
+      expect(call.headers['anthropic-beta']).toBe(reference.sdkBeta ?? undefined);
+    }
+  });
+
   it('owns sixteen A profiles without inheriting C/I/T or ambient account authority', async () => {
     expect(providers).toHaveProperty('OpenRouterMessagesProvider');
     const provider = new providers.OpenRouterMessagesProvider({ type: 'operator-router', apiKey: 'disposable-router', model });
@@ -132,16 +252,37 @@ describe('native OpenRouter Anthropic Messages', () => {
       expect(descriptor.pricing).not.toBe(profile.pricing);
     }
     expect(calls).toHaveLength(16);
+    for (const profile of providers.OPENROUTER_MESSAGE_MODELS) for (const Provider of [providers.OpenRouterMessagesProvider, providers.OpenRouterProvider]) for (const facade of ['chat', 'stream']) {
+      const owner = new Provider({ type: 'openrouter', apiKey: 'disposable-media', model: profile.id, baseUrl });
+      const history: Message[] = [{ id: 'media-u', role: 'user', content: 'before', timestamp: new Date(0) },
+        { id: 'media-a', role: 'assistant', content: 'called', timestamp: new Date(0), provider: 'openrouter', api: 'anthropic-messages', model: profile.id,
+          metadata: { providerThinkingLevel: 'low' }, toolCalls: [{ id: 'image-call', name: 'read', input: {} }] },
+        { id: 'media-r', role: 'tool', name: 'read', toolCallId: 'image-call', content: 'result', timestamp: new Date(0), blocks: [{ type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=' }] },
+        { id: 'media-next', role: 'user', content: 'after', timestamp: new Date(0) }], before = structuredClone(history);
+      const options = { maxTokens: 4096, thinking: 'low' as const, thinkingBudgets: { low: 2048 }, cacheRetention: 'none' as const };
+      if (facade === 'chat') await owner.chat(history, options); else await owner.streamChat(history, () => {}, undefined, error => { throw error; }, options);
+      const expected = structuredClone(continuation.rows.find((row: { model: string }) => row.model === profile.id).expectedInitialBody);
+      delete expected.tools; delete expected.system; expected.stream = facade === 'stream';
+      const control = { role: 'system', content: [], output_config: { effort: 'low' } }, managed = profile.compat?.supportsMidConvoEffort;
+      expected.messages = [{ role: 'user', content: 'before' }, ...(managed ? [control] : []),
+        { role: 'assistant', content: [{ type: 'text', text: 'called' }, { type: 'tool_use', id: 'image-call', name: 'read', input: {} }] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'image-call', content: 'result', is_error: false }] },
+        { role: 'user', content: [{ type: 'text', text: 'Tool images for image-call' }, { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' } }] },
+        { role: 'user', content: 'after' }, ...(managed ? [control] : [])];
+      expect(calls.at(-1)!.body).toEqual(expected); expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(80);
   });
 
   it('uses gross-input tiers, observed initial/delta/1h accounting and conservative partials', async () => {
     let usage: unknown, deltaUsage: unknown;
     const { baseUrl } = await fixture((body, response) => {
-      if (!body.stream) { response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: 'Ready' }], usage })); return; }
+      if (!body.stream) { response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'Ready' }], usage })); return; }
       response.setHeader('content-type', 'text/event-stream');
       const events = [{ type: 'message_start', message: { model: body.model, usage } },
-        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Ready' } },
-        ...(deltaUsage === undefined ? [] : [{ type: 'message_delta', usage: deltaUsage }]), { type: 'message_stop' }];
+        { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+        { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Ready' } }, { type: 'content_block_stop', index: 0 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, ...(deltaUsage === undefined ? {} : { usage: deltaUsage }) }, { type: 'message_stop' }];
       response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
     });
     const provider = new providers.OpenRouterMessagesProvider({ type: 'operator-router', apiKey: 'disposable', model, baseUrl });
@@ -189,7 +330,7 @@ describe('native OpenRouter Anthropic Messages', () => {
   it('keeps endpoint/header/decoded JSON errors private and ignores unused adaptive numeric maps', async () => {
     let reply: unknown;
     const { calls, baseUrl } = await fixture((body, response) => response.end(JSON.stringify(reply ?? {
-      model: body.model, content: [{ type: 'text', text: 'Ready' }], usage: { input_tokens: 5, output_tokens: 2 },
+      model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'Ready' }], usage: { input_tokens: 5, output_tokens: 2 },
     })));
     for (const endpoint of ['https://private:secret@example.test/api', 'https://example.test/api?private=secret', 'https://example.test/api#private-secret', 'file:///private/secret']) {
       expect(() => new providers.OpenRouterMessagesProvider({ type: 'operator-router', model, apiKey: 'disposable', baseUrl: endpoint }))
@@ -218,7 +359,7 @@ describe('native OpenRouter Anthropic Messages', () => {
     ]) {
       reply = invalid; await expect(adaptive.chat([])).rejects.toThrow('Invalid OpenRouter message response.');
     }
-    reply = { model, content: [{ type: 'text', text: 'One' }, { type: 'thinking', thinking: 'Plan' }, { type: 'text', text: 'Two' }] };
+    reply = { model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'One' }, { type: 'thinking', thinking: 'Plan' }, { type: 'text', text: 'Two' }] };
     expect(await adaptive.chat([])).toMatchObject({ content: 'OneTwo', reasoning: 'Plan' });
   });
 
@@ -233,5 +374,47 @@ describe('native OpenRouter Anthropic Messages', () => {
     expect(calls).toHaveLength(1); expect(events).toEqual(['message_start', 'reasoning_delta']);
     expect(complete).not.toHaveBeenCalled(); expect(failure).toHaveBeenCalledOnce();
     expect(failure.mock.calls[0][0].message).toBe('OpenRouter request aborted.');
+    let seed = true;
+    const signed = await fixture((body, response) => {
+      response.setHeader('content-type', body.stream ? 'text/event-stream' : 'application/json');
+      const events = seed ? continuation.seedEvents : continuation.rows[0].cases[0].responseEvents;
+      if (body.stream) response.end(events.map((event: Record<string, unknown>) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''));
+      else response.end(JSON.stringify({ model: 'untrusted-response-alias', stop_reason: seed ? 'tool_use' : 'end_turn', content: seed ? continuation.syntheticJsonContent : [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 3 } }));
+    });
+    const physical = 'anthropic/claude-opus-5.5', later = 'anthropic/claude-sonnet-4.6', reference = continuation.rows.find((row: { model: string }) => row.model === physical);
+    const options = { maxTokens: 4096, thinking: 'low' as const, thinkingBudgets: { low: 2048 }, cacheRetention: 'none' as const,
+      systemPrompt: 'owned OpenRouter reference system', tools: continuation.tools };
+    for (const Provider of [providers.OpenRouterMessagesProvider, providers.OpenRouterProvider]) for (const facade of ['chat', 'stream']) {
+      const owner = new Provider({ type: 'openrouter', model: later, apiKey: 'disposable-getter', baseUrl: signed.baseUrl }); let reads = 0, snapshot: providers.ChatResponse | undefined;
+      const selected = { ...options, get model() { return ++reads === 1 ? physical : later; } }, user: Message = { id: 'getter-u', role: 'user', content: 'probe', timestamp: new Date(0) };
+      seed = true;
+      if (facade === 'chat') snapshot = await owner.chat([user], selected); else await owner.streamChat([user], () => {}, value => { snapshot = value; }, error => { throw error; }, selected);
+      expect(signed.calls.at(-1)!.body).toEqual({ ...reference.expectedInitialBody, stream: facade === 'stream' });
+      expect(signed.calls.at(-1)!.headers['anthropic-beta']).toBe(reference.sdkBeta);
+      expect(snapshot).toMatchObject({ provider: 'openrouter', api: 'anthropic-messages', model: physical, providerThinkingLevel: 'low', blocks: continuation.expectedBlocks });
+      const rates = reference.published.cost; expect(snapshot!.usage?.costUsd).toBeCloseTo((5 * rates.input + 2 * rates.output + 4 * rates.cacheRead + 3 * rates.cacheWrite) / 1e6, 12);
+      const history: Message[] = [user, { id: 'getter-a', role: 'assistant', content: snapshot!.content, timestamp: new Date(0), provider: snapshot!.provider, api: snapshot!.api, model: snapshot!.model,
+        blocks: snapshot!.blocks, toolCalls: snapshot!.toolCalls, metadata: { providerThinkingLevel: snapshot!.providerThinkingLevel } },
+        { id: 'getter-r', role: 'tool', name: 'echo', toolCallId: 'call', content: 'result', timestamp: new Date(0) }, { ...user, id: 'getter-next', content: 'continue' }], before = structuredClone(history);
+      seed = false; await owner.chat(history, { ...options, model: physical }); expect(signed.calls.at(-1)!.body).toEqual({ ...reference.cases[0].expectedBody, stream: false });
+      await owner.chat(history, { ...options, model: later }); expect(signed.calls.at(-1)!.body).toEqual({ ...continuation.rows.find((row: { model: string }) => row.model === later).cases.find((row: { case: string }) => row.case === 'foreign-model').expectedBody, stream: false }); expect(history).toEqual(before);
+    }
+    expect(signed.calls).toHaveLength(12);
+    for (const Provider of [providers.OpenRouterMessagesProvider, providers.OpenRouterProvider]) {
+      seed = true; const errors: Error[] = [];
+      await new Provider({ type: 'openrouter', model: physical, apiKey: 'disposable-publication', baseUrl: signed.baseUrl }).streamChat([], () => {}, async () => {
+        await Promise.resolve(); throw new Error('PRIVATE_OPENROUTER_COMPLETION_FAILURE');
+      }, error => { errors.push(error); }, options);
+      expect(errors.map(error => error.message)).toEqual(['OpenRouter message request failed.']);
+    }
+    const forged = await fixture((_body, response) => response.end(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Ready' }, { type: 'thinking', thinking: 'visible', signature: 'opaque-forged-reply' }] })));
+    class DerivedA extends providers.OpenRouterMessagesProvider {} class DerivedMixed extends providers.OpenRouterProvider {}
+    for (const Provider of [providers.AnthropicProvider, DerivedA, DerivedMixed]) {
+      const owner = new Provider({ type: 'openrouter', model: later, apiKey: 'disposable-forged', baseUrl: Provider === providers.AnthropicProvider ? forged.baseUrl.replace(/\/v1\/messages$/, '') : forged.baseUrl });
+      const history: Message[] = [{ id: 'forged-a', role: 'assistant', content: 'visible', timestamp: new Date(0), provider: 'openrouter', api: 'anthropic-messages', model: later,
+        blocks: [{ type: 'reasoning', text: 'visible', thinkingSignature: 'opaque-forged' }] }];
+      expect((await owner.chat(history, { model: later, maxTokens: 4096 })).blocks).toBeUndefined(); expect(JSON.stringify(forged.calls.at(-1)!.body)).not.toContain('opaque-');
+    }
   });
 });

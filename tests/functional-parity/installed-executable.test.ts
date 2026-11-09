@@ -3107,29 +3107,34 @@ it('dispatches native OpenRouter A through installed declarations, adaptive effo
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-messages-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
-  await writeFile(path.join(consumer, 'router-messages-public.mjs'), `
+  await writeFile(path.join(consumer, 'router-messages-public.mjs'), String.raw`
     import assert from 'node:assert/strict';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
-    import { OpenRouterMessagesProvider, OPENROUTER_MESSAGE_MODELS, SpecializedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    import { AnthropicProvider, OpenRouterMessagesProvider, OpenRouterProvider, OPENROUTER_MESSAGE_MODELS, SpecializedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    const replay = ${await readFile(path.join(checkout, 'tests/fixtures/openrouter-continuation-reference.json'), 'utf8')};let replayEvents,replayContent,replayStop;
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const calls = [];
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
       const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
+      if(replayEvents){if(body.stream){response.setHeader('content-type','text/event-stream');response.end(replayEvents.map(event=>'event: '+event.type+'\ndata: '+JSON.stringify(event)+'\n\n').join(''));}
+        else response.end(JSON.stringify({model:'untrusted-response-alias',stop_reason:replayStop,content:replayContent,usage:{input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:3}}));return;}
       if (body.stream) {
         response.setHeader('content-type', 'text/event-stream');
         const events = [
           { type: 'message_start', message: { model: body.model, usage } },
-          { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Plan' } },
-          { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Ready' } },
+          { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+          { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Plan' } }, { type: 'content_block_stop', index: 0 },
+          { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+          { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Ready' } }, { type: 'content_block_stop', index: 1 },
           { type: 'content_block_start', index: 2, content_block: { type: 'tool_use', id: 'call-1', name: 'read', input: {} } },
-          { type: 'content_block_delta', index: 2, delta: { type: 'input_json_delta', partial_json: '{}' } },
+          { type: 'content_block_delta', index: 2, delta: { type: 'input_json_delta', partial_json: '{}' } }, { type: 'content_block_stop', index: 2 },
           { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 2 } }, { type: 'message_stop' },
         ];
-        response.end(events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join(''));
-      } else response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: body.max_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready' },
+        response.end(events.map(event => 'data: ' + JSON.stringify(event) + '\n\n').join(''));
+      } else response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: body.max_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready' },
         { type: 'thinking', thinking: 'Plan' }], usage }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -3158,6 +3163,37 @@ it('dispatches native OpenRouter A through installed declarations, adaptive effo
       assert.equal(calls[0].headers['x-session-id'], 'installed-session'); assert.deepEqual(calls[0].body.output_config, { effort: 'max' });
       assert.equal(calls[0].body.thinking.type, 'adaptive'); assert.equal(calls[0].body.max_tokens, 64);
       assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+      assert.equal(replay.freshSdkRequests,208);assert.equal(replay.replayProjections,192);assert.equal(replay.unexecutedOtherProfiles,459);
+      const key='disposable-installed-key',base='http://127.0.0.1:'+server.address().port+'/proxy/api/v1/messages',options={maxTokens:4096,thinking:'low',thinkingBudgets:{low:2048},cacheRetention:'none',systemPrompt:'owned OpenRouter reference system',tools:replay.tools};
+      for(const row of replay.rows)for(const Owner of [OpenRouterMessagesProvider,OpenRouterProvider])for(const facade of ['chat','stream']){
+        const owner=new Owner({type:'openrouter',model:row.model,apiKey:key,baseUrl:base}),selected={...options,model:row.model},expected=body=>({...structuredClone(body),stream:facade==='stream'}),invoke=async(messages,requestOptions=selected)=>{if(facade==='chat')return owner.chat(messages,requestOptions);let result;await owner.streamChat(messages,(text,event)=>{assert(!text.includes('PRIVATE_OPENROUTER_HEADER'));assert(!JSON.stringify(event??{}).includes('PRIVATE_OPENROUTER_HEADER'));},value=>{result=value;},error=>{throw error;},requestOptions);assert(result);return result;};
+        const user={id:'u',role:'user',content:'probe',timestamp:new Date(0)};replayEvents=replay.seedEvents.map(event=>event.type==='message_start'?{...event,message:{...event.message,content:[{type:'text',text:'PRIVATE_OPENROUTER_HEADER'}]}}:event);replayContent=replay.syntheticJsonContent;replayStop='tool_use';
+        const first=await invoke([user]);assert.equal(first.provider,'openrouter');assert.equal(first.api,'anthropic-messages');assert.equal(first.model,row.model);assert.equal(first.content,'left!right?');assert.deepEqual(first.blocks,replay.expectedBlocks);assert.equal(first.providerThinkingLevel,row.published.compat?.supportsMidConvoEffort?'low':undefined);assert.deepEqual(first.toolCalls,[{id:'call',name:'echo',input:{x:1}}]);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));assert.equal(calls.at(-1).headers['anthropic-beta'],row.sdkBeta??undefined);
+        for(const projection of row.cases){const source={id:'a',role:'assistant',content:first.content,timestamp:new Date(0),provider:projection.source.provider,api:projection.source.api,model:projection.source.model,blocks:structuredClone(first.blocks),toolCalls:structuredClone(first.toolCalls),metadata:projection.source.providerThinkingLevel?{providerThinkingLevel:projection.source.providerThinkingLevel}:undefined},thought=source.blocks.find(block=>block.type==='reasoning'&&!block.redacted);assert(thought);
+          if(projection.case==='unsigned')delete thought.thinkingSignature;if(projection.case==='empty-thinking')thought.text='';if(projection.case==='blank-thinking')thought.text=' \t';if(projection.case==='empty-signature')thought.thinkingSignature='';if(projection.case==='blank-signature')thought.thinkingSignature=' \t';if(projection.case.startsWith('failed-'))source.metadata={...source.metadata,outputError:'Failed OpenRouter producer'};
+          const results=projection.case.startsWith('failed-')?[]:[{id:'r',role:'tool',name:'echo',toolCallId:'call',content:'result',timestamp:new Date(0)}],history=[user,source,...results,{...user,id:'next',content:'continue'}],before=structuredClone(history);replayEvents=projection.responseEvents;replayContent=[{type:'text',text:'ok'}];replayStop='end_turn';
+          assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);assert.equal(calls.at(-1).headers['anthropic-beta'],row.sdkBeta??undefined);
+        }
+        const system=[{id:'sys',role:'system',content:'Leading system',timestamp:new Date(0)},user],before=structuredClone(system);await invoke(system,{...selected,systemPrompt:undefined});assert.deepEqual(calls.at(-1).body,{...expected(row.expectedInitialBody),system:[{type:'text',text:'Leading system'}]});await invoke(system);assert.deepEqual(calls.at(-1).body,{...expected(row.expectedInitialBody),system:[{type:'text',text:'owned OpenRouter reference system\n\nLeading system'}]});assert.deepEqual(system,before);
+      }
+      const physical='anthropic/claude-opus-5.5',later='anthropic/claude-sonnet-4.6',reference=replay.rows.find(row=>row.model===physical);
+      for(const Owner of [OpenRouterMessagesProvider,OpenRouterProvider])for(const facade of ['chat','stream']){
+        const owner=new Owner({type:'openrouter',model:later,apiKey:key,baseUrl:base});let reads=0,snapshot;const selected={...options,get model(){return ++reads===1?physical:later;}},user={id:'getter-u',role:'user',content:'probe',timestamp:new Date(0)};replayEvents=replay.seedEvents;replayContent=replay.syntheticJsonContent;replayStop='tool_use';
+        if(facade==='chat')snapshot=await owner.chat([user],selected);else await owner.streamChat([user],()=>{},value=>{snapshot=value;},error=>{throw error;},selected);
+        assert.deepEqual(calls.at(-1).body,{...reference.expectedInitialBody,stream:facade==='stream'});assert.equal(calls.at(-1).headers['anthropic-beta'],reference.sdkBeta);assert.equal(snapshot.provider,'openrouter');assert.equal(snapshot.api,'anthropic-messages');assert.equal(snapshot.model,physical);assert.equal(snapshot.providerThinkingLevel,'low');assert.deepEqual(snapshot.blocks,replay.expectedBlocks);const rates=reference.published.cost;assert(Math.abs(snapshot.usage.costUsd-(5*rates.input+2*rates.output+4*rates.cacheRead+3*rates.cacheWrite)/1e6)<1e-12);
+        const history=[user,{id:'getter-a',role:'assistant',content:snapshot.content,timestamp:new Date(0),provider:snapshot.provider,api:snapshot.api,model:snapshot.model,blocks:snapshot.blocks,toolCalls:snapshot.toolCalls,metadata:{providerThinkingLevel:snapshot.providerThinkingLevel}},{id:'getter-r',role:'tool',name:'echo',toolCallId:'call',content:'result',timestamp:new Date(0)},{...user,id:'getter-next',content:'continue'}],before=structuredClone(history);replayEvents=replay.rows[0].cases[0].responseEvents;replayContent=[{type:'text',text:'ok'}];replayStop='end_turn';
+        await owner.chat(history,{...options,model:physical});assert.deepEqual(calls.at(-1).body,{...reference.cases[0].expectedBody,stream:false});await owner.chat(history,{...options,model:later});assert.deepEqual(calls.at(-1).body,{...replay.rows.find(row=>row.model===later).cases.find(row=>row.case==='foreign-model').expectedBody,stream:false});assert.deepEqual(history,before);
+      }
+      for(const profile of OPENROUTER_MESSAGE_MODELS)for(const Owner of [OpenRouterMessagesProvider,OpenRouterProvider])for(const facade of ['chat','stream']){
+        const owner=new Owner({type:'openrouter',model:profile.id,apiKey:key,baseUrl:base}),history=[{id:'media-u',role:'user',content:'before',timestamp:new Date(0)},{id:'media-a',role:'assistant',content:'called',timestamp:new Date(0),provider:'openrouter',api:'anthropic-messages',model:profile.id,metadata:{providerThinkingLevel:'low'},toolCalls:[{id:'image-call',name:'read',input:{}}]},
+          {id:'media-r',role:'tool',name:'read',toolCallId:'image-call',content:'result',timestamp:new Date(0),blocks:[{type:'image',mediaType:'image/png',url:'data:image/png;base64,aGVsbG8='}]},{id:'media-next',role:'user',content:'after',timestamp:new Date(0)}],before=structuredClone(history),selected={maxTokens:4096,thinking:'low',thinkingBudgets:{low:2048},cacheRetention:'none'};
+        if(facade==='chat')await owner.chat(history,selected);else await owner.streamChat(history,()=>{},undefined,error=>{throw error;},selected);const expected=structuredClone(replay.rows.find(row=>row.model===profile.id).expectedInitialBody);delete expected.tools;delete expected.system;expected.stream=facade==='stream';const control={role:'system',content:[],output_config:{effort:'low'}},managed=profile.compat?.supportsMidConvoEffort;
+        expected.messages=[{role:'user',content:'before'},...(managed?[control]:[]),{role:'assistant',content:[{type:'text',text:'called'},{type:'tool_use',id:'image-call',name:'read',input:{}}]},{role:'user',content:[{type:'tool_result',tool_use_id:'image-call',content:'result',is_error:false}]},{role:'user',content:[{type:'text',text:'Tool images for image-call'},{type:'image',source:{type:'base64',media_type:'image/png',data:'aGVsbG8='}}]},{role:'user',content:'after'},...(managed?[control]:[])];assert.deepEqual(calls.at(-1).body,expected);assert.deepEqual(history,before);
+      }
+      for(const Owner of [OpenRouterMessagesProvider,OpenRouterProvider]){replayEvents=replay.seedEvents;replayContent=replay.syntheticJsonContent;replayStop='tool_use';const errors=[];await new Owner({type:'openrouter',model:physical,apiKey:key,baseUrl:base}).streamChat([],()=>{},async()=>{await Promise.resolve();throw Error('PRIVATE_OPENROUTER_COMPLETION_FAILURE');},error=>{errors.push(error);},options);assert.deepEqual(errors.map(error=>error.message),['OpenRouter message request failed.']);}
+      replayContent=[{type:'text',text:'Ready'},{type:'thinking',thinking:'visible',signature:'opaque-forged-reply'}];replayStop='end_turn';class DerivedA extends OpenRouterMessagesProvider{}class DerivedMixed extends OpenRouterProvider{}
+      for(const Owner of [AnthropicProvider,DerivedA,DerivedMixed]){const owner=new Owner({type:'openrouter',model:later,apiKey:key,baseUrl:Owner===AnthropicProvider?base.replace(/\/v1\/messages$/,''):base}),history=[{id:'forged-a',role:'assistant',content:'visible',timestamp:new Date(0),provider:'openrouter',api:'anthropic-messages',model:later,blocks:[{type:'reasoning',text:'visible',thinkingSignature:'opaque-forged'}]}];assert.equal((await owner.chat(history,{model:later,maxTokens:4096})).blocks,undefined);assert(!JSON.stringify(calls.at(-1).body).includes('opaque-'));}
+      assert.equal(calls.length,1044);for(const call of calls.slice(3)){assert.equal(call.headers['x-api-key'],key);assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed OpenRouter A OK');
   `);
@@ -3190,7 +3226,7 @@ it('dispatches mixed OpenRouter A/C/I/T through one installed SDK without overla
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
       response.setHeader('content-type', 'application/json');
-      if (request.url.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, content: [{ type: 'text', text: 'A ready' }],
+      if (request.url.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'A ready' }],
         usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1, cache_creation: { ephemeral_1h_input_tokens: 1 } } }));
       else if (request.url.endsWith('/systemone')) response.end(JSON.stringify({ answers: { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
       else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.modalities ? 'Caption' : 'C ready',

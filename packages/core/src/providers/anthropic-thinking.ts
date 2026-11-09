@@ -130,8 +130,8 @@ export function anthropicThinkingBetas(model: string, options?: ChatOptions): st
     ? ['interleaved-thinking-2025-05-14'] : [];
 }
 /** Insert controls before the corresponding assistant, never between a tool use/result pair. */
-export function applyAnthropicManagedHistory(body: Record<string, unknown>, options: ChatOptions | undefined, messages: readonly Message[], owner: string): void {
-  const effort = anthropicManagedEffort(String(body.model), options);
+export function applyAnthropicManagedHistory(body: Record<string, unknown>, options: ChatOptions | undefined, messages: readonly Message[], owner: string,
+  effort = anthropicManagedEffort(String(body.model), options)): void {
   if (effort === undefined || !Array.isArray(body.messages)) return;
   const converted = body.messages;
   body.messages = converted.flatMap((message: unknown, index: number) => {
