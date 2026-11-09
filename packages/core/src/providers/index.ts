@@ -1916,6 +1916,8 @@ export class MoonshotCnProvider extends MoonshotProvider {
   }
 }
 
+const nativeNvidiaReplay = new WeakSet<AiProvider>();
+
 /** Explicit native Nvidia C policy, never inferred from an alias or compatible URL. */
 export class NvidiaProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1923,6 +1925,7 @@ export class NvidiaProvider extends OpenAiProvider {
     const model = config.model ?? NVIDIA_MODELS[0].id; nvidiaProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://integrate.api.nvidia.com/v1', 'chat/completions', 'Nvidia');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === NvidiaProvider) nativeNvidiaReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1953,10 +1956,17 @@ export class NvidiaProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid Nvidia request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareNvidiaChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateNvidiaChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return nvidiaStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return nvidiaReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareNvidiaChat(body, options, messages);
+    if (nativeNvidiaReplay.has(this)) {
+      const profile = nvidiaProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Nvidia chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateNvidiaChat(value, nativeNvidiaReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return nvidiaStreamValidator(nativeNvidiaReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return nvidiaReasoning(value, nativeNvidiaReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return nvidiaUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Nvidia request aborted.');
@@ -1972,7 +1982,7 @@ export class NvidiaProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Nvidia API key is required.');
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('Nvidia request aborted.');
-      return { ...result, provider, api: 'openai-completions' };
+      return nativeNvidiaReplay.has(this) ? result : { ...result, provider, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1982,7 +1992,7 @@ export class NvidiaProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Nvidia API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        response => { active(); if (nativeNvidiaReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }

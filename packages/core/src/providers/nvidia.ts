@@ -71,29 +71,29 @@ export function nvidiaUsage(value: unknown, model: string): ChatResponse['usage'
     ...(usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }) };
 }
-export function nvidiaReasoning(value: unknown): string | undefined {
+export function nvidiaReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
-  const fields = ['reasoning_content', 'reasoning', 'reasoning_text', 'reasoning_summary'];
+  const fields = nativeReplay ? ['reasoning_content', 'reasoning', 'reasoning_text'] : ['reasoning_content', 'reasoning', 'reasoning_text', 'reasoning_summary'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
     || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Nvidia chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Nvidia reasoning replay.');
+  if (!nativeReplay && value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Nvidia reasoning replay.');
   return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
 }
 const validFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
-export function validateNvidiaChat(value: unknown): void {
+export function validateNvidiaChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)
     || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Nvidia chat response.');
-  nvidiaReasoning(value.choices[0].message);
+  nvidiaReasoning(value.choices[0].message, nativeReplay);
 }
-export function nvidiaStreamValidator(): (value?: unknown) => void {
+export function nvidiaStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Nvidia chat response.'); return; }
     if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Nvidia chat response.');
     const choice = value.choices[0]; if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Nvidia chat response.');
-    nvidiaReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Nvidia chat response.');
+    nvidiaReasoning(choice.delta, nativeReplay); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Nvidia chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Nvidia chat response.'); finished = true; }
   };
 }
