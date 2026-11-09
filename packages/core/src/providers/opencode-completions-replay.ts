@@ -25,8 +25,8 @@ function legacyDetail(signature: string | undefined): Item | undefined {
   catch { return undefined; }
 }
 
-/** Go C mechanics only. The caller privately admits the actual body owner before using these projections. */
-export function applyOpenCodeGoCompletionHistory(body: Item, messages: Message[], provider: string, requiresReasoning: boolean): void {
+/** Independently admitted Go/Zen C mechanics; the caller owns the actual body and marker policy. */
+export function applyOpenCodeCompletionHistory(body: Item, messages: Message[], provider: string, requiresReasoning: boolean, normalizeReasoningMarker: boolean): void {
   const model = String(body.model), assistants = messages.filter(message => message.role === 'assistant'), tools = messages.filter(message => message.role === 'tool');
   const ids = new Map<string, string>(); let assistantIndex = 0, toolIndex = 0;
   if (Array.isArray(body.messages)) body.messages = body.messages.flatMap((value): Item[] => {
@@ -54,7 +54,7 @@ export function applyOpenCodeGoCompletionHistory(body: Item, messages: Message[]
       if (preserved) result.reasoning_details = preserved;
       else {
         const visible = thinking.filter(block => block.text.trim()), first = visible[0]?.thinkingSignature;
-        const field = first === 'reasoning' ? 'reasoning_content' : first;
+        const field = normalizeReasoningMarker && first === 'reasoning' ? 'reasoning_content' : first;
         if (field && fields.some(value => value === field)) result[field] = visible.map(block => block.text).join('\n');
       }
       if (requiresReasoning && result.reasoning_content === undefined) result.reasoning_content = '';
@@ -77,7 +77,7 @@ export function applyOpenCodeGoCompletionHistory(body: Item, messages: Message[]
 }
 
 /** Pinned C streaming coalesces one text and one thinking block, unlike contiguous Google blocks. */
-export function createOpenCodeGoCompletionCapture() {
+export function createOpenCodeCompletionCapture(normalizeReasoningMarker: boolean) {
   const slots: Array<MessageContentBlock | number> = [], toolIndexes = new Set<number>();
   let text: Extract<MessageContentBlock, { type: 'text' }> | undefined, thought: Extract<MessageContentBlock, { type: 'reasoning' }> | undefined;
   let details: Item[] | undefined;
@@ -87,7 +87,7 @@ export function createOpenCodeGoCompletionCapture() {
       if (!record(value)) return;
       if (typeof value.content === 'string' && value.content) { if (!text) { text = { type: 'text', text: '' }; slots.push(text); } text.text += value.content; }
       const field = fields.find(field => typeof value[field] === 'string' && value[field]);
-      if (field) thinking(field === 'reasoning' ? 'reasoning_content' : field).text += value[field] as string;
+      if (field) thinking(normalizeReasoningMarker && field === 'reasoning' ? 'reasoning_content' : field).text += value[field] as string;
       if (Array.isArray(value.tool_calls)) for (const [position, call] of value.tool_calls.entries()) if (record(call)) {
         const index = complete ? position : call.index;
         if (typeof index === 'number' && !toolIndexes.has(index)) { toolIndexes.add(index); slots.push(index); }
@@ -106,7 +106,7 @@ export function createOpenCodeGoCompletionCapture() {
       const indexes = [...toolIndexes].sort((a, b) => a - b);
       return slots.map((slot): MessageContentBlock => {
         if (typeof slot !== 'number') return { ...slot };
-        const call = calls[indexes.indexOf(slot)]; if (!call) throw new Error('Invalid OpenCode Go chat response.');
+        const call = calls[indexes.indexOf(slot)]; if (!call) throw new Error(normalizeReasoningMarker ? 'Invalid OpenCode Go chat response.' : 'Invalid OpenCode chat response.');
         return { type: 'tool_call', ...call };
       });
     },

@@ -55,7 +55,7 @@ import { MINIMAX_MODELS, miniMaxProfile, miniMaxEndpoint, miniMaxThinking, prepa
 export { MINIMAX_MODELS, MINIMAX_MODELS as MINIMAX_CN_MODELS } from './minimax.js';
 import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeaders, prepareOpenCodeGoMessage, prepareOpenCodeGoChat, prepareOpenCodeGoResponse, prepareOpenCodeGoOutputBudget, opencodeGoUsage, mergeOpenCodeGoUsage, opencodeGoReasoning, validateOpenCodeGoMessage, validateOpenCodeGoChat, opencodeGoMessageText, opencodeGoStreamValidator, opencodeGoFailure } from './opencode-go.js';
 export { OPENCODE_GO_MODELS } from './opencode-go.js';
-import { applyOpenCodeGoCompletionHistory, createOpenCodeGoCompletionCapture } from './opencode-go-completions-replay.js';
+import { applyOpenCodeCompletionHistory, createOpenCodeCompletionCapture } from './opencode-completions-replay.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -665,7 +665,7 @@ function normalizeOpenAiUsage(
   };
 }
 
-const nativeCompletionsOwners = new WeakMap<Record<string, unknown>, { provider: string; api: string; model: string }>();
+const nativeCompletionsOwners = new WeakMap<Record<string, unknown>, { provider: string; api: string; model: string; normalizeReasoningMarker: boolean }>();
 
 export class OpenAiProvider extends AiProvider {
   override getModelApi(): string { return 'openai-completions'; }
@@ -837,7 +837,7 @@ export class OpenAiProvider extends AiProvider {
     }
 
     const reasoning = this.responseReasoning(choice.message), toolCalls = this.parseToolCalls(choice.message.tool_calls);
-    const capture = owner ? createOpenCodeGoCompletionCapture() : undefined; capture?.accept(choice.message, true);
+    const capture = owner ? createOpenCodeCompletionCapture(owner.normalizeReasoningMarker) : undefined; capture?.accept(choice.message, true);
     if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.');
     return {
       content: choice.message.content || '',
@@ -846,7 +846,7 @@ export class OpenAiProvider extends AiProvider {
       model: data.model,
       usage: data.usage ? this.responseUsage(data.usage, owner?.model ?? model) : undefined,
       toolCalls,
-      ...(owner ? { ...owner, blocks: capture!.finish(toolCalls) } : {}),
+      ...(owner ? { provider: owner.provider, api: owner.api, model: owner.model, blocks: capture!.finish(toolCalls) } : {}),
     };
   }
 
@@ -891,7 +891,7 @@ export class OpenAiProvider extends AiProvider {
 
     try {
       const prepared = this.prepareChatBody(body, options, messages), owner = nativeCompletionsOwners.get(prepared);
-      const capture = owner ? createOpenCodeGoCompletionCapture() : undefined;
+      const capture = owner ? createOpenCodeCompletionCapture(owner.normalizeReasoningMarker) : undefined;
       const active = () => { if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.'); };
       const serializedBody = serializeProviderBody(prepared);
       const response = await this.request(this.getChatUrl(), {
@@ -925,7 +925,7 @@ export class OpenAiProvider extends AiProvider {
         active(); const toolCalls = collectToolCalls();
         for (const call of toolCalls ?? []) { active(); await onChunk('', { type: 'tool_call', data: call }); active(); }
         const result: ChatResponse = { content: fullContent, ...(fullReasoning ? { reasoning: fullReasoning } : {}), model: streamModel,
-          ...(stopReason ? { stopReason } : {}), usage, toolCalls, ...(owner ? { ...owner, blocks: capture!.finish(toolCalls) } : {}) };
+          ...(stopReason ? { stopReason } : {}), usage, toolCalls, ...(owner ? { provider: owner.provider, api: owner.api, model: owner.model, blocks: capture!.finish(toolCalls) } : {}) };
         active(); if (owner) await onComplete?.(result); else onComplete?.(result); active();
       };
       const reader = response.body.getReader();
@@ -5129,8 +5129,8 @@ class OpenCodeGoCompletionsProvider extends OpenAiProvider {
     const prepared = prepareOpenCodeGoChat(body, options, messages);
     if (nativeOpenCodeGoReplay.has(this)) {
       const profile = opencodeGoProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('OpenCode Go chat model is not supported.');
-      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id };
-      applyOpenCodeGoCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent); nativeCompletionsOwners.set(prepared, owner);
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: true };
+      applyOpenCodeCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, true); nativeCompletionsOwners.set(prepared, owner);
     }
     return prepared;
   }
@@ -5223,12 +5223,21 @@ export class OpenCodeGoProvider extends AiProvider {
 }
 
 class OpenCodeCompletionsProvider extends OpenAiProvider {
+  constructor(config: ProviderConfig, ownsReplay = false) { super(config); if (ownsReplay) nativeOpenCodeReplay.add(this); }
   protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
   protected override getHeaders(options?: ChatOptions): Record<string, string> { return opencodeHeaders(this.config, options, 'openai-completions'); }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareOpenCodeChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateOpenCodeChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return opencodeStreamValidator('openai-completions'); }
-  protected override responseReasoning(value: unknown): string | undefined { return opencodeReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareOpenCodeChat(body, options, messages);
+    if (nativeOpenCodeReplay.has(this)) {
+      const profile = opencodeProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('OpenCode chat model is not supported.');
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: false };
+      applyOpenCodeCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateOpenCodeChat(value, nativeOpenCodeReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return opencodeStreamValidator('openai-completions', nativeOpenCodeReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return opencodeReasoning(value, nativeOpenCodeReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeUsage(value, model); }
 }
 class OpenCodeMessagesProvider extends AnthropicProvider {
@@ -5369,7 +5378,7 @@ export class OpenCodeProvider extends AiProvider {
   private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
     if (!this.validateConfig()) throw new Error('OpenCode API key is required.'); const profile = opencodeProfile(model);
     for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode image input.'); }
-    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config) : new OpenCodeResponsesProvider(config, options, native);
+    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config, native) : new OpenCodeResponsesProvider(config, options, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model }; if (opencodeProfile(model).api === 'anthropic-messages' && !nativeOpenCodeReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
@@ -5377,13 +5386,13 @@ export class OpenCodeProvider extends AiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; const result = await delegate.chat(messages, owned);
-      if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); return nativeOpenCodeReplay.has(this) && api !== 'openai-completions' ? result : { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); return nativeOpenCodeReplay.has(this) ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw opencodeFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); };
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeProfile(model).api; active();
-      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeReplay.has(this) && api !== 'openai-completions') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
     } catch (error) { const failure = opencodeFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }

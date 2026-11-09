@@ -158,7 +158,7 @@ describe('explicit native OpenCode Go A/C/R SDK', () => {
     expect((await new providers.OpenAiProvider(config).chat([source, user])).blocks).toBeUndefined();
     class DerivedGo extends providers.OpenCodeGoProvider {}
     await expect(new DerivedGo(config).chat([source, user])).rejects.toThrow('Unsupported OpenCode Go reasoning replay.');
-    plain = true; expect((await new providers.OpenCodeProvider({ ...config, type: 'opencode' }).chat([source, user])).blocks).toBeUndefined();
+    plain = true; expect((await new providers.OpenCodeProvider({ ...config, type: 'opencode' }).chat([source, user])).blocks).toEqual([{ type: 'text', text: 'Ready' }]);
     for (const call of calls.slice(-3)) expect(JSON.stringify(call.body)).not.toMatch(/opaque-go-c-|reasoning_details/); expect(calls).toHaveLength(17);
   });
 
