@@ -25,8 +25,8 @@ function legacyDetail(signature: string | undefined): Item | undefined {
   catch { return undefined; }
 }
 
-/** Independently admitted Go/Zen C mechanics; the caller owns the actual body and marker policy. */
-export function applyOpenCodeCompletionHistory(body: Item, messages: Message[], provider: string, requiresReasoning: boolean, normalizeReasoningMarker: boolean): void {
+/** Independently admitted C mechanics; the caller owns the actual body and marker policy. */
+export function applyCompletionHistory(body: Item, messages: Message[], provider: string, requiresReasoning: boolean, normalizeReasoningMarker: boolean): void {
   const model = String(body.model), assistants = messages.filter(message => message.role === 'assistant'), tools = messages.filter(message => message.role === 'tool');
   const ids = new Map<string, string>(); let assistantIndex = 0, toolIndex = 0;
   if (Array.isArray(body.messages)) body.messages = body.messages.flatMap((value): Item[] => {
@@ -77,7 +77,7 @@ export function applyOpenCodeCompletionHistory(body: Item, messages: Message[], 
 }
 
 /** Pinned C streaming coalesces one text and one thinking block, unlike contiguous Google blocks. */
-export function createOpenCodeCompletionCapture(normalizeReasoningMarker: boolean) {
+export function createCompletionCapture(normalizeReasoningMarker: boolean, invalidResponse: string) {
   const slots: Array<MessageContentBlock | number> = [], toolIndexes = new Set<number>();
   let text: Extract<MessageContentBlock, { type: 'text' }> | undefined, thought: Extract<MessageContentBlock, { type: 'reasoning' }> | undefined;
   let details: Item[] | undefined;
@@ -106,7 +106,7 @@ export function createOpenCodeCompletionCapture(normalizeReasoningMarker: boolea
       const indexes = [...toolIndexes].sort((a, b) => a - b);
       return slots.map((slot): MessageContentBlock => {
         if (typeof slot !== 'number') return { ...slot };
-        const call = calls[indexes.indexOf(slot)]; if (!call) throw new Error(normalizeReasoningMarker ? 'Invalid OpenCode Go chat response.' : 'Invalid OpenCode chat response.');
+        const call = calls[indexes.indexOf(slot)]; if (!call) throw new Error(invalidResponse);
         return { type: 'tool_call', ...call };
       });
     },

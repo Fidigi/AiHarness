@@ -55,7 +55,7 @@ import { MINIMAX_MODELS, miniMaxProfile, miniMaxEndpoint, miniMaxThinking, prepa
 export { MINIMAX_MODELS, MINIMAX_MODELS as MINIMAX_CN_MODELS } from './minimax.js';
 import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeaders, prepareOpenCodeGoMessage, prepareOpenCodeGoChat, prepareOpenCodeGoResponse, prepareOpenCodeGoOutputBudget, opencodeGoUsage, mergeOpenCodeGoUsage, opencodeGoReasoning, validateOpenCodeGoMessage, validateOpenCodeGoChat, opencodeGoMessageText, opencodeGoStreamValidator, opencodeGoFailure } from './opencode-go.js';
 export { OPENCODE_GO_MODELS } from './opencode-go.js';
-import { applyOpenCodeCompletionHistory, createOpenCodeCompletionCapture } from './opencode-completions-replay.js';
+import { applyCompletionHistory, createCompletionCapture } from './completions-replay.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -665,7 +665,7 @@ function normalizeOpenAiUsage(
   };
 }
 
-const nativeCompletionsOwners = new WeakMap<Record<string, unknown>, { provider: string; api: string; model: string; normalizeReasoningMarker: boolean }>();
+const nativeCompletionsOwners = new WeakMap<Record<string, unknown>, { provider: string; api: string; model: string; normalizeReasoningMarker: boolean; invalidResponse: string }>();
 
 export class OpenAiProvider extends AiProvider {
   override getModelApi(): string { return 'openai-completions'; }
@@ -837,7 +837,7 @@ export class OpenAiProvider extends AiProvider {
     }
 
     const reasoning = this.responseReasoning(choice.message), toolCalls = this.parseToolCalls(choice.message.tool_calls);
-    const capture = owner ? createOpenCodeCompletionCapture(owner.normalizeReasoningMarker) : undefined; capture?.accept(choice.message, true);
+    const capture = owner ? createCompletionCapture(owner.normalizeReasoningMarker, owner.invalidResponse) : undefined; capture?.accept(choice.message, true);
     if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.');
     return {
       content: choice.message.content || '',
@@ -891,7 +891,7 @@ export class OpenAiProvider extends AiProvider {
 
     try {
       const prepared = this.prepareChatBody(body, options, messages), owner = nativeCompletionsOwners.get(prepared);
-      const capture = owner ? createOpenCodeCompletionCapture(owner.normalizeReasoningMarker) : undefined;
+      const capture = owner ? createCompletionCapture(owner.normalizeReasoningMarker, owner.invalidResponse) : undefined;
       const active = () => { if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.'); };
       const serializedBody = serializeProviderBody(prepared);
       const response = await this.request(this.getChatUrl(), {
@@ -4535,6 +4535,7 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 }
 
 const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
+const nativeFireworksCompletions = new WeakSet<AiProvider>();
 const nativeOpenRouterReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeGoReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeReplay = new WeakSet<AiProvider>();
@@ -5028,12 +5029,21 @@ export class AnthropicProvider extends AiProvider {
 
 /** Private native C delegate; only the explicit mixed Fireworks adapter publishes profiles. */
 class FireworksCompletionsProvider extends OpenAiProvider {
+  constructor(config: ProviderConfig, ownsReplay = false) { super(config); if (ownsReplay) nativeFireworksCompletions.add(this); }
   protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
   protected override getHeaders(options?: ChatOptions): Record<string, string> { return fireworksHeaders(this.config, options, 'openai-completions'); }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareFireworksChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateFireworksChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return fireworksStreamValidator('openai-completions'); }
-  protected override responseReasoning(value: unknown): string | undefined { return fireworksReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareFireworksChat(body, options, messages);
+    if (nativeFireworksCompletions.has(this)) {
+      const profile = fireworksProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('Fireworks chat model is not supported.');
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Fireworks chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateFireworksChat(value, nativeFireworksCompletions.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return fireworksStreamValidator('openai-completions', nativeFireworksCompletions.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return fireworksReasoning(value, nativeFireworksCompletions.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return fireworksUsage(value, model); }
 }
 
@@ -5070,6 +5080,7 @@ export class FireworksProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     const model = config.model ?? FIREWORKS_MODELS[0].id; fireworksProfile(model);
     super({ ...config, model, baseUrl: fireworksBase(config.baseUrl ?? 'https://api.fireworks.ai/inference') }); this.ownsReplay = new.target === FireworksProvider;
+    if (new.target === FireworksProvider) nativeFireworksCompletions.add(this);
     registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, FIREWORKS_MODELS[0].id); return options => prepareFireworksOutputBudget(options, selected); });
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -5096,7 +5107,7 @@ export class FireworksProvider extends AiProvider {
       if (profile.api === 'anthropic-messages' && !parseDataImage(image.url)) throw new Error('Invalid Fireworks image input.');
     }
     const config = { ...this.config, model };
-    return profile.api === 'anthropic-messages' ? new FireworksMessagesProvider(config, this.ownsReplay) : new FireworksCompletionsProvider(config);
+    return profile.api === 'anthropic-messages' ? new FireworksMessagesProvider(config, this.ownsReplay) : new FireworksCompletionsProvider(config, nativeFireworksCompletions.has(this));
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model };
@@ -5107,7 +5118,7 @@ export class FireworksProvider extends AiProvider {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api;
       const result = await provider.chat(messages, this.conversationOptions(messages, model, options));
-      if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); return this.ownsReplay && api === 'anthropic-messages' ? result : { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); return (api === 'anthropic-messages' ? this.ownsReplay : nativeFireworksCompletions.has(this)) ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw fireworksFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -5115,7 +5126,7 @@ export class FireworksProvider extends AiProvider {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); };
     try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api; active();
       await provider.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); if (this.ownsReplay && api === 'anthropic-messages') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, this.conversationOptions(messages, model, options));
+        response => { active(); if (api === 'anthropic-messages' ? this.ownsReplay : nativeFireworksCompletions.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, this.conversationOptions(messages, model, options));
     } catch (error) { const failure = fireworksFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
@@ -5129,8 +5140,8 @@ class OpenCodeGoCompletionsProvider extends OpenAiProvider {
     const prepared = prepareOpenCodeGoChat(body, options, messages);
     if (nativeOpenCodeGoReplay.has(this)) {
       const profile = opencodeGoProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('OpenCode Go chat model is not supported.');
-      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: true };
-      applyOpenCodeCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, true); nativeCompletionsOwners.set(prepared, owner);
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: true, invalidResponse: 'Invalid OpenCode Go chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, true); nativeCompletionsOwners.set(prepared, owner);
     }
     return prepared;
   }
@@ -5230,8 +5241,8 @@ class OpenCodeCompletionsProvider extends OpenAiProvider {
     const prepared = prepareOpenCodeChat(body, options, messages);
     if (nativeOpenCodeReplay.has(this)) {
       const profile = opencodeProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('OpenCode chat model is not supported.');
-      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: false };
-      applyOpenCodeCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid OpenCode chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
     }
     return prepared;
   }
