@@ -21,6 +21,8 @@ import type { Message } from '../types/index.js';
 
 const continuation = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/opencode-go-continuation-reference.json', import.meta.url), 'utf8'));
 const continuationModels: string[] = continuation.rows.map((row: { model: string }) => row.model);
+const completions = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/opencode-go-continuation-reference-completions.json', import.meta.url), 'utf8'));
+const completionModels: string[] = completions.rows.map((row: { model: string }) => row.model);
 
 const a = 'claude-haiku-5-5', c = 'glm-5.3', r = 'gpt-6-luna', numeric = 'qwen3.7-plus';
 const input: Message = { id: 'input', role: 'user', content: 'Continue', timestamp: new Date(0) };
@@ -43,6 +45,153 @@ async function fixture(override?: (api: 'A' | 'C' | 'R', body: Record<string, an
 }
 
 describe('explicit native OpenCode Go A/C/R SDK', () => {
+  it.each(completionModels)('compares independently bound whole private Go C bodies and typed carriers for %s', async model => {
+    const reference = completions.rows.find((row: { model: string }) => row.model === model);
+    let replyEvents = reference.seedResponseEvents, reply = reference.syntheticJsonResponse;
+    const { calls, baseUrl } = await fixture((_api, body, response) => {
+      if (body.stream) sse(response, replyEvents, true); else { response.setHeader('content-type', 'application/json'); response.end(JSON.stringify(reply)); }
+    });
+    for (const facade of ['chat', 'stream']) {
+      const provider = new providers.OpenCodeGoProvider({ type: 'opencode-go', model, apiKey: 'disposable-go-c', baseUrl });
+      const user: Message = { id: 'c-u', role: 'user', content: 'probe', timestamp: new Date(0) };
+      const options: providers.ChatOptions = { ...reference.options, model, systemPrompt: 'owned OpenCode Go C reference system', tools: completions.tools };
+      const expected = (body: Record<string, unknown>) => { const value: Record<string, unknown> = { ...structuredClone(body), stream: facade === 'stream' }; if (facade === 'chat') delete value.stream_options; return value; };
+      const invoke = async (messages: Message[], selected = options) => {
+        if (facade === 'chat') return provider.chat(messages, selected); let complete: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, (text, event) => { expect(text + JSON.stringify(event ?? {})).not.toMatch(/opaque-go-c-|private summary|IGNORED_PRIVATE/); },
+          value => { complete = value; }, error => { throw error; }, selected); expect(complete).toBeDefined(); return complete!;
+      };
+      replyEvents = reference.seedResponseEvents; reply = reference.syntheticJsonResponse;
+      const first = await invoke([user]); expect(first).toMatchObject({ provider: 'opencode-go', api: 'openai-completions', model, content: 'leftright!', reasoning: 'firstsecond' });
+      expect(first.blocks).toEqual(reference.expectedBlocks); expect(first.toolCalls).toEqual(reference.expectedToolCalls); expect(calls.at(-1)!.body).toEqual(expected(reference.expectedInitialBody));
+      for (const projection of reference.cases) {
+        const source: Message = { id: 'c-a', role: 'assistant', content: first.content, timestamp: new Date(0), ...projection.source,
+          blocks: structuredClone(projection.blocks), toolCalls: structuredClone(projection.toolCalls), ...(projection.failed ? { metadata: { outputError: 'Failed Go C producer' } } : {}) };
+        const result: Message[] = projection.toolResult ? [{ id: 'c-r', role: 'tool', name: 'echo', toolCallId: projection.toolResult.toolCallId,
+          content: projection.toolResult.content.map((block: { text: string }) => block.text).join('\n'), isError: projection.toolResult.isError, timestamp: new Date(0) }] : [];
+        const history = [user, source, ...result, { ...user, id: 'c-next', content: 'continue' }], before = structuredClone(history);
+        replyEvents = projection.responseEvents; reply = projection.syntheticJsonResponse;
+        expect((await invoke(history)).content).toBe('ok'); expect(calls.at(-1)!.body).toEqual(expected(projection.expectedBody)); expect(history).toEqual(before);
+      }
+      const withSystem: Message[] = [{ id: 'c-sys', role: 'system', content: 'Leading system', timestamp: new Date(0) }, user], systemBefore = structuredClone(withSystem);
+      await invoke(withSystem, { ...options, systemPrompt: undefined });
+      expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: 'system', content: 'Leading system' }, { role: 'user', content: 'probe' }] });
+      await invoke(withSystem); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: 'system', content: 'owned OpenCode Go C reference system\n\nLeading system' }, { role: 'user', content: 'probe' }] }); expect(withSystem).toEqual(systemBefore);
+      const root = await mkdtemp(path.join(os.tmpdir(), 'aih-go-c-replay-')), credential = 'sensitive', redactor = new CredentialRedactor([credential, 'disposable-go-c']);
+      const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
+      const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'Go C private replay' }), registry = new ExtensionRegistry();
+      const same = reference.cases[0].expectedBody.messages;
+      const finalBlocks = [{ type: 'text', text: 'ok' }], finalItem = { role: 'assistant', content: 'ok', ...(providers.OPENCODE_GO_MODELS.find(profile => profile.id === model)!.requiresReasoningContent ? { reasoning_content: '' } : {}) };
+      const native = () => calls.at(-1)!.body.messages; let effects = 0;
+      await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; replyEvents = reference.cases[0].responseEvents; reply = reference.cases[0].syntheticJsonResponse; return { content: 'result' }; } }));
+      replyEvents = reference.seedResponseEvents; reply = reference.syntheticJsonResponse;
+      try {
+        await manager.addMessage(session.id, { role: 'user', content: 'probe' });
+        await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider: 'opencode-go', tools: completions.tools,
+          toolContext: { sessionManager: manager, notify: () => {} }, redactText,
+          streamTurn: messages => facade === 'chat' ? provider.chat(messages, options) : streamProviderTurn({ provider, providerName: 'opencode-go', model, messages,
+            tools: completions.tools, systemPrompt: options.systemPrompt, extensionRegistry: registry, maxRetries: 0, maxTokens: 64, thinking: options.thinking, cacheRetention: 'none', redactText, redactJson,
+            createTextRedactor: () => redactor.createStream() }) });
+        expect(effects).toBe(1); expect(native()).toEqual(redactJson(same.slice(0, -1)));
+        const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8'), history = session.messages.filter(item => item.role === 'assistant');
+        expect(history.map(item => item.blocks)).toEqual([redactJson(reference.expectedBlocks), finalBlocks]); expect(bytes).not.toContain(credential); expect(bytes).not.toContain('disposable-go-c'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
+        const restarted = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), loaded = (await restarted.loadFromStore(session.id))!;
+        expect(loaded.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const ordinary = serializeSessionForExport(loaded), complete = serializeSessionForExport(loaded, { includeOpaqueContinuations: true });
+        expect(ordinary.warning).toContain('Native continuation'); expect(JSON.stringify(ordinary.session)).not.toContain('opaque-go-c-'); expect(JSON.stringify(complete.session)).toContain('[REDACTED]'); expect(JSON.stringify(complete.session)).not.toContain(credential);
+        await invoke(loaded.messages); expect(native()).toEqual([...redactJson(same.slice(0, -1)), finalItem]); expect(await readFile(file, 'utf8')).toBe(bytes);
+        await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
+        const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
+        const edited = { ...same[2], content: 'edited answer' }; delete edited.reasoning_details;
+        expect(native()).toEqual([...same.slice(0, 2), edited, same[3], finalItem]);
+        const canonicalTarget = getCompactionModelMessages(restarted, clone.id).find(message => message.content === 'edited answer')!;
+        expect(canonicalTarget).toMatchObject({ provider: 'opencode-go', api: 'openai-completions', model }); expect(canonicalTarget.metadata).toBeUndefined(); expect(canonicalTarget.blocks?.some(block => block.type === 'reasoning')).toBe(false);
+        for (const id of [session.id, clone.id]) { const raw = (await restarted.getRawEntries(id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(raw).toHaveLength(2); expect(raw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks))); }
+        expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical); expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-go-c-/); expect(canonical).toEqual(beforeSummary);
+        const kept = clone.messages.filter(item => item.role === 'assistant').at(-1)!, sourceBytes = await readFile(file, 'utf8'); await restarted.applyCompaction(clone.id, 'PUBLIC_GO_C_PREFIX', kept.id);
+        const compactedManager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }); expect(await compactedManager.loadFromStore(clone.id)).toBeTruthy(); const compacted = getCompactionModelMessages(compactedManager, clone.id);
+        expect(compacted.map(item => ({ role: item.role, content: item.content }))).toEqual([{ role: 'system', content: '[Context Summary] PUBLIC_GO_C_PREFIX' }, { role: 'assistant', content: 'ok' }]); expect(compacted.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual([finalBlocks]);
+        const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
+        const raw = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(raw).toHaveLength(2); expect(raw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
+        const ancestry = (await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(ancestry.map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
+        await invoke(compacted); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: 'system', content: 'owned OpenCode Go C reference system\n\n[Context Summary] PUBLIC_GO_C_PREFIX' }, finalItem] });
+        expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
+      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+    }
+    expect(calls).toHaveLength(48); for (const call of calls) { expect(call.url).toBe('/owned%2Fgo/v1/chat/completions'); expect(call.headers.authorization).toBe('Bearer disposable-go-c');
+      expect(call.headers['x-api-key']).toBeUndefined(); expect(call.headers['x-opencode-session']).toBeUndefined(); }
+  });
+
+  it('pins private C body identity and prices, awaits completion and refuses generic or derived grants', async () => {
+    let reference = completions.rows.find((row: { model: string }) => row.model === c), plain = false;
+    const { calls, baseUrl } = await fixture((_api, body, response) => {
+      const row = completions.rows.find((row: { model: string }) => row.model === body.model) ?? reference;
+      if (plain) { response.end(JSON.stringify({ choices: [{ message: { content: 'Ready' }, finish_reason: 'stop' }] })); return; }
+      if (body.stream) sse(response, row.seedResponseEvents, true); else response.end(JSON.stringify(row.syntheticJsonResponse));
+    });
+    const user: Message = { ...input, content: 'probe' }, expected = (body: Record<string, unknown>, stream: boolean) => { const value: Record<string, unknown> = { ...structuredClone(body), stream }; if (!stream) delete value.stream_options; return value; };
+    for (const model of [c, 'deepseek-v4-flash']) for (const facade of ['chat', 'stream']) {
+      reference = completions.rows.find((row: { model: string }) => row.model === model);
+      const provider = new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-c', model, baseUrl });
+      provider.getProviderType = () => 'forged-go-c-provider'; provider.getModelApi = () => 'forged-go-c-api'; let reads = 0, captured: providers.ChatResponse | undefined;
+      const base: providers.ChatOptions = { ...reference.options, tools: completions.tools, systemPrompt: 'owned OpenCode Go C reference system', sessionId: 'go-c-bound' };
+      const options = { ...base, get model() { return ++reads === 1 ? model : a; } };
+      if (facade === 'chat') captured = await provider.chat([user], options); else await provider.streamChat([user], async text => { if (text) { await Promise.resolve(); provider.setConfiguredModel(a); } }, value => { captured = value; }, error => { throw error; }, options);
+      expect(calls.at(-1)!.body).toEqual(expected(reference.expectedInitialBody, facade === 'stream')); expect(captured).toMatchObject({ provider: 'opencode-go', api: 'openai-completions', model, blocks: reference.expectedBlocks });
+      const rates = providers.OPENCODE_GO_MODELS.find(profile => profile.id === model)!.pricing!;
+      expect(captured!.usage?.costUsd).toBeCloseTo((5 * rates.inputPerMillion + 2 * rates.outputPerMillion + 4 * rates.cacheReadPerMillion + rates.cacheWritePerMillion) / 1e6, 12);
+      const history: Message[] = [user, { id: 'c-getter-a', role: 'assistant', content: captured!.content, timestamp: new Date(0), provider: captured!.provider, api: captured!.api, model: captured!.model, blocks: captured!.blocks, toolCalls: captured!.toolCalls },
+        { id: 'c-getter-r', role: 'tool', name: 'echo', toolCallId: captured!.toolCalls![0].id, content: 'result', timestamp: new Date(0) }, { ...user, id: 'c-next', content: 'continue' }], before = structuredClone(history);
+      await provider.chat(history, { ...base, model }); expect(calls.at(-1)!.body).toEqual(expected(reference.cases[0].expectedBody, false));
+      const other = completions.rows.find((row: { model: string }) => row.model === (model === c ? 'deepseek-v4-flash' : c));
+      await provider.chat(history, { ...base, model: other.model }); expect(calls.at(-1)!.body).toEqual(expected(other.cases.find((projection: { case: string }) => projection.case === 'model').expectedBody, false)); expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(12); for (const call of calls) { expect(call.headers['x-opencode-session']).toBe('go-c-bound'); expect(call.headers['x-client-request-id']).toBeUndefined(); }
+    for (const model of [c, 'deepseek-v4-flash']) { const errors: Error[] = [];
+      await new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-c', model, baseUrl }).streamChat([user], () => {}, async () => { await Promise.resolve(); throw new Error('PRIVATE_GO_C_COMPLETION'); }, error => { errors.push(error); }, { maxTokens: 64, thinking: 'high' });
+      expect(errors.map(error => error.message)).toEqual(['OpenCode Go chat request failed.']);
+    }
+    reference = completions.rows.find((row: { model: string }) => row.model === c);
+    const source: Message = { ...user, role: 'assistant', content: 'leftright!', provider: 'opencode-go', api: 'openai-completions', model: c, blocks: reference.expectedBlocks, toolCalls: reference.expectedToolCalls };
+    const config = { type: 'opencode-go', apiKey: 'disposable-go-c', model: c, baseUrl };
+    expect((await new providers.OpenAiProvider(config).chat([source, user])).blocks).toBeUndefined();
+    class DerivedGo extends providers.OpenCodeGoProvider {}
+    await expect(new DerivedGo(config).chat([source, user])).rejects.toThrow('Unsupported OpenCode Go reasoning replay.');
+    plain = true; expect((await new providers.OpenCodeProvider({ ...config, type: 'opencode' }).chat([source, user])).blocks).toBeUndefined();
+    for (const call of calls.slice(-3)) expect(JSON.stringify(call.body)).not.toMatch(/opaque-go-c-|reasoning_details/); expect(calls).toHaveLength(17);
+  });
+
+  it('keeps existing C image attribution once and refuses undeclared images without preparing or decoding them', async () => {
+    const { calls, baseUrl } = await fixture(); let refusals = 0;
+    for (const profile of providers.OPENCODE_GO_MODELS.filter(profile => profile.api === 'openai-completions')) for (const facade of ['chat', 'stream']) {
+      const history: Message[] = [{ ...input, content: 'before' }, { id: 'c-image-a', role: 'assistant', content: 'called', timestamp: new Date(0), provider: 'opencode-go', api: 'openai-completions', model: profile.id,
+        toolCalls: [{ id: 'image-call', name: 'read', input: {} }] }, { id: 'c-image-r', role: 'tool', name: 'read', toolCallId: 'image-call', content: 'result', timestamp: new Date(0), blocks: [{ type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,aGVsbG8=' }] }, { ...input, id: 'c-after', content: 'after' }], before = structuredClone(history);
+      const provider = new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-c', model: profile.id, baseUrl }), invoke = () => facade === 'chat' ? provider.chat(history) : provider.streamChat(history, () => {}, undefined, error => { throw error; });
+      if (!profile.declaredInput.includes('image')) { await expect(invoke()).rejects.toThrow('OpenCode Go chat model does not support images.'); refusals++; }
+      else { await invoke(); expect(calls.at(-1)!.body.messages).toEqual([{ role: 'user', content: 'before' }, { role: 'assistant', content: 'called', tool_calls: [{ id: 'image-call', type: 'function', function: { name: 'read', arguments: '{}' } }], ...(profile.requiresReasoningContent ? { reasoning_content: '' } : {}) },
+        { role: 'tool', content: 'result', tool_call_id: 'image-call' }, { role: 'user', content: [{ type: 'text', text: 'Tool images for image-call' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,aGVsbG8=' } }] }, { role: 'user', content: 'after' }]); }
+      expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(22); expect(refusals).toBe(18);
+  });
+
+  it('withdraws private C pending tools on EOF, provider error and awaited abort without exposing opaque fields', async () => {
+    const reference = completions.rows.find((row: { model: string }) => row.model === c); let mode = 'eof';
+    const { calls, baseUrl } = await fixture((_api, _body, response) => {
+      const events = structuredClone(reference.seedResponseEvents); events[0].choices[0].delta.reasoning_details = [events[4].choices[0].delta.reasoning_details[0]];
+      sse(response, mode === 'eof' ? events.slice(0, -1) : mode === 'error' ? [...events.slice(0, -1), { error: { message: 'PRIVATE_GO_C_FAILURE' } }] : events, true);
+    });
+    for (mode of ['eof', 'error', 'abort']) { const controller = new AbortController(), complete = vi.fn(), errors: Error[] = [], seen: string[] = [];
+      await new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-c', model: c, baseUrl }).streamChat([input], async (text, event) => {
+        seen.push(text + JSON.stringify(event ?? {})); if (mode === 'abort' && text) { await Promise.resolve(); controller.abort(); }
+      }, complete, error => { errors.push(error); }, { signal: controller.signal, maxTokens: 64, thinking: 'high' });
+      expect(errors).toHaveLength(1); expect(errors[0].message).not.toMatch(/PRIVATE_|opaque-go-c-/); expect(complete).not.toHaveBeenCalled(); expect(seen.join('')).not.toMatch(/opaque-go-c-|private summary|tool_call/);
+      if (mode === 'abort') expect(seen).toHaveLength(1);
+    }
+    expect(calls).toHaveLength(3);
+  });
+
   it.each(continuationModels)('compares independent whole private A/R bodies and ordered carriers for %s', async model => {
     const reference = continuation.rows.find((row: { model: string }) => row.model === model), isA = reference.kind === 'A';
     let replyEvents = reference.seedResponseEvents, reply = reference.syntheticJsonResponse;
@@ -171,7 +320,7 @@ describe('explicit native OpenCode Go A/C/R SDK', () => {
       for (const call of calls.slice(-2)) expect(JSON.stringify(call.body)).not.toContain('forged-go-private');
     }
     const cSource: Message = { ...user, role: 'assistant', provider: 'opencode-go', api: 'anthropic-messages', model: a, blocks: [{ type: 'reasoning', text: 'visible thought', thinkingSignature: 'forged-go-private' }] };
-    expect((await new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-private', model: c, baseUrl }).chat([cSource, user])).blocks).toBeUndefined(); expect(JSON.stringify(calls.at(-1)!.body)).not.toContain('forged-go-private'); expect(calls).toHaveLength(19);
+    expect((await new providers.OpenCodeGoProvider({ type: 'opencode-go', apiKey: 'disposable-go-private', model: c, baseUrl }).chat([cSource, user])).blocks).toEqual([{ type: 'text', text: 'Ready' }]); expect(JSON.stringify(calls.at(-1)!.body)).not.toContain('forged-go-private'); expect(calls).toHaveLength(19);
   });
 
   it('keeps existing A/R tool-image attribution once without granting decode or persistence preparation', async () => {
@@ -231,7 +380,7 @@ describe('explicit native OpenCode Go A/C/R SDK', () => {
     const { calls, baseUrl } = await fixture(), provider = new providers.OpenCodeGoProvider({ type: 'operator', apiKey: 'disposable', baseUrl }), history: Message[] = [{ ...input, role: 'assistant', content: 'Before', blocks: [{ type: 'reasoning', text: 'Earlier plan' }] }, input];
     for (const model of [a, 'qwen3.8-flash', c, r]) for (const cacheRetention of ['none', 'short', 'long'] as const) { const ownedHistory = history.map(message => message.role === 'assistant' ? { ...message, provider: 'operator', api: provider.getModelApi(model), model } : message); await provider.chat(ownedHistory, { model, sessionId: 'go-session', cacheRetention, systemPrompt: 'System', tools: [{ name: 'first', description: 'First', parameters: {} }, { name: 'last', description: 'Last', parameters: {} }] }); const call = calls.at(-1)!, b = call.body; expect(call.headers['x-opencode-session']).toBe('go-session'); expect(call.headers.session_id).toBeUndefined(); expect(call.headers['session-id']).toBeUndefined(); expect(call.headers['x-session-affinity']).toBeUndefined(); expect(call.headers['x-client-request-id']).toBe(model === r && cacheRetention !== 'none' ? 'go-session' : undefined);
       if (model === a || model === 'qwen3.8-flash') { const control = cacheRetention === 'none' ? undefined : { type: 'ephemeral', ...(cacheRetention === 'long' ? { ttl: '1h' } : {}) }; expect(b.system[0].cache_control).toEqual(control); expect(b.tools[0].cache_control).toBeUndefined(); expect(b.tools[1].cache_control).toEqual(control); expect(b.messages[0].content[0]).toEqual(model === a ? { type: 'text', text: 'Earlier plan' } : { type: 'thinking', thinking: 'Earlier plan', signature: '' }); }
-      else { expect(b.prompt_cache_key).toBe(cacheRetention === 'none' || (model === c && cacheRetention === 'short') ? undefined : 'go-session'); expect(b.prompt_cache_retention).toBe(cacheRetention === 'long' ? '24h' : undefined); if (model === c) expect(b.messages.find((m: { role: string }) => m.role === 'assistant').reasoning_content).toBe('Earlier plan'); }
+      else { expect(b.prompt_cache_key).toBe(cacheRetention === 'none' || (model === c && cacheRetention === 'short') ? undefined : 'go-session'); expect(b.prompt_cache_retention).toBe(cacheRetention === 'long' ? '24h' : undefined); if (model === c) expect(b.messages.find((m: { role: string }) => m.role === 'assistant').reasoning_content).toBeUndefined(); }
     }
     const overridden = new providers.OpenCodeGoProvider({ type: 'operator', apiKey: 'disposable', baseUrl, customHeaders: { 'X-OpenCode-Session': 'operator-owned', 'x-client-request-id': 'operator-request' } }); await overridden.chat([input], { model: r, sessionId: 'automatic', cacheRetention: 'none' }); expect(calls.at(-1)!.headers['x-opencode-session']).toBe('operator-owned'); expect(calls.at(-1)!.headers['x-client-request-id']).toBe('operator-request');
     const unicode = '字🙂'.repeat(40); await overridden.chat([input], { model: r, sessionId: unicode, cacheRetention: 'long' }); expect(calls.at(-1)!.body.prompt_cache_key).toBe(Array.from(unicode).slice(0, 64).join(''));

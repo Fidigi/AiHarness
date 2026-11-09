@@ -55,6 +55,7 @@ import { MINIMAX_MODELS, miniMaxProfile, miniMaxEndpoint, miniMaxThinking, prepa
 export { MINIMAX_MODELS, MINIMAX_MODELS as MINIMAX_CN_MODELS } from './minimax.js';
 import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeaders, prepareOpenCodeGoMessage, prepareOpenCodeGoChat, prepareOpenCodeGoResponse, prepareOpenCodeGoOutputBudget, opencodeGoUsage, mergeOpenCodeGoUsage, opencodeGoReasoning, validateOpenCodeGoMessage, validateOpenCodeGoChat, opencodeGoMessageText, opencodeGoStreamValidator, opencodeGoFailure } from './opencode-go.js';
 export { OPENCODE_GO_MODELS } from './opencode-go.js';
+import { applyOpenCodeGoCompletionHistory, createOpenCodeGoCompletionCapture } from './opencode-go-completions-replay.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -664,6 +665,8 @@ function normalizeOpenAiUsage(
   };
 }
 
+const nativeCompletionsOwners = new WeakMap<Record<string, unknown>, { provider: string; api: string; model: string }>();
+
 export class OpenAiProvider extends AiProvider {
   override getModelApi(): string { return 'openai-completions'; }
 
@@ -803,29 +806,26 @@ export class OpenAiProvider extends AiProvider {
       finalMessages.unshift({ role: 'system', content: options.systemPrompt });
     }
 
-    const response = await this.request(this.getChatUrl(), {
-      method: 'POST',
-      headers: this.getHeaders(options),
-      body: serializeProviderBody(this.prepareChatBody({
-        model,
-        messages: finalMessages,
-        stream: false,
-        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-        ...(options?.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
-        ...(options?.thinking && options.thinking !== 'off' ? {
-          reasoning_effort: options.thinking === 'xhigh' || options.thinking === 'max'
-            ? 'high' : options.thinking,
-        } : {}),
-        ...(options?.tools?.length ? {
-          tools: options.tools.map(tool => ({
-            type: 'function',
-            function: { name: tool.name, description: tool.description, parameters: tool.parameters },
-          })),
-          tool_choice: 'auto',
-        } : {}),
-      }, options, messages)),
-      signal: options?.signal,
-    });
+    const url = this.getChatUrl(), headers = this.getHeaders(options);
+    const body = this.prepareChatBody({
+      model,
+      messages: finalMessages,
+      stream: false,
+      ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options?.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
+      ...(options?.thinking && options.thinking !== 'off' ? {
+        reasoning_effort: options.thinking === 'xhigh' || options.thinking === 'max'
+          ? 'high' : options.thinking,
+      } : {}),
+      ...(options?.tools?.length ? {
+        tools: options.tools.map(tool => ({
+          type: 'function',
+          function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+        })),
+        tool_choice: 'auto',
+      } : {}),
+    }, options, messages), owner = nativeCompletionsOwners.get(body);
+    const response = await this.request(url, { method: 'POST', headers, body: serializeProviderBody(body), signal: options?.signal });
 
     if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
 
@@ -836,14 +836,17 @@ export class OpenAiProvider extends AiProvider {
       throw new Error('No content in OpenAI response');
     }
 
-    const reasoning = this.responseReasoning(choice.message);
+    const reasoning = this.responseReasoning(choice.message), toolCalls = this.parseToolCalls(choice.message.tool_calls);
+    const capture = owner ? createOpenCodeGoCompletionCapture() : undefined; capture?.accept(choice.message, true);
+    if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.');
     return {
       content: choice.message.content || '',
       ...lengthStop(choice.finish_reason),
       ...(reasoning ? { reasoning } : {}),
       model: data.model,
-      usage: data.usage ? this.responseUsage(data.usage, model) : undefined,
-      toolCalls: this.parseToolCalls(choice.message.tool_calls),
+      usage: data.usage ? this.responseUsage(data.usage, owner?.model ?? model) : undefined,
+      toolCalls,
+      ...(owner ? { ...owner, blocks: capture!.finish(toolCalls) } : {}),
     };
   }
 
@@ -887,7 +890,10 @@ export class OpenAiProvider extends AiProvider {
     }
 
     try {
-      const serializedBody = serializeProviderBody(this.prepareChatBody(body, options, messages));
+      const prepared = this.prepareChatBody(body, options, messages), owner = nativeCompletionsOwners.get(prepared);
+      const capture = owner ? createOpenCodeGoCompletionCapture() : undefined;
+      const active = () => { if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.'); };
+      const serializedBody = serializeProviderBody(prepared);
       const response = await this.request(this.getChatUrl(), {
         method: 'POST',
         headers: this.getHeaders(options),
@@ -915,6 +921,13 @@ export class OpenAiProvider extends AiProvider {
       const toolCallFragments = new Map<number, OpenAiToolCall>();
       const collectToolCalls = (): ToolCall[] | undefined =>
         this.parseToolCalls([...toolCallFragments.entries()].sort(([a], [b]) => a - b).map(([, call]) => call));
+      const publish = async () => {
+        active(); const toolCalls = collectToolCalls();
+        for (const call of toolCalls ?? []) { active(); await onChunk('', { type: 'tool_call', data: call }); active(); }
+        const result: ChatResponse = { content: fullContent, ...(fullReasoning ? { reasoning: fullReasoning } : {}), model: streamModel,
+          ...(stopReason ? { stopReason } : {}), usage, toolCalls, ...(owner ? { ...owner, blocks: capture!.finish(toolCalls) } : {}) };
+        active(); if (owner) await onComplete?.(result); else onComplete?.(result); active();
+      };
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
       let buffer = '';
@@ -922,7 +935,7 @@ export class OpenAiProvider extends AiProvider {
 
       try {
         while (true) {
-        const { done, value } = await reader.read();
+        active(); const { done, value } = await reader.read(); active();
         if (done) break;
         transportBytes += value.byteLength;
         if (value.byteLength > MAX_PROVIDER_STREAM_EVENT_BYTES
@@ -945,16 +958,7 @@ export class OpenAiProvider extends AiProvider {
           if (++streamEvents > MAX_PROVIDER_STREAM_EVENTS) throw new Error('The provider response exceeded its event limit.');
           if (dataStr === '[DONE]') {
             validateStream();
-            const toolCalls = collectToolCalls();
-            for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
-            onComplete?.({
-              content: fullContent,
-              ...(stopReason ? { stopReason } : {}),
-              ...(fullReasoning ? { reasoning: fullReasoning } : {}),
-              model: streamModel,
-              usage,
-              toolCalls,
-            });
+            await publish();
             return;
           }
 
@@ -967,6 +971,7 @@ export class OpenAiProvider extends AiProvider {
           validateStream(data);
           stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
+          if (capture) { capture.accept(delta); const details = (delta as Record<string, unknown> | undefined)?.reasoning_details; if (details !== undefined) addOutput(serializeProviderBody(details)); }
           const reasoning = this.responseReasoning(delta, true);
           if (reasoning) {
             addOutput(reasoning);
@@ -976,7 +981,7 @@ export class OpenAiProvider extends AiProvider {
           if (typeof delta?.content === 'string' && delta.content) {
             addOutput(delta.content);
             fullContent += delta.content;
-            await onChunk(delta.content, { type: 'text_delta', data });
+            await onChunk(delta.content, owner ? { type: 'text_delta' } : { type: 'text_delta', data });
           }
           for (const fragment of Array.isArray(delta?.tool_calls) ? delta.tool_calls : []) {
             if (!Number.isSafeInteger(fragment.index) || fragment.index < 0
@@ -1012,23 +1017,14 @@ export class OpenAiProvider extends AiProvider {
             streamModel = data.model;
           }
           // OpenAI emits usage in a final empty-choices chunk when include_usage is enabled.
-          if (data.usage) usage = this.responseUsage(data.usage, model);
+          if (data.usage) usage = this.responseUsage(data.usage, owner?.model ?? model);
         }
       }
       buffer += decoder.decode();
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
       validateStream();
 
-      const toolCalls = collectToolCalls();
-      for (const call of toolCalls ?? []) await onChunk('', { type: 'tool_call', data: call });
-        onComplete?.({
-          content: fullContent,
-          ...(fullReasoning ? { reasoning: fullReasoning } : {}),
-          model: streamModel,
-          ...(stopReason ? { stopReason } : {}),
-          usage,
-          toolCalls,
-        });
+      await publish();
       } finally {
         void reader.cancel('provider-stream-finished').catch(() => undefined);
         try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
@@ -5126,12 +5122,21 @@ export class FireworksProvider extends AiProvider {
 
 /** Private A/C/R delegates; only the explicit routed adapter publishes OpenCode Go profiles. */
 class OpenCodeGoCompletionsProvider extends OpenAiProvider {
+  constructor(config: ProviderConfig, ownsReplay = false) { super(config); if (ownsReplay) nativeOpenCodeGoReplay.add(this); }
   protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
   protected override getHeaders(options?: ChatOptions): Record<string, string> { return opencodeGoHeaders(this.config, options, 'openai-completions'); }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareOpenCodeGoChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateOpenCodeGoChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('openai-completions'); }
-  protected override responseReasoning(value: unknown): string | undefined { return opencodeGoReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareOpenCodeGoChat(body, options, messages);
+    if (nativeOpenCodeGoReplay.has(this)) {
+      const profile = opencodeGoProfile(String(prepared.model)); if (profile.api !== 'openai-completions') throw new Error('OpenCode Go chat model is not supported.');
+      const owner = { provider: this.getProviderType(), api: 'openai-completions', model: profile.id };
+      applyOpenCodeGoCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateOpenCodeGoChat(value, nativeOpenCodeGoReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('openai-completions', nativeOpenCodeGoReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return opencodeGoReasoning(value, nativeOpenCodeGoReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
 }
 class OpenCodeGoMessagesProvider extends AnthropicProvider {
@@ -5198,7 +5203,7 @@ export class OpenCodeGoProvider extends AiProvider {
   private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
     if (!this.validateConfig()) throw new Error('OpenCode Go API key is required.'); const profile = opencodeGoProfile(model);
     for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode Go chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode Go image input.'); }
-    const config = { ...this.config, model }, native = nativeOpenCodeGoReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeGoMessagesProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeGoCompletionsProvider(config) : new OpenCodeGoResponsesProvider(config, options, native);
+    const config = { ...this.config, model }, native = nativeOpenCodeGoReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeGoMessagesProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeGoCompletionsProvider(config, native) : new OpenCodeGoResponsesProvider(config, options, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model }; if (opencodeGoProfile(model).api === 'anthropic-messages' && !nativeOpenCodeGoReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
@@ -5206,13 +5211,13 @@ export class OpenCodeGoProvider extends AiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; const result = await delegate.chat(messages, owned);
-      if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); return nativeOpenCodeGoReplay.has(this) && api !== 'openai-completions' ? result : { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); return nativeOpenCodeGoReplay.has(this) ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw opencodeGoFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); };
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; active();
-      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeGoReplay.has(this) && api !== 'openai-completions') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeGoReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
     } catch (error) { const failure = opencodeGoFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
