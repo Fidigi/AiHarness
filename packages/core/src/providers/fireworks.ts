@@ -64,7 +64,7 @@ export function fireworksThinking(model: string, options?: ChatOptions): Publish
 function explicitLimit(profile: FireworksProfile, options?: ChatOptions): number | undefined {
   const maximum = options?.maxTokens; if (maximum !== undefined && (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > profile.maxOutputTokens)) throw new Error('Invalid Fireworks output limit.'); return maximum;
 }
-export function prepareFireworksMessage(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> {
+export function prepareFireworksMessage(body: Record<string, unknown>, options?: ChatOptions, nativeReplay = false): Record<string, unknown> {
   const model = String(body.model), profile = fireworksProfile(model), level = fireworksThinking(model, options);
   if (profile.api !== 'anthropic-messages') throw new Error('Fireworks chat model is not supported.');
   const maximum = explicitLimit(profile, options) ?? profile.maxOutputTokens; body.max_tokens = maximum; delete body.output_config;
@@ -76,7 +76,10 @@ export function prepareFireworksMessage(body: Record<string, unknown>, options?:
   const control = options?.cacheRetention === 'none' ? undefined : { type: 'ephemeral' };
   if (typeof body.system === 'string') body.system = [{ type: 'text', text: body.system, ...(control ? { cache_control: control } : {}) }];
   else if (Array.isArray(body.system)) for (const block of body.system) if (record(block)) { delete block.cache_control; if (control) block.cache_control = control; }
-  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) for (const field of ['strict','eager_input_streaming','cache_control']) delete tool[field];
+  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool)) {
+    if (nativeReplay) { const schema = record(tool.input_schema) ? tool.input_schema : {}; tool.input_schema = { type: 'object', properties: schema.properties ?? {}, required: schema.required ?? [] }; }
+    for (const field of ['strict','eager_input_streaming','cache_control']) delete tool[field];
+  }
   if (Array.isArray(body.messages)) for (const message of body.messages) if (record(message) && Array.isArray(message.content)) for (const block of message.content) if (record(block) && block.cache_control) { if (control) block.cache_control = control; else delete block.cache_control; }
   return body;
 }
@@ -145,15 +148,15 @@ export function fireworksReasoning(value: unknown): string | undefined {
 }
 const aFinish = (value: unknown): boolean => ['end_turn','stop_sequence','tool_use','max_tokens'].includes(String(value));
 const cFinish = (value: unknown): boolean => ['stop','end','length','tool_calls','function_call'].includes(String(value));
-export function validateFireworksMessage(value: unknown): void {
+export function validateFireworksMessage(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || value.type === 'error' || !Array.isArray(value.content) || !aFinish(value.stop_reason) || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Fireworks chat response.');
-  for (const block of value.content) { if (!record(block)) throw new Error('Invalid Fireworks chat response.'); if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid Fireworks chat response.'); } else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && block.signature !== '')) throw new Error('Unsupported Fireworks reasoning replay.'); } else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid Fireworks chat response.'); } else throw new Error('Unsupported Fireworks reasoning replay.'); }
+  for (const block of value.content) { if (!record(block)) throw new Error('Invalid Fireworks chat response.'); if (block.type === 'text') { if (typeof block.text !== 'string') throw new Error('Invalid Fireworks chat response.'); } else if (block.type === 'thinking') { if (typeof block.thinking !== 'string' || (block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== ''))) throw new Error('Unsupported Fireworks reasoning replay.'); } else if (block.type === 'redacted_thinking' && nativeReplay) { if (typeof block.data !== 'string') throw new Error('Invalid Fireworks chat response.'); } else if (block.type === 'tool_use') { if (typeof block.id !== 'string' || !block.id || typeof block.name !== 'string' || !block.name || !record(block.input)) throw new Error('Invalid Fireworks chat response.'); } else throw new Error('Unsupported Fireworks reasoning replay.'); }
 }
 export function fireworksMessageText(content: unknown): string { return Array.isArray(content) ? content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('') : ''; }
 export function validateFireworksChat(value: unknown): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message) || value.choices[0].message.refusal || !cFinish(value.choices[0].finish_reason) || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Fireworks chat response.'); fireworksReasoning(value.choices[0].message);
 }
-export function fireworksStreamValidator(api: FireworksProfile['api']): (value?: unknown) => void {
+export function fireworksStreamValidator(api: FireworksProfile['api'], nativeReplay = false): (value?: unknown) => void {
   let started = false, stopped = false, finished = false;
   return value => {
     if (value === undefined) { if (!finished || (api === 'anthropic-messages' && (!started || !stopped))) throw new Error('Invalid Fireworks chat response.'); return; }
@@ -163,8 +166,8 @@ export function fireworksStreamValidator(api: FireworksProfile['api']): (value?:
     if (value.type === 'message_start') { if (started || !record(value.message)) throw new Error('Invalid Fireworks chat response.'); started = true; }
     else if (value.type === 'message_delta') { if (!started || !record(value.delta)) throw new Error('Invalid Fireworks chat response.'); if (value.delta.stop_reason !== undefined && value.delta.stop_reason !== null) { if (!aFinish(value.delta.stop_reason)) throw new Error('Invalid Fireworks chat response.'); finished = true; } }
     else if (value.type === 'message_stop') { if (!started || !finished) throw new Error('Invalid Fireworks chat response.'); stopped = true; }
-    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text','thinking','tool_use'].includes(String(block.type))) throw new Error('Invalid Fireworks chat response.'); if (block.type === 'thinking' && block.signature !== undefined && block.signature !== '') throw new Error('Unsupported Fireworks reasoning replay.'); }
-    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta','thinking_delta','input_json_delta'].includes(String(delta.type))) throw new Error('Unsupported Fireworks reasoning replay.'); const field = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : 'partial_json'; if (typeof delta[field] !== 'string') throw new Error('Invalid Fireworks chat response.'); }
+    else if (value.type === 'content_block_start') { const block = value.content_block; if (!started || !record(block) || !['text','thinking','tool_use'].includes(String(block.type)) && !(nativeReplay && block.type === 'redacted_thinking')) throw new Error('Invalid Fireworks chat response.'); if (block.type === 'thinking' && block.signature !== undefined && (typeof block.signature !== 'string' || !nativeReplay && block.signature !== '')) throw new Error('Unsupported Fireworks reasoning replay.'); }
+    else if (value.type === 'content_block_delta') { const delta = value.delta; if (!started || !record(delta) || !['text_delta','thinking_delta','input_json_delta'].includes(String(delta.type)) && !(nativeReplay && delta.type === 'signature_delta')) throw new Error('Unsupported Fireworks reasoning replay.'); const field = delta.type === 'text_delta' ? 'text' : delta.type === 'thinking_delta' ? 'thinking' : delta.type === 'signature_delta' ? 'signature' : 'partial_json'; if (typeof delta[field] !== 'string') throw new Error('Invalid Fireworks chat response.'); }
     else if (!['ping','content_block_stop'].includes(value.type)) throw new Error('Invalid Fireworks chat response.');
   };
 }

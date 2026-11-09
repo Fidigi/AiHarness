@@ -4538,6 +4538,8 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
   }
 }
 
+const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
+
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
@@ -4645,7 +4647,8 @@ export class AnthropicProvider extends AiProvider {
   private hasNativeMessageReplay(model: string): boolean {
     return this.ownsNativeProfiles && hasAnthropicProfile(model)
       || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model)
-      || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model);
+      || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
+      || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model);
   }
 
   private nativeMessageHistory(messages: Message[], model: string): Message[] {
@@ -5031,19 +5034,24 @@ class FireworksCompletionsProvider extends OpenAiProvider {
 
 /** Private native A delegate; no Claude-name inference or Fireworks ambient authentication. */
 class FireworksMessagesProvider extends AnthropicProvider {
+  constructor(config: ProviderConfig, private readonly ownsReplay = false) { super(config); if (ownsReplay) nativeFireworksMessages.add(this); }
   protected override getMessagesUrl(): string { return `${this.config.baseUrl}/messages`; }
   protected override messageHeaders(options?: ChatOptions): Record<string, string> { return fireworksHeaders(this.config, options, 'anthropic-messages'); }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
-  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareFireworksMessage(body, options); }
-  protected override validateMessageResponse(value: unknown): void { validateFireworksMessage(value); }
-  protected override createMessageStreamValidator(): (value?: unknown) => void { return fireworksStreamValidator('anthropic-messages'); }
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareFireworksMessage(body, options, this.ownsReplay); }
+  protected override permitsEmptyMessageSignature(_model: string): boolean { return true; }
+  protected override validateMessageResponse(value: unknown, native = false): void { validateFireworksMessage(value, native); }
+  protected override createMessageStreamValidator(native = false): (value?: unknown) => void { return fireworksStreamValidator('anthropic-messages', native); }
   protected override messageText(content: unknown): string { return fireworksMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeFireworksUsage(previous, value, start); }
   protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return fireworksUsage(value, model); }
-  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const prepared = native ? toolImageMessages(messages) : messages;
+    const converted = super.buildAnthropicMessages(prepared, native, model), original = (native ? prepared : toolImageMessages(messages)).filter(message => message.role !== 'system');
     for (let index = 0; index < original.length; index++) {
-      const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+      const message = original[index];
+      if (native) { if (message.role === 'tool') (converted[index].content as Array<Record<string, unknown>>)[0].is_error = message.isError === true; continue; }
+      const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
       if (!reasoning) continue; const content = converted[index].content;
       converted[index].content = [{ type: 'text', text: reasoning }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
     }
@@ -5053,9 +5061,10 @@ class FireworksMessagesProvider extends AnthropicProvider {
 
 /** Explicit supplied-key mixed Fireworks A/C SDK; no factory, dialect or automatic host. */
 export class FireworksProvider extends AiProvider {
+  private readonly ownsReplay: boolean;
   constructor(config: ProviderConfig) {
     const model = config.model ?? FIREWORKS_MODELS[0].id; fireworksProfile(model);
-    super({ ...config, model, baseUrl: fireworksBase(config.baseUrl ?? 'https://api.fireworks.ai/inference') });
+    super({ ...config, model, baseUrl: fireworksBase(config.baseUrl ?? 'https://api.fireworks.ai/inference') }); this.ownsReplay = new.target === FireworksProvider;
     registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, FIREWORKS_MODELS[0].id); return options => prepareFireworksOutputBudget(options, selected); });
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -5082,18 +5091,18 @@ export class FireworksProvider extends AiProvider {
       if (profile.api === 'anthropic-messages' && !parseDataImage(image.url)) throw new Error('Invalid Fireworks image input.');
     }
     const config = { ...this.config, model };
-    return profile.api === 'anthropic-messages' ? new FireworksMessagesProvider(config) : new FireworksCompletionsProvider(config);
+    return profile.api === 'anthropic-messages' ? new FireworksMessagesProvider(config, this.ownsReplay) : new FireworksCompletionsProvider(config);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model };
-    if (fireworksProfile(model).api === 'anthropic-messages' && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; }
+    if (fireworksProfile(model).api === 'anthropic-messages' && !this.ownsReplay && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; }
     return owned;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api;
       const result = await provider.chat(messages, this.conversationOptions(messages, model, options));
-      if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); return { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); return this.ownsReplay && api === 'anthropic-messages' ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw fireworksFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -5101,7 +5110,7 @@ export class FireworksProvider extends AiProvider {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('Fireworks request aborted.'); };
     try { const provider = this.conversation(messages, model), api = fireworksProfile(model).api; active();
       await provider.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, this.conversationOptions(messages, model, options));
+        response => { active(); if (this.ownsReplay && api === 'anthropic-messages') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, this.conversationOptions(messages, model, options));
     } catch (error) { const failure = fireworksFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
