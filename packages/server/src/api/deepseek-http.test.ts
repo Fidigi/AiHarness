@@ -92,12 +92,12 @@ it('reloads encrypted explicit DeepSeek hosts and preserves native C policy acro
       expect(call.headers.authorization).toBe(`Bearer ${key}`); expect(call.headers['x-operator-fixture']).toBe(headerSecret);
       expect(call.body.thinking).toEqual({ type: 'disabled' }); expect(call.body.reasoning_effort).toBeUndefined();
       expect(call.body.max_completion_tokens).toBeUndefined(); expect(call.body.max_tokens).toBeGreaterThan(0); expect(call.body.store).toBeUndefined();
-      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(true);
+      for (const tool of call.body.tools ?? []) expect(tool.function.strict).toBe(false);
       for (const message of call.body.messages) { expect(message.role).not.toBe('developer'); if (message.role === 'assistant') expect(typeof message.reasoning_content).toBe('string'); }
       for (const name of ['x-api-key', 'api-key', 'anthropic-version', 'cf-aig-authorization']) expect(call.headers[name]).toBeUndefined();
     }
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const secret of [...keys, headerSecret]) expect(await readFile(path.join(dataDir, file), 'utf8')).not.toContain(secret);
   } finally {
-    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(resolve)); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 30_000);

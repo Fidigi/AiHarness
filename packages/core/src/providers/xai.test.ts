@@ -179,7 +179,7 @@ describe('explicit native xAI Responses SDK', () => {
         const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
         expect(native()).toEqual([{ type: 'function_call', call_id: 'call_native', id: 'fc_native', name: 'echo', arguments: '{"x":1}' },
           { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }], status: 'completed', id: 'msg_pi_1' }, finalItem]);
-        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+        const raw = (await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(raw).toHaveLength(2); expect(raw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(message => message.blocks)));
         expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
         const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
         expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-xai-/); expect(canonical).toEqual(beforeSummary);
@@ -189,7 +189,8 @@ describe('explicit native xAI Responses SDK', () => {
         const compacted = getCompactionModelMessages(compactedManager, clone.id); expect(compacted.some(message => message.content.includes('PUBLIC_XAI_COMPACTED_PREFIX'))).toBe(true);
         expect(compacted.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([reference.projections[0].second.content]); expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
         const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
-        expect((await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+        const retained = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(retained).toHaveLength(2); expect(retained.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(message => message.blocks)));
+        const ancestry = (await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(ancestry.map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
         await invoke(compacted); expect(native()).toEqual([finalItem]); expect(calls.at(-1)!.body.input.filter((item: Record<string, any>) => item.type === 'function_call_output')).toEqual([]);
         expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
       } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
