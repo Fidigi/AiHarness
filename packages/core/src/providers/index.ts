@@ -4540,6 +4540,7 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 
 const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
 const nativeOpenRouterReplay = new WeakSet<AiProvider>();
+const nativeOpenCodeGoReplay = new WeakSet<AiProvider>();
 
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
@@ -4651,7 +4652,8 @@ export class AnthropicProvider extends AiProvider {
       || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model)
       || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
       || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
-      || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model);
+      || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)
+      || nativeOpenCodeGoReplay.has(this) && OPENCODE_GO_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model);
   }
 
   protected nativeMessageHistory(messages: Message[], model: string): Message[] {
@@ -5131,18 +5133,23 @@ class OpenCodeGoCompletionsProvider extends OpenAiProvider {
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
 }
 class OpenCodeGoMessagesProvider extends AnthropicProvider {
+  constructor(config: ProviderConfig, ownsReplay = false) { super(config); if (ownsReplay) nativeOpenCodeGoReplay.add(this); }
   protected override getMessagesUrl(): string { return `${this.config.baseUrl}/messages`; }
   protected override messageHeaders(options?: ChatOptions): Record<string, string> { return opencodeGoHeaders(this.config, options, 'anthropic-messages'); }
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
-  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareOpenCodeGoMessage(body, options); }
-  protected override validateMessageResponse(value: unknown): void { validateOpenCodeGoMessage(value); }
-  protected override createMessageStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('anthropic-messages'); }
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareOpenCodeGoMessage(body, options, nativeOpenCodeGoReplay.has(this)); }
+  protected override permitsEmptyMessageSignature(model: string): boolean { return opencodeGoProfile(model).allowEmptySignature; }
+  protected override validateMessageResponse(value: unknown, native = false): void { validateOpenCodeGoMessage(value, native); }
+  protected override createMessageStreamValidator(native = false): (value?: unknown) => void { return opencodeGoStreamValidator('anthropic-messages', native); }
   protected override messageText(content: unknown): string { return opencodeGoMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenCodeGoUsage(previous, value, start); }
   protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
-  protected override buildAnthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
-    const converted = super.buildAnthropicMessages(messages), original = toolImageMessages(messages).filter(message => message.role !== 'system');
-    for (let index = 0; index < original.length; index++) { const message = original[index], reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
+  protected override nativeMessageHistory(messages: Message[], model: string): Message[] { return toolImageMessages(super.nativeMessageHistory(messages, model)); }
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages, native, model), original = (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system');
+    for (let index = 0; index < original.length; index++) { const message = original[index];
+      if (native) { if (message.role === 'tool') (converted[index].content as Array<Record<string, unknown>>)[0].is_error = message.isError === true; continue; }
+      const reasoning = message.role === 'assistant' ? message.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).filter(text => text.trim()).join('\n') : undefined;
       if (!reasoning) continue; const content = converted[index].content;
       converted[index].content = [{ type: 'thinking', thinking: reasoning, signature: '' }, ...(typeof content === 'string' ? content ? [{ type: 'text', text: content }] : [] : Array.isArray(content) ? content : [])];
     }
@@ -5150,10 +5157,17 @@ class OpenCodeGoMessagesProvider extends AnthropicProvider {
   }
 }
 class OpenCodeGoResponsesProvider extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly options?: ChatOptions) { super(config); }
+  constructor(config: ProviderConfig, private readonly options?: ChatOptions, private readonly ownsReplay = false) { super(config); }
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
-  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest { const body = super.requestBody(messages, options); prepareOpenCodeGoResponse(body, options); return body; }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    if (!this.ownsReplay) { const body = super.requestBody(messages, options); prepareOpenCodeGoResponse(body, options); return body; }
+    const history = toolImageMessages(messages), body = super.requestBody(history, options, true);
+    if (!OPENCODE_GO_MODELS.some(profile => profile.api === 'openai-responses' && profile.id === body.model)) throw new Error('OpenCode Go chat model is not supported.');
+    const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
+    nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, history, owner); prepareOpenCodeGoResponse(body, options, true); applyResponsesWholeIdHistory(body, history, owner); return body;
+  }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (this.ownsReplay ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
   protected override headers(_websocket: boolean, _sessionId?: string): Record<string, string> { return opencodeGoHeaders(this.config, this.options, 'openai-responses'); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeGoUsage(value, model); }
 }
@@ -5163,6 +5177,7 @@ export class OpenCodeGoProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     const model = config.model ?? OPENCODE_GO_MODELS[0].id; opencodeGoProfile(model);
     super({ ...config, model, baseUrl: opencodeGoBase(config.baseUrl ?? 'https://opencode.ai/zen/go') });
+    if (new.target === OpenCodeGoProvider) nativeOpenCodeGoReplay.add(this);
     registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, OPENCODE_GO_MODELS[0].id); return options => prepareOpenCodeGoOutputBudget(options, selected); });
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -5181,21 +5196,21 @@ export class OpenCodeGoProvider extends AiProvider {
   private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
     if (!this.validateConfig()) throw new Error('OpenCode Go API key is required.'); const profile = opencodeGoProfile(model);
     for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode Go chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode Go image input.'); }
-    const config = { ...this.config, model }; return profile.api === 'anthropic-messages' ? new OpenCodeGoMessagesProvider(config) : profile.api === 'openai-completions' ? new OpenCodeGoCompletionsProvider(config) : new OpenCodeGoResponsesProvider(config, options);
+    const config = { ...this.config, model }, native = nativeOpenCodeGoReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeGoMessagesProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeGoCompletionsProvider(config) : new OpenCodeGoResponsesProvider(config, options, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
-    const owned = { ...options, model }; if (opencodeGoProfile(model).api === 'anthropic-messages' && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
+    const owned = { ...options, model }; if (opencodeGoProfile(model).api === 'anthropic-messages' && !nativeOpenCodeGoReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType();
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; const result = await delegate.chat(messages, owned);
-      if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); return { ...result, provider: providerName, model, api };
+      if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); return nativeOpenCodeGoReplay.has(this) && api !== 'openai-completions' ? result : { ...result, provider: providerName, model, api };
     } catch (error) { throw opencodeGoFailure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel()!, providerName = this.getProviderType(), active = () => { if (options?.signal?.aborted) throw new Error('OpenCode Go request aborted.'); };
     try { const owned = this.conversationOptions(messages, model, options), delegate = this.conversation(messages, model, owned), api = opencodeGoProfile(model).api; active();
-      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
+      await delegate.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); }, response => { active(); if (nativeOpenCodeGoReplay.has(this) && api !== 'openai-completions') return onComplete?.(response); onComplete?.(response ? { ...response, provider: providerName, model, api } : response); }, error => { throw error; }, owned);
     } catch (error) { const failure = opencodeGoFailure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
