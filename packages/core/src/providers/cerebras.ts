@@ -70,24 +70,24 @@ export function cerebrasUsage(value: unknown, model: string): ChatResponse['usag
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), costUsd: usage.costUsd };
 }
 
-export function cerebrasReasoning(value: unknown): string | undefined {
+export function cerebrasReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
   const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
     || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Cerebras chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Cerebras reasoning replay.');
+  if (!nativeReplay && value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Cerebras reasoning replay.');
   return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
 }
 const validFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
-export function validateCerebrasChat(value: unknown): void {
+export function validateCerebrasChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)
     || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Cerebras chat response.');
-  cerebrasReasoning(value.choices[0].message);
+  cerebrasReasoning(value.choices[0].message, nativeReplay);
 }
 
 /** Per-request state; parallel or nested streams cannot lend one another a finish witness. */
-export function cerebrasStreamValidator(): (value?: unknown) => void {
+export function cerebrasStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Cerebras chat response.'); return; }
@@ -95,7 +95,7 @@ export function cerebrasStreamValidator(): (value?: unknown) => void {
     const choice = value.choices[0];
     if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Cerebras chat response.');
-    cerebrasReasoning(choice.delta);
+    cerebrasReasoning(choice.delta, nativeReplay);
     if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Cerebras chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) {
       if (!validFinish(choice.finish_reason)) throw new Error('Invalid Cerebras chat response.');

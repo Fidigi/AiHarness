@@ -1503,6 +1503,8 @@ export class AntLingProvider extends OpenAiProvider {
   }
 }
 
+const nativeCerebrasReplay = new WeakSet<AiProvider>();
+
 /** Explicit reviewed Cerebras C SDK; operator identities never select compatibility or credentials. */
 export class CerebrasProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1510,6 +1512,7 @@ export class CerebrasProvider extends OpenAiProvider {
     const model = config.model ?? CEREBRAS_MODELS[0].id; cerebrasProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.cerebras.ai/v1', 'chat/completions', 'Cerebras');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === CerebrasProvider) nativeCerebrasReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1538,10 +1541,17 @@ export class CerebrasProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid Cerebras request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareCerebrasChat(body, options); }
-  protected override validateChatResponse(value: unknown): void { validateCerebrasChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return cerebrasStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return cerebrasReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareCerebrasChat(body, options);
+    if (nativeCerebrasReplay.has(this)) {
+      const profile = cerebrasProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Cerebras chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, false, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateCerebrasChat(value, nativeCerebrasReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return cerebrasStreamValidator(nativeCerebrasReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return cerebrasReasoning(value, nativeCerebrasReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return cerebrasUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Cerebras request aborted.');
@@ -1557,7 +1567,7 @@ export class CerebrasProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Cerebras API key is required.');
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('Cerebras request aborted.');
-      return { ...result, provider, api: 'openai-completions' };
+      return nativeCerebrasReplay.has(this) ? result : { ...result, provider, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1567,7 +1577,7 @@ export class CerebrasProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Cerebras API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
+        response => { active(); if (nativeCerebrasReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, api: 'openai-completions' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
