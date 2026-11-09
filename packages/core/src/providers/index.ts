@@ -1794,6 +1794,8 @@ export class ZaiProvider extends OpenAiProvider {
   }
 }
 
+const nativeMoonshotReplay = new WeakSet<AiProvider>();
+
 /** Explicit native Moonshot C policy, never inferred from an alias or compatible URL. */
 export class MoonshotProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1801,6 +1803,7 @@ export class MoonshotProvider extends OpenAiProvider {
     const model = config.model ?? MOONSHOT_MODELS[0].id; moonshotProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.moonshot.ai/v1', 'chat/completions', 'Moonshot');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === MoonshotProvider) nativeMoonshotReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1830,10 +1833,17 @@ export class MoonshotProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid Moonshot request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareMoonshotChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateMoonshotChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return moonshotStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return moonshotReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareMoonshotChat(body, options, messages);
+    if (nativeMoonshotReplay.has(this)) {
+      const profile = moonshotProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Moonshot chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateMoonshotChat(value, nativeMoonshotReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return moonshotStreamValidator(nativeMoonshotReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return moonshotReasoning(value, nativeMoonshotReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return moonshotUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Moonshot request aborted.');
@@ -1849,7 +1859,7 @@ export class MoonshotProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('Moonshot request aborted.');
-      return { ...result, provider, model, api: 'openai-completions' };
+      return nativeMoonshotReplay.has(this) ? result : { ...result, provider, model, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1859,7 +1869,7 @@ export class MoonshotProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); },
+        response => { active(); if (nativeMoonshotReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }

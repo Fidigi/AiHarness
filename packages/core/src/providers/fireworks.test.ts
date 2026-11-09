@@ -316,7 +316,7 @@ describe('explicit native mixed Fireworks A/C SDK', () => {
         await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
         const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
         expect(native()).toEqual([{ role: 'assistant', content: [{ type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }, { type: 'text', text: 'edited answer' }] }, finalMessage]);
-        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
+        const originalRaw = (await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(originalRaw).toHaveLength(2); expect(originalRaw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
         expect(clone.messages.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual(history.map(item => item.blocks));
         const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
         expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-/); expect(canonical).toEqual(beforeSummary);
@@ -326,7 +326,8 @@ describe('explicit native mixed Fireworks A/C SDK', () => {
         const compacted = getCompactionModelMessages(compactedManager, clone.id); expect(compacted.some(item => item.content.includes('PUBLIC_FIREWORKS_COMPACTED_PREFIX'))).toBe(true);
         expect(compacted.filter(item => item.role === 'assistant').map(item => item.blocks)).toEqual([finalContent]); expect(compacted.filter(item => item.role === 'tool')).toEqual([]);
         const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
-        expect((await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
+        const retained = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(retained).toHaveLength(2); expect(retained.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
+        const ancestry = (await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(ancestry.map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
         await invoke(compacted); expect(native()).toEqual([finalMessage]); expect(results()).toEqual([]);
         expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
       } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
