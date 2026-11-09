@@ -34,7 +34,7 @@ export const XIAOMI_MODELS: readonly XiaomiProfile[] = Object.freeze(reviewed.ma
 const profiles = new Map(XIAOMI_MODELS.map(profile => [profile.id, profile]));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 export function xiaomiProfile(model: string): XiaomiProfile { const profile = profiles.get(model); if (!profile) throw new Error('Xiaomi chat model is not supported.'); return profile; }
-export function prepareXiaomiChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+export function prepareXiaomiChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
   const profile = xiaomiProfile(String(body.model)), requested = options?.thinking ?? 'off';
   if (!PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid Xiaomi thinking level.');
   const selected = clampPublishedThinkingLevel(requested, PUBLISHED_THINKING_LEVELS.filter(level => profile.thinkingLevelMap[level] !== null));
@@ -54,7 +54,7 @@ export function prepareXiaomiChat(body: Record<string, unknown>, options?: ChatO
     const history = messages.filter(message => message.role === 'assistant'); let assistant = 0;
     for (const message of body.messages) if (record(message)) {
       if (message.role === 'system') message.role = 'developer';
-      if (message.role === 'assistant') message.reasoning_content = history[assistant++]?.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).join('\n') ?? '';
+      if (message.role === 'assistant' && !nativeReplay) message.reasoning_content = history[assistant++]?.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).join('\n') ?? '';
       if (!profile.declaredInput.includes('image') && Array.isArray(message.content) && message.content.some(part => record(part) && part.type === 'image_url')) throw new Error('Xiaomi chat model does not support images.');
     }
     body.messages = body.messages.filter(message => !record(message) || message.role !== 'assistant' || message.content || message.tool_calls);
@@ -71,26 +71,26 @@ export function xiaomiUsage(value: unknown, model: string): ChatResponse['usage'
     ...(usage.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
     ...(usage.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }), ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }) };
 }
-export function xiaomiReasoning(value: unknown): string | undefined {
+export function xiaomiReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
   const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
   if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string') || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Xiaomi chat response.');
-  if (value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Xiaomi reasoning replay.');
+  if (!nativeReplay && value.reasoning_details !== undefined && (!Array.isArray(value.reasoning_details) || value.reasoning_details.length)) throw new Error('Unsupported Xiaomi reasoning replay.');
   return fields.map(field => value[field]).find((text): text is string => typeof text === 'string' && text.length > 0);
 }
 const validFinish = (value: unknown) => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
-export function validateXiaomiChat(value: unknown): void {
+export function validateXiaomiChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message) || value.choices[0].message.refusal || !validFinish(value.choices[0].finish_reason)) throw new Error('Invalid Xiaomi chat response.');
-  xiaomiReasoning(value.choices[0].message);
+  xiaomiReasoning(value.choices[0].message, nativeReplay);
 }
-export function xiaomiStreamValidator(): (value?: unknown) => void {
+export function xiaomiStreamValidator(nativeReplay = false): (value?: unknown) => void {
   let finished = false;
   return value => {
     if (value === undefined) { if (!finished) throw new Error('Invalid Xiaomi chat response.'); return; }
     if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Xiaomi chat response.');
     const choice = value.choices[0]; if (choice === undefined) return;
     if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Xiaomi chat response.');
-    xiaomiReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Xiaomi chat response.');
+    xiaomiReasoning(choice.delta, nativeReplay); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Xiaomi chat response.');
     if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Xiaomi chat response.'); finished = true; }
   };
 }

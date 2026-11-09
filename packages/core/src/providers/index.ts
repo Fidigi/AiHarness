@@ -1175,6 +1175,8 @@ function systemOneEndpoint(baseUrl: string, operation: string, label: string): s
   } catch { throw new Error(`Invalid ${label} endpoint.`); }
 }
 
+const nativeXiaomiReplay = new WeakSet<AiProvider>();
+
 /** Explicit supplied-key Xiaomi C SDK; regional plans and routed identities remain separate. */
 export class XiaomiProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1182,6 +1184,7 @@ export class XiaomiProvider extends OpenAiProvider {
     const model = config.model ?? XIAOMI_MODELS[0].id; xiaomiProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://api.xiaomimimo.com/v1', 'chat/completions', 'Xiaomi');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === XiaomiProvider) nativeXiaomiReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1204,10 +1207,16 @@ export class XiaomiProvider extends OpenAiProvider {
     try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
     catch { throw new Error('Invalid Xiaomi request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareXiaomiChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateXiaomiChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return xiaomiStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return xiaomiReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const native = nativeXiaomiReplay.has(this);
+    if (!native) return prepareXiaomiChat(body, options, messages);
+    const profile = xiaomiProfile(String(body.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Xiaomi chat response.' };
+    applyCompletionHistory(body, messages, owner.provider, true, false);
+    const prepared = prepareXiaomiChat(body, options, messages, true); nativeCompletionsOwners.set(prepared, owner); return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateXiaomiChat(value, nativeXiaomiReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return xiaomiStreamValidator(nativeXiaomiReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return xiaomiReasoning(value, nativeXiaomiReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return xiaomiUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Xiaomi request aborted.');
@@ -1220,7 +1229,7 @@ export class XiaomiProvider extends OpenAiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
     try { if (!this.validateConfig()) throw new Error('Xiaomi API key is required.'); const result = await super.chat(messages, options);
-      if (options?.signal?.aborted) throw new Error('Xiaomi request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+      if (options?.signal?.aborted) throw new Error('Xiaomi request aborted.'); return nativeXiaomiReplay.has(this) ? result : { ...result, provider, model, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1228,7 +1237,7 @@ export class XiaomiProvider extends OpenAiProvider {
     const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel(), active = () => { if (options?.signal?.aborted) throw new Error('Xiaomi request aborted.'); };
     try { if (!this.validateConfig()) throw new Error('Xiaomi API key is required.'); active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+        response => { active(); if (nativeXiaomiReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
