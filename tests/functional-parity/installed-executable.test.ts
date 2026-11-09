@@ -5227,11 +5227,16 @@ it('dispatches native Moonshot CN through installed public declarations and capt
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'moonshot-cn-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'moonshot-cn-continuation-reference-completions.json'), await readFile(new URL('../fixtures/moonshot-cn-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'moonshot-cn-public.mjs'), String.raw`
     import assert from 'node:assert/strict'; import { createServer } from 'node:http';
-    import { MoonshotCnProvider, MOONSHOT_CN_MODELS, MOONSHOT_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
+    import { readFile } from 'node:fs/promises';import { fileURLToPath } from 'node:url';
+    import { MoonshotCnProvider, MOONSHOT_CN_MODELS, MOONSHOT_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, getSupportedThinkingLevels, AI_HARNESS_CORE_API_VERSION, closeProviderNetworkDispatchers } from '@ai-harness/core';
+    assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
+    const completions=JSON.parse(await readFile(new URL('./moonshot-cn-continuation-reference-completions.json',import.meta.url),'utf8'));let privateReply;
     const calls=[],key='disposable-installed-moonshot-cn',input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)},usage={prompt_tokens:10,completion_tokens:2,prompt_tokens_details:{cached_tokens:4}};
     const server=createServer(async(req,res)=>{let text='';for await(const b of req)text+=b;const body=JSON.parse(text),answer=body.max_tokens===512?' {"label":"safe"} ':'Ready';calls.push({url:req.url,headers:req.headers,body});
+      if(privateReply){const{row,projection,raw}=privateReply,events=raw?row.rawSeed.responseEvents:projection?.responseEvents??row.seedResponseEvents,reply=raw?row.rawSeed.syntheticJsonResponse:projection?.syntheticJsonResponse??row.syntheticJsonResponse;if(body.stream){res.setHeader('content-type','text/event-stream');res.end(events.map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+'data: [DONE]\n\n');}else res.end(JSON.stringify(reply));return;}
       if(body.stream){res.setHeader('content-type','text/event-stream');res.end([{choices:[{delta:{reasoning_content:'Thought',content:answer},finish_reason:'stop'}]},{choices:[],usage}].map(v=>'data: '+JSON.stringify(v)+'\n\n').join('')+'data: [DONE]\n\n');}
       else res.end(JSON.stringify({model:'remote-alias',choices:[{message:{content:answer,reasoning_content:'Thought'},finish_reason:'stop'}],usage}));
     });await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -5254,8 +5259,16 @@ it('dispatches native Moonshot CN through installed public declarations and capt
           if(index%2===0){assert.equal(call.body.messages[0].role,'system');assert.equal(call.body.tools[0].function.strict,undefined);}
         }
       }
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new MoonshotCnProvider({type:'moonshotai-cn',apiKey:key,model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fcn/v1'}),options={...row.options,model:row.model,systemPrompt:'owned Moonshot CN C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-moonshot-cn-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'moonshotai-cn');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed Moonshot CN C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,169);for(const call of calls.slice(9)){assert.equal(call.url,'/owned%2Fcn/v1/chat/completions');assert.equal(call.headers.authorization,'Bearer '+key);for(const field of['x-api-key','anthropic-version','anthropic-beta','session_id','x-client-request-id','x-session-affinity'])assert.equal(call.headers[field],undefined);}
       console.log('native moonshot CN installed OK');
-    } finally {server.closeAllConnections();await new Promise(r=>server.close(r));}
+    } finally {await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(r=>server.close(r));}
   `);
   expect(await run(process.execPath, ['moonshot-cn-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native moonshot CN installed OK\n', stderr: '' });
 }, 60_000);

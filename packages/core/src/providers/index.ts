@@ -1795,6 +1795,8 @@ export class ZaiProvider extends OpenAiProvider {
 }
 
 const nativeMoonshotReplay = new WeakSet<AiProvider>();
+const nativeMoonshotCnReplay = new WeakSet<AiProvider>();
+const hasNativeMoonshotReplay = (provider: AiProvider): boolean => nativeMoonshotReplay.has(provider) || nativeMoonshotCnReplay.has(provider);
 
 /** Explicit native Moonshot C policy, never inferred from an alias or compatible URL. */
 export class MoonshotProvider extends OpenAiProvider {
@@ -1835,15 +1837,15 @@ export class MoonshotProvider extends OpenAiProvider {
   }
   protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
     const prepared = prepareMoonshotChat(body, options, messages);
-    if (nativeMoonshotReplay.has(this)) {
+    if (hasNativeMoonshotReplay(this)) {
       const profile = moonshotProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Moonshot chat response.' };
       applyCompletionHistory(prepared, messages, owner.provider, profile.requiresReasoningContent, false); nativeCompletionsOwners.set(prepared, owner);
     }
     return prepared;
   }
-  protected override validateChatResponse(value: unknown): void { validateMoonshotChat(value, nativeMoonshotReplay.has(this)); }
-  protected override createStreamValidator(): (value?: unknown) => void { return moonshotStreamValidator(nativeMoonshotReplay.has(this)); }
-  protected override responseReasoning(value: unknown): string | undefined { return moonshotReasoning(value, nativeMoonshotReplay.has(this)); }
+  protected override validateChatResponse(value: unknown): void { validateMoonshotChat(value, hasNativeMoonshotReplay(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return moonshotStreamValidator(hasNativeMoonshotReplay(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return moonshotReasoning(value, hasNativeMoonshotReplay(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return moonshotUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Moonshot request aborted.');
@@ -1859,7 +1861,7 @@ export class MoonshotProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
       const result = await super.chat(messages, options);
       if (options?.signal?.aborted) throw new Error('Moonshot request aborted.');
-      return nativeMoonshotReplay.has(this) ? result : { ...result, provider, model, api: 'openai-completions' };
+      return hasNativeMoonshotReplay(this) ? result : { ...result, provider, model, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1869,7 +1871,7 @@ export class MoonshotProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Moonshot API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); if (nativeMoonshotReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); },
+        response => { active(); if (hasNativeMoonshotReplay(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); },
         error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
@@ -1879,6 +1881,7 @@ export class MoonshotProvider extends OpenAiProvider {
 export class MoonshotCnProvider extends MoonshotProvider {
   constructor(config: ProviderConfig) {
     super({ ...config, baseUrl: config.baseUrl ?? 'https://api.moonshot.cn/v1' });
+    if (new.target === MoonshotCnProvider) nativeMoonshotCnReplay.add(this);
   }
 }
 
