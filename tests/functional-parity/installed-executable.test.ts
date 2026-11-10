@@ -3419,20 +3419,24 @@ it('dispatches mixed Cloudflare C/S through one installed SDK without changing n
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cloudflare-mixed-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cloudflare-workers-ai-continuation-reference-completions.json'), await readFile(new URL('../fixtures/cloudflare-workers-ai-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'cloudflare-mixed-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { CloudflareWorkersAiMixedProvider, CloudflareWorkersAiProvider, SpecializedModels, ProviderFactory, getProviderPublishedModels, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(process.cwd() + '/node_modules/'));
     const chat = '@cf/deepseek-ai/deepseek-v4-flash-0731', native = '@cf/cloudflare/clef', vision = '@cf/google/gemma-4-26b-a4b-it';
-    const key = 'disposable-installed-cloudflare-mixed', calls = [], questions = { approved: { type: 'boolean', prompt: 'Approved?' } }; let malformed = false;
+    const key = 'disposable-installed-cloudflare-mixed', calls = [], questions = { approved: { type: 'boolean', prompt: 'Approved?' } }; let malformed = false, privateReply;
+    const completions = JSON.parse(await readFile(new URL('./cloudflare-workers-ai-continuation-reference-completions.json', import.meta.url), 'utf8'));
     const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk; const body = JSON.parse(text); calls.push({ path: request.url, headers: request.headers, body });
+      if (privateReply) { const { row, projection, raw } = privateReply, events = raw ? row.rawSeed.responseEvents : projection?.responseEvents ?? row.seedResponseEvents, reply = raw ? row.rawSeed.syntheticJsonResponse : projection?.syntheticJsonResponse ?? row.syntheticJsonResponse; if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end(events.map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'); } else response.end(JSON.stringify(reply)); return; }
       if (request.url.endsWith('/run')) response.end(JSON.stringify({ success: true, result: { answers: malformed ? {} : { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } } }));
       else if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { content: 'Ready' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
-      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.messages[0]?.content.includes('Answer these finite-domain questions') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready' } }], usage }));
+      else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.messages[0]?.content.includes('Answer these finite-domain questions') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready' }, finish_reason: 'stop' }], usage }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -3461,6 +3465,14 @@ it('dispatches mixed Cloudflare C/S through one installed SDK without changing n
       assert.equal(calls.length, 8); assert.equal(calls.filter(call => call.path === '/owned/ai/run').length, 4);
       for (const call of calls) { assert.ok(['/owned/ai/run', '/owned/ai/v1/chat/completions'].includes(call.path)); assert.equal(call.headers.authorization, 'Bearer ' + key); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); }
       assert.ok(!JSON.stringify([result, completed, guest, failed, provider.getSpecializedModels()]).includes(key));
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new CloudflareWorkersAiMixedProvider({type:'cloudflare-workers-ai',apiKey:key,model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned/ai/v1'}),options={...row.options,model:row.model,systemPrompt:'owned Cloudflare Workers AI C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-cloudflare-workers-ai-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'cloudflare-workers-ai');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));const rates=row.published.cost;assert(Math.abs(first.usage.costUsd-(5*rates.input+2*rates.output+4*rates.cacheRead+rates.cacheWrite)/1e6)<1e-12);
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed Cloudflare C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,728);for(const c of calls.slice(8)){assert.equal(c.path,'/owned/ai/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);for(const name of['session_id','x-client-request-id','x-session-affinity','cf-aig-authorization','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed mixed Cloudflare OK');
   `);
@@ -3482,20 +3494,24 @@ it('dispatches native Cloudflare C through installed public declarations, reason
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'cloudflare-chat-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'cloudflare-workers-ai-continuation-reference-completions.json'), await readFile(new URL('../fixtures/cloudflare-workers-ai-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'cloudflare-chat-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { CloudflareWorkersAiChatProvider, CLOUDFLARE_CHAT_MODELS, SpecializedModels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(process.cwd() + '/node_modules/'));
     const model = '@cf/deepseek-ai/deepseek-v4-flash-0731', key = 'disposable-installed-cloudflare-chat';
-    const calls = []; let mode = 'normal';
+    const calls = []; let mode = 'normal', privateReply;
+    const completions = JSON.parse(await readFile(new URL('./cloudflare-workers-ai-continuation-reference-completions.json', import.meta.url), 'utf8'));
     const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk; const body = JSON.parse(text);
       calls.push({ path: request.url, headers: request.headers, body });
+      if (privateReply) { const { row, projection, raw } = privateReply, events = raw ? row.rawSeed.responseEvents : projection?.responseEvents ?? row.seedResponseEvents, reply = raw ? row.rawSeed.syntheticJsonResponse : projection?.syntheticJsonResponse ?? row.syntheticJsonResponse; if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end(events.map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'); } else response.end(JSON.stringify(reply)); return; }
       if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ choices: [{ delta: { reasoning_content: 'Thought' } }] }) + '\\n\\ndata: ' + JSON.stringify({ model, choices: [{ delta: { content: 'Ready' }, finish_reason: 'stop' }], usage }) + '\\n\\ndata: [DONE]\\n\\n'); }
-      else response.end(JSON.stringify({ model, choices: [{ message: { content: mode === 'label' ? JSON.stringify({ label: 'safe' }) : mode === 'questions' ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready', reasoning_content: 'Thought' } }], usage }));
+      else response.end(JSON.stringify({ model, choices: [{ message: { content: mode === 'label' ? JSON.stringify({ label: 'safe' }) : mode === 'questions' ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: true, probability: 0.8 }, { value: false, probability: 0.2 }] } } }) : 'Ready', reasoning_content: 'Thought' }, finish_reason: 'stop' }], usage }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -3518,6 +3534,14 @@ it('dispatches native Cloudflare C through installed public declarations, reason
       assert.equal(calls.length, 4);
       for (const call of calls) { assert.equal(call.path, '/owned/ai/v1/chat/completions'); assert.equal(call.headers.authorization, 'Bearer ' + key); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); }
       assert.ok(!JSON.stringify([result, complete, provider.getSpecializedModels()]).includes(key));
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new CloudflareWorkersAiChatProvider({type:'cloudflare-workers-ai',apiKey:key,model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned/ai/v1'}),options={...row.options,model:row.model,systemPrompt:'owned Cloudflare Workers AI C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-cloudflare-workers-ai-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'cloudflare-workers-ai');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));const rates=row.published.cost;assert(Math.abs(first.usage.costUsd-(5*rates.input+2*rates.output+4*rates.cacheRead+rates.cacheWrite)/1e6)<1e-12);
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed Cloudflare C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,724);for(const c of calls.slice(4)){assert.equal(c.path,'/owned/ai/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer '+key);for(const name of['session_id','x-client-request-id','x-session-affinity','cf-aig-authorization','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Cloudflare C OK');
   `);

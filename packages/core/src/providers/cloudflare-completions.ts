@@ -44,7 +44,7 @@ export function cloudflareMixedBases(config: CloudflareWorkersAiConfig): { chat:
 }
 
 /** Cloudflare's reviewed C compatibility is independent of operator ID and proxy hostname. */
-export function prepareCloudflareChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+export function prepareCloudflareChat(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
   const profile = cloudflareChatProfile(String(body.model)), requested = options?.thinking ?? 'off';
   if (!PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid Cloudflare thinking level.');
   const levels = PUBLISHED_THINKING_LEVELS.filter(level => !profile.reasoning ? level === 'off'
@@ -72,6 +72,7 @@ export function prepareCloudflareChat(body: Record<string, unknown>, options?: C
   }
   if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = false;
   if (options?.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens)) throw new Error('Invalid Cloudflare output limit.');
+  if (nativeReplay) { if (body.max_tokens !== undefined) body.max_completion_tokens = body.max_tokens; delete body.max_tokens; }
   return body;
 }
 
@@ -91,10 +92,32 @@ export function cloudflareChatUsage(value: unknown, model: string): ChatResponse
     costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + (read ?? 0) * pricing.cacheReadPerMillion + (write ?? 0) * pricing.cacheWritePerMillion) / 1_000_000 };
 }
 
-export function validateCloudflareChat(value: unknown): void {
+export function cloudflareNativeReasoning(value: unknown): string | undefined {
+  if (!record(value)) return undefined;
+  const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
+  if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
+    || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Cloudflare chat response.');
+  return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+const validFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
+export function validateCloudflareChat(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)) throw new Error('Invalid Cloudflare chat response.');
   const message = value.choices[0].message;
   if (message.refusal || (message.content !== undefined && message.content !== null && typeof message.content !== 'string')
-    || ['reasoning_content', 'reasoning_summary'].some(field => message[field] !== undefined && message[field] !== null && typeof message[field] !== 'string')
+    || (!nativeReplay && ['reasoning_content', 'reasoning_summary'].some(field => message[field] !== undefined && message[field] !== null && typeof message[field] !== 'string'))
+    || (nativeReplay && !validFinish(value.choices[0].finish_reason))
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid Cloudflare chat response.');
+  if (nativeReplay) cloudflareNativeReasoning(message);
+}
+export function cloudflareStreamValidator(nativeReplay = false): (value?: unknown) => void {
+  if (!nativeReplay) return () => {};
+  let finished = false;
+  return value => {
+    if (value === undefined) { if (!finished) throw new Error('Invalid Cloudflare chat response.'); return; }
+    if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Cloudflare chat response.');
+    const choice = value.choices[0]; if (choice === undefined) return;
+    if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Cloudflare chat response.');
+    cloudflareNativeReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Cloudflare chat response.');
+    if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid Cloudflare chat response.'); finished = true; }
+  };
 }

@@ -23,7 +23,7 @@ import { applyNativeResponsesToolHistory, nativeResponsesToolId, nativeResponses
 import { applyResponsesReplay, applyResponsesWholeIdHistory, applyResponsesSplitIdHistory, createResponsesReplayCapture, type ResponsesReplayOwner } from './responses-replay.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
-import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat } from './cloudflare-completions.js';
+import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat, cloudflareNativeReasoning, cloudflareStreamValidator } from './cloudflare-completions.js';
 import { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
 export { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
 import { openRouterCompletionProfile, prepareOpenRouterCompletion, openRouterCompletionReasoning, openRouterCompletionUsage, validateOpenRouterCompletion } from './openrouter-completions.js';
@@ -2084,6 +2084,8 @@ export class OpenRouterCompletionsProvider extends OpenAiProvider {
   }
 }
 
+const nativeCloudflareReplay = new WeakSet<AiProvider>();
+
 /** Explicit Workers AI C SDK; the native S classifier and gateway remain separate services. */
 export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -2092,6 +2094,7 @@ export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
     cloudflareChatProfile(model);
     const endpoint = cloudflareChatEndpoint(config);
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === CloudflareWorkersAiChatProvider) nativeCloudflareReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -2122,14 +2125,32 @@ export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid Cloudflare request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareCloudflareChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateCloudflareChat(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareCloudflareChat(body, options, messages, nativeCloudflareReplay.has(this));
+    if (nativeCloudflareReplay.has(this)) {
+      const profile = cloudflareChatProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Cloudflare chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, profile.compat.requiresReasoningContentOnAssistantMessages === true, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateCloudflareChat(value, nativeCloudflareReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return cloudflareStreamValidator(nativeCloudflareReplay.has(this)); }
+  protected override responseReasoning(value: unknown, stream = false): string | undefined { return nativeCloudflareReplay.has(this) ? cloudflareNativeReasoning(value) : super.responseReasoning(value, stream); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return cloudflareChatUsage(value, model); }
+  private nativeFailure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Cloudflare request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['Cloudflare API key is required.', 'Cloudflare chat model is not supported.', 'Invalid Cloudflare thinking level.',
+      'Invalid Cloudflare output limit.', 'Cloudflare chat model does not support images.', 'Invalid Cloudflare request headers.', 'Invalid Cloudflare chat response.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Cloudflare chat request failed.');
+  }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
-    if (!this.validateConfig()) throw new Error('Cloudflare API key is required.');
-    const provider = this.getProviderType(), result = await super.chat(messages, options);
-    if (options?.signal?.aborted) throw new Error('Cloudflare request aborted.');
-    return { ...result, provider, api: this.getModelApi() };
+    try {
+      if (!this.validateConfig()) throw new Error('Cloudflare API key is required.');
+      const provider = this.getProviderType(), result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('Cloudflare request aborted.');
+      return nativeCloudflareReplay.has(this) ? result : { ...result, provider, api: this.getModelApi() };
+    } catch (error) { if (nativeCloudflareReplay.has(this)) throw this.nativeFailure(error, options?.signal); throw error; }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -2139,10 +2160,10 @@ export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('Cloudflare API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, api: this.getModelApi() } : response); },
+        response => { active(); if (nativeCloudflareReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, api: this.getModelApi() } : response); },
         error => { throw error; }, options);
     } catch (error) {
-      const failure = options?.signal?.aborted ? new Error('Cloudflare request aborted.') : error instanceof Error ? error : new Error('Cloudflare chat request failed.');
+      const failure = nativeCloudflareReplay.has(this) ? this.nativeFailure(error, options?.signal) : options?.signal?.aborted ? new Error('Cloudflare request aborted.') : error instanceof Error ? error : new Error('Cloudflare chat request failed.');
       if (onError) onError(failure); else throw failure;
     }
   }
@@ -5882,6 +5903,7 @@ export class CloudflareWorkersAiMixedProvider extends AiProvider {
     const bases = cloudflareMixedBases(config);
     super({ ...config, model });
     this.bases = bases;
+    if (new.target === CloudflareWorkersAiMixedProvider) nativeCloudflareReplay.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
@@ -5899,7 +5921,9 @@ export class CloudflareWorkersAiMixedProvider extends AiProvider {
     return undefined;
   }
   private conversation(model: string): CloudflareWorkersAiChatProvider {
-    return new CloudflareWorkersAiChatProvider({ ...this.config, model, baseUrl: this.bases.chat });
+    const provider = new CloudflareWorkersAiChatProvider({ ...this.config, model, baseUrl: this.bases.chat });
+    if (!nativeCloudflareReplay.has(this)) nativeCloudflareReplay.delete(provider);
+    return provider;
   }
   private classifier(model?: string): CloudflareWorkersAiProvider {
     return new CloudflareWorkersAiProvider({ ...this.config, model, baseUrl: this.bases.classifier });
