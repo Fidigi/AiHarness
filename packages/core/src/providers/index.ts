@@ -1242,6 +1242,8 @@ export class XiaomiProvider extends OpenAiProvider {
   }
 }
 
+const nativeHuggingFaceReplay = new WeakSet<AiProvider>();
+
 /** Explicit supplied-token Hugging Face C SDK; aliases and shared IDs never select foreign policy. */
 export class HuggingFaceProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -1249,6 +1251,7 @@ export class HuggingFaceProvider extends OpenAiProvider {
     const model = config.model ?? HUGGINGFACE_MODELS[0].id; huggingfaceProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl ?? 'https://router.huggingface.co/v1', 'chat/completions', 'Hugging Face');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === HuggingFaceProvider) nativeHuggingFaceReplay.add(this);
   }
   override getModelApi(_model?: string): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -1271,10 +1274,17 @@ export class HuggingFaceProvider extends OpenAiProvider {
     try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
     catch { throw new Error('Invalid Hugging Face request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> { return prepareHuggingFaceChat(body, options, messages); }
-  protected override validateChatResponse(value: unknown): void { validateHuggingFaceChat(value); }
-  protected override createStreamValidator(): (value?: unknown) => void { return huggingfaceStreamValidator(); }
-  protected override responseReasoning(value: unknown): string | undefined { return huggingfaceReasoning(value); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const prepared = prepareHuggingFaceChat(body, options, messages);
+    if (nativeHuggingFaceReplay.has(this)) {
+      const profile = huggingfaceProfile(String(prepared.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid Hugging Face chat response.' };
+      applyCompletionHistory(prepared, messages, owner.provider, false, false); nativeCompletionsOwners.set(prepared, owner);
+    }
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateHuggingFaceChat(value, nativeHuggingFaceReplay.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return huggingfaceStreamValidator(nativeHuggingFaceReplay.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return huggingfaceReasoning(value, nativeHuggingFaceReplay.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return huggingfaceUsage(value, model); }
   private failure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Hugging Face request aborted.');
@@ -1287,7 +1297,7 @@ export class HuggingFaceProvider extends OpenAiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel();
     try { if (!this.validateConfig()) throw new Error('Hugging Face API key is required.'); const result = await super.chat(messages, options);
-      if (options?.signal?.aborted) throw new Error('Hugging Face request aborted.'); return { ...result, provider, model, api: 'openai-completions' };
+      if (options?.signal?.aborted) throw new Error('Hugging Face request aborted.'); return nativeHuggingFaceReplay.has(this) ? result : { ...result, provider, model, api: 'openai-completions' };
     } catch (error) { throw this.failure(error, options?.signal); }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
@@ -1295,7 +1305,7 @@ export class HuggingFaceProvider extends OpenAiProvider {
     const provider = this.getProviderType(), model = options?.model || this.getConfiguredModel(), active = () => { if (options?.signal?.aborted) throw new Error('Hugging Face request aborted.'); };
     try { if (!this.validateConfig()) throw new Error('Hugging Face API key is required.'); active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
+        response => { active(); if (nativeHuggingFaceReplay.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, provider, model, api: 'openai-completions' } : response); }, error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
   }
 }
