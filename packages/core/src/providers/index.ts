@@ -10,7 +10,7 @@ import { calculateModelCost, calculatePublishedModelCost, clampPublishedThinking
 import { getProviderPublishedModel } from './provider-model-metadata.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
-import { azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses } from './azure-profiles.js';
+import { azureCompletionReasoning, azureCompletionStreamValidator, azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses, validateAzureCompletion } from './azure-profiles.js';
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
 import { bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
@@ -735,11 +735,11 @@ export class OpenAiProvider extends AiProvider {
   }
 
   protected prepareChatBody(body: Record<string, unknown>, _options?: ChatOptions, _messages?: Message[]): Record<string, unknown> { return body; }
-  protected validateChatResponse(_value: unknown): void {}
+  protected validateChatResponse(_value: unknown, _body?: Record<string, unknown>): void {}
   /** Optional per-request native completion validation; legacy compatible streams retain their policy. */
-  protected createStreamValidator(): (value?: unknown) => void { return () => {}; }
+  protected createStreamValidator(_body?: Record<string, unknown>): (value?: unknown) => void { return () => {}; }
   protected responseUsage(usage: NonNullable<OpenAiResponse['usage']> | NonNullable<OpenAiStreamChunk['usage']>, _model: string): ChatResponse['usage'] { return normalizeOpenAiUsage(usage); }
-  protected responseReasoning(value: unknown, stream = false): string | undefined {
+  protected responseReasoning(value: unknown, stream = false, _body?: Record<string, unknown>): string | undefined {
     const message = value as { reasoning_content?: string; reasoning_summary?: string } | undefined;
     return stream ? typeof message?.reasoning_content === 'string' ? message.reasoning_content : undefined
       : message?.reasoning_content || message?.reasoning_summary;
@@ -830,13 +830,13 @@ export class OpenAiProvider extends AiProvider {
     if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
 
     const data = await readProviderJson<OpenAiResponse>(response);
-    this.validateChatResponse(data);
+    this.validateChatResponse(data, body);
     const choice = data.choices?.[0];
     if (!choice?.message) {
       throw new Error('No content in OpenAI response');
     }
 
-    const reasoning = this.responseReasoning(choice.message), toolCalls = this.parseToolCalls(choice.message.tool_calls);
+    const reasoning = this.responseReasoning(choice.message, false, body), toolCalls = this.parseToolCalls(choice.message.tool_calls);
     const capture = owner ? createCompletionCapture(owner.normalizeReasoningMarker, owner.invalidResponse) : undefined; capture?.accept(choice.message, true);
     if (owner && options?.signal?.aborted) throw new Error('The provider request was cancelled.');
     return {
@@ -904,7 +904,7 @@ export class OpenAiProvider extends AiProvider {
       if (!response.ok) await rejectProviderHttpResponse(response, `OpenAI API error (${response.status}).`);
       if (!response.body) throw new Error('OpenAI streaming response has no body');
 
-      const validateStream = this.createStreamValidator();
+      const validateStream = this.createStreamValidator(prepared);
       let fullContent = '';
       let fullReasoning = '';
       let streamModel = model;
@@ -972,7 +972,7 @@ export class OpenAiProvider extends AiProvider {
           stopReason = lengthStop(data.choices?.[0]?.finish_reason).stopReason ?? stopReason;
           const delta = data.choices?.[0]?.delta;
           if (capture) { capture.accept(delta); const details = (delta as Record<string, unknown> | undefined)?.reasoning_details; if (details !== undefined) addOutput(serializeProviderBody(details)); }
-          const reasoning = this.responseReasoning(delta, true);
+          const reasoning = this.responseReasoning(delta, true, prepared);
           if (reasoning) {
             addOutput(reasoning);
             fullReasoning += reasoning;
@@ -3664,6 +3664,8 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
   }
 }
 
+const nativeAzureCompletions = new WeakSet<AiProvider>();
+
 /** Azure's pinned C exception uses native v1/Bearer, not legacy deployment-path/api-key C. */
 export class AzureCompletionsProvider extends OpenAiProvider {
   private readonly azureBaseUrl: string;
@@ -3675,6 +3677,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
     super({ ...config, type: ProviderType.AZURE, model: config.model || 'deepseek-v4-pro', baseUrl });
     this.azureBaseUrl = baseUrl; this.logicalProvider = String(config.type || ProviderType.AZURE); this.deployments = azureDeployments(config);
     this.ownsNativeProfiles = new.target === AzureCompletionsProvider;
+    if (new.target === AzureCompletionsProvider) nativeAzureCompletions.add(this);
   }
   override getProviderType(): string { return this.logicalProvider; }
   override getModelApi(): string { return 'openai-completions'; }
@@ -3689,25 +3692,45 @@ export class AzureCompletionsProvider extends OpenAiProvider {
     return { ...headers, Authorization: `Bearer ${String(this.config.apiKey)}` };
   }
   protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
-    if (this.ownsNativeProfiles) prepareAzureCompletion(body, options, messages, this.getProviderType());
+    const model = String(body.model), native = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    if (this.ownsNativeProfiles || native) prepareAzureCompletion(body, options, messages, native ? this.logicalProvider : this.getProviderType(), native);
+    if (native) applyCompletionHistory(body, messages, this.logicalProvider, true, false);
     body.model = typeof this.config.deployment === 'string' ? this.config.deployment : this.deployments.get(String(body.model)) ?? body.model;
+    // Azure's actual SDK wrapper rewrites the posted deployment,not the prepared catalogue provenance.
+    if (native) nativeCompletionsOwners.set(body, { provider: this.logicalProvider, api: 'openai-completions', model, normalizeReasoningMarker: false, invalidResponse: 'Invalid Azure chat response.' });
     return body;
   }
+  private hasNativeBody(body?: Record<string, unknown>): boolean { return nativeAzureCompletions.has(this) && body !== undefined && nativeCompletionsOwners.has(body); }
+  protected override validateChatResponse(value: unknown, body?: Record<string, unknown>): void { if (this.hasNativeBody(body)) validateAzureCompletion(value); }
+  protected override createStreamValidator(body?: Record<string, unknown>): (value?: unknown) => void { return this.hasNativeBody(body) ? azureCompletionStreamValidator() : super.createStreamValidator(body); }
+  protected override responseReasoning(value: unknown, stream = false, body?: Record<string, unknown>): string | undefined { return this.hasNativeBody(body) ? azureCompletionReasoning(value) : super.responseReasoning(value, stream, body); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] {
-    return this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions' ? azureProfileUsage(value, model) : super.responseUsage(value as NonNullable<OpenAiResponse['usage']>, model);
+    return (this.ownsNativeProfiles || nativeAzureCompletions.has(this)) && azureProfileApi(model) === 'openai-completions' ? azureProfileUsage(value, model, nativeAzureCompletions.has(this)) : super.responseUsage(value as NonNullable<OpenAiResponse['usage']>, model);
+  }
+  private nativeFailure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Azure request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['OpenAI API key is required', 'Invalid Azure thinking level.', 'Invalid Azure output limit.', 'Azure completion model does not support images.', 'Invalid Azure chat response.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Azure completion request failed.');
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions';
-    const result = await super.chat(messages, azureRequestOptions(options, model));
-    return native ? { ...result, provider, model, api: 'openai-completions' } : result;
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    try {
+      const result = await super.chat(messages, azureRequestOptions(options, model));
+      return replay ? result : native ? { ...result, provider, model, api: 'openai-completions' } : result;
+    } catch (error) { if (replay) throw this.nativeFailure(error, options?.signal); throw error; }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions';
-    await super.streamChat(messages, native ? azureNativeChunk(onChunk, options?.signal) : onChunk, response => onComplete?.(response && native ? { ...response, provider, model, api: 'openai-completions' } : response),
-      onError, azureRequestOptions(options, model));
+    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    const report = (error: Error) => { const safe = this.nativeFailure(error, options?.signal); if (onError) onError(safe); else throw safe; };
+    try {
+      await super.streamChat(messages, native || replay ? azureNativeChunk(onChunk, options?.signal) : onChunk,
+        response => onComplete?.(response && native && !replay ? { ...response, provider, model, api: 'openai-completions' } : response),
+        replay ? report : onError, azureRequestOptions(options, model));
+    } catch (error) { if (replay) report(error instanceof Error ? error : new Error()); else throw error; }
   }
 }
 
@@ -3717,6 +3740,7 @@ export class AzureProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     super({ ...config, model: config.model || 'gpt-4o', baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
     azureDeployments(config); this.ownsNativeProfiles = new.target === AzureProvider;
+    if (new.target === AzureProvider) nativeAzureCompletions.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
@@ -3726,16 +3750,23 @@ export class AzureProvider extends AiProvider {
   private conversation(model: string, provider: string): AiProvider {
     const config = { ...this.config, type: provider, model };
     azureResponsesOwnerNames.set(config, provider);
-    return azureProfileApi(model) === 'openai-completions' ? new AzureCompletionsProvider(config) : new AzureResponsesProvider(config);
+    if (azureProfileApi(model) !== 'openai-completions') return new AzureResponsesProvider(config);
+    const delegate = new AzureCompletionsProvider(config);
+    if (!nativeAzureCompletions.has(this)) nativeAzureCompletions.delete(delegate);
+    return delegate;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel() || 'gpt-4o', provider = this.getProviderType();
-    return { ...await this.conversation(model, provider).chat(messages, azureRequestOptions(options, model)), provider };
+    const nativeC = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    const result = await this.conversation(model, nativeC ? String(this.config.type) : provider).chat(messages, azureRequestOptions(options, model));
+    return nativeC ? result : { ...result, provider };
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel() || 'gpt-4o', provider = this.getProviderType();
-    await this.conversation(model, provider).streamChat(messages, onChunk, response => onComplete?.(response ? { ...response, provider } : response), onError, azureRequestOptions(options, model));
+    const nativeC = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    await this.conversation(model, nativeC ? String(this.config.type) : provider).streamChat(messages, onChunk,
+      response => onComplete?.(response && !nativeC ? { ...response, provider } : response), onError, azureRequestOptions(options, model));
   }
 }
 

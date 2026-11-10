@@ -2768,6 +2768,7 @@ it('dispatches native Bedrock binary streams through installed public declaratio
 
 it('dispatches Azure native v1 and explicit Responses through installed public declarations and runtime', async () => {
   const profiles = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/azure-reference.json'), 'utf8')).profiles;
+  const continuations = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/azure-continuation-reference-completions.json'), 'utf8'));
   await writeFile(path.join(consumer, 'azure-public.ts'), `
     import { AzureProvider, AzureResponsesProvider, AzureCompletionsProvider, ProviderFactory, azureEnvironmentConfig, type ProviderConfig, type AiProvider } from '@ai-harness/core';
     const config: ProviderConfig = { type: 'azure', azureApi: 'responses', apiKey: 'disposable', baseUrl: 'https://tenant.openai.azure.com', azureDeploymentMap: { logical: 'physical' } };
@@ -2790,11 +2791,16 @@ it('dispatches Azure native v1 and explicit Responses through installed public d
     import { AzureProvider, AzureResponsesProvider, AzureCompletionsProvider, ProviderFactory, azureEnvironmentConfig, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const profiles = ${JSON.stringify(profiles.map((row: { profile: { id: string; api: string; maxTokens: number }; expectedUsage: unknown }) => ({ id: row.profile.id, api: row.profile.api, max: row.profile.maxTokens, usage: row.expectedUsage })))};
-    const calls = [];
+    const continuations = ${JSON.stringify(continuations)}, fixtureBytes = JSON.stringify(continuations);
+    const calls = []; let activeC;
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       calls.push({ url: request.url, key: request.headers['api-key'], authorization: request.headers.authorization, body: JSON.parse(text) });
       const body = calls.at(-1).body, c = request.url.endsWith('/chat/completions');
+      if (c && activeC) {
+        response.setHeader('content-type', body.stream ? 'text/event-stream' : 'application/json');
+        response.end(body.stream ? activeC.events.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join('') + 'data: [DONE]\\n\\n' : JSON.stringify(activeC.json)); return;
+      }
       const usage = c ? { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12, prompt_tokens_details: { cached_tokens: 3 } }
         : body.model === 'physical' ? { input_tokens: 4, output_tokens: 1 }
         : { input_tokens: 11, output_tokens: 2, total_tokens: 13, input_tokens_details: { cached_tokens: 3, cache_write_tokens: 1 } };
@@ -2841,6 +2847,24 @@ it('dispatches Azure native v1 and explicit Responses through installed public d
         assert.equal(provider.getConfiguredModel(), 'logical');
       }
       assert.equal(calls.length, 91);
+      for (const row of continuations.rows) for (const Constructor of [AzureCompletionsProvider, AzureProvider]) for (const stream of [false, true]) {
+        const owned = new Constructor({ ...explicit, model: row.model, ...row.deploymentConfig }), user = { id: 'c-u', role: 'user', content: 'probe', timestamp: new Date(0) };
+        const options = { ...row.options, model: row.model, systemPrompt: 'owned Azure C reference system', tools: continuations.tools };
+        const expected = body => { const value = { ...structuredClone(body), stream }; if (!stream) delete value.stream_options; return value; };
+        const invoke = async messages => { if (!stream) return owned.chat(messages, options); let value; await owned.streamChat(messages, () => {}, response => { value = response; }, error => { throw error; }, options); assert.ok(value); return value; };
+        activeC = { events: row.seedResponseEvents, json: row.syntheticJsonResponse };
+        const first = await invoke([user]); assert.deepEqual(first.blocks, row.expectedBlocks); assert.deepEqual(first.toolCalls, row.expectedToolCalls); assert.equal(first.model, row.model); assert.equal(first.provider, 'azure'); assert.equal(first.api, 'openai-completions');
+        assert.deepEqual(calls.at(-1).body, expected(row.expectedInitialBody)); assert.equal(first.usage.promptTokens, 5); assert.equal(first.usage.cacheWriteTokens, 1); assert.ok(Math.abs(first.usage.costUsd - 0.000017941) < 1e-12);
+        activeC = { events: row.rawSeed.responseEvents, json: row.rawSeed.syntheticJsonResponse }; assert.deepEqual((await invoke([user])).blocks, row.rawSeed.expectedBlocks); assert.deepEqual(calls.at(-1).body, expected(row.expectedInitialBody));
+        for (const projection of row.cases) {
+          const source = { id: 'c-a', role: 'assistant', content: first.content, timestamp: new Date(0), ...projection.source, blocks: structuredClone(projection.blocks), toolCalls: structuredClone(projection.toolCalls), ...(projection.failed ? { metadata: { outputError: 'Failed Azure C producer' } } : {}) };
+          const results = projection.toolResult ? [{ id: 'c-r', role: 'tool', name: 'echo', toolCallId: projection.toolResult.toolCallId, content: projection.toolResult.content.map(block => block.text).join('\\n'), isError: projection.toolResult.isError, timestamp: new Date(0) }] : [];
+          const history = [user, source, ...results, { ...user, id: 'c-next', content: 'continue' }], before = structuredClone(history); activeC = { events: projection.responseEvents, json: projection.syntheticJsonResponse };
+          assert.equal((await invoke(history)).content, 'ok'); assert.deepEqual(calls.at(-1).body, expected(projection.expectedBody)); assert.deepEqual(history, before);
+        }
+      }
+      assert.equal(calls.length, 331); assert.equal(JSON.stringify(continuations), fixtureBytes);
+      for (const call of calls.slice(91)) { assert.equal(call.url, '/openai/v1/chat/completions'); assert.equal(call.key, undefined); assert.equal(call.authorization, 'Bearer disposable-installed-key'); }
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Azure Responses OK');
   `);

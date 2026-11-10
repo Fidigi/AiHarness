@@ -87,7 +87,7 @@ describe('original Azure scoped declarations and physical policies', () => {
     const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
     for (const { profile } of reference.profiles) {
       const provider = ProviderFactory.create({ ...config(profile.id), apiKey: undefined });
-      expect(provider.getModelApi(profile.id)).toBe(profile.api);
+      expect(provider.getModelApi?.(profile.id)).toBe(profile.api);
       const rows = getProviderPublishedModels(provider)!;
       expect(rows).toHaveLength(45);
       expect(rows.find(row => row.id === profile.id)).toMatchObject({ name: profile.name, api: profile.api,
@@ -111,18 +111,18 @@ describe('original Azure scoped declarations and physical policies', () => {
     expect(provider.getConfiguredModel()).toBe('gpt-5');
     expect(calls).toEqual([{ path: '/openai/v1/responses', body: expect.objectContaining({ model: 'r-deployment' }) },
       { path: '/openai/v1/chat/completions', body: expect.objectContaining({ model: 'c-deployment' }) }]);
-    expect(ProviderFactory.create({ ...config('gpt-5'), azureApi: 'responses' }).getModelApi()).toBe('azure-openai-responses');
-    expect(ProviderFactory.create({ ...config('deepseek-v4-pro'), azureApi: 'completions' }).getModelApi()).toBe('openai-completions');
+    expect(ProviderFactory.create({ ...config('gpt-5'), azureApi: 'responses' }).getModelApi?.()).toBe('azure-openai-responses');
+    expect(ProviderFactory.create({ ...config('deepseek-v4-pro'), azureApi: 'completions' }).getModelApi?.()).toBe('openai-completions');
     expect(ProviderFactory.create({ type: 'azure', apiKey: 'key', baseUrl: 'https://legacy.openai.azure.com' })).toBeInstanceOf(OpenAiProvider);
     expect(ProviderFactory.create({ ...config('gpt-5'), azureApi: 'native', baseUrl: 'https://owned-reference.openai.azure.com/proxy/v1' } as ProviderConfig)
-      .getModelApi('deepseek-v4-pro')).toBe('openai-completions');
+      .getModelApi?.('deepseek-v4-pro')).toBe('openai-completions');
   });
 
   it('pins native identity/prices/caps independently of public methods, metadata and later configuration', async () => {
     for (const id of ['gpt-5', 'deepseek-v4-pro']) {
       const row = reference.profiles.find(row => row.profile.id === id)!;
       const provider = ProviderFactory.create(config(id)), calls: unknown[] = [];
-      const exposed = provider.getPublishedModels()!.find(row => row.id === id)!;
+      const exposed = provider.getPublishedModels!()!.find(row => row.id === id)!;
       exposed.maxOutputTokens = Number.MAX_SAFE_INTEGER;
       exposed.pricing!.inputPerMillion = 999999;
       provider.getModelApi = () => 'forged-api'; provider.getProviderType = () => 'operator-alias';
@@ -130,9 +130,9 @@ describe('original Azure scoped declarations and physical policies', () => {
         const body = JSON.parse(String(init.body)); calls.push(body); provider.setConfiguredModel('unknown-after-send');
         return response(row.profile.api, body.stream === true);
       }));
-      const options: ChatOptions = { maxTokens: 64, get thinkingBudgets() { throw new Error('Unused numeric map was read'); } };
+      const options: ChatOptions = { maxTokens: 64, get thinkingBudgets(): never { throw new Error('Unused numeric map was read'); } };
       const result = await provider.chat(messages, options);
-      expect(result).toMatchObject({ model: id, api: row.profile.api, provider: 'operator-alias' });
+      expect(result).toMatchObject({ model: id, api: row.profile.api, provider: row.profile.api === 'openai-completions' ? 'azure' : 'operator-alias' });
       expect(result.usage?.costUsd).toBeCloseTo(row.expectedUsage.costUsd!, 12);
       await expect(provider.chat(messages, { model: id, maxTokens: row.profile.maxTokens + 1 })).rejects.toThrow('Invalid Azure output limit.');
       expect(calls).toHaveLength(1);
@@ -176,15 +176,15 @@ describe('original Azure scoped declarations and physical policies', () => {
     expect(seen).toEqual(['reasoning_delta']); expect(complete).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledTimes(1);
   });
 
-  it('replays required C plain reasoning only with matching provider/model/API provenance', async () => {
-    const bodies: Array<{ messages: Array<{ role: string; reasoning_content?: unknown }> }> = [];
+  it('does not grant native C replay from legacy metadata-only provenance', async () => {
+    const bodies: Array<{ messages: Array<{ role: string; content: unknown; reasoning_content?: unknown }> }> = [];
     vi.stubGlobal('fetch', vi.fn(async (_url, init) => { const body = JSON.parse(String(init.body)); bodies.push(body); return response('openai-completions', body.stream === true); }));
     const provider = ProviderFactory.create(config('deepseek-v4-pro'));
     const metadata = { provider: 'azure', model: 'deepseek-v4-pro', api: 'openai-completions' };
     for (const provenance of [metadata, { ...metadata, provider: 'deepseek' }, { ...metadata, api: 'azure-openai-responses' }, { ...metadata, model: 'other' }, undefined]) {
       await provider.chat([...messages, { id: 'assistant', role: 'assistant', content: 'ok', timestamp: new Date(0),
         blocks: [{ type: 'reasoning', text: 'owned thought' }], metadata: provenance }]);
-      expect(bodies.at(-1)!.messages.find(message => message.role === 'assistant')?.reasoning_content).toBe(provenance === metadata ? 'owned thought' : '');
+      expect(bodies.at(-1)!.messages.find(message => message.role === 'assistant')).toEqual({ role: 'assistant', content: 'owned thoughtok', reasoning_content: '' });
     }
   });
 

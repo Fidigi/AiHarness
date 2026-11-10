@@ -84,7 +84,7 @@ export function prepareAzureResponses(body: Record<string, unknown>, options?: C
   // Azure's SDK uses affinity independently of retention. This does not observe a cache hit or make a warming request.
   if (options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
 }
-export function prepareAzureCompletion(body: Record<string, unknown>, options: ChatOptions | undefined, messages: Message[], provider: string): void {
+export function prepareAzureCompletion(body: Record<string, unknown>, options: ChatOptions | undefined, messages: Message[], provider: string, nativeReplay = false): void {
   const profile = profiles.get(String(body.model)); if (profile?.api !== 'openai-completions') return;
   const requested = options?.thinking;
   if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid Azure thinking level.');
@@ -104,7 +104,7 @@ export function prepareAzureCompletion(body: Record<string, unknown>, options: C
   if (Array.isArray(body.messages)) for (const message of body.messages) {
     if (!record(message)) continue;
     if (message.role === 'developer') message.role = 'system';
-    if (message.role === 'assistant') {
+    if (message.role === 'assistant' && !nativeReplay) {
       const previous = history[assistant++], metadata = previous?.metadata;
       message.reasoning_content = metadata?.provider === provider && metadata.model === profile.id && metadata.api === profile.api
         ? previous.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).join('\n') ?? '' : '';
@@ -112,10 +112,36 @@ export function prepareAzureCompletion(body: Record<string, unknown>, options: C
     if (Array.isArray(message.content) && message.content.some(part => record(part) && part.type === 'image_url')) throw new Error('Azure completion model does not support images.');
   }
 }
-export function azureProfileUsage(value: unknown, model: string): ChatResponse['usage'] {
+export function azureProfileUsage(value: unknown, model: string, nativeReplay = false): ChatResponse['usage'] {
   const profile = profiles.get(model); if (!profile) return undefined;
   if (profile.api === 'azure-openai-responses') return nativeResponsesUsage(value, profile);
   if (!record(value) || (value.prompt_tokens_details !== undefined && !record(value.prompt_tokens_details))) return undefined;
   return nativeResponsesUsage({ input_tokens: value.prompt_tokens, output_tokens: value.completion_tokens, total_tokens: value.total_tokens,
-    input_tokens_details: { cached_tokens: record(value.prompt_tokens_details) ? value.prompt_tokens_details.cached_tokens : undefined, cache_write_tokens: 0 } }, profile);
+    input_tokens_details: { cached_tokens: record(value.prompt_tokens_details) ? value.prompt_tokens_details.cached_tokens : undefined,
+      cache_write_tokens: nativeReplay && record(value.prompt_tokens_details) ? value.prompt_tokens_details.cache_write_tokens ?? 0 : 0 } }, profile);
+}
+
+export function azureCompletionReasoning(value: unknown): string | undefined {
+  if (!record(value)) return undefined;
+  const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
+  if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
+    || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid Azure chat response.');
+  return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+const validCompletionFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
+export function validateAzureCompletion(value: unknown): void {
+  if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)
+    || value.choices[0].message.refusal || !validCompletionFinish(value.choices[0].finish_reason)) throw new Error('Invalid Azure chat response.');
+  azureCompletionReasoning(value.choices[0].message);
+}
+export function azureCompletionStreamValidator(): (value?: unknown) => void {
+  let finished = false;
+  return value => {
+    if (value === undefined) { if (!finished) throw new Error('Invalid Azure chat response.'); return; }
+    if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid Azure chat response.');
+    const choice = value.choices[0]; if (choice === undefined) return;
+    if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid Azure chat response.');
+    azureCompletionReasoning(choice.delta); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid Azure chat response.');
+    if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validCompletionFinish(choice.finish_reason)) throw new Error('Invalid Azure chat response.'); finished = true; }
+  };
 }
