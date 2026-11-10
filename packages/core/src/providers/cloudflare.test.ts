@@ -6,7 +6,7 @@ import { runCodemode } from '../tools/codemode.js';
 import type { ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 
 const chat = '@cf/deepseek-ai/deepseek-v4-flash-0731', vision = '@cf/google/gemma-4-26b-a4b-it', native = '@cf/cloudflare/clef';
-const message = { id: 'user-1', role: 'user' as const, content: 'Approved', timestamp: 1 };
+const message = { id: 'user-1', role: 'user' as const, content: 'Approved', timestamp: new Date(1) };
 const questions = { approved: { type: 'boolean' as const, prompt: 'Approved?' } };
 const servers: Server[] = [];
 afterEach(async () => { for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
@@ -27,12 +27,12 @@ async function fixture() {
       if (body.stream) {
         response.setHeader('content-type', 'text/event-stream');
         response.end(`data: ${JSON.stringify({ model: body.model, choices: [{ index: 0, delta: { reasoning_content: 'Thought' } }] })}\n\ndata: ${JSON.stringify({ model: body.model,
-          choices: [{ index: 0, delta: { content: 'Ready' } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage })}\n\ndata: [DONE]\n\n`);
+          choices: [{ index: 0, delta: { content: 'Ready' }, finish_reason: 'stop' }] })}\n\ndata: ${JSON.stringify({ choices: [], usage })}\n\ndata: [DONE]\n\n`);
       } else {
         const system = body.messages[0]?.content ?? '';
         const content = system.includes('Classify the user input') ? JSON.stringify({ label: 'safe' })
           : system.includes('Answer these finite-domain questions') ? JSON.stringify({ answers: { approved: { value: true, probabilities: [{ value: false, probability: 0.2 }, { value: true, probability: 0.8 }] } } }) : 'Ready';
-        response.end(JSON.stringify({ model: body.model, choices: [{ message: { content } }], usage }));
+        response.end(JSON.stringify({ model: body.model, choices: [{ message: { content }, finish_reason: 'stop' }], usage }));
       }
     }
   });
@@ -65,7 +65,7 @@ describe('explicit mixed Cloudflare Workers AI SDK', () => {
       expect((await models.classifyQuestions({ model, state: {}, questions })).answers.approved.value).toBe(true);
     }
     const result = await runCodemode({ code: `await models.classifyQuestions(${JSON.stringify({ model: native, state: {}, questions })}); await models.classifyQuestions(${JSON.stringify({ model: `${chat}:classifier`, state: {}, questions })}); store('mixed',true); return 'Ready';`,
-      context: { provider } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      context: { provider } as unknown as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
     expect(result.isError).not.toBe(true); expect(result.details).toMatchObject({ store: { mixed: true }, usage: { totalTokens: 24 }, costComplete: true, nestedCalls: [{ state: 'completed', usage: { totalTokens: 12 } }, { state: 'completed', usage: { totalTokens: 12 } }] });
     expect(calls).toHaveLength(7); expect(calls.map(call => call.url)).toEqual(['/proxy%2Fowned/ai/v1/chat/completions', '/proxy%2Fowned/ai/run', '/proxy%2Fowned/ai/run',
       '/proxy%2Fowned/ai/v1/chat/completions', '/proxy%2Fowned/ai/v1/chat/completions', '/proxy%2Fowned/ai/run', '/proxy%2Fowned/ai/v1/chat/completions']);
@@ -75,7 +75,7 @@ describe('explicit mixed Cloudflare Workers AI SDK', () => {
     const error = await models.classifyQuestions({ model: native, state: {}, questions }).catch(error => error);
     expect(error).toBeInstanceOf(SpecializedModelError); expect(error.usage).toMatchObject({ totalTokens: 12, costUsd: 0.0000024 });
     const failed = await runCodemode({ code: `store('bad',true); await models.classifyQuestions(${JSON.stringify({ model: native, state: {}, questions })});`,
-      context: { provider } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      context: { provider } as unknown as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
     expect(failed.isError).toBe(true); expect(failed.details?.store).toBeUndefined(); expect(failed.details).toMatchObject({ usage: { totalTokens: 12, costUsd: 0.0000024 }, nestedCalls: [{ state: 'failed' }] });
     await expect(provider.chat([], { model: native })).rejects.toThrow('Cloudflare chat model is not supported.');
     await expect(provider.generateImages({ model: 'dall-e-3', prompt: 'Draw' })).rejects.toThrow('Image model or options are not supported.'); expect(calls).toHaveLength(9);
