@@ -13,7 +13,7 @@ export function openRouterCompletionProfile(model: string): OpenRouterCompletion
 }
 
 /** Prepare only the owned OpenAI envelope; operator IDs never select compatibility policy. */
-export function prepareOpenRouterCompletion(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+export function prepareOpenRouterCompletion(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
   const profile = openRouterCompletionProfile(String(body.model));
   const requested = options?.thinking ?? 'off';
   if (!PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid OpenRouter thinking level.');
@@ -31,7 +31,7 @@ export function prepareOpenRouterCompletion(body: Record<string, unknown>, optio
       if (message.role === 'system' && developer) message.role = 'developer';
       if (message.role === 'assistant') {
         const original = history[assistant++];
-        if (profile.compat?.requiresReasoningContentOnAssistantMessages) message.reasoning_content = original?.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).join('') ?? '';
+        if (!nativeReplay && profile.compat?.requiresReasoningContentOnAssistantMessages) message.reasoning_content = original?.blocks?.flatMap(block => block.type === 'reasoning' ? [block.text] : []).join('') ?? '';
       }
       if (!profile.declaredInput.includes('image') && Array.isArray(message.content)
         && message.content.some(part => record(part) && part.type === 'image_url')) throw new Error('OpenRouter chat model does not support images.');
@@ -53,11 +53,23 @@ export function prepareOpenRouterCompletion(body: Record<string, unknown>, optio
   if (options?.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens)) {
     throw new Error('Invalid OpenRouter output limit.');
   }
+  if (nativeReplay) {
+    body.store = false;
+    if (body.max_tokens !== undefined) body.max_completion_tokens = body.max_tokens;
+    delete body.max_tokens;
+    if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = false;
+  }
   return body;
 }
 
-export function openRouterCompletionReasoning(value: unknown): string | undefined {
+export function openRouterCompletionReasoning(value: unknown, nativeReplay = false): string | undefined {
   if (!record(value)) return undefined;
+  if (nativeReplay) {
+    const fields = ['reasoning_content', 'reasoning', 'reasoning_text'];
+    if (fields.some(field => value[field] !== undefined && value[field] !== null && typeof value[field] !== 'string')
+      || (value.content !== undefined && value.content !== null && typeof value.content !== 'string')) throw new Error('Invalid OpenRouter chat response.');
+    return fields.map(field => value[field]).find((value): value is string => typeof value === 'string' && value.length > 0);
+  }
   if (value.reasoning_details !== undefined) {
     if (!Array.isArray(value.reasoning_details)) throw new Error('Invalid OpenRouter chat response.');
     const text: string[] = [];
@@ -94,12 +106,27 @@ export function openRouterCompletionUsage(value: unknown, model: string): ChatRe
   };
 }
 
-export function validateOpenRouterCompletion(value: unknown): void {
+const validFinish = (value: unknown): boolean => ['stop', 'end', 'length', 'tool_calls', 'function_call'].includes(String(value));
+export function validateOpenRouterCompletion(value: unknown, nativeReplay = false): void {
   if (!record(value) || value.error || !Array.isArray(value.choices) || !record(value.choices[0]) || !record(value.choices[0].message)) {
     throw new Error('Invalid OpenRouter chat response.');
   }
   const message = value.choices[0].message;
   if (message.refusal || (message.content !== undefined && message.content !== null && typeof message.content !== 'string')
+    || (nativeReplay && !validFinish(value.choices[0].finish_reason))
     || (value.model !== undefined && (typeof value.model !== 'string' || Buffer.byteLength(value.model) > 500
       || /[\u0000-\u001f\u007f-\u009f]/u.test(value.model)))) throw new Error('Invalid OpenRouter chat response.');
+  if (nativeReplay) openRouterCompletionReasoning(message, true);
+}
+export function openRouterCompletionStreamValidator(nativeReplay = false): (value?: unknown) => void {
+  if (!nativeReplay) return () => {};
+  let finished = false;
+  return value => {
+    if (value === undefined) { if (!finished) throw new Error('Invalid OpenRouter chat response.'); return; }
+    if (!record(value) || !Array.isArray(value.choices)) throw new Error('Invalid OpenRouter chat response.');
+    const choice = value.choices[0]; if (choice === undefined) return;
+    if (!record(choice) || finished || (choice.delta !== undefined && !record(choice.delta))) throw new Error('Invalid OpenRouter chat response.');
+    openRouterCompletionReasoning(choice.delta, true); if (record(choice.delta) && choice.delta.refusal) throw new Error('Invalid OpenRouter chat response.');
+    if (choice.finish_reason !== undefined && choice.finish_reason !== null) { if (!validFinish(choice.finish_reason)) throw new Error('Invalid OpenRouter chat response.'); finished = true; }
+  };
 }

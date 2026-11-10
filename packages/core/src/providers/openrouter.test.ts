@@ -41,7 +41,7 @@ describe('explicit mixed OpenRouter SDK', () => {
         usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1, cache_creation: { ephemeral_1h_input_tokens: 1 } } }));
       else if (incoming.url?.endsWith('/systemone')) response.end(JSON.stringify({ answers: { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
       else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.modalities ? 'Caption' : 'C ready',
-        ...(body.modalities ? { images: [{ image_url: { url: `data:image/png;base64,${png}` } }] } : {}) } }],
+        ...(body.modalities ? { images: [{ image_url: { url: `data:image/png;base64,${png}` } }] } : {}) }, ...(body.modalities ? {} : { finish_reason: 'stop' }) }],
         usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } }));
     });
     servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));

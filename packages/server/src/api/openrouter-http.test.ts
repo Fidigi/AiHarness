@@ -112,6 +112,6 @@ it('reloads encrypted mixed OpenRouter configuration and executes native A/C plu
     }
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const key of keys) expect(await readFile(path.join(dataDir, file), 'utf8')).not.toContain(key);
   } finally {
-    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(resolve)); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+    await stop(); wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 30_000);

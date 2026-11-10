@@ -26,7 +26,7 @@ export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudflareMixedBases, prepareCloudflareChat, cloudflareChatUsage, validateCloudflareChat, cloudflareNativeReasoning, cloudflareStreamValidator } from './cloudflare-completions.js';
 import { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
 export { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
-import { openRouterCompletionProfile, prepareOpenRouterCompletion, openRouterCompletionReasoning, openRouterCompletionUsage, validateOpenRouterCompletion } from './openrouter-completions.js';
+import { openRouterCompletionProfile, prepareOpenRouterCompletion, openRouterCompletionReasoning, openRouterCompletionUsage, validateOpenRouterCompletion, openRouterCompletionStreamValidator } from './openrouter-completions.js';
 import { FIREWORKS_MODELS, fireworksProfile, fireworksBase, fireworksHeaders, prepareFireworksMessage, prepareFireworksChat, prepareFireworksOutputBudget, fireworksUsage, mergeFireworksUsage, fireworksReasoning, validateFireworksMessage, validateFireworksChat, fireworksMessageText, fireworksStreamValidator, fireworksFailure } from './fireworks.js';
 export { FIREWORKS_MODELS } from './fireworks.js';
 import { TOGETHER_MODELS, togetherProfile, prepareTogetherChat, togetherUsage, togetherReasoning, validateTogetherChat, togetherStreamValidator } from './together.js';
@@ -2017,6 +2017,8 @@ export class NvidiaProvider extends OpenAiProvider {
   }
 }
 
+const nativeOpenRouterCompletions = new WeakSet<AiProvider>();
+
 /** Explicit native C transport, separate from OpenRouter A, image and System One APIs. */
 export class OpenRouterCompletionsProvider extends OpenAiProvider {
   private readonly endpoint: string;
@@ -2025,6 +2027,7 @@ export class OpenRouterCompletionsProvider extends OpenAiProvider {
     openRouterCompletionProfile(model);
     const endpoint = systemOneEndpoint(config.baseUrl || 'https://openrouter.ai/api/v1/', 'chat/completions', 'OpenRouter completions');
     super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    if (new.target === OpenRouterCompletionsProvider) nativeOpenRouterCompletions.add(this);
   }
   override getModelApi(): string { return 'openai-completions'; }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -2056,17 +2059,30 @@ export class OpenRouterCompletionsProvider extends OpenAiProvider {
       return Object.fromEntries(headers.entries());
     } catch { throw new Error('Invalid OpenRouter request headers.'); }
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages?: Message[]): Record<string, unknown> {
-    return prepareOpenRouterCompletion(body, options, messages);
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    if (!nativeOpenRouterCompletions.has(this)) return prepareOpenRouterCompletion(body, options, messages);
+    const profile = openRouterCompletionProfile(String(body.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid OpenRouter chat response.' };
+    applyCompletionHistory(body, messages, owner.provider, profile.compat?.requiresReasoningContentOnAssistantMessages === true, false);
+    const prepared = prepareOpenRouterCompletion(body, options, messages, true); nativeCompletionsOwners.set(prepared, owner); return prepared;
   }
-  protected override validateChatResponse(value: unknown): void { validateOpenRouterCompletion(value); }
-  protected override responseReasoning(value: unknown): string | undefined { return openRouterCompletionReasoning(value); }
+  protected override validateChatResponse(value: unknown): void { validateOpenRouterCompletion(value, nativeOpenRouterCompletions.has(this)); }
+  protected override createStreamValidator(): (value?: unknown) => void { return openRouterCompletionStreamValidator(nativeOpenRouterCompletions.has(this)); }
+  protected override responseReasoning(value: unknown): string | undefined { return openRouterCompletionReasoning(value, nativeOpenRouterCompletions.has(this)); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterCompletionUsage(value, model); }
+  private nativeFailure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('OpenRouter request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const fixed = ['OpenRouter API key is required.', 'OpenRouter chat model is not supported.', 'Invalid OpenRouter thinking level.',
+      'Invalid OpenRouter output limit.', 'OpenRouter chat model does not support images.', 'Invalid OpenRouter request headers.', 'Invalid OpenRouter chat response.'];
+    return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'OpenRouter chat request failed.');
+  }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
-    if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
-    const result = await super.chat(messages, options);
-    if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.');
-    return { ...result, api: this.getModelApi() };
+    try {
+      if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
+      const result = await super.chat(messages, options);
+      if (options?.signal?.aborted) throw new Error('OpenRouter request aborted.');
+      return nativeOpenRouterCompletions.has(this) ? result : { ...result, api: this.getModelApi() };
+    } catch (error) { if (nativeOpenRouterCompletions.has(this)) throw this.nativeFailure(error, options?.signal); throw error; }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -2075,10 +2091,10 @@ export class OpenRouterCompletionsProvider extends OpenAiProvider {
       if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
       active();
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-        response => { active(); onComplete?.(response ? { ...response, api: this.getModelApi() } : response); },
+        response => { active(); if (nativeOpenRouterCompletions.has(this)) return onComplete?.(response); onComplete?.(response ? { ...response, api: this.getModelApi() } : response); },
         error => { throw error; }, options);
     } catch (error) {
-      const failure = options?.signal?.aborted ? new Error('OpenRouter request aborted.') : error instanceof Error ? error : new Error('OpenRouter chat request failed.');
+      const failure = nativeOpenRouterCompletions.has(this) ? this.nativeFailure(error, options?.signal) : options?.signal?.aborted ? new Error('OpenRouter request aborted.') : error instanceof Error ? error : new Error('OpenRouter chat request failed.');
       if (onError) onError(failure); else throw failure;
     }
   }
@@ -5968,7 +5984,7 @@ export class OpenRouterProvider extends AiProvider {
     const model = config.model ?? 'openai/gpt-4o';
     openRouterConversationApi(model);
     super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') });
-    if (new.target === OpenRouterProvider) nativeOpenRouterReplay.add(this);
+    if (new.target === OpenRouterProvider) { nativeOpenRouterReplay.add(this); nativeOpenRouterCompletions.add(this); }
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
@@ -5993,6 +6009,7 @@ export class OpenRouterProvider extends AiProvider {
     const config = { ...this.config, model };
     const provider = openRouterConversationApi(model) === 'anthropic-messages' ? new OpenRouterMessagesProvider(config) : new OpenRouterCompletionsProvider(config);
     if (!nativeOpenRouterReplay.has(this)) nativeOpenRouterReplay.delete(provider);
+    if (!nativeOpenRouterCompletions.has(this)) nativeOpenRouterCompletions.delete(provider);
     return provider;
   }
   override getSpecializedModels(): SpecializedModel[] {
@@ -6003,7 +6020,8 @@ export class OpenRouterProvider extends AiProvider {
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     const model = options?.model ?? this.getConfiguredModel()!, providerName = this.getProviderType();
     const result = await this.conversation(model).chat(messages, { ...options, model });
-    return nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages' ? result : { ...result, provider: providerName };
+    return nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages'
+      || nativeOpenRouterCompletions.has(this) && openRouterConversationApi(model) === 'openai-completions' ? result : { ...result, provider: providerName };
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
@@ -6016,7 +6034,9 @@ export class OpenRouterProvider extends AiProvider {
       throw failure;
     }
     const providerName = this.getProviderType();
-    return provider.streamChat(messages, onChunk, response => onComplete?.(response && !(nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages')
+    const native = nativeOpenRouterReplay.has(this) && openRouterConversationApi(model) === 'anthropic-messages'
+      || nativeOpenRouterCompletions.has(this) && openRouterConversationApi(model) === 'openai-completions';
+    return provider.streamChat(messages, onChunk, response => onComplete?.(response && !native
       ? { ...response, provider: providerName } : response), onError, { ...options, model });
   }
   override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {

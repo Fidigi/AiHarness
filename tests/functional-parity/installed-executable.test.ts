@@ -3037,25 +3037,29 @@ it('dispatches native OpenRouter C through installed declarations, reasoning, to
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-completions-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'openrouter-continuation-reference-completions.json'), await readFile(new URL('../fixtures/openrouter-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'router-completions-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { OpenRouterCompletionsProvider, OPENROUTER_COMPLETION_MODELS, SpecializedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const calls = [];
+    const calls = []; let privateReply;
+    const completions = JSON.parse(await readFile(new URL('./openrouter-continuation-reference-completions.json', import.meta.url), 'utf8'));
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      if (privateReply) { const { row, projection, raw } = privateReply, events = raw ? row.rawSeed.responseEvents : projection?.responseEvents ?? row.seedResponseEvents, reply = raw ? row.rawSeed.syntheticJsonResponse : projection?.syntheticJsonResponse ?? row.syntheticJsonResponse; if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end(events.map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'); } else response.end(JSON.stringify(reply)); return; }
       const usage = { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } };
       if (body.stream) {
         response.setHeader('content-type', 'text/event-stream');
         for (const value of [{ choices: [{ delta: { reasoning: 'Plan', content: 'Ready' } }] },
-          { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', function: { name: 'read', arguments: '{}' } }] } }] },
+          { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', function: { name: 'read', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] },
           { choices: [], usage }]) response.write('data: ' + JSON.stringify(value) + '\\n\\n');
         response.end('data: [DONE]\\n\\n');
       } else response.end(JSON.stringify({ model: body.model, choices: [{ message: {
-        content: body.max_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready', reasoning: 'Plan' } }], usage }));
+        content: body.max_completion_tokens === 512 ? JSON.stringify({ label: 'yes' }) : 'Ready', reasoning: 'Plan' }, finish_reason: 'stop' }], usage }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
@@ -3082,6 +3086,14 @@ it('dispatches native OpenRouter C through installed declarations, reasoning, to
       assert.equal(calls[0].headers['x-session-id'], 'installed-session'); assert.equal(calls[0].body.reasoning.effort, 'max');
       assert.deepEqual(calls[1].body.stream_options, { include_usage: true });
       assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new OpenRouterCompletionsProvider({type:'openrouter',apiKey:'disposable-installed-key',model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/proxy/api/v1'}),options={...row.options,model:row.model,systemPrompt:'owned OpenRouter C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-openrouter-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'openrouter');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));const rates=row.published.cost;if(['input','output','cacheRead','cacheWrite'].some(name=>rates[name]>0))assert(Math.abs(first.usage.costUsd-(5*rates.input+2*rates.output+4*rates.cacheRead+rates.cacheWrite)/1e6)<1e-12);else assert.equal(first.usage.costUsd,undefined);
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed OpenRouter C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,15083);for(const c of calls.slice(3)){assert.equal(c.url,'/proxy/api/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer disposable-installed-key');for(const name of['x-session-id','session_id','x-client-request-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed OpenRouter C OK');
   `);
@@ -3214,23 +3226,27 @@ it('dispatches mixed OpenRouter A/C/I/T through one installed SDK without overla
   `);
   const types = await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'router-mixed-public.ts'], consumer, environment);
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+  await writeFile(path.join(consumer, 'openrouter-continuation-reference-completions.json'), await readFile(new URL('../fixtures/openrouter-continuation-reference-completions.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'router-mixed-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { OpenRouterProvider, SpecializedModels, ProviderFactory, getProviderPublishedModels, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
-    const calls = [], overlap = 'google/gemini-3-pro-image', a = 'anthropic/claude-sonnet-4.6';
+    const calls = [], overlap = 'google/gemini-3-pro-image', a = 'anthropic/claude-sonnet-4.6'; let privateReply;
+    const completions = JSON.parse(await readFile(new URL('./openrouter-continuation-reference-completions.json', import.meta.url), 'utf8'));
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6L3sAAAAASUVORK5CYII=';
     const server = createServer(async (request, response) => {
       let text = ''; for await (const chunk of request) text += chunk;
       const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
+      if (privateReply) { const { row, projection, raw } = privateReply, events = raw ? row.rawSeed.responseEvents : projection?.responseEvents ?? row.seedResponseEvents, reply = raw ? row.rawSeed.syntheticJsonResponse : projection?.syntheticJsonResponse ?? row.syntheticJsonResponse; if (body.stream) { response.setHeader('content-type', 'text/event-stream'); response.end(events.map(value => 'data: ' + JSON.stringify(value) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'); } else response.end(JSON.stringify(reply)); return; }
       response.setHeader('content-type', 'application/json');
       if (request.url.endsWith('/messages')) response.end(JSON.stringify({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: 'A ready' }],
         usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1, cache_creation: { ephemeral_1h_input_tokens: 1 } } }));
       else if (request.url.endsWith('/systemone')) response.end(JSON.stringify({ answers: { approved: { type: 'noul', noul: 0.8 } }, usage: { input_tokens: 10, output_tokens: 2 } }));
       else response.end(JSON.stringify({ model: body.model, choices: [{ message: { content: body.modalities ? 'Caption' : 'C ready',
-        ...(body.modalities ? { images: [{ image_url: { url: 'data:image/png;base64,' + png } }] } : {}) } }],
+        ...(body.modalities ? { images: [{ image_url: { url: 'data:image/png;base64,' + png } }] } : {}) }, ...(body.modalities ? {} : { finish_reason: 'stop' }) }],
         usage: { prompt_tokens: 10, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 4, cache_write_tokens: 1 } } }));
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -3260,6 +3276,14 @@ it('dispatches mixed OpenRouter A/C/I/T through one installed SDK without overla
       for (const call of calls.slice(1)) { assert.equal(call.headers.authorization, 'Bearer disposable-installed-key'); assert.equal(call.headers['x-api-key'], undefined); }
       assert.equal(calls[0].body.thinking.type, 'adaptive'); assert.equal(calls[1].body.modalities, undefined); assert.ok(calls[3].body.modalities.includes('image'));
       assert.equal(JSON.stringify(provider.getSpecializedModels()).includes('disposable-installed-key'), false);
+      for(const row of completions.rows)for(const facade of['chat','stream']){
+        const owner=new OpenRouterProvider({type:'openrouter',apiKey:'disposable-installed-key',model:row.model,baseUrl:'http://127.0.0.1:'+server.address().port+'/proxy/api/v1'}),options={...row.options,model:row.model,systemPrompt:'owned OpenRouter C reference system',tools:completions.tools},probe={id:'c-u',role:'user',content:'probe',timestamp:new Date(0)};
+        const expected=body=>{const value={...structuredClone(body),stream:facade==='stream'};if(facade==='chat')delete value.stream_options;return value;},invoke=async history=>{if(facade==='chat')return owner.chat(history,options);let complete;await owner.streamChat(history,(text,event)=>{assert(!/opaque-openrouter-c-|private summary|IGNORED_PRIVATE/.test(text+JSON.stringify(event??{})));},value=>{complete=value;},error=>{throw error;},options);assert(complete);return complete;};
+        privateReply={row};const first=await invoke([probe]);assert.equal(first.provider,'openrouter');assert.equal(first.api,'openai-completions');assert.equal(first.model,row.model);assert.equal(first.content,'leftright!');assert.equal(first.reasoning,'firstsecond');assert.deepEqual(first.blocks,row.expectedBlocks);assert.deepEqual(first.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));const rates=row.published.cost;if(['input','output','cacheRead','cacheWrite'].some(name=>rates[name]>0))assert(Math.abs(first.usage.costUsd-(5*rates.input+2*rates.output+4*rates.cacheRead+rates.cacheWrite)/1e6)<1e-12);else assert.equal(first.usage.costUsd,undefined);
+        privateReply={row,raw:true};const raw=await invoke([probe]);assert.deepEqual(raw.blocks,row.rawSeed.expectedBlocks);assert.deepEqual(raw.toolCalls,row.expectedToolCalls);assert.deepEqual(calls.at(-1).body,expected(row.expectedInitialBody));for(const field of['normalizeReasoningMarker','invalidResponse'])assert.equal(raw[field],undefined);
+        for(const projection of row.cases){const source={id:'c-a',role:'assistant',content:first.content,timestamp:new Date(0),...projection.source,blocks:structuredClone(projection.blocks),toolCalls:structuredClone(projection.toolCalls),...(projection.failed?{metadata:{outputError:'Failed installed OpenRouter C producer'}}:{})},result=projection.toolResult?[{id:'c-r',role:'tool',name:'echo',toolCallId:projection.toolResult.toolCallId,content:projection.toolResult.content.map(block=>block.text).join('\\n'),isError:projection.toolResult.isError,timestamp:new Date(0)}]:[],history=[probe,source,...result,{...probe,id:'c-next',content:'continue'}],before=structuredClone(history);privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);}
+      }
+      assert.equal(calls.length,15084);for(const c of calls.slice(4)){assert.equal(c.url,'/proxy/api/v1/chat/completions');assert.equal(c.headers.authorization,'Bearer disposable-installed-key');for(const name of['x-session-id','session_id','x-client-request-id','x-session-affinity','nvcf-poll-seconds'])assert.equal(c.headers[name],undefined);}
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed mixed OpenRouter OK');
   `);
