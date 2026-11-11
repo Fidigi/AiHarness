@@ -23,7 +23,7 @@ describe('native Mistral Conversations dialect', () => {
     const provider = providers.ProviderFactory.create({ type: 'mistral-conversations', apiKey: 'disposable-native-factory' });
     expect(provider).toBeInstanceOf(providers.MistralProvider);
     expect(provider.getConfiguredModel()).toBe('mistral-small-latest');
-    expect(provider.getModelApi()).toBe('mistral-conversations');
+    expect(provider.getModelApi!()).toBe('mistral-conversations');
     expect(provider.validateConfig()).toBe(true);
     expect(providers.ProviderFactory.has('mistral-conversations')).toBe(true);
     expect(providers.ProviderFactory.has('MISTRAL-CONVERSATIONS')).toBe(true);
@@ -113,7 +113,7 @@ describe('native Mistral Conversations dialect', () => {
       else expect(answer!.usage!.costUsd).toBeCloseTo(expectedCost, 12);
     });
 
-  it('replays owned thinking/tools/images with collision-safe nine-character tool IDs', async () => {
+  it('projects unowned thinking as text with images and collision-safe nine-character tool IDs', async () => {
     const fetch = vi.fn(async () => sse([event({}, 'stop')])); vi.stubGlobal('fetch', fetch);
     const history: Message[] = [...messages,
       { id: 'a', role: 'assistant', content: 'text', blocks: [{ type: 'reasoning', text: 'thought' }, { type: 'text', text: 'text' }], timestamp: new Date(0), toolCalls: [
@@ -126,7 +126,7 @@ describe('native Mistral Conversations dialect', () => {
     await create({ model: 'magistral-medium-latest' }).chat(history, { tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }] });
     const body = JSON.parse(String((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body));
     const assistant = body.messages[1], tool = body.messages[2];
-    expect(assistant.content).toEqual([{ type: 'thinking', thinking: [{ type: 'text', text: 'thought' }] }, { type: 'text', text: 'text' }]);
+    expect(assistant.content).toEqual([{ type: 'text', text: 'thought' }, { type: 'text', text: 'text' }]);
     expect(assistant.tool_calls.map((call: { id: string }) => call.id)).toEqual([expect.stringMatching(/^[a-zA-Z0-9]{9}$/), expect.stringMatching(/^[a-zA-Z0-9]{9}$/)]);
     expect(new Set(assistant.tool_calls.map((call: { id: string }) => call.id)).size).toBe(2);
     expect(tool).toMatchObject({ role: 'tool', tool_call_id: assistant.tool_calls[0].id,
@@ -174,7 +174,7 @@ describe('native Mistral Conversations dialect', () => {
     await provider.chat([image], { thinking: 'max', sessionId: 's', cacheRetention: 'none' });
     await provider.chat([image], { model: 'magistral-medium-latest', thinking: 'off' });
     await provider.chat([image], { model: 'devstral-latest', thinking: 'high' });
-    expect(calls[0].body).toMatchObject({ reasoning_effort: 'max', messages: [{ content: 'hello\n(image omitted: model does not support images)' }] });
+    expect(calls[0].body).toMatchObject({ reasoning_effort: 'max', messages: [{ content: [{ type: 'text', text: 'hello' }, { type: 'text', text: '(image omitted: model does not support images)' }] }] });
     expect(calls[0].body).not.toHaveProperty('prompt_cache_key'); expect(calls[0].headers.has('x-affinity')).toBe(false);
     expect(calls[1].body).toMatchObject({ reasoning_effort: 'none', messages: [{ content: [{ type: 'text', text: 'hello' }, { type: 'image_url' }] }] });
     expect(calls[2].body).not.toHaveProperty('reasoning_effort'); expect(calls[2].body).not.toHaveProperty('prompt_mode');

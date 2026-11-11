@@ -5104,6 +5104,7 @@ it('dispatches native Cerebras through installed public declarations and capture
 }, 60_000);
 
 it('dispatches native Mistral through installed public declarations and runtime', async () => {
+  await writeFile(path.join(consumer, 'mistral-continuation-reference.json'), await readFile(new URL('../fixtures/mistral-continuation-reference.json', import.meta.url), 'utf8'));
   await writeFile(path.join(consumer, 'mistral-public.ts'), `
     import { MistralProvider, ProviderFactory, ProviderType, type AgentProviderConfig,
       type AiProvider, type ProviderDialect, type PublishedModelMetadata } from '@ai-harness/core';
@@ -5122,6 +5123,7 @@ it('dispatches native Mistral through installed public declarations and runtime'
   expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   await writeFile(path.join(consumer, 'mistral-public.mjs'), `
     import assert from 'node:assert/strict';
+    import { readFile } from 'node:fs/promises';
     import { spawn } from 'node:child_process';
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
@@ -5134,8 +5136,10 @@ it('dispatches native Mistral through installed public declarations and runtime'
       const body = JSON.parse(text);
       calls.push({ url: request.url, authorization: request.headers.authorization, body });
       response.setHeader('content-type', 'text/event-stream');
-      response.end('data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { content: [{ type: 'thinking', thinking: [{ text: 'thought' }] }, { type: 'text', text: 'installed Mistral' }] }, finish_reason: 'stop' }], usage: { prompt_tokens: 4, num_cached_tokens: 1, completion_tokens: 1 } }) + '\\n\\ndata: [DONE]\\n\\n');
+      response.end(replayEvents ? replayEvents.map(event => 'data: ' + JSON.stringify(event) + '\\n\\n').join('') + 'data: [DONE]\\n\\n'
+        : 'data: ' + JSON.stringify({ model: body.model, choices: [{ delta: { content: [{ type: 'thinking', thinking: [{ text: 'thought' }] }, { type: 'text', text: 'installed Mistral' }] }, finish_reason: 'stop' }], usage: { prompt_tokens: 4, num_cached_tokens: 1, completion_tokens: 1 } }) + '\\n\\ndata: [DONE]\\n\\n');
     });
+    let replayEvents;
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     try {
       const provider = new MistralProvider({ type: 'my-mistral', apiKey: 'disposable-installed-key', baseUrl: 'http://127.0.0.1:' + server.address().port, model: 'magistral-medium-latest' });
@@ -5195,6 +5199,23 @@ it('dispatches native Mistral through installed public declarations and runtime'
         assert.equal(call.authorization, 'Bearer disposable-native-cli-key'); assert.equal(call.body.reasoning_effort, 'high');
       }
       assert.equal(calls.length, 5);
+      const continuation = JSON.parse(await readFile(new URL('./mistral-continuation-reference.json', import.meta.url), 'utf8'));
+      for (const row of continuation.rows) for (const facade of ['chat', 'stream']) {
+        const provider = new MistralProvider({ type: 'mistral', model: row.model, apiKey: 'disposable-mistral-continuation', baseUrl: 'http://127.0.0.1:' + server.address().port });
+        const options = { ...row.options, tools: continuation.tools }, user = { id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) };
+        const invoke = async (messages, selected = options) => { if (facade === 'chat') return provider.chat(messages, selected); let answer; await provider.streamChat(messages, () => {}, value => { answer = value; }, error => { throw error; }, selected); assert.ok(answer); return answer; };
+        replayEvents = row.seedResponseEvents;
+        const answer = await invoke([user], { ...options, systemPrompt: 'owned Mistral reference system' });
+        assert.equal(answer.provider, 'mistral'); assert.equal(answer.api, 'mistral-conversations'); assert.equal(answer.model, row.model);
+        assert.deepEqual(answer.blocks, row.expectedBlocks); assert.deepEqual(answer.toolCalls, row.expectedToolCalls); assert.deepEqual(calls.at(-1).body, row.expectedInitialBody);
+        for (const projection of row.cases) {
+          replayEvents = projection.responseEvents;
+          const messages = projection.messages.map(value => ({ ...structuredClone(value), timestamp: new Date(0) })), before = structuredClone(messages);
+          assert.equal((await invoke(messages)).content, 'ok'); assert.deepEqual(calls.at(-1).body, projection.expectedBody); assert.deepEqual(messages, before);
+          assert.equal(calls.at(-1).authorization, 'Bearer disposable-mistral-continuation'); assert.equal(calls.at(-1).url, '/v1/chat/completions');
+        }
+      }
+      assert.equal(calls.length, 1685);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Mistral OK');
   `);

@@ -56,6 +56,7 @@ export { MINIMAX_MODELS, MINIMAX_MODELS as MINIMAX_CN_MODELS } from './minimax.j
 import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeaders, prepareOpenCodeGoMessage, prepareOpenCodeGoChat, prepareOpenCodeGoResponse, prepareOpenCodeGoOutputBudget, opencodeGoUsage, mergeOpenCodeGoUsage, opencodeGoReasoning, validateOpenCodeGoMessage, validateOpenCodeGoChat, opencodeGoMessageText, opencodeGoStreamValidator, opencodeGoFailure } from './opencode-go.js';
 export { OPENCODE_GO_MODELS } from './opencode-go.js';
 import { applyCompletionHistory, createCompletionCapture } from './completions-replay.js';
+import { createMistralCapture, mistralReplayMessages } from './mistral-replay.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -2432,6 +2433,9 @@ export class OpenRouterImagesProvider extends AiProvider {
 }
 
 /** Explicit native dialect, usable under an operator-selected custom provider ID. */
+const nativeMistralProviders = new WeakSet<AiProvider>();
+const nativeMistralBodies = new WeakMap<object, { provider: string; api: string; model: string }>();
+
 export class MistralProvider extends AiProvider {
   override getModelApi(): string { return 'mistral-conversations'; }
 
@@ -2442,6 +2446,7 @@ export class MistralProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     super(config);
     this.baseUrl = resolveProviderDiscoveryEndpoint('mistral-conversations', config.baseUrl || 'https://api.mistral.ai').replace(/\/models$/, '');
+    if (new.target === MistralProvider) nativeMistralProviders.add(this);
   }
 
   validateConfig(): boolean {
@@ -2477,6 +2482,7 @@ export class MistralProvider extends AiProvider {
   private body(messages: Message[], options?: ChatOptions): Record<string, unknown> {
     const model = options?.model || this.getConfiguredModel() || 'mistral-small-latest';
     const metadata = getPublishedModelMetadata('mistral', model);
+    const native = nativeMistralProviders.has(this) && metadata !== undefined;
     const imagesAllowed = metadata?.capabilities.imageInput === true;
     const ids = new Map<string, string>(), owners = new Map<string, string>();
     const toolId = (id: string): string => {
@@ -2489,9 +2495,10 @@ export class MistralProvider extends AiProvider {
     };
     // Reserve already-valid IDs before mapping foreign IDs, preserving replay pairs.
     for (const message of messages) for (const call of message.toolCalls ?? []) if (/^[a-zA-Z0-9]{9}$/u.test(call.id)) toolId(call.id);
-    const input: Array<Record<string, unknown>> = [];
-    if (options?.systemPrompt) input.push({ role: 'system', content: options.systemPrompt });
-    for (const message of messages) {
+    const input: Array<Record<string, unknown>> = native
+      ? mistralReplayMessages(messages, this.config.type, model, imagesAllowed, options?.systemPrompt) : [];
+    if (!native && options?.systemPrompt) input.push({ role: 'system', content: options.systemPrompt });
+    for (const message of native ? [] : messages) {
       const images = messageImages(message);
       if (message.role === 'assistant') {
         const content = message.blocks?.some(block => block.type === 'text' || block.type === 'reasoning')
@@ -2524,7 +2531,7 @@ export class MistralProvider extends AiProvider {
     if (options?.tools && (!Array.isArray(options.tools) || options.tools.length > MAX_PROVIDER_STREAM_TOOL_CALLS)) {
       throw new Error('The provider request exceeded the tool-call limit.');
     }
-    return { model, messages: input, stream: true,
+    const body = { model, messages: input, stream: true,
       ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       ...(options?.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
       ...(effort ? { reasoning_effort: effort } : {}),
@@ -2533,6 +2540,8 @@ export class MistralProvider extends AiProvider {
         function: { name: tool.name, description: tool.description, parameters: tool.parameters, strict: false },
       })) } : {}),
     };
+    if (native) nativeMistralBodies.set(body, { provider: this.config.type, api: 'mistral-conversations', model });
+    return body;
   }
 
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
@@ -2545,6 +2554,7 @@ export class MistralProvider extends AiProvider {
 
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    let owner: { provider: string; api: string; model: string } | undefined;
     try {
       if (!this.validateConfig()) throw new Error('Mistral API key is required.');
       const checkCancellation = (): void => {
@@ -2552,6 +2562,8 @@ export class MistralProvider extends AiProvider {
       };
       checkCancellation();
       const body = this.body(messages, options);
+      owner = nativeMistralBodies.get(body);
+      const capture = owner ? createMistralCapture() : undefined;
       const response = await this.request(`${this.baseUrl}/chat/completions`, { method: 'POST', headers: this.headers(options),
         body: serializeProviderBody(body), signal: options?.signal });
       if (!response.ok) await rejectProviderHttpResponse(response, `Mistral API error (${response.status}).`);
@@ -2587,6 +2599,7 @@ export class MistralProvider extends AiProvider {
             ? part.thinking.map((item: { text?: string }) => typeof item?.text === 'string' ? item.text : '').join('')
             : part?.type === 'text' && typeof part.text === 'string' ? part.text : '';
           if (!text) continue; addOutput(text);
+          capture?.append(part.type === 'thinking' ? 'reasoning' : 'text', text);
           if (part.type === 'thinking') { reasoning += text; await onChunk('', { type: 'reasoning_delta', data: { content: text } }); }
           else { content += text; await onChunk(text, { type: 'text_delta' }); }
         }
@@ -2611,9 +2624,9 @@ export class MistralProvider extends AiProvider {
             const text = typeof args === 'string' ? args : serializeProviderBody(args);
             addOutput(text); call.function.arguments += text;
           }
-          tools.set(index, call);
+          tools.set(index, call); capture?.tool(index);
         }
-        if (typeof data.model === 'string' && data.model.length <= 500 && !/[\u0000-\u001f\u007f]/u.test(data.model)) model = data.model;
+        if (!owner && typeof data.model === 'string' && data.model.length <= 500 && !/[\u0000-\u001f\u007f]/u.test(data.model)) model = data.model;
         if (data.usage && typeof data.usage === 'object') {
           const rawUsage = data.usage as Record<string, unknown>;
           const details = rawUsage.prompt_tokens_details ?? rawUsage.prompt_token_details ?? rawUsage.promptTokensDetails ?? rawUsage.promptTokenDetails;
@@ -2663,11 +2676,14 @@ export class MistralProvider extends AiProvider {
         });
         if (costUsd !== undefined) usage = { ...usage, costUsd };
       }
-      onComplete?.({ content, api: this.getModelApi(), ...(reasoning ? { reasoning } : {}), provider: this.getProviderType(), model, usage,
-        ...(['length', 'model_length'].includes(finish) ? { stopReason: 'length' as const } : {}), ...(toolCalls.length ? { toolCalls } : {}) });
+      const result: ChatResponse = { content, ...(owner ?? { api: this.getModelApi(), provider: this.getProviderType(), model }),
+        ...(reasoning ? { reasoning } : {}), ...(capture ? { blocks: capture.finish(toolCalls) } : {}), usage,
+        ...(['length', 'model_length'].includes(finish) ? { stopReason: 'length' as const } : {}), ...(toolCalls.length ? { toolCalls } : {}) };
+      if (owner) await onComplete?.(result); else onComplete?.(result);
     } catch (error) {
       onError?.(options?.signal?.aborted ? new Error('The provider request was cancelled.')
-        : error instanceof Error ? error : new Error('The provider request failed.'));
+        : owner && !(error instanceof ProviderContextOverflowError) && !(error instanceof Error && /^(?:The provider (?:response was invalid|response exceeded the (?:output|tool-call) limit|response exceeded its event limit|streaming response was invalid|reported a streaming error|tool call was (?:ambiguous|invalid)|streaming event exceeded the output limit|response ended without a finish reason)|Mistral API error \(\d+\)|Invalid Mistral request headers)\.$/u.test(error.message))
+          ? new Error('Mistral request failed.') : error instanceof Error ? error : new Error('The provider request failed.'));
     }
   }
 }
