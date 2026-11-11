@@ -273,7 +273,7 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
       expect(users.map(row => row.case)).toEqual(['text-image', 'image-only', 'whitespace-image', 'text-two-images']);
       for (const vector of users) for (const stream of [false, true]) {
         const messages: Message[] = [{ id: 'u', role: 'user', content: vector.provided.text, timestamp: new Date(0),
-          blocks: vector.provided.images.map(image => ({ type: 'image', url: `data:${image.mimeType};base64,${image.data}` })) }];
+          blocks: vector.provided.images.map(image => ({ type: 'image', mediaType: image.mimeType, url: `data:${image.mimeType};base64,${image.data}` })) }];
         const options = { model: profile.id, maxTokens: 64 }, before = structuredClone({ messages, options });
         expect(await f.call(stream, options, messages)).toMatchObject({ content: 'ok', model: profile.id, api: vector.api });
         const body = JSON.parse(f.fetch.mock.calls.at(-1)![1]!.body as string);
@@ -635,7 +635,7 @@ describe('native original Google/Vertex response authority', () => {
         }
         expect(source).toEqual(before);
         const image: Message = { ...source, content: 'image answer', blocks: [{ type: 'text', text: 'image answer' },
-          { type: 'image', url: 'data:image/png;base64,AA==' }], toolCalls: undefined };
+          { type: 'image', mediaType: 'image/png', url: 'data:image/png;base64,AA==' }], toolCalls: undefined };
         await f.call(stream, { maxTokens: 64 }, [image]);
         expect(JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents).toEqual([{ role: 'model', parts: [
           { text: 'image answer' }, { inlineData: { mimeType: 'image/png', data: 'AA==' } },
@@ -771,21 +771,25 @@ describe('native original Google/Vertex signed durability', () => {
       const native = signedParts.map((part, index) => index === 0 ? { ...part, thoughtSignature: 'c2VjcmV0' } : part);
       let turn = 0, effects = 0;
       await registry.load('echo', api => api.registerTool({ name: 'echo', description: 'Echo', execute: () => { effects++; return { content: 'result' }; } }));
+      const now = Date.now(), clock = vi.spyOn(Date, 'now');
       try {
         await manager.addMessage(session.id, { role: 'user', content: 'start' });
         await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry, provider,
           tools: [{ name: 'echo', description: 'Echo', parameters: { type: 'object' } }], toolContext: { sessionManager: manager, notify: () => {} },
           redactText, streamTurn: async messages => {
+            clock.mockReturnValue(turn === 0 ? now + 60_000 : now);
             f.parts(turn++ === 0 ? native : native.filter(part => !part.functionCall));
             return stream ? streamProviderTurn({ provider: f.provider, providerName: provider, model: 'gemini-3.8-flash',
               messages, tools: [], extensionRegistry: registry, sessionManager: manager, sessionId: session.id,
               redactText, redactJson, createTextRedactor: () => redactor.createStream(), maxRetries: 0, maxTokens: 64, cacheRetention: 'none' })
               : f.call(false, { maxTokens: 64 }, messages);
           } });
+        clock.mockRestore();
         expect(effects).toBe(1); expect(turn).toBe(2);
         const file = path.join(root, session.id + '.jsonl'), bytes = await readFile(file, 'utf8');
         expect(bytes).not.toContain('c2VjcmV0'); expect(bytes).toContain('[REDACTED]'); expect((await stat(file)).mode & 0o777).toBe(0o600);
         const history = session.messages.filter(message => message.role === 'assistant');
+        expect(history[0].timestamp.getTime()).toBeGreaterThan(history[1].timestamp.getTime());
         const expected = signedBlocks.map((block, index) => index === 0 ? { ...block, textSignature: '[REDACTED]' } : block);
         expect(history.map(message => message.blocks)).toEqual([expected, expected.filter(block => block.type !== 'tool_call')]);
         expect(history.map(message => [message.provider, message.api, message.model])).toEqual(Array(2).fill([provider, f.provider.getModelApi(), 'gemini-3.8-flash']));
@@ -803,12 +807,13 @@ describe('native original Google/Vertex signed durability', () => {
         expect(await readFile(file, 'utf8')).toBe(bytes);
         await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
         const clone = await restarted.cloneSession(session.id);
+        if (!clone) throw new Error('Expected an independent session clone.');
         const projected = restarted.getEffectiveContext(clone.id).flatMap((entry): Message[] => entry.type === 'message' ? [{ ...entry, timestamp: new Date(entry.timestamp) }] : []);
         await f.call(stream, { maxTokens: 64 }, projected);
         const edited = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body)).contents.filter((content: { role: string }) => content.role === 'model');
         expect(edited[0].parts).toEqual([{ functionCall: { id: 'native-call', name: 'echo', args: { x: 1 } }, thoughtSignature: 'dG9vbA==' }, { text: 'edited answer' }]);
         expect(edited[1].parts).toEqual(retained.filter(part => !part.functionCall));
-        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks))
+        expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant').map(entry => entry.blocks))
           .toEqual(history.map(message => message.blocks));
         expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
         registry.virtualModels.register({ provider: 'router', id: 'auto', maxOutputTokens: 64,
@@ -833,7 +838,12 @@ describe('native original Google/Vertex signed durability', () => {
         expect(compacted.filter(message => message.role === 'tool')).toEqual([]);
         const raw = await compactedManager.getRawEntries(clone.id);
         expect(raw).toContainEqual(expect.objectContaining({ type: 'compaction', firstKeptEntryId: kept.id, summary: 'PUBLIC_COMPACTED_PREFIX' }));
-        expect(raw.filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
+        // A copy may persist in timestamp order; raw membership is not active ancestry.
+        const retainedHistory = raw.filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant');
+        expect(retainedHistory).toHaveLength(2);
+        expect(retainedHistory.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(message => message.blocks)));
+        const ancestry = (await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant');
+        expect(ancestry.map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
         const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8');
         expect((await stat(compactedFile)).mode & 0o777).toBe(0o600);
         await f.call(stream, { maxTokens: 64 }, compacted);
@@ -842,7 +852,7 @@ describe('native original Google/Vertex signed durability', () => {
         expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes);
         expect(await readFile(file, 'utf8')).toBe(sourceBytes);
         expect(effects).toBe(1);
-      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+      } finally { clock.mockRestore(); await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
     });
   }
 });
