@@ -204,6 +204,45 @@ describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
     expect(calls).toHaveLength(3);
   });
 
+  it.each(['chat', 'stream'] as const)('does not grant or revoke Zen G replay through mutable facade/delegate fields (%s)', async facade => {
+    const model = g, reference = googleContinuation.rows.find((row: { model: string }) => row.model === model);
+    let reply = reference.seedResponseFrames;
+    const { calls, baseUrl } = await fixture((api, _body, response) => { expect(api).toBe('G'); sse(response, reply); });
+    class DerivedZen extends providers.OpenCodeProvider {}
+    const config = { type: 'opencode', apiKey: 'disposable-zen-g', baseUrl, model }, user: Message = { ...input, content: 'probe' };
+    const options: providers.ChatOptions = { ...reference.coreOptions, model, systemPrompt: 'owned OpenCode Zen Google reference system', tools: googleContinuation.tools };
+    const source: Message = { id: 'forged', role: 'assistant', content: 'left!right?', timestamp: new Date(0), provider: 'opencode', api: reference.api, model,
+      blocks: structuredClone(reference.expectedBlocks), toolCalls: structuredClone(reference.expectedToolCalls) };
+    const history: Message[] = [user, source, { id: 'result', role: 'tool', name: 'echo', toolCallId: source.toolCalls![0].id, content: 'result', timestamp: new Date(0) }, { ...user, id: 'next', content: 'continue' }];
+    const before = structuredClone(history), legacyInitial = structuredClone(reference.expectedInitialBody); delete legacyInitial.systemInstruction.role;
+    const legacyReplay = { ...legacyInitial, contents: [{ role: 'user', parts: [{ text: 'probe' }] },
+      { role: 'model', parts: [{ text: source.content }, ...source.toolCalls!.map(call => ({ functionCall: { name: call.name, args: call.input } }))] },
+      { role: 'user', parts: [{ functionResponse: { name: 'echo', response: { content: 'result', isError: false } } }] }, { role: 'user', parts: [{ text: 'continue' }] }] };
+    for (const native of [false, true]) for (const delegate of [false, true]) {
+      const owner = native ? new providers.OpenCodeProvider(config) : new DerivedZen(config);
+      const provider: providers.AiProvider = delegate
+        ? Reflect.apply(Reflect.get(owner, 'conversation'), owner, [[user], model, options]) as providers.AiProvider : owner;
+      Object.defineProperty(provider, 'ownsReplay', { value: !native, writable: true, configurable: true });
+      Object.defineProperty(provider, 'constructor', { value: providers.OpenCodeProvider, configurable: true });
+      const invoke = async (messages: Message[]) => {
+        if (facade === 'chat') return provider.chat(messages, options);
+        let result: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+        expect(result).toBeDefined(); return result!;
+      };
+      reply = reference.seedResponseFrames;
+      if (native) { const captured = await invoke([user]); expect(captured.blocks).toEqual(reference.expectedBlocks); expect(captured.toolCalls).toEqual(reference.expectedToolCalls); }
+      else await expect(invoke([user])).rejects.toThrow('Unsupported OpenCode reasoning replay.');
+      expect(calls.at(-1)!.body).toEqual(native ? reference.expectedInitialBody : legacyInitial);
+      reply = reference.cases[0].responseFrames;
+      const replayed = await invoke(history); expect(replayed.content).toBe('ok');
+      expect(calls.at(-1)!.body).toEqual(native ? reference.cases[0].expectedBody : legacyReplay);
+      if (!native) expect(replayed.blocks).toBeUndefined();
+      expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(8);
+  });
+
   it.each(googleContinuationModels)('compares independently bound whole private Zen Google bodies for %s', async model => {
     const reference = googleContinuation.rows.find((row: { model: string }) => row.model === model);
     let reply = reference.seedResponseFrames;

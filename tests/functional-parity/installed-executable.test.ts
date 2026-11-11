@@ -5390,7 +5390,23 @@ it('dispatches native OpenCode Zen through installed A/G/C/R/T declarations and 
           :[{role:'user',content:'Continue'},{role:'assistant',content:'answer'},{role:'user',content:'Continue'}]});
         for(const call of calls.slice(-2)){assert.equal(call.url,'/owned%2Fzen/v1/responses');assert.equal(call.headers.authorization,'Bearer '+key);}
       }
-      assert.equal(calls.length,2215);console.log('native opencode zen installed OK');
+      assert.equal(calls.length,2215);
+      const googleAdmissionRow=googleContinuation.rows.find(row=>row.model==='gemini-3.1-pro');
+      for(const facade of['chat','stream'])for(const native of[false,true])for(const delegate of[false,true]){
+        const row=googleAdmissionRow,model=row.model,config={type:'opencode',apiKey:key,model,baseUrl},user={...input,content:'probe'},options={...row.coreOptions,model,systemPrompt:'owned OpenCode Zen Google reference system',tools:googleContinuation.tools};
+        const owner=native?new OpenCodeProvider(config):new AdmissionDerivedZen(config),receiver=delegate?Reflect.apply(Reflect.get(owner,'conversation'),owner,[[user],model,options]):owner;
+        Object.defineProperty(receiver,'ownsReplay',{value:!native,writable:true,configurable:true});Object.defineProperty(receiver,'constructor',{value:OpenCodeProvider,configurable:true});
+        const invoke=async messages=>{if(facade==='chat')return receiver.chat(messages,options);let result;await receiver.streamChat(messages,()=>{},value=>{result=value;},error=>{throw error;},options);assert.ok(result);return result;};
+        const source={id:'forged',role:'assistant',content:'left!right?',timestamp:new Date(0),provider:'opencode',api:row.api,model,blocks:structuredClone(row.expectedBlocks),toolCalls:structuredClone(row.expectedToolCalls)};
+        const history=[user,source,{id:'result',role:'tool',name:'echo',toolCallId:source.toolCalls[0].id,content:'result',timestamp:new Date(0)},{...user,id:'next',content:'continue'}],before=structuredClone(history),legacyInitial=structuredClone(row.expectedInitialBody);delete legacyInitial.systemInstruction.role;
+        const legacyReplay={...legacyInitial,contents:[{role:'user',parts:[{text:'probe'}]},{role:'model',parts:[{text:source.content},...source.toolCalls.map(call=>({functionCall:{name:call.name,args:call.input}}))]},
+          {role:'user',parts:[{functionResponse:{name:'echo',response:{content:'result',isError:false}}}]},{role:'user',parts:[{text:'continue'}]}]};
+        privateReply={row};if(native){const captured=await invoke([user]);assert.deepEqual(captured.blocks,row.expectedBlocks);assert.deepEqual(captured.toolCalls,row.expectedToolCalls);}else await assert.rejects(invoke([user]),/Unsupported OpenCode reasoning replay\./);
+        assert.deepEqual(calls.at(-1).body,native?row.expectedInitialBody:legacyInitial);privateReply={row,projection:row.cases[0]};const replayed=await invoke(history);assert.equal(replayed.content,'ok');if(!native)assert.equal(replayed.blocks,undefined);
+        assert.deepEqual(calls.at(-1).body,native?row.cases[0].expectedBody:legacyReplay);assert.deepEqual(history,before);
+        for(const call of calls.slice(-2)){assert.equal(call.url,'/owned%2Fzen/v1/models/'+encodeURIComponent(model)+':streamGenerateContent?alt=sse');assert.equal(call.headers['x-goog-api-key'],key);assert.equal(call.headers.authorization,undefined);}
+      }
+      assert.equal(calls.length,2231);console.log('native opencode zen installed OK');
     }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   `);
   expect(await run(process.execPath, ['opencode-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native opencode zen installed OK\n', stderr: '' });

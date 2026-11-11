@@ -5509,16 +5509,16 @@ class OpenCodeNativeClassifierProvider extends NativeClassifierProvider {
 
 /** Zen Google REST owns native levels/auth/terminal authority;generic Gemini remains unchanged. */
 class OpenCodeGoogleProvider extends AiProvider {
-  constructor(config: ProviderConfig, private readonly ownsReplay = false) { super(config); }
+  constructor(config: ProviderConfig) { super(config); }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override getModelApi(): string { return 'google-generative-ai'; }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> { return this.execute(messages, options); }
   override async streamChat(messages: Message[], chunk: StreamChunkCallback, complete?: (response?: ChatResponse) => void, error?: (error: Error) => void, options?: ChatOptions): Promise<void> {
-    try { const response = await this.execute(messages, options, chunk); if (this.ownsReplay) await complete?.(response); else complete?.(response); }
+    try { const response = await this.execute(messages, options, chunk); if (nativeOpenCodeReplay.has(this)) await complete?.(response); else complete?.(response); }
     catch (failure) { if (error) error(failure instanceof Error ? failure : new Error('Invalid OpenCode response.')); else throw failure; }
   }
   private async execute(messages: Message[], options?: ChatOptions, chunk?: StreamChunkCallback): Promise<ChatResponse> {
-    const model = options?.model || this.config.model!, native = this.ownsReplay && opencodeProfile(model).api === 'google-generative-ai', owner = native ? { provider: this.getProviderType(), api: 'google-generative-ai', model } : undefined;
+    const model = options?.model || this.config.model!, native = nativeOpenCodeReplay.has(this) && opencodeProfile(model).api === 'google-generative-ai', owner = native ? { provider: this.getProviderType(), api: 'google-generative-ai', model } : undefined;
     const active = () => { if (options?.signal?.aborted) throw new Error('OpenCode request aborted.'); }; const invalid: () => never = () => { throw new Error('Invalid OpenCode response.'); };
     const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
     active(); const body = opencodeGoogleBody(model, toolImageMessages(messages), options, owner?.provider), response = await this.request(`${this.config.baseUrl}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: opencodeHeaders(this.config, options, 'google-generative-ai'), body: serializeProviderBody(body), signal: options?.signal });
@@ -5608,7 +5608,12 @@ export class OpenCodeProvider extends AiProvider {
       if (native) nativeOpenCodeReplay.add(delegate);
       return delegate;
     }
-    return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : new OpenCodeCompletionsProvider(config, native);
+    if (profile.api === 'google-generative-ai') {
+      const delegate = new OpenCodeGoogleProvider(config);
+      if (native) nativeOpenCodeReplay.add(delegate);
+      return delegate;
+    }
+    return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : new OpenCodeCompletionsProvider(config, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model }; if (opencodeProfile(model).api === 'anthropic-messages' && !nativeOpenCodeReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;
