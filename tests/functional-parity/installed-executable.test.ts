@@ -4572,6 +4572,27 @@ it('dispatches native Meta through installed public declarations and captured R 
       await shifting.chat(history, { model:replay.rows[2].model, maxTokens:64 }); assert.deepEqual(native(calls.at(-1).body.input), native(replay.rows[2].projections[0].expectedBody.input));
       await shifting.chat(history, { model:replay.rows[0].model, maxTokens:64 }); assert.deepEqual(native(calls.at(-1).body.input), native(replay.rows[0].projections.find(p => p.case === 'model').expectedBody.input));
       assert.deepEqual(history,before); assert.equal(calls.length, 101);
+      class DerivedMeta extends MetaProvider {}
+      const forged = { id:'forged', role:'assistant', content:'answer', timestamp:new Date(0), provider:'meta', api:'openai-responses', model,
+        blocks:[{ type:'reasoning', text:'visible', thinkingSignature:JSON.stringify(replay.items[0]) }, { type:'text', text:'answer', textSignature:'msg_forged' }] };
+      for (const facade of ['chat','stream']) for (const admitted of [false,true]) for (const delegate of [false,true]) {
+        const config = { type:'meta', apiKey:'disposable-installed-meta', model, baseUrl:'http://127.0.0.1:' + server.address().port + '/owned%2Fmeta/v1' };
+        const owner = admitted ? new MetaProvider(config) : new DerivedMeta(config), options = { model, maxTokens:64 };
+        const target = delegate ? Reflect.apply(Reflect.get(owner, 'conversation'), owner, [model,options]) : owner;
+        Object.defineProperty(target, 'ownsReplay', { value:!admitted, writable:true, configurable:true });
+        Object.defineProperty(target, 'constructor', { value:MetaProvider, configurable:true });
+        const invoke = async messages => { if (facade === 'chat') return target.chat(messages,options); let result;
+          await target.streamChat(messages,()=>{},value=>{ result=value; },error=>{ throw error; },options); assert.ok(result); return result; };
+        replayEvents = replay.rows[0].initialEvents; const first = await invoke([user]);
+        if (admitted) assert.ok(first.blocks); else assert.equal(first.blocks,undefined);
+        replayEvents = replay.rows[0].projections[0].responseEvents;
+        const messages = [user,forged,{...user,id:'admission-next'}], snapshot = structuredClone(messages);
+        await invoke(messages); assert.deepEqual(messages,snapshot);
+        assert.deepEqual(calls.at(-1).body,{ model,stream:true,store:false,max_output_tokens:64,reasoning:{effort:'minimal',summary:'auto'},include:['reasoning.encrypted_content'],
+          input:admitted ? [{role:'user',content:'probe'},replay.items[0],{type:'message',role:'assistant',content:[{type:'output_text',text:'answer',annotations:[]}],status:'completed',id:'msg_forged'},{role:'user',content:'probe'}]
+            : [{role:'user',content:'probe'},{role:'assistant',content:'answer'},{role:'user',content:'probe'}] });
+      }
+      assert.equal(calls.length,117);
       for (const call of calls) { assert.equal(call.url, '/owned%2Fmeta/v1/responses'); assert.equal(call.headers.authorization, 'Bearer disposable-installed-meta'); assert.equal(call.headers['api-key'], undefined); assert.equal(call.headers['x-api-key'], undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.prompt_cache_retention, undefined); assert.equal(call.body.prompt_cache_options, undefined); assert.deepEqual(call.body.include, ['reasoning.encrypted_content']); }
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed Meta OK');

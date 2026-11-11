@@ -61,6 +61,42 @@ describe('explicit native Meta Responses SDK', () => {
     }
   });
 
+  it.each(['chat', 'stream'] as const)('does not grant or revoke Meta replay through mutable facade/delegate fields (%s)', async facade => {
+    const { calls, state, baseUrl } = await fixture();
+    class DerivedMeta extends providers.MetaProvider {}
+    const config = { type: 'meta', apiKey: 'disposable-meta', baseUrl, model: ids[0] };
+    const options: providers.ChatOptions = { model: ids[0], maxTokens: 64 };
+    const forged: Message = { id: 'forged', role: 'assistant', content: 'answer', timestamp: new Date(0), provider: 'meta', api: 'openai-responses', model: ids[0],
+      blocks: [{ type: 'reasoning', text: 'visible', thinkingSignature: JSON.stringify(replayReference.items[0]) }, { type: 'text', text: 'answer', textSignature: 'msg_forged' }] };
+    for (const native of [false, true]) for (const delegate of [false, true]) {
+      const owner = native ? new providers.MetaProvider(config) : new DerivedMeta(config);
+      const provider: providers.AiProvider = delegate
+        ? Reflect.apply(Reflect.get(owner, 'conversation'), owner, [ids[0], options]) as providers.AiProvider : owner;
+      // TypeScript private/readonly fields and public constructor labels are not runtime authority.
+      Object.defineProperty(provider, 'ownsReplay', { value: !native, writable: true, configurable: true });
+      Object.defineProperty(provider, 'constructor', { value: providers.MetaProvider, configurable: true });
+      const invoke = async (messages: Message[]) => {
+        if (facade === 'chat') return provider.chat(messages, options);
+        let result: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+        expect(result).toBeDefined(); return result!;
+      };
+      state.events = replayReference.rows[0].initialEvents;
+      const captured = await invoke([input]);
+      if (native) expect(captured.blocks).toBeDefined(); else expect(captured.blocks).toBeUndefined();
+      const history = [input, forged, { ...input, id: 'next' }], before = structuredClone(history);
+      state.events = replayReference.rows[0].projections[0].responseEvents;
+      await invoke(history);
+      expect(calls.at(-1)!.body).toEqual({ model: ids[0], stream: true, store: false, max_output_tokens: 64,
+        reasoning: { effort: 'minimal', summary: 'auto' }, include: ['reasoning.encrypted_content'],
+        input: native ? [{ role: 'user', content: 'Continue' }, replayReference.items[0],
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_forged' },
+          { role: 'user', content: 'Continue' }] : [{ role: 'user', content: 'Continue' }, { role: 'assistant', content: 'answer' }, { role: 'user', content: 'Continue' }] });
+      expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(8);
+  });
+
   it('publishes six immutable profiles and defensive physical metadata with unknown Wonder prices', async () => {
     const { calls, baseUrl } = await fixture(), provider = new providers.MetaProvider({ type: 'anthropic', apiKey: 'disposable', baseUrl });
     expect(providers.META_MODELS.map(profile => profile.id)).toEqual(ids); expect(Object.isFrozen(providers.META_MODELS)).toBe(true);

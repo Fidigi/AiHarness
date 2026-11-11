@@ -3786,21 +3786,23 @@ export class AzureProvider extends AiProvider {
   }
 }
 
+const nativeMetaResponses = new WeakSet<AiProvider>();
+
 /** Explicit Meta SSE policy; only the exact owning facade admits private replay. Muse auth stays separate. */
 class ReviewedMetaResponsesProvider extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention'], private readonly ownsReplay = false) { super(config); }
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    if (!this.ownsReplay) { const body = super.requestBody(messages, options); prepareMetaResponse(body, options); return body; }
+    if (!nativeMetaResponses.has(this)) { const body = super.requestBody(messages, options); prepareMetaResponse(body, options); return body; }
     // Preserve Meta's existing user/tool-image preparation while aligning rich slots with that same history.
     const history = toolImageMessages(messages), body = super.requestBody(history, options, true);
     const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
     nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, history, owner);
     prepareMetaResponse(body, options); applyResponsesWholeIdHistory(body, history, owner); return body;
   }
-  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (this.ownsReplay ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (nativeMetaResponses.has(this) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return metaUsage(value, model); }
   protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
     const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);
@@ -3820,17 +3822,17 @@ class ReviewedMetaResponsesProvider extends OpenAiResponsesProvider {
     };
     if (!this.validateConfig()) { report(new Error('Meta API key is required.')); return; }
     await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-      response => { active(); return onComplete?.(response && !this.ownsReplay ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+      response => { active(); return onComplete?.(response && !nativeMetaResponses.has(this) ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
   }
 }
 
 /** Supplied-key Meta SDK; no factory reservation, ambient auth, OAuth or Server/Settings composition. */
 export class MetaProvider extends AiProvider {
   private readonly baseUrl: string;
-  private readonly ownsReplay: boolean;
   constructor(config: ProviderConfig) {
     const model = config.model ?? META_MODELS[0].id; metaProfile(model);
-    const baseUrl = metaBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl; this.ownsReplay = new.target === MetaProvider;
+    const baseUrl = metaBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+    if (new.target === MetaProvider) nativeMetaResponses.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override setConfiguredModel(model: string): void { metaProfile(model); super.setConfiguredModel(model); }
@@ -3851,7 +3853,10 @@ export class MetaProvider extends AiProvider {
     throw new Error('Image model or options are not supported.');
   }
   private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedMetaResponsesProvider {
-    metaProfile(String(model)); return new ReviewedMetaResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention, this.ownsReplay);
+    metaProfile(String(model));
+    const delegate = new ReviewedMetaResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+    if (nativeMetaResponses.has(this)) nativeMetaResponses.add(delegate);
+    return delegate;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('Meta API key is required.');
