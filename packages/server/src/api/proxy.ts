@@ -21,6 +21,7 @@ import {
   createProviderNetworkScope,
   CredentialRedactor,
   GeminiProvider,
+  GitHubCopilotProvider,
   LocalProvider,
   MockProvider,
   normalizeProviderUsage,
@@ -40,6 +41,7 @@ import type {
   Message,
   ModelPricing,
   ProviderConfig,
+  ProviderOAuthCredential,
   ProviderNetworkScope,
 } from '@ai-harness/core';
 
@@ -417,6 +419,7 @@ export class AiProxyServer {
   private vertexProxy?: CoreProviderProxy;
   private bedrockProxy?: CoreProviderProxy;
   private mockProxy?: CoreProviderProxy;
+  private githubCopilotProxy?: CoreProviderProxy;
   private readonly customProxies = new Map<string, CoreProviderProxy>();
   private readonly agentProviders = new Map<string, AiProvider>();
   private readonly usage = new Map<string, ProviderUsageMetrics>();
@@ -533,6 +536,17 @@ export class AiProxyServer {
       this.mockProxy = new CoreProviderProxy(provider);
       this.agentProviders.set('mock', provider);
     }
+  }
+
+  /** Subscription composition never enters the API-key or custom-dialect paths. */
+  setGitHubCopilotSubscription(model: string, credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>): void {
+    const provider = new GitHubCopilotProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'github-copilot', model }, async signal => {
+      const credential = await credentialSource(signal);
+      this.redactor.add(credential?.accessToken); this.redactor.add(credential?.refreshToken);
+      return credential;
+    });
+    this.agentProviders.set('github-copilot', provider);
+    this.githubCopilotProxy = new CoreProviderProxy(provider);
   }
 
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
@@ -656,7 +670,7 @@ export class AiProxyServer {
   setCustomProvider(type: string, provider: AiProvider): void {
     const normalized = type.trim().toLowerCase();
     if (!/^[a-z][a-z0-9_-]{1,63}$/.test(normalized)
-      || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'].includes(normalized)) {
+      || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot'].includes(normalized)) {
       throw new Error(`Invalid custom provider id: ${type}`);
     }
     const providerConfig = (provider as unknown as { config: ProviderConfig }).config;
@@ -682,6 +696,7 @@ export class AiProxyServer {
       case 'vertex': this.vertexProxy = undefined; break;
       case 'bedrock': this.bedrockProxy = undefined; break;
       case 'local': this.localProxy = undefined; break;
+      case 'github-copilot': this.githubCopilotProxy = undefined; break;
       default: return false;
     }
     return true;
@@ -800,6 +815,7 @@ export class AiProxyServer {
       case 'vertex': return !!this.vertexProxy;
       case 'bedrock': return !!this.bedrockProxy;
       case 'local': return !!this.localProxy;
+      case 'github-copilot': return !!this.githubCopilotProxy;
       case 'mock': return !!this.mockProxy;
       default: return this.customProxies.has(type.toLowerCase());
     }
@@ -815,6 +831,7 @@ export class AiProxyServer {
       { type: 'vertex', configured: !!this.vertexProxy },
       { type: 'bedrock', configured: !!this.bedrockProxy },
       { type: 'local', configured: !!this.localProxy },
+      { type: 'github-copilot', configured: !!this.githubCopilotProxy },
       ...(this.config.enableMockProvider ? [{ type: 'mock', configured: true }] : []),
       ...[...this.customProxies.keys()].sort().map(type => ({ type, configured: true })),
     ];
@@ -1030,6 +1047,7 @@ export class AiProxyServer {
       case 'vertex': return this.vertexProxy ?? null;
       case 'bedrock': return this.bedrockProxy ?? null;
       case 'local': return this.localProxy ?? null;
+      case 'github-copilot': return this.githubCopilotProxy ?? null;
       case 'mock': return this.mockProxy ?? null;
       default: return this.customProxies.get(type.toLowerCase()) ?? null;
     }

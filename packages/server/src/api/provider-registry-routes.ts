@@ -15,6 +15,7 @@ const BUILTIN_ENVIRONMENT: Record<string, string[]> = {
   bedrock: ['AWS_ACCESS_KEY_ID'],
   local: ['LOCAL_BASE_URL', 'LLAMA_BASE_URL'],
   mock: [],
+  'github-copilot': [],
 };
 
 function identifier(value: unknown, name: string): string {
@@ -51,7 +52,7 @@ export function createProviderRegistryRouter(
             connected: provider.configured,
             method: provider.type === 'mock' || provider.type === 'local' && !environmentVariable
               ? 'none' : provider.type === 'vertex' && environmentVariable === 'GOOGLE_VERTEX_ACCESS_TOKEN'
-                || oauth.isSupported(provider.type) ? 'oauth' : environmentVariable ? 'environment' : 'api-key',
+                || provider.type === 'github-copilot' || oauth.isSupported(provider.type) ? 'oauth' : environmentVariable ? 'environment' : 'api-key',
             ...(environmentVariable ? { environmentVariable } : {}),
             reconnectSupported: provider.type !== 'mock',
             disconnectSupported: provider.type !== 'mock' && !environmentVariable,

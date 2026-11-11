@@ -73,6 +73,7 @@ import {
 } from './runtime/services.js';
 import { getAppUpdateStatus } from './runtime/app-update.js';
 import { ProviderOAuthService } from './runtime/provider-oauth.js';
+import { resolveGitHubCopilotSubscription } from './runtime/github-copilot.js';
 import { providerOperation } from './runtime/provider-administration.js';
 
 export type { ChatOptions } from '@ai-harness/core';
@@ -239,6 +240,9 @@ function initializeCredentials(
         ? JSON.stringify({ bearerToken: value }) : value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
+    const copilot = await resolveGitHubCopilotSubscription(credentials);
+    if (runtime.closed) throw new Error('Application runtime is no longer active.');
+    if (copilot) proxy.setGitHubCopilotSubscription(copilot.model, copilot.credentialSource);
     let mcpOAuth: McpOAuthCredentialManager | undefined;
     let mcpOAuthFlows: McpOAuthFlowService | undefined;
     if (store) {

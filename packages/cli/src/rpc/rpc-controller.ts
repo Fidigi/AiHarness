@@ -1948,6 +1948,7 @@ export class RpcController {
           : provider.getConfiguredModel(),
         discoveredModels,
         publishedModels: getProviderPublishedModels(provider),
+        discoveryAuthoritative: provider.isModelDiscoveryAuthoritative?.() === true,
         getModelApi: (model: string) => provider.getModelApi?.(model),
       };
     }));

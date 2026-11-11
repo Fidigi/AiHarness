@@ -30,6 +30,10 @@ export type { OpenCodeProfile } from './providers/opencode.js';
 export type { KimiCodingProfile } from './providers/kimi-coding.js';
 export { getKimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
 export type { KimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
+export { getGitHubCopilotOAuthConfig, getGitHubCopilotBaseUrl, exchangeGitHubCopilotToken } from './providers/github-copilot-oauth.js';
+export type { GitHubCopilotOAuthCredential } from './providers/github-copilot-oauth.js';
+export { GITHUB_COPILOT_MODELS } from './providers/github-copilot.js';
+export type { GitHubCopilotApi, GitHubCopilotModel, GitHubCopilotChatOptions } from './providers/github-copilot.js';
 export type { MetaProfile } from './providers/meta.js';
 export type { XaiProfile } from './providers/xai.js';
 export type { AntLingProfile } from './providers/ant-ling.js';
@@ -86,6 +90,7 @@ export {
   MINIMAX_MODELS,
   MiniMaxCnProvider,
   MINIMAX_CN_MODELS,
+  GitHubCopilotProvider,
   OpenCodeGoProvider,
   OPENCODE_GO_MODELS,
   OpenCodeProvider,

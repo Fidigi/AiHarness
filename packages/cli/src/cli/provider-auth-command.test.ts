@@ -14,12 +14,16 @@ const execute = promisify(execFile);
 let root: string, cwd: string, agent: string;
 let server: Server | undefined;
 let requests: string[];
-let issuerForms: { url: string; method?: string; contentType?: string; authorization?: string; apiKey?: string; body: string }[];
+let issuerForms: { url: string; method?: string; contentType?: string; authorization?: string; apiKey?: string; originalUrl?: string; body: string }[];
 let transportErrors: { name: string; code?: string }[];
 let endpoint: string;
 let mode: 'success' | 'device-stall' | 'token-stall' | 'pending' | 'publication-failure' | 'transport-reset';
 let activeResponses = 0;
 let deviceUserCode = 'VISIBLE-123';
+let copilotPickerModel = 'gpt-4o';
+let copilotResponseEvents: unknown[] = [];
+let holdCopilotCatalogue = false;
+let releaseCopilotCatalogue: (() => void) | undefined;
 const token = 'disposable-fixture-access-741';
 const refresh = 'disposable-fixture-refresh-742';
 const master = 'disposable-fixture-master-key-at-least-32-bytes';
@@ -64,6 +68,7 @@ beforeEach(async () => {
   cwd = path.join(root, 'workspace'); agent = path.join(root, 'agent');
   await mkdir(cwd); await mkdir(agent);
   requests = []; mode = 'success'; activeResponses = 0; deviceUserCode = 'VISIBLE-123';
+  copilotPickerModel = 'gpt-4o'; copilotResponseEvents = []; holdCopilotCatalogue = false; releaseCopilotCatalogue = undefined;
   const caseTransportErrors: typeof transportErrors = [];
   transportErrors = caseTransportErrors;
   const caseIssuerForms: typeof issuerForms = [];
@@ -74,16 +79,33 @@ beforeEach(async () => {
     requests.push(req.url!);
     activeResponses++;
     res.once('close', () => { activeResponses--; });
-    if (req.url?.startsWith('/api/oauth/') || req.url === '/coding/v1/messages') {
+    if (req.url?.startsWith('/api/oauth/') || req.url === '/coding/v1/messages'
+      || ['/login/device/code', '/login/oauth/access_token', '/copilot_internal/v2/token', '/models', '/responses'].includes(req.url!)) {
       let body = '';
-      req.on('data', chunk => { body += String(chunk); if (Buffer.byteLength(body) > 8192) req.destroy(); });
+      req.on('data', chunk => { body += String(chunk); if (Buffer.byteLength(body) > (req.url === '/responses' ? 2_000_000 : 8192)) req.destroy(); });
       req.on('error', (error: NodeJS.ErrnoException) => { caseTransportErrors.push({ name: error.name, code: error.code }); });
       req.once('end', () => {
         caseIssuerForms.push({ url: req.url!, method: req.method, contentType: req.headers['content-type'],
-          authorization: req.headers.authorization, apiKey: req.headers['x-api-key'] as string | undefined, body });
+          authorization: req.headers.authorization, apiKey: req.headers['x-api-key'] as string | undefined,
+          originalUrl: req.headers['x-fixture-original-url'] as string | undefined, body });
+        if (req.url === '/responses') {
+          res.writeHead(200, { 'content-type': 'text/event-stream' });
+          res.end(copilotResponseEvents.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+          return;
+        }
         const grant = new URLSearchParams(body).get('grant_type');
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(req.url === '/api/oauth/device_authorization' ? {
+        const copilotBody = req.url === '/login/device/code' ? { device_code: 'copilot-private-device', user_code: deviceUserCode,
+          verification_uri: 'https://github.com/login/device', expires_in: 30, interval: 0.01 }
+          : req.url === '/login/oauth/access_token' ? { access_token: refresh, token_type: 'bearer' }
+          : req.url === '/copilot_internal/v2/token' ? { token, expires_at: Math.floor(Date.now() / 1000) + 3600 }
+          : req.url === '/models' ? { data: [{ id: copilotPickerModel, model_picker_enabled: true }, { id: 'disabled', model_picker_enabled: true, policy: { state: 'disabled' } }] }
+          : undefined;
+        if (req.url === '/models' && holdCopilotCatalogue) {
+          releaseCopilotCatalogue = () => res.end(JSON.stringify(copilotBody));
+          return;
+        }
+        res.end(JSON.stringify(copilotBody ?? (req.url === '/api/oauth/device_authorization' ? {
           device_code: 'private-device-code-743', user_code: deviceUserCode,
           verification_uri: `${endpoint}/verify?private=do-not-print`, verification_uri_complete: `${endpoint}/verify?device=private-device-code-743`,
           expires_in: 30, interval: 0.01,
@@ -92,7 +114,7 @@ beforeEach(async () => {
           content: [{ type: 'text', text: 'Ready after refresh.' }], stop_reason: 'end_turn', stop_sequence: null,
           usage: { input_tokens: 1, output_tokens: 1 },
         } : { access_token: grant === 'refresh_token' ? 'rotated-kimi-access' : token,
-          refresh_token: grant === 'refresh_token' ? 'rotated-kimi-refresh' : refresh, expires_in: 3600, token_type: 'Bearer' }));
+          refresh_token: grant === 'refresh_token' ? 'rotated-kimi-refresh' : refresh, expires_in: 3600, token_type: 'Bearer' })));
       });
       return;
     }
@@ -139,6 +161,103 @@ describe('actual top-level provider auth CLI', () => {
     expect(await readdir(agent)).toEqual([]);
     expect(await readdir(cwd)).toEqual([]);
   }, 30_000);
+
+  it.each([false, true])('publishes a Copilot CLI login only without intervening logout (withdraw=%s)', async withdraw => {
+    const preload = path.join(root, 'copilot-routing.mjs');
+    // Capture fixed vendor targets while delegating real HTTPS to this disposable issuer.
+    // This is a transport fixture, not a real GitHub account or vendor TLS qualification.
+    await writeFile(preload, `const originalFetch = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const target = new URL(String(input));
+  if (!['github.com', 'api.github.com', 'api.individual.githubcopilot.com'].includes(target.hostname)) throw new Error('Unexpected fixture target');
+  const headers = new Headers(init?.headers); headers.set('x-fixture-original-url', target.href);
+  return originalFetch(new URL(target.pathname + target.search, ${JSON.stringify(endpoint)}), { ...init, headers });
+};\n`);
+    holdCopilotCatalogue = withdraw;
+    const pending = launch(['auth', 'login', 'copilot-team', '--issuer=github-copilot'], {
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${preload}`,
+    });
+    if (withdraw) {
+      await waitForRequest('/models', pending.done);
+      try { expect((await invoke(['auth', 'logout', 'copilot-team'])).code).toBe(0); }
+      finally { releaseCopilotCatalogue?.(); }
+    }
+    const result = await pending.done;
+    expect(result).toEqual({ code: withdraw ? 1 : 0, signal: null, stdout: withdraw ? '' : 'Provider credentials encrypted and saved.\n',
+      stderr: `Authorize at https://github.com/login/device\nUser code: ${deviceUserCode}\n${withdraw ? 'Auth operation failed.\n' : ''}` });
+    expect(requests).toEqual(['/login/device/code', '/login/oauth/access_token', '/copilot_internal/v2/token', '/models']);
+    expect(issuerForms.map(item => item.originalUrl)).toEqual(['https://github.com/login/device/code', 'https://github.com/login/oauth/access_token',
+      'https://api.github.com/copilot_internal/v2/token', 'https://api.individual.githubcopilot.com/models']);
+    expect(issuerForms.map(item => item.method)).toEqual(['POST', 'POST', 'GET', 'GET']);
+    expect(issuerForms.map(item => item.authorization)).toEqual([undefined, undefined, `Bearer ${refresh}`, `Bearer ${token}`]);
+    expect(issuerForms.slice(0, 2).map(item => Object.fromEntries(new URLSearchParams(item.body)))).toEqual([
+      { client_id: 'Iv1.b507a08c87ecfe98', scope: 'read:user' },
+      { client_id: 'Iv1.b507a08c87ecfe98', device_code: 'copilot-private-device', grant_type: 'urn:ietf:params:oauth:grant-type:device_code' },
+    ]);
+    const file = path.join(agent, 'credentials.enc'), service = new ProviderCredentialService({ store: new EncryptedCredentialStore(file, master) });
+    await service.load();
+    const saved = await service.resolve('copilot-team', { env: {}, subscriptionProvider: 'github-copilot' });
+    if (withdraw) {
+      expect(saved).toBeUndefined(); expect(service.list()).toEqual([]);
+      for (const secret of [token, refresh, 'copilot-private-device']) expect(await readFile(file, 'utf8') + result.stdout + result.stderr).not.toContain(secret);
+      expect((await stat(file)).mode & 0o777).toBe(0o600);
+      return;
+    }
+    expect(saved?.credential).toMatchObject({ version: 1, type: 'oauth', accessToken: token, refreshToken: refresh,
+      subscription: { provider: 'github-copilot', availableModelIds: ['gpt-4o'] } });
+    expect(await service.resolve('copilot-team', { env: {} })).toBeUndefined();
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    const bytes = await readFile(file, 'utf8');
+    for (const secret of [token, refresh, 'copilot-private-device']) expect(bytes + result.stdout + result.stderr).not.toContain(secret);
+    const listed = await invoke(['auth', 'list', '--json']);
+    expect(JSON.parse(listed.stdout).find((item: { provider: string }) => item.provider === 'copilot-team').stored).toEqual(saved!.descriptor);
+    expect((await invoke(['auth', 'logout', 'copilot-team'])).code).toBe(0);
+    await service.load();
+    expect(await service.resolve('copilot-team', { env: {}, subscriptionProvider: 'github-copilot' })).toBeUndefined();
+    expect(requests).toHaveLength(4);
+    expect(await readdir(cwd)).toEqual([]);
+  });
+
+  it('uses an encrypted Copilot login for an actual CLI inference turn and refuses it after logout', async () => {
+    copilotPickerModel = 'gpt-5-mini';
+    const fixture = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
+      rows: Array<{ model: string; case: string; responseEvents: unknown[] }>;
+    };
+    copilotResponseEvents = fixture.rows.find(row => row.model === copilotPickerModel && row.case === 'user')!.responseEvents;
+    const preload = path.join(root, 'copilot-inference-routing.mjs');
+    await writeFile(preload, `const originalFetch = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const target = new URL(String(input));
+  if (!['github.com', 'api.github.com', 'api.individual.githubcopilot.com'].includes(target.hostname)) throw new Error('Unexpected fixture target');
+  const headers = new Headers(init?.headers); headers.set('x-fixture-original-url', target.href);
+  return originalFetch(new URL(target.pathname + target.search, ${JSON.stringify(endpoint)}), { ...init, headers });
+};\n`);
+    const env = { NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import=${preload}`, AI_HARNESS_OPENAI_API_KEY_COMMAND: '' };
+    const login = await invoke(['auth', 'login', 'github-copilot', '--issuer=github-copilot'], env);
+    expect(login, login.stderr).toMatchObject({ code: 0, signal: null });
+    const sessions = path.join(root, 'sessions');
+    const args = ['--approve', '--mode', 'json', '--session-dir', sessions, '--provider', 'github-copilot', '--model', copilotPickerModel, '--thinking', 'off', 'probe'];
+    const turn = await invoke(args, env);
+    expect(turn, turn.stderr).toMatchObject({ code: 0, signal: null });
+    const records = turn.stdout.trim().split('\n').map(line => JSON.parse(line));
+    expect(records.find(record => record.type === 'message_end' && record.message?.role === 'assistant')?.message)
+      .toMatchObject({ provider: 'github-copilot', api: 'openai-responses', model: copilotPickerModel });
+    expect(requests).toEqual(['/login/device/code', '/login/oauth/access_token', '/copilot_internal/v2/token', '/models', '/responses']);
+    const request = issuerForms.at(-1)!;
+    expect(request).toMatchObject({ method: 'POST', originalUrl: 'https://api.individual.githubcopilot.com/responses', authorization: `Bearer ${token}` });
+    expect(request.apiKey).toBeUndefined();
+    expect(JSON.parse(request.body)).toMatchObject({ model: copilotPickerModel, stream: true, store: false });
+    const journal = (await Promise.all((await readdir(sessions)).filter(file => file.endsWith('.jsonl')).map(file => readFile(path.join(sessions, file), 'utf8')))).join('\n');
+    const entries = journal.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+    expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant',
+      provider: 'github-copilot', api: 'openai-responses', model: copilotPickerModel }));
+    expect((await stat(path.join(agent, 'credentials.enc'))).mode & 0o777).toBe(0o600);
+    for (const secret of [token, refresh]) expect(login.stdout + login.stderr + turn.stdout + turn.stderr + journal).not.toContain(secret);
+    expect((await invoke(['auth', 'logout', 'github-copilot'])).code).toBe(0);
+    const withdrawn = await invoke(args, env);
+    expect(withdrawn.signal).toBeNull(); expect(withdrawn.code).not.toBe(0);
+    expect(requests).toHaveLength(5);
+  }, 30000);
 
   it('lists metadata without credential commands, refresh or agents', async () => {
     const result = await invoke(['auth', 'list', '--json']);

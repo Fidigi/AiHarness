@@ -8,6 +8,7 @@ import {
   getProviderPublishedModels,
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
+  GitHubCopilotProvider,
   providerCredentialEnvironmentKeys,
   resolveModelReference,
   resolveModelScope,
@@ -20,6 +21,8 @@ import {
   type ModelScopeDiagnostic,
   type VirtualModelRegistry,
 } from '@ai-harness/core';
+
+import type { CliGitHubCopilotSubscription } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -87,6 +90,7 @@ function attempt(
 }
 
 export interface CreateConfiguredProvidersOptions {
+  githubCopilot?: CliGitHubCopilotSubscription;
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -125,6 +129,8 @@ export function createConfiguredProviders(
 ): Map<string, AiProvider> {
   const providers = new Map<string, AiProvider>();
   const network = networkConfig(options.network);
+  if (options.githubCopilot) providers.set('github-copilot', new GitHubCopilotProvider(
+    { ...network, type: 'github-copilot', model: options.githubCopilot.model }, options.githubCopilot.credentialSource));
   const openAiKey = configuredCredential('openai', env.OPENAI_API_KEY, options.credentials);
   const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
   const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);
@@ -230,6 +236,7 @@ export async function resolveStartupProvider(
             configured: instance.validateConfig(),
             configuredModel: instance.getConfiguredModel(),
             publishedModels: getProviderPublishedModels(instance),
+            discoveryAuthoritative: instance.isModelDiscoveryAuthoritative?.() === true,
             getModelApi: (model: string) => instance.getModelApi?.(model),
           })),
           ...getPublishedProviders()

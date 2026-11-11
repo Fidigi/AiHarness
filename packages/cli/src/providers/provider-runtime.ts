@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   CredentialRedactor,
+  GITHUB_COPILOT_MODELS,
   bedrockCredentialConfig,
   EncryptedCredentialStore,
   ProviderCredentialService,
@@ -9,13 +10,20 @@ import {
   type AgentSettings,
   type ExtensionProvider,
   type ProviderOAuthRefreshConfig,
+  type ProviderOAuthCredential,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
   'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
+export interface CliGitHubCopilotSubscription {
+  model: string;
+  credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>;
+}
+
 export interface CliProviderRuntime {
+  githubCopilot?: CliGitHubCopilotSubscription;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -43,7 +51,7 @@ export function oauthRefreshConfigFromEnv(
   };
 }
 
-/** Resolve secrets once for the process; only raw values stay in this local composition root. */
+/** Resolve ordinary keys locally; subscription consumers retain a fresh credential resolver. */
 export async function createCliProviderRuntime(
   agentDir: string,
   settings: AgentSettings,
@@ -81,6 +89,7 @@ export async function createCliProviderRuntime(
     ...extensionProviders.map(item => item.type),
   ]);
   for (const provider of providers) {
+    if (provider === 'github-copilot') continue;
     const resolved = await credentials.resolve(provider, {
       env: commandEnv,
       allowCommands: !offline,
@@ -96,7 +105,15 @@ export async function createCliProviderRuntime(
     }
     values.set(provider, value);
   }
+  const credentialSource: CliGitHubCopilotSubscription['credentialSource'] = async signal => {
+    const resolved = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot',
+      allowCommands: false, allowRefresh: !offline, signal });
+    return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
+  };
+  const subscription = await credentialSource();
+  const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.availableModelIds.includes(model.id));
   return {
+    ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     credentials,
     values,
     network: resolveAgentProviderNetworkSettings(settings),

@@ -1,12 +1,13 @@
-import { getKimiCodingOAuthConfig } from '@ai-harness/core';
-import type { ProviderOAuthRefreshConfig } from '@ai-harness/core';
+import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, getKimiCodingOAuthConfig } from '@ai-harness/core';
+import type { CredentialRedactor, ProviderOAuthCredential, ProviderOAuthRefreshConfig } from '@ai-harness/core';
 
 export interface OAuthDeviceConfig {
   deviceAuthorizationUrl: string;
   tokenUrl: string;
   clientId: string;
   scope?: string;
-  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'];
+  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'] | 'github-copilot';
+  enterpriseDomain?: string;
 }
 
 export interface OAuthDevicePrompt {
@@ -23,6 +24,7 @@ export interface OAuthDeviceCredential {
   refreshToken?: string;
   expiresAt?: number;
   tokenType?: string;
+  subscription?: ProviderOAuthCredential['subscription'];
 }
 
 const MAX_OAUTH_RESPONSE_BYTES = 256 * 1024;
@@ -108,11 +110,18 @@ function oauthDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
 }
 
 export class OAuthDeviceClient {
-  constructor(private readonly config: OAuthDeviceConfig) {
+  constructor(private readonly config: OAuthDeviceConfig, private readonly redactor?: CredentialRedactor) {
     const deviceUrl = safeEndpoint(config.deviceAuthorizationUrl);
     const tokenUrl = safeEndpoint(config.tokenUrl);
-    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding') {
-      throw new Error('La configuration OAuth Kimi Coding est invalide.');
+    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding' && config.responseProfile !== 'github-copilot') {
+      throw new Error('La configuration OAuth est invalide.');
+    }
+    if (config.responseProfile === 'github-copilot') {
+      const expected = getGitHubCopilotOAuthConfig(config.enterpriseDomain);
+      if (deviceUrl !== expected.deviceAuthorizationUrl || tokenUrl !== expected.tokenUrl
+        || config.clientId !== expected.clientId || config.scope !== expected.scope) {
+        throw new Error('La configuration OAuth GitHub Copilot est invalide.');
+      }
     }
     if (config.responseProfile === 'kimi-coding') {
       const suffix = '/api/oauth/token';
@@ -139,7 +148,8 @@ export class OAuthDeviceClient {
       response = await fetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
         method: 'POST',
         redirect: 'manual',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+          ...(this.config.responseProfile === 'github-copilot' ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
         body: new URLSearchParams({ client_id: this.config.clientId, ...(this.config.scope ? { scope: this.config.scope } : {}) }),
         signal: requestSignal,
       });
@@ -197,7 +207,8 @@ export class OAuthDeviceClient {
         response = await fetch(safeEndpoint(this.config.tokenUrl), {
           method: 'POST',
           redirect: 'manual',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+            ...(this.config.responseProfile === 'github-copilot' ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
           body: new URLSearchParams({
             client_id: this.config.clientId,
             device_code: prompt.deviceCode,
@@ -220,6 +231,14 @@ export class OAuthDeviceClient {
             || !Number.isFinite(data.expires_in) || data.expires_in < 0
             || data.expires_in > 365 * 24 * 60 * 60))) {
           throw new Error('La réponse OAuth est invalide.');
+        }
+        if (this.config.responseProfile === 'github-copilot') {
+          const exchanged = await exchangeGitHubCopilotToken(data.access_token, {
+            enterpriseDomain: this.config.enterpriseDomain, signal, redactor: this.redactor,
+          });
+          return { accessToken: exchanged.accessToken, refreshToken: exchanged.refreshToken, expiresAt: exchanged.expiresAt,
+            subscription: { provider: 'github-copilot', availableModelIds: exchanged.availableModelIds,
+              ...(exchanged.enterpriseDomain === undefined ? {} : { enterpriseDomain: exchanged.enterpriseDomain }) } };
         }
         const expiresIn = data.expires_in as number | undefined;
         return {

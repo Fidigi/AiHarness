@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getKimiCodingOAuthConfig } from '@ai-harness/core';
+import { CredentialRedactor, getGitHubCopilotOAuthConfig, getKimiCodingOAuthConfig } from '@ai-harness/core';
 import { OAuthDeviceClient, type OAuthDeviceConfig } from './oauth-device';
 
 afterEach(() => vi.restoreAllMocks());
@@ -120,6 +120,47 @@ describe('OAuthDeviceClient', () => {
       expect(() => new OAuthDeviceClient(config)).toThrow(/OAuth/u);
     }
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('exchanges the Copilot device grant before returning a persistable subscription credential', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    const transport = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ device_code: 'copilot-device', user_code: 'CODE-123',
+        verification_uri: 'https://github.com/login/device', expires_in: 30, interval: 0.001 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'github-private-grant', token_type: 'bearer' })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'copilot-private-access', expires_at: 2000 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: 'gpt-4o', model_picker_enabled: true }] })));
+    const redactor = new CredentialRedactor(), client = new OAuthDeviceClient(getGitHubCopilotOAuthConfig(), redactor);
+    const result = await client.pollCredential(await client.requestCode());
+    expect(result).toEqual({ accessToken: 'copilot-private-access', refreshToken: 'github-private-grant', expiresAt: 1_700_000,
+      subscription: { provider: 'github-copilot', availableModelIds: ['gpt-4o'] } });
+    expect(transport.mock.calls.map(([url]) => url)).toEqual(['https://github.com/login/device/code',
+      'https://github.com/login/oauth/access_token', 'https://api.github.com/copilot_internal/v2/token', 'https://api.individual.githubcopilot.com/models']);
+    expect(Object.fromEntries(new URLSearchParams(String(transport.mock.calls[0]![1]?.body)))).toEqual({ client_id: 'Iv1.b507a08c87ecfe98', scope: 'read:user' });
+    expect(Object.fromEntries(new URLSearchParams(String(transport.mock.calls[1]![1]?.body)))).toEqual({
+      client_id: 'Iv1.b507a08c87ecfe98', device_code: 'copilot-device', grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+    });
+    expect(transport.mock.calls.slice(0, 2).map(([, init]) => new Headers(init?.headers).get('user-agent'))).toEqual(['GitHubCopilotChat/0.35.0', 'GitHubCopilotChat/0.35.0']);
+    expect(transport.mock.calls.every(([, init]) => init?.redirect === 'manual')).toBe(true);
+    expect(redactor.redact('github-private-grant copilot-private-access')).toBe('[REDACTED] [REDACTED]');
+  });
+
+  it('does not return a GitHub device token when Copilot subscription exchange is refused', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'github-private-grant' })))
+      .mockResolvedValueOnce(new Response('subscription unavailable', { status: 403 }));
+    const redactor = new CredentialRedactor(), client = new OAuthDeviceClient(getGitHubCopilotOAuthConfig(), redactor);
+    await expect(client.pollCredential({ deviceCode: 'device', userCode: 'CODE-123', verificationUri: 'https://github.com/login/device', expiresIn: 30, interval: 0.001 }))
+      .rejects.toThrow('GitHub Copilot authentication failed.');
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(redactor.redact('github-private-grant')).toBe('[REDACTED]');
+  });
+
+  it('binds the Copilot device profile to its public client, scope and configured enterprise authority', () => {
+    for (const override of [{ clientId: 'foreign' }, { scope: 'repo' }, { deviceAuthorizationUrl: 'https://foreign.example/device' },
+      { tokenUrl: 'https://foreign.example/token' }, { enterpriseDomain: 'other.ghe.com' }]) {
+      expect(() => new OAuthDeviceClient({ ...getGitHubCopilotOAuthConfig('company.ghe.com'), ...override })).toThrow(/OAuth/u);
+    }
   });
 
   it('supports cancellation', async () => {

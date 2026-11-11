@@ -23,6 +23,8 @@ export interface ProviderModelState {
   configuredModel?: string;
   publishedModels?: readonly PublishedModelMetadata[];
   discoveredModels?: readonly string[];
+  /** No fallback availability for published/configured/custom IDs absent from this discovery result. */
+  discoveryAuthoritative?: boolean;
   getModelApi?: (model: string) => string | undefined;
 }
 
@@ -167,7 +169,9 @@ export function buildProviderModelCatalog(
       models.set(custom.id, catalogEntry(state.provider, custom, state.configured, 'custom', custom.key));
     }
 
+    const available = new Set((state.discoveredModels ?? []).filter(isValidModelId).map(id => id.trim()));
     for (const model of models.values()) {
+      if (state.discoveryAuthoritative) model.available = state.configured && available.has(model.id);
       // Published APIs do not establish the dialect of an undeclared live adapter.
       if (state.configured) delete model.api;
       try {
@@ -211,7 +215,8 @@ export async function discoverProviderModelIds(
   options: ModelDiscoveryOptions = {},
 ): Promise<string[]> {
   const timeoutMs = nonNegativeInteger(options.timeoutMs ?? 8_000, 'timeoutMs');
-  const retries = nonNegativeInteger(options.retries ?? 2, 'retries');
+  // Account discovery may refresh a grant; do not implicitly repeat that operation.
+  const retries = nonNegativeInteger(options.retries ?? (provider.isModelDiscoveryAuthoritative?.() ? 0 : 2), 'retries');
   const retryDelayMs = nonNegativeInteger(options.retryDelayMs ?? 100, 'retryDelayMs');
   const maxModels = positiveInteger(options.maxModels ?? 500, 'maxModels');
   let lastError: unknown;
@@ -262,6 +267,7 @@ export async function collectProviderModelCatalog(
       configuredModel: provider.getConfiguredModel(),
       publishedModels: getProviderPublishedModels(provider),
       discoveredModels,
+      discoveryAuthoritative: provider.isModelDiscoveryAuthoritative?.() === true,
       getModelApi: model => provider.getModelApi?.(model),
     } satisfies ProviderModelState;
   }));

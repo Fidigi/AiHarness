@@ -1,15 +1,79 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ProviderCredentialService, type ProviderOAuthCredential } from '@ai-harness/core';
+import { createConfiguredProviders, resolveStartupProvider } from './configured-providers.js';
 import { createCliProviderRuntime } from './provider-runtime.js';
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
 describe('CLI provider runtime', () => {
+  it('composes Copilot subscription routing without flattening tokens and observes logout on the next turn', async () => {
+    const credentials = new ProviderCredentialService();
+    const models = ['claude-fable-5', 'gemini-3.5-flash', 'gpt-5-mini'];
+    const access: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'disposable-cli-copilot', refreshToken: 'disposable-github-grant', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot', availableModelIds: models } };
+    await credentials.setOAuth('github-copilot', access, false);
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+    expect(runtime.values.has('github-copilot')).toBe(false);
+    expect(runtime.githubCopilot).toBeDefined();
+    const providers = createConfiguredProviders({}, { credentials: runtime.values, githubCopilot: runtime.githubCopilot });
+    expect(providers.has('github-copilot')).toBe(true);
+    const fixture = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
+      rows: Array<{ model: string; case: string; expectedPath: string; expectedBody: unknown; responseEvents: Array<{ type?: string }> }>;
+    };
+    const transport = vi.spyOn(globalThis, 'fetch');
+    for (const model of models) {
+      const selected = await resolveStartupProvider(providers, { provider: 'github-copilot', model }, {});
+      const row = fixture.rows.find(row => row.model === model && row.case === 'user')!;
+      let posted: { url: string; body: unknown; authorization: string | null } | undefined;
+      transport.mockImplementationOnce(async (url, init) => {
+        posted = { url: String(url), body: JSON.parse(String(init?.body)), authorization: new Headers(init?.headers).get('authorization') };
+        return new Response(row.responseEvents.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + (row.responseEvents[0].type ? '' : 'data: [DONE]\n\n'), { headers: { 'content-type': 'text/event-stream' } });
+      });
+      const result = await selected.provider.chat([{ id: 'probe', role: 'user', content: 'probe', timestamp: new Date(0) }], {
+        systemPrompt: 'Follow instructions', maxTokens: 64, cacheRetention: 'none',
+        tools: [{ name: 'echo', description: 'Echo input', parameters: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'], additionalProperties: false } }],
+      });
+      const expected = structuredClone(row.expectedBody) as Record<string, unknown>; delete expected.tool_choice;
+      expect(posted).toEqual({ url: 'https://api.individual.githubcopilot.com' + row.expectedPath, body: expected, authorization: 'Bearer disposable-cli-copilot' });
+      expect(result).toMatchObject({ provider: 'github-copilot', model, content: 'ok' });
+    }
+    await credentials.delete('github-copilot');
+    await expect(providers.get('github-copilot')!.chat([])).rejects.toThrow('GitHub Copilot');
+    expect(transport).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not infer subscription consumers from API keys, generic OAuth, or a foreign storage label', async () => {
+    for (const kind of ['api-key', 'oauth', 'foreign-label']) {
+      const credentials = new ProviderCredentialService();
+      if (kind === 'api-key') await credentials.setApiKey('github-copilot', 'disposable-api-key', false);
+      else await credentials.setOAuth(kind === 'foreign-label' ? 'openai' : 'github-copilot', {
+        accessToken: 'disposable-oauth', refreshToken: 'disposable-github-grant', expiresAt: Date.now() + 120000,
+        ...(kind === 'foreign-label' ? { subscription: { provider: 'github-copilot' as const, availableModelIds: ['gpt-5-mini'] } } : {}),
+      }, false);
+      const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+      expect(runtime.githubCopilot).toBeUndefined();
+      expect(createConfiguredProviders({}, { credentials: runtime.values, githubCopilot: runtime.githubCopilot }).has('github-copilot')).toBe(false);
+      if (kind === 'foreign-label') expect(runtime.values.has('openai')).toBe(false);
+    }
+  });
+
+  it('does not refresh expired Copilot credentials when the CLI is offline', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('github-copilot', { accessToken: 'disposable-expired', refreshToken: 'disposable-github', expiresAt: 1,
+      subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false, [], undefined, true);
+    expect(runtime.githubCopilot).toBeUndefined();
+    expect(runtime.values.has('github-copilot')).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it.each([['cerebras', 'CEREBRAS_API_KEY', 'AI_HARNESS_CEREBRAS_API_KEY'],
     ['mistral-conversations', 'MISTRAL_API_KEY', 'AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {

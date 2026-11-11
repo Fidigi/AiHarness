@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
+import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
   executeShellCommand,
@@ -44,6 +45,12 @@ export interface ProviderOAuthCredential {
   refreshToken?: string;
   expiresAt?: number;
   tokenType?: string;
+  /** Explicit subscription issuer; independent of the credential's storage label. */
+  subscription?: {
+    provider: 'github-copilot';
+    enterpriseDomain?: string;
+    availableModelIds: string[];
+  };
 }
 
 export type ProviderCredential = ProviderApiKeyCredential | ProviderOAuthCredential;
@@ -72,6 +79,8 @@ export interface ProviderOAuthRefreshConfig {
 
 export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
+  /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
+  subscriptionProvider?: 'github-copilot';
   cwd?: string;
   signal?: AbortSignal;
   commandTimeoutMs?: number;
@@ -165,6 +174,20 @@ function validateCredential(value: unknown): ProviderCredential {
       throw new ProviderCredentialError('invalid-credential', 'The provider credential is invalid.');
     }
     credential.tokenType = record.tokenType;
+  }
+  if (record.subscription !== undefined) {
+    const subscription = record.subscription;
+    const invalid = (): never => { throw new ProviderCredentialError('invalid-credential', 'The provider subscription credential is invalid.'); };
+    if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)
+      || subscription.provider !== 'github-copilot' || !credential.refreshToken || credential.expiresAt === undefined
+      || !Array.isArray(subscription.availableModelIds) || subscription.availableModelIds.length > 2048) invalid();
+    const ids = [...subscription.availableModelIds];
+    if (!ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256
+      && !/[\u0000-\u0020\u007f-\u009f]/u.test(id)) || Buffer.byteLength(JSON.stringify(ids)) > MAX_OAUTH_RESPONSE_BYTES) invalid();
+    try { getGitHubCopilotOAuthConfig(subscription.enterpriseDomain); }
+    catch { invalid(); }
+    credential.subscription = { provider: 'github-copilot', availableModelIds: [...new Set(ids)],
+      ...(subscription.enterpriseDomain === undefined ? {} : { enterpriseDomain: subscription.enterpriseDomain.toLowerCase() }) };
   }
   return credential;
 }
@@ -757,6 +780,43 @@ export class ProviderCredentialService {
     return descriptor(id, credential, persist && this.options.store ? 'encrypted-store' : 'memory');
   }
 
+  /**
+   * Reserve a one-shot durable OAuth publication before starting remote login.
+   * Any intervening store write fails closed, including logout of an absent key.
+   * This deliberately prefers restarting login over overwriting another frontend.
+   */
+  async prepareOAuthLogin(provider: string, signal?: AbortSignal): Promise<
+    (value: Omit<ProviderOAuthCredential, 'version' | 'type'>) => Promise<ProviderCredentialDescriptor>
+  > {
+    const id = providerId(provider), store = this.options.store;
+    if (!store) throw new ProviderCredentialError('storage-unavailable', 'Credential storage is unavailable.');
+    const generation = (this.generations.get(id) ?? 0) + 1;
+    this.generations.set(id, generation);
+    await store.load();
+    this.assertCurrent(id, generation, signal);
+    const name = this.storageName(id), expected = store.get(name), revision = store.getRevision();
+    let consumed = false;
+    return async value => {
+      const credential = validateCredential({ version: 1, type: 'oauth', ...value });
+      this.rememberCredential(credential);
+      if (consumed) throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
+      consumed = true;
+      this.assertCurrent(id, generation, signal);
+      const serialized = JSON.stringify({ ...credential, revision: randomUUID() });
+      const published = await store.compareAndSet(name, expected, serialized, revision);
+      if (!published) throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
+      try {
+        this.assertCurrent(id, generation, signal);
+      } catch (error) {
+        // Withdraw only this publication, never a later writer's credential.
+        await store.compareAndSet(name, serialized, expected);
+        throw error;
+      }
+      this.volatile.delete(id);
+      return descriptor(id, credential, 'encrypted-store');
+    };
+  }
+
   async delete(provider: string): Promise<boolean> {
     const id = providerId(provider);
     const hadMemory = this.volatile.has(id);
@@ -809,6 +869,7 @@ export class ProviderCredentialService {
     for (const name of providerCredentialEnvironmentKeys(id)) {
       const value = env[name];
       if (value) {
+        if (options.subscriptionProvider !== undefined) return undefined;
         const credential: ProviderApiKeyCredential = { version: 1, type: 'api-key', apiKey: secret(value) };
         this.rememberCredential(credential);
         return { credential, descriptor: descriptor(id, credential, 'environment') };
@@ -817,7 +878,7 @@ export class ProviderCredentialService {
 
     const configuredCommand = env[commandVariable(id)];
     if (configuredCommand) {
-      if (options.allowCommands === false) return undefined;
+      if (options.allowCommands === false || options.subscriptionProvider !== undefined) return undefined;
       let apiKey = this.commandCache.get(id);
       if (!apiKey) {
         const requestedTimeout = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
@@ -911,12 +972,14 @@ export class ProviderCredentialService {
     generation: number,
     expected?: string,
   ): Promise<ResolvedProviderCredential | undefined> {
+    const subscriptionProvider = credential.type === 'oauth' ? credential.subscription?.provider : undefined;
+    if (subscriptionProvider !== options.subscriptionProvider) return undefined;
     const now = options.now ?? Date.now();
     if (credential.type !== 'oauth' || credential.expiresAt === undefined || credential.expiresAt > now + 60_000) {
       return { credential: structuredClone(credential), descriptor: descriptor(provider, credential, source) };
     }
     if (options.allowRefresh === false) return undefined;
-    if (!credential.refreshToken || !options.oauth) {
+    if (!credential.refreshToken || !options.oauth && !credential.subscription) {
       throw new ProviderCredentialError('refresh-unavailable', 'The provider credential has expired and cannot be refreshed.');
     }
     const refreshed = await this.refresh(credential, options.oauth, options);
@@ -936,17 +999,31 @@ export class ProviderCredentialService {
 
   private async refresh(
     current: ProviderOAuthCredential,
-    rawConfig: ProviderOAuthRefreshConfig,
+    rawConfig: ProviderOAuthRefreshConfig | undefined,
     options: ResolveProviderCredentialOptions,
   ): Promise<ProviderOAuthCredential> {
-    const config = safeOAuthConfig(rawConfig);
-    this.redactor.add(config.clientSecret);
     const requestedTimeout = options.refreshTimeoutMs ?? DEFAULT_REFRESH_TIMEOUT_MS;
     const timeoutMs = Number.isSafeInteger(requestedTimeout) && requestedTimeout > 0
       ? Math.min(requestedTimeout, MAX_CREDENTIAL_OPERATION_TIMEOUT_MS)
       : DEFAULT_REFRESH_TIMEOUT_MS;
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    if (current.subscription?.provider === 'github-copilot') {
+      try {
+        const exchanged = await exchangeGitHubCopilotToken(current.refreshToken!, {
+          enterpriseDomain: current.subscription.enterpriseDomain, signal, fetcher: options.fetcher, now: options.now, redactor: this.redactor,
+        });
+        return { version: 1, type: 'oauth', accessToken: exchanged.accessToken, refreshToken: exchanged.refreshToken,
+          expiresAt: exchanged.expiresAt, ...(current.tokenType ? { tokenType: current.tokenType } : {}),
+          subscription: { provider: 'github-copilot', availableModelIds: exchanged.availableModelIds,
+            ...(exchanged.enterpriseDomain === undefined ? {} : { enterpriseDomain: exchanged.enterpriseDomain }) } };
+      } catch {
+        if (options.signal?.aborted) throw options.signal.reason;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+    }
+    const config = safeOAuthConfig(rawConfig!);
+    this.redactor.add(config.clientSecret);
     let response: Response;
     try {
       response = await abortable((options.fetcher ?? fetch)(config.tokenUrl, {

@@ -40,7 +40,7 @@ export class ModelCatalogService {
   async getCatalog(refresh = false): Promise<ProviderModelCatalog[]> {
     const changedSource = this.proxy.getProviders().some(({ type }) => {
       const provider = this.proxy.getAgentProvider(type);
-      return provider?.canDiscoverModels() && this.discoverySources.get(type) !== provider;
+      return provider?.isModelDiscoveryAuthoritative?.() || provider?.canDiscoverModels() && this.discoverySources.get(type) !== provider;
     });
     if (refresh || changedSource || !this.updatedAt || Date.now() - this.refreshedAt >= this.cacheTtlMs) await this.refresh();
     return this.buildCatalog();
@@ -100,7 +100,9 @@ export class ModelCatalogService {
           const models = await discoverProviderModelIds(provider);
           if (this.proxy.getAgentProvider(type) === provider) this.discovered.set(type, models);
         } catch {
-          // Discovery is optional. Keep the last successful bounded cache.
+          // Account access cannot fall back to a stale successful discovery.
+          if (provider.isModelDiscoveryAuthoritative?.()) this.discovered.delete(type);
+          // Ordinary discovery retains its last successful bounded cache.
         }
       }));
       this.updatedAt = new Date().toISOString();
@@ -120,6 +122,7 @@ export class ModelCatalogService {
       provider,
       configured,
       configuredModel: this.proxy.getAgentProvider(provider)?.getConfiguredModel(),
+      discoveryAuthoritative: this.proxy.getAgentProvider(provider)?.isModelDiscoveryAuthoritative?.() === true,
       publishedModels: this.proxy.getAgentProvider(provider) ? getProviderPublishedModels(this.proxy.getAgentProvider(provider)!) : undefined,
       getModelApi: (model: string) => this.proxy.getAgentProvider(provider)?.getModelApi?.(model),
       discoveredModels: this.discoverySources.get(provider) === this.proxy.getAgentProvider(provider)

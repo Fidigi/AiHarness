@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OpenAiMixedProvider, OpenAiProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, type CustomModelDefinition } from '@ai-harness/core';
+import { GitHubCopilotProvider, type ProviderOAuthCredential, OpenAiMixedProvider, OpenAiProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, type CustomModelDefinition } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ModelCatalogService } from './model-catalog.js';
 
@@ -8,6 +8,26 @@ describe('ModelCatalogService', () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('refreshes account-scoped availability without retaining stale grants on logout or discovery failure', async () => {
+    let current: ProviderOAuthCredential | undefined = { version: 1, type: 'oauth', accessToken: 'private-subscription-token', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } };
+    const source = vi.fn(async () => current);
+    const provider = new GitHubCopilotProvider({ type: 'github-copilot', model: 'gpt-5-mini' }, source);
+    const proxy = new AiProxyServer(); proxy.setCustomProvider('account-test', provider);
+    const catalog = new ModelCatalogService(proxy);
+    const available = async () => (await catalog.getCatalog()).find(row => row.provider === 'account-test')!.models.filter(model => model.available).map(model => model.id);
+    expect(await available()).toEqual(['gpt-5-mini']);
+    current = undefined;
+    expect(await available()).toEqual([]);
+    current = { version: 1, type: 'oauth', accessToken: 'private-subscription-token', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot', availableModelIds: ['claude-fable-5'] } };
+    expect(await available()).toEqual(['claude-fable-5']);
+    source.mockRejectedValueOnce(new Error('private-credential-error'));
+    expect(await available()).toEqual([]);
+    expect(source).toHaveBeenCalledTimes(4);
+    expect(catalog.getPricing('account-test', 'claude-fable-5')).toBeUndefined();
   });
 
   it('groups published models and augments a configured provider with live discovery', async () => {

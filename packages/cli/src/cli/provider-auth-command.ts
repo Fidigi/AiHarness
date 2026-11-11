@@ -1,7 +1,7 @@
 import path from 'node:path';
 import {
   CredentialRedactor, EncryptedCredentialStore, ProviderCredentialService,
-  getKimiCodingOAuthConfig, resolvePreTrustAgentDirectory,
+  getGitHubCopilotOAuthConfig, getKimiCodingOAuthConfig, resolvePreTrustAgentDirectory,
 } from '@ai-harness/core';
 import { CLI_CREDENTIAL_PROVIDERS } from '../providers/provider-runtime.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
@@ -9,13 +9,15 @@ import { terminalText } from '../tui/terminal-text.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
-  login <provider> [--timeout <1..300>] [--issuer kimi-coding]
+  login <provider> [--timeout <1..300>] [--issuer kimi-coding|github-copilot]
                                      Explicit HTTPS device flow; provider is the storage label
   logout <provider>                  Delete local stored credentials; no remote revocation
   -h, --help                         Show help without startup
 Login/logout require AI_HARNESS_MASTER_KEY and the independent encrypted credential store.
 Device endpoints: AI_HARNESS_OAUTH_<PROVIDER>_{DEVICE_URL,TOKEN_URL,CLIENT_ID,SCOPE}.
 --issuer kimi-coding selects the Kimi public client; optional KIMI_CODE_OAUTH_HOST/KIMI_OAUTH_HOST.
+--issuer github-copilot selects subscription exchange; optional GITHUB_COPILOT_ENTERPRISE_DOMAIN.
+Copilot login discovers models but does not change account model policies.
 Authorization instructions go to stderr; tokens and device codes are never printed.
 Exits: 0 success/help, 2 usage, 1 operation failure, 124 deadline, 130 cancellation.
 `;
@@ -33,7 +35,7 @@ export async function loadTopLevelCredentialService(cwd: string, redactor: Crede
 
 class AuthUsageError extends Error {}
 
-function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding'; json: boolean; timeout: number; help: boolean } {
+function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding' | 'github-copilot'; json: boolean; timeout: number; help: boolean } {
   if (args.length > 16 || args.some(arg => Buffer.byteLength(arg) > 4096 || /[\x00-\x1f\x7f-\x9f]/u.test(arg))) throw new AuthUsageError();
   const action = args[0] ?? 'help';
   if (['help', '-h', '--help'].includes(action)) {
@@ -42,7 +44,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
   }
   if (!['list', 'login', 'logout'].includes(action)) throw new AuthUsageError();
   let provider: string | undefined;
-  let issuer: 'kimi-coding' | undefined;
+  let issuer: 'kimi-coding' | 'github-copilot' | undefined;
   let json = false, timeout = 300, help = false;
   const seen = new Set<string>();
   for (let i = 1; i < args.length; i++) {
@@ -64,7 +66,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
         timeout = Number(value);
       } else if (key === '--issuer' && action === 'login') {
         const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
-        if (value !== 'kimi-coding') throw new AuthUsageError();
+        if (value !== 'kimi-coding' && value !== 'github-copilot') throw new AuthUsageError();
         issuer = value;
       } else throw new AuthUsageError();
     } else {
@@ -113,15 +115,19 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
     }
     const config = parsed.issuer === 'kimi-coding'
       ? getKimiCodingOAuthConfig(process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST)
-      : oauthConfigFromEnv(parsed.provider!);
+      : parsed.issuer === 'github-copilot'
+        ? getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN)
+        : oauthConfigFromEnv(parsed.provider!);
     if (!config) { process.stderr.write('Auth unavailable: operator device flow is not configured.\n'); return 1; }
-    const client = new OAuthDeviceClient(config);
+    const client = new OAuthDeviceClient(config, redactor);
     process.on('SIGINT', cancel);
     process.on('SIGTERM', cancel);
     deadline = performance.now() + parsed.timeout * 1000;
     timer = setTimeout(expire, parsed.timeout * 1000);
     // The existing bounded device client links this caller through transport and
     // response-body reads; never replace process-global fetch to cancel a command.
+    const publish = parsed.issuer === 'github-copilot'
+      ? await service.prepareOAuthLogin(parsed.provider!, controller.signal) : undefined;
     const prompt = await client.requestCode(controller.signal);
     if (controller.signal.aborted) throw new Error();
     redactor.add(prompt.deviceCode);
@@ -138,7 +144,8 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
     timer = setTimeout(expire, Math.max(1, Math.min(deadline - performance.now(), prompt.expiresIn * 1000)));
     const credential = await client.pollCredential(prompt, controller.signal);
     if (controller.signal.aborted) throw new Error();
-    await service.setOAuth(parsed.provider!, credential, true);
+    if (publish) await publish(credential);
+    else await service.setOAuth(parsed.provider!, credential, true);
     // Never advertise a volatile login, and never activate a provider here.
     if (controller.signal.aborted) throw new Error();
     process.stdout.write('Provider credentials encrypted and saved.\n');

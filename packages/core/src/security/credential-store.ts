@@ -10,6 +10,7 @@ import path from 'node:path';
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   randomBytes,
   scrypt as scryptCallback,
   timingSafeEqual,
@@ -434,6 +435,7 @@ async function atomicPrivateWrite(filePath: string, content: string): Promise<vo
 export class EncryptedCredentialStore {
   private credentials: Record<string, string> = Object.create(null) as Record<string, string>;
   private loaded = false;
+  private revision = 'missing';
   private mutation = Promise.resolve();
   private readonly filePath: string;
   private readonly maxBytes: number;
@@ -455,6 +457,11 @@ export class EncryptedCredentialStore {
       this.credentials = loaded;
       this.loaded = true;
     });
+  }
+
+  /** Opaque revision of the last loaded encrypted document, including its absence. */
+  getRevision(): string {
+    return this.revision;
   }
 
   get(name: string): string | undefined {
@@ -519,6 +526,8 @@ export class EncryptedCredentialStore {
       try {
         const current = await this.readCurrent();
         if (!Object.hasOwn(current, normalized)) {
+          // A logout is an intent even before a first login has published a value.
+          await this.writeCurrent(current);
           this.credentials = current;
           this.loaded = true;
           return false;
@@ -542,6 +551,7 @@ export class EncryptedCredentialStore {
     name: string,
     expected: string | undefined,
     value: string | undefined,
+    expectedRevision?: string,
   ): Promise<boolean> {
     const normalized = validateName(name);
     const validated = value === undefined ? undefined : validateValue(value);
@@ -549,7 +559,7 @@ export class EncryptedCredentialStore {
       const release = await acquireLock(this.filePath);
       try {
         const current = await this.readCurrent();
-        if (current[normalized] !== expected) {
+        if (current[normalized] !== expected || expectedRevision !== undefined && this.revision !== expectedRevision) {
           this.credentials = current;
           this.loaded = true;
           return false;
@@ -585,7 +595,10 @@ export class EncryptedCredentialStore {
 
   private async readCurrent(): Promise<Record<string, string>> {
     const source = await readBoundedRegularFile(this.filePath, this.maxBytes);
-    if (source === undefined) return Object.create(null) as Record<string, string>;
+    if (source === undefined) {
+      this.revision = 'missing';
+      return Object.create(null) as Record<string, string>;
+    }
     try {
       const document = parseDocument(source, this.maxBytes);
       const salt = decodeBase64(document.salt, 16);
@@ -598,7 +611,9 @@ export class EncryptedCredentialStore {
       decipher.setAuthTag(tag);
       const clear = Buffer.concat([decipher.update(encrypted), decipher.final()]);
       if (clear.length > this.maxBytes) throw invalidStore();
-      return parseCredentials(new TextDecoder('utf-8', { fatal: true }).decode(clear));
+      const credentials = parseCredentials(new TextDecoder('utf-8', { fatal: true }).decode(clear));
+      this.revision = createHash('sha256').update(source).digest('hex');
+      return credentials;
     } catch (error) {
       if (error instanceof CredentialStoreError) throw error;
       throw invalidStore();
@@ -630,6 +645,7 @@ export class EncryptedCredentialStore {
       throw new CredentialStoreError('store-too-large', 'The credential store exceeds its size limit.');
     }
     await atomicPrivateWrite(this.filePath, serialized);
+    this.revision = createHash('sha256').update(serialized).digest('hex');
   }
 }
 

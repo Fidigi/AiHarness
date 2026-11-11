@@ -327,6 +327,7 @@ async function main(): Promise<void> {
       );
       const providers = createConfiguredProviders(process.env, {
         credentials: providerRuntime.values,
+        githubCopilot: providerRuntime.githubCopilot,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -831,6 +832,7 @@ async function main(): Promise<void> {
     );
     const refreshedProviders = createConfiguredProviders(process.env, {
       credentials: refreshedRuntime.values,
+      githubCopilot: refreshedRuntime.githubCopilot,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -977,6 +979,7 @@ async function main(): Promise<void> {
   if (!cliArguments.noSession) await sessionManager.loadAllSessions();
   const configuredProviders: Map<string, AiProvider> = createConfiguredProviders(process.env, {
     credentials: providerRuntime.values,
+    githubCopilot: providerRuntime.githubCopilot,
     network: providerRuntime.network,
   });
 

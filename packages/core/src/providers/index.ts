@@ -57,6 +57,8 @@ import { OPENCODE_GO_MODELS, opencodeGoProfile, opencodeGoBase, opencodeGoHeader
 export { OPENCODE_GO_MODELS } from './opencode-go.js';
 import { applyCompletionHistory, createCompletionCapture } from './completions-replay.js';
 import { createMistralCapture, mistralReplayMessages } from './mistral-replay.js';
+import { GITHUB_COPILOT_MODELS, githubCopilotModel, githubCopilotAccountModels, githubCopilotRoute, githubCopilotHeaders, githubCopilotCompletionsBody, githubCopilotResponsesBody, githubCopilotMessagesBody, githubCopilotMessageHeaders, githubCopilotCompletionsValidator, type GitHubCopilotChatOptions } from './github-copilot.js';
+import type { ProviderOAuthCredential } from './credentials.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -438,6 +440,9 @@ export abstract class AiProvider {
   getProviderType(): string {
     return String(this.config.type);
   }
+
+  /** Account-scoped adapters require a fresh discovered ID before a model is offered as available. */
+  isModelDiscoveryAuthoritative?(): boolean { return false; }
 
   /** Optional owned static conversation metadata; undefined preserves the legacy published table. */
   getPublishedModels?(): readonly PublishedModelMetadata[] | undefined { return undefined; }
@@ -4742,6 +4747,7 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
 }
 
 const nativeMiniMaxReplay = new WeakSet<AnthropicProvider>();
+const nativeGitHubCopilotReplay = new WeakSet<AiProvider>();
 const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
 const nativeFireworksCompletions = new WeakSet<AiProvider>();
 const nativeOpenRouterReplay = new WeakSet<AiProvider>();
@@ -4857,6 +4863,7 @@ export class AnthropicProvider extends AiProvider {
       || nativeMiniMaxReplay.has(this) && MINIMAX_MODELS.some(profile => profile.id === model)
       || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
       || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
+      || nativeGitHubCopilotReplay.has(this) && githubCopilotModel(model).api === 'anthropic-messages'
       || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)
       || nativeOpenCodeGoReplay.has(this) && OPENCODE_GO_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
       || nativeOpenCodeReplay.has(this) && OPENCODE_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model);
@@ -5339,6 +5346,134 @@ export class FireworksProvider extends AiProvider {
 }
 
 /** Private A/C/R delegates; only the explicit routed adapter publishes OpenCode Go profiles. */
+class GitHubCopilotCompletionsDelegate extends OpenAiProvider {
+  constructor(config: ProviderConfig, private readonly route: ReturnType<typeof githubCopilotRoute>, private readonly requestHeaders: Record<string, string>) { super(config); }
+  protected override getChatUrl(): string { return this.route.url; }
+  protected override getHeaders(): Record<string, string> { return this.requestHeaders; }
+  protected override prepareChatBody(_body: Record<string, unknown>, options?: GitHubCopilotChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const native = nativeGitHubCopilotReplay.has(this), body = githubCopilotCompletionsBody(this.route.model, messages, options, native);
+    if (native) {
+      applyCompletionHistory(body, messages, 'github-copilot', false, false);
+      if (options?.toolChoice === 'auto') body.tool_choice = 'auto';
+      nativeCompletionsOwners.set(body, { provider: 'github-copilot', api: this.route.model.api, model: this.route.model.id,
+        normalizeReasoningMarker: false, invalidResponse: 'Invalid GitHub Copilot completion stream.' });
+    }
+    return body;
+  }
+  protected override createStreamValidator(): (value?: unknown) => void { return githubCopilotCompletionsValidator(nativeGitHubCopilotReplay.has(this)); }
+  protected override async request(url: string | URL, init?: RequestInit): Promise<Response> {
+    const response = await super.request(url, init);
+    if (response.ok && !response.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) {
+      rejectProviderResponse(response, 'Invalid GitHub Copilot response transport.');
+    }
+    return response;
+  }
+}
+
+class GitHubCopilotResponsesDelegate extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly route: ReturnType<typeof githubCopilotRoute>, private readonly requestHeaders: Record<string, string>) { super(config); }
+  protected override responseUrl(): string { return this.route.url; }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override headers(): Record<string, string> { return this.requestHeaders; }
+  protected override requestBody(messages: Message[], options?: GitHubCopilotChatOptions): ResponsesRequest {
+    if (!nativeGitHubCopilotReplay.has(this)) return githubCopilotResponsesBody(this.route.model, messages, options);
+    const history: Message[] = options?.systemPrompt ? [{ id: 'copilot-system', role: 'system', content: options.systemPrompt, timestamp: new Date(0) }, ...messages] : messages;
+    const body = githubCopilotResponsesBody(this.route.model, history, { ...options, systemPrompt: undefined }, true);
+    const owner = { provider: 'github-copilot', api: this.route.model.api, model: body.model };
+    nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, history, owner); applyResponsesWholeIdHistory(body, history, owner);
+    return body;
+  }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string {
+    return (nativeResponsesOwners.has(body) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body);
+  }
+}
+
+class GitHubCopilotMessagesDelegate extends AnthropicProvider {
+  constructor(config: ProviderConfig, private readonly route: ReturnType<typeof githubCopilotRoute>, private readonly requestHeaders: Record<string, string>) { super(config); }
+  protected override getMessagesUrl(): string { return this.route.url; }
+  protected override messageHeaders(options?: GitHubCopilotChatOptions): Record<string, string> { return githubCopilotMessageHeaders(this.route.model, this.requestHeaders, options); }
+  protected override applyMessageThinking(): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: GitHubCopilotChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const native = nativeGitHubCopilotReplay.has(this);
+    const assistants = native ? (body.messages as Array<{ role: string; content: unknown }>).filter(message => message.role === 'assistant').map(message => message.content) : undefined;
+    return githubCopilotMessagesBody(this.route.model, messages, options, assistants);
+  }
+  protected override createMessageStreamValidator(): (value?: unknown) => void {
+    const validator = anthropicResponseStreamValidator();
+    return value => { if (value === undefined) validator.finish(); else validator.validate(value); };
+  }
+  protected override async request(url: string | URL, init?: RequestInit): Promise<Response> {
+    const response = await super.request(url, init);
+    if (response.ok && !response.headers.get('content-type')?.toLowerCase().includes('text/event-stream')) rejectProviderResponse(response, 'Invalid GitHub Copilot response transport.');
+    return response;
+  }
+}
+
+/** Subscription SDK composition; exact facade membership grants independently captured A/C/R replay. */
+export class GitHubCopilotProvider extends AiProvider {
+  constructor(config: ProviderConfig, private readonly credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>) {
+    if (typeof credentialSource !== 'function' || typeof config.model !== 'string') throw new Error('GitHub Copilot subscription and model are required.');
+    githubCopilotModel(config.model);
+    super({ ...config, type: 'github-copilot', apiKey: undefined, baseUrl: undefined });
+    if (new.target === GitHubCopilotProvider) nativeGitHubCopilotReplay.add(this);
+  }
+  override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
+  override canDiscoverModels(): boolean { return true; }
+  override isModelDiscoveryAuthoritative(): boolean { return true; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return GITHUB_COPILOT_MODELS.map(model => ({ id: model.id, name: model.name, api: model.api,
+      contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens,
+      capabilities: { reasoning: model.reasoning, imageInput: model.input.includes('image'), toolCalls: true },
+      ...(model.reasoning ? model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {} : { thinkingLevelMap: null }),
+    }));
+  }
+  override getModelApi(model = this.config.model!): string { return githubCopilotModel(model).api; }
+  override setConfiguredModel(model: string): void { githubCopilotModel(model); super.setConfiguredModel(model); }
+  override async getAvailableModels(): Promise<string[]> {
+    const credential = await this.credentialSource();
+    if (!credential || credential.subscription?.provider !== 'github-copilot') return [];
+    return githubCopilotAccountModels(credential.subscription.availableModelIds).map(model => githubCopilotRoute(credential, model.id).model.id);
+  }
+  override async chat(messages: Message[], options?: GitHubCopilotChatOptions): Promise<ChatResponse> {
+    let result: ChatResponse | undefined;
+    await this.streamChat(messages, () => {}, response => { result = response; }, undefined, options);
+    if (!result) throw new Error('GitHub Copilot response is incomplete.');
+    return result;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: GitHubCopilotChatOptions): Promise<void> {
+    const active = () => { if (options?.signal?.aborted) throw new Error('GitHub Copilot request cancelled.'); };
+    try {
+      active(); const credential = await this.credentialSource(options?.signal); active();
+      if (!credential) throw new Error('GitHub Copilot subscription is unavailable.');
+      const route = githubCopilotRoute(credential, options?.model ?? this.config.model!);
+      for (const message of messages) for (const image of messageImages(message)) {
+        if (!parseDataImage(image.url)) throw new Error('Invalid GitHub Copilot image input.');
+      }
+      const config = { ...this.config, model: route.model.id, apiKey: credential.accessToken, baseUrl: new URL(route.url).origin };
+      const headers = githubCopilotHeaders(credential.accessToken, messages);
+      const delegate: AiProvider = route.model.api === 'openai-completions' ? new GitHubCopilotCompletionsDelegate(config, route, headers)
+        : route.model.api === 'openai-responses' ? new GitHubCopilotResponsesDelegate(config, route, headers)
+          : new GitHubCopilotMessagesDelegate(config, route, headers);
+      if (nativeGitHubCopilotReplay.has(this)) nativeGitHubCopilotReplay.add(delegate);
+      let result: ChatResponse | undefined;
+      await delegate.streamChat(messages, async (text, event) => {
+        const visible = event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text }
+          : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        active(); await onChunk(text, visible); active();
+      }, response => { result = response; }, error => { throw error; }, { ...options, model: route.model.id });
+      active(); if (!result) throw new Error('GitHub Copilot response is incomplete.');
+      if (!result.content.trim() && !result.reasoning?.trim() && !result.toolCalls?.length) throw new Error('GitHub Copilot response has no visible output.');
+      await onComplete?.({ ...result, provider: 'github-copilot', api: route.model.api, model: route.model.id }); active();
+    } catch (error) {
+      const failure = error instanceof ProviderContextOverflowError ? error
+        : new Error(options?.signal?.aborted ? 'GitHub Copilot request cancelled.' : 'GitHub Copilot request failed.');
+      if (onError) await onError(failure); else throw failure;
+    }
+  }
+}
+
 class OpenCodeGoCompletionsProvider extends OpenAiProvider {
   constructor(config: ProviderConfig, ownsReplay = false) { super(config); if (ownsReplay) nativeOpenCodeGoReplay.add(this); }
   protected override getChatUrl(): string { return `${this.config.baseUrl}/chat/completions`; }
