@@ -3871,21 +3871,23 @@ export class MetaProvider extends AiProvider {
   }
 }
 
+const nativeXaiResponses = new WeakSet<AiProvider>();
+
 /** Explicit xAI SSE/JSON reply policy; only the exact owning facade admits private replay. */
 class ReviewedXaiResponsesProvider extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention'], private readonly ownsReplay = false) { super(config); }
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override acceptsJsonResponse(): boolean { return true; }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    if (!this.ownsReplay) { const body = super.requestBody(messages, options); prepareXaiResponse(body, options); return body; }
+    if (!nativeXaiResponses.has(this)) { const body = super.requestBody(messages, options); prepareXaiResponse(body, options); return body; }
     const history = toolImageMessages(messages), body = super.requestBody(history, options, true);
     const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
     nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, history, owner);
     prepareXaiResponse(body, options); applyResponsesWholeIdHistory(body, history, owner); return body;
   }
-  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (this.ownsReplay ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (nativeXaiResponses.has(this) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return xaiUsage(value, model); }
   protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
     const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);
@@ -3905,17 +3907,17 @@ class ReviewedXaiResponsesProvider extends OpenAiResponsesProvider {
     };
     if (!this.validateConfig()) { report(new Error('xAI API key is required.')); return; }
     await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
-      response => { active(); return onComplete?.(response && !this.ownsReplay ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
+      response => { active(); return onComplete?.(response && !nativeXaiResponses.has(this) ? { ...response, provider, model, api: 'openai-responses' } : response); }, report, options);
   }
 }
 
 /** Supplied-key xAI SDK; no factory reservation, ambient auth, OAuth or Server/Settings composition. */
 export class XaiProvider extends AiProvider {
   private readonly baseUrl: string;
-  private readonly ownsReplay: boolean;
   constructor(config: ProviderConfig) {
     const model = config.model ?? XAI_MODELS[0].id; xaiProfile(model);
-    const baseUrl = xaiBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl; this.ownsReplay = new.target === XaiProvider;
+    const baseUrl = xaiBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+    if (new.target === XaiProvider) nativeXaiResponses.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override setConfiguredModel(model: string): void { xaiProfile(model); super.setConfiguredModel(model); }
@@ -3936,7 +3938,10 @@ export class XaiProvider extends AiProvider {
     throw new Error('Image model or options are not supported.');
   }
   private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedXaiResponsesProvider {
-    xaiProfile(String(model)); return new ReviewedXaiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention, this.ownsReplay);
+    xaiProfile(String(model));
+    const delegate = new ReviewedXaiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+    if (nativeXaiResponses.has(this)) nativeXaiResponses.add(delegate);
+    return delegate;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('xAI API key is required.');
