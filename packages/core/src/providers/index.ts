@@ -5489,17 +5489,17 @@ class OpenCodeMessagesProvider extends AnthropicProvider {
   }
 }
 class OpenCodeResponsesProvider extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly options?: ChatOptions, private readonly ownsReplay = false) { super(config); }
+  constructor(config: ProviderConfig, private readonly options?: ChatOptions) { super(config); }
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
-    if (!this.ownsReplay) { const body = super.requestBody(messages, options); prepareOpenCodeResponse(body, options); return body; }
+    if (!nativeOpenCodeReplay.has(this)) { const body = super.requestBody(messages, options); prepareOpenCodeResponse(body, options); return body; }
     const history = toolImageMessages(messages), body = super.requestBody(history, options, true);
     if (!OPENCODE_MODELS.some(profile => profile.api === 'openai-responses' && profile.id === body.model)) throw new Error('OpenCode chat model is not supported.');
     const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
     nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, history, owner); prepareOpenCodeResponse(body, options, true); applyResponsesSplitIdHistory(body, history, owner); return body;
   }
-  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (this.ownsReplay ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return (nativeOpenCodeReplay.has(this) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body); }
   protected override headers(_websocket: boolean, _sessionId?: string): Record<string, string> { return opencodeHeaders(this.config, this.options, 'openai-responses'); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return opencodeUsage(value, model); }
 }
@@ -5602,7 +5602,13 @@ export class OpenCodeProvider extends AiProvider {
   private conversation(messages: Message[], model: string, options?: ChatOptions): AiProvider {
     if (!this.validateConfig()) throw new Error('OpenCode API key is required.'); const profile = opencodeProfile(model);
     for (const message of messages) for (const image of messageImages(message)) { if (!profile.declaredInput.includes('image')) throw new Error('OpenCode chat model does not support images.'); if (!parseDataImage(image.url)) throw new Error('Invalid OpenCode image input.'); }
-    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this); return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : profile.api === 'openai-completions' ? new OpenCodeCompletionsProvider(config, native) : new OpenCodeResponsesProvider(config, options, native);
+    const config = { ...this.config, model }, native = nativeOpenCodeReplay.has(this);
+    if (profile.api === 'openai-responses') {
+      const delegate = new OpenCodeResponsesProvider(config, options);
+      if (native) nativeOpenCodeReplay.add(delegate);
+      return delegate;
+    }
+    return profile.api === 'anthropic-messages' ? new OpenCodeMessagesProvider(config, native) : profile.api === 'google-generative-ai' ? new OpenCodeGoogleProvider(config, native) : new OpenCodeCompletionsProvider(config, native);
   }
   private conversationOptions(messages: Message[], model: string, options?: ChatOptions): ChatOptions {
     const owned = { ...options, model }; if (opencodeProfile(model).api === 'anthropic-messages' && !nativeOpenCodeReplay.has(this) && owned.systemPrompt === undefined) { const system = messages.filter(message => message.role === 'system').map(message => message.content).join('\n'); if (system) owned.systemPrompt = system; } return owned;

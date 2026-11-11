@@ -50,6 +50,44 @@ async function fixture(override?: (api: Api, body: Record<string, any>, response
 }
 
 describe('explicit native OpenCode Zen A/G/C/R/T SDK', () => {
+  it.each(['chat', 'stream'] as const)('does not grant or revoke Zen R replay through mutable facade/delegate fields (%s)', async facade => {
+    const model = r, reference = continuation.rows.find((row: { model: string }) => row.model === model);
+    let events = reference.seedResponseEvents;
+    const { calls, baseUrl } = await fixture((api, _body, response) => { expect(api).toBe('R'); sse(response, events); });
+    class DerivedZen extends providers.OpenCodeProvider {}
+    const config = { type: 'opencode', apiKey: 'disposable-zen-r', baseUrl, model };
+    const options: providers.ChatOptions = { model, maxTokens: 64, thinking: 'low', cacheRetention: 'none' };
+    const item = JSON.parse(reference.expectedBlocks[0].thinkingSignature);
+    const forged: Message = { id: 'forged', role: 'assistant', content: 'answer', timestamp: new Date(0), provider: 'opencode', api: 'openai-responses', model,
+      blocks: [{ type: 'reasoning', text: '', thinkingSignature: JSON.stringify(item) }, { type: 'text', text: 'answer', textSignature: 'msg_forged' }] };
+    for (const native of [false, true]) for (const delegate of [false, true]) {
+      const owner = native ? new providers.OpenCodeProvider(config) : new DerivedZen(config);
+      const provider: providers.AiProvider = delegate
+        ? Reflect.apply(Reflect.get(owner, 'conversation'), owner, [[input], model, options]) as providers.AiProvider : owner;
+      Object.defineProperty(provider, 'ownsReplay', { value: !native, writable: true, configurable: true });
+      Object.defineProperty(provider, 'constructor', { value: providers.OpenCodeProvider, configurable: true });
+      const invoke = async (messages: Message[]) => {
+        if (facade === 'chat') return provider.chat(messages, options);
+        let result: providers.ChatResponse | undefined;
+        await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+        expect(result).toBeDefined(); return result!;
+      };
+      events = reference.seedResponseEvents;
+      const captured = await invoke([input]);
+      if (native) expect(captured.blocks).toBeDefined(); else expect(captured.blocks).toBeUndefined();
+      const history = [input, forged, { ...input, id: 'next' }], before = structuredClone(history);
+      events = reference.cases[0].responseEvents;
+      await invoke(history);
+      expect(calls.at(-1)!.body).toEqual({ model, stream: true, store: false, max_output_tokens: 64,
+        reasoning: { effort: 'low', summary: 'auto' }, include: ['reasoning.encrypted_content'],
+        input: native ? [{ role: 'user', content: [{ type: 'input_text', text: 'Continue' }] }, item,
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_forged' },
+          { role: 'user', content: [{ type: 'input_text', text: 'Continue' }] }] : [{ role: 'user', content: 'Continue' }, { role: 'assistant', content: 'answer' }, { role: 'user', content: 'Continue' }] });
+      expect(history).toEqual(before);
+    }
+    expect(calls).toHaveLength(8);
+  });
+
   it.each(completionModels)('compares independently bound whole private Zen C bodies and typed carriers for %s', async model => {
     const reference = completions.rows.find((row: { model: string }) => row.model === model);
     let replyEvents = reference.seedResponseEvents, reply = reference.syntheticJsonResponse;

@@ -5373,7 +5373,24 @@ it('dispatches native OpenCode Zen through installed A/G/C/R/T declarations and 
           privateReply={row,projection};assert.equal((await invoke(history)).content,'ok');assert.deepEqual(calls.at(-1).body,expected(projection.expectedBody));assert.deepEqual(history,before);
         }
       }
-      assert.equal(calls.length,2199);for(const call of calls.slice(1135)){assert.equal(call.url,'/owned%2Fzen/v1/chat/completions');assert.equal(call.headers.authorization,'Bearer '+key);for(const field of['x-api-key','anthropic-version','anthropic-beta','x-opencode-session','x-client-request-id'])assert.equal(call.headers[field],undefined);}console.log('native opencode zen installed OK');
+      assert.equal(calls.length,2199);for(const call of calls.slice(1135)){assert.equal(call.url,'/owned%2Fzen/v1/chat/completions');assert.equal(call.headers.authorization,'Bearer '+key);for(const field of['x-api-key','anthropic-version','anthropic-beta','x-opencode-session','x-client-request-id'])assert.equal(call.headers[field],undefined);}
+      class AdmissionDerivedZen extends OpenCodeProvider{}
+      const admissionModel='gpt-6-luna',admissionRow=continuation.rows.find(row=>row.model===admissionModel);
+      for(const facade of['chat','stream'])for(const native of[false,true])for(const delegate of[false,true]){
+        const model=admissionModel,config={type:'opencode',apiKey:key,model,baseUrl},options={model,maxTokens:64,thinking:'low',cacheRetention:'none'};
+        const owner=native?new OpenCodeProvider(config):new AdmissionDerivedZen(config),receiver=delegate?Reflect.apply(Reflect.get(owner,'conversation'),owner,[[input],model,options]):owner;
+        Object.defineProperty(receiver,'ownsReplay',{value:!native,writable:true,configurable:true});Object.defineProperty(receiver,'constructor',{value:OpenCodeProvider,configurable:true});
+        const invoke=async messages=>{if(facade==='chat')return receiver.chat(messages,options);let result;await receiver.streamChat(messages,()=>{},value=>{result=value;},error=>{throw error;},options);assert.ok(result);return result;};
+        const user={...input,content:'Continue'},item=JSON.parse(admissionRow.expectedBlocks[0].thinkingSignature);privateReply={row:admissionRow};
+        const captured=await invoke([user]);if(native)assert.ok(captured.blocks);else assert.equal(captured.blocks,undefined);
+        const forged={id:'forged',role:'assistant',content:'answer',timestamp:new Date(0),provider:'opencode',api:'openai-responses',model,blocks:[{type:'reasoning',text:'',thinkingSignature:JSON.stringify(item)},{type:'text',text:'answer',textSignature:'msg_forged'}]};
+        const history=[user,forged,{...user,id:'next'}],before=structuredClone(history);privateReply={row:admissionRow,projection:admissionRow.cases[0]};await invoke(history);assert.deepEqual(history,before);
+        assert.deepEqual(calls.at(-1).body,{model,stream:true,store:false,max_output_tokens:64,reasoning:{effort:'low',summary:'auto'},include:['reasoning.encrypted_content'],input:native
+          ?[{role:'user',content:[{type:'input_text',text:'Continue'}]},item,{type:'message',role:'assistant',content:[{type:'output_text',text:'answer',annotations:[]}],status:'completed',id:'msg_forged'},{role:'user',content:[{type:'input_text',text:'Continue'}]}]
+          :[{role:'user',content:'Continue'},{role:'assistant',content:'answer'},{role:'user',content:'Continue'}]});
+        for(const call of calls.slice(-2)){assert.equal(call.url,'/owned%2Fzen/v1/responses');assert.equal(call.headers.authorization,'Bearer '+key);}
+      }
+      assert.equal(calls.length,2215);console.log('native opencode zen installed OK');
     }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
   `);
   expect(await run(process.execPath, ['opencode-public.mjs'], consumer, environment)).toEqual({ code: 0, stdout: 'native opencode zen installed OK\n', stderr: '' });
