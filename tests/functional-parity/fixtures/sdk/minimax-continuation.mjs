@@ -19,6 +19,40 @@ export function sendMiniMaxContinuation(response, stream) {
   return true;
 }
 
+export async function checkMiniMaxAdmission(Constructor, calls, scope, owner, baseUrl, expectedPath, key) {
+  const start = calls.length, model = 'MiniMax-M3', row = reference.rows.find(row => row.scope === scope && row.model === model);
+  assert.ok(row); class Derived extends Constructor {}
+  const options = { model, thinking: 'off', maxTokens: 64, cacheRetention: 'none' }, initial = [{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }];
+  const history = [...initial, { id: 'a', role: 'assistant', content: 'left!right?', provider: owner, api: row.api, model, timestamp: new Date(1),
+    blocks: structuredClone(reference.expectedBlocks), toolCalls: [{ id: 'call', name: 'echo', input: { x: 1 } }] },
+    { id: 't', role: 'tool', toolCallId: 'call', content: 'result', timestamp: new Date(2) }, { id: 'next', role: 'user', content: 'continue', timestamp: new Date(3) }];
+  const before = structuredClone({ history, options }), legacy = [{ role: 'user', content: 'probe' }, { role: 'assistant', content: [
+    { type: 'text', text: 'firstsecond\n[Reasoning redacted]' }, { type: 'text', text: 'left!right?' }, { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call', content: 'result' }] }, { role: 'user', content: 'continue' }];
+  mode = 'normal';
+  try {
+    for (const stream of [false, true]) for (const native of [false, true]) {
+      const config = { type: owner, apiKey: key, baseUrl, model }, provider = native ? new Constructor(config) : new Derived(config);
+      Object.defineProperty(provider, 'ownsMiniMaxReplay', { value: !native, writable: true, configurable: true });
+      Object.defineProperty(provider, 'constructor', { value: Constructor, configurable: true });
+      const invoke = async messages => {
+        if (!stream) return provider.chat(messages, options);
+        let result; await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+        assert.ok(result); return result;
+      };
+      for (const messages of [initial, history]) {
+        if (native) assert.deepEqual((await invoke(messages)).blocks, reference.expectedBlocks);
+        else await assert.rejects(invoke(messages), /Unsupported MiniMax (reasoning replay|message content)\./);
+        assert.deepEqual(calls.at(-1).body, { model, max_tokens: 64, stream, thinking: { type: 'disabled' },
+          messages: messages === initial ? [{ role: 'user', content: 'probe' }] : native ? row.cases[0].expectedMessages : legacy });
+        assert.deepEqual({ history, options }, before);
+      }
+    }
+    assert.equal(calls.length - start, 8);
+    for (const call of calls.slice(start)) { assert.equal(call.url, expectedPath); assert.equal(call.headers['x-api-key'], key); assert.equal(call.headers.authorization, undefined); }
+  } finally { mode = undefined; }
+}
+
 export async function checkMiniMaxContinuation(provider, calls, scope, owner, expectedPath, key) {
   const start = calls.length, rows = reference.rows.filter(row => row.scope === scope);
   assert.equal(rows.length, 3);

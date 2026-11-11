@@ -4741,6 +4741,7 @@ function applyAnthropicPromptCache(body: Record<string, unknown>, retention: Cha
   }
 }
 
+const nativeMiniMaxReplay = new WeakSet<AnthropicProvider>();
 const nativeFireworksMessages = new WeakSet<AnthropicProvider>();
 const nativeFireworksCompletions = new WeakSet<AiProvider>();
 const nativeOpenRouterReplay = new WeakSet<AiProvider>();
@@ -4760,7 +4761,6 @@ export class AnthropicProvider extends AiProvider {
   }
 
   private readonly ownsNativeProfiles: boolean;
-  private readonly ownsMiniMaxReplay: boolean;
   private readonly ownsKimiCodingReplay: boolean;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
@@ -4769,7 +4769,7 @@ export class AnthropicProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     super(config);
     this.ownsNativeProfiles = new.target === AnthropicProvider;
-    this.ownsMiniMaxReplay = new.target === MiniMaxProvider || new.target === MiniMaxCnProvider;
+    if (new.target === MiniMaxProvider || new.target === MiniMaxCnProvider) nativeMiniMaxReplay.add(this);
     this.ownsKimiCodingReplay = new.target === KimiCodingProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
@@ -4854,7 +4854,7 @@ export class AnthropicProvider extends AiProvider {
 
   private hasNativeMessageReplay(model: string): boolean {
     return this.ownsNativeProfiles && hasAnthropicProfile(model)
-      || this.ownsMiniMaxReplay && MINIMAX_MODELS.some(profile => profile.id === model)
+      || nativeMiniMaxReplay.has(this) && MINIMAX_MODELS.some(profile => profile.id === model)
       || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
       || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
       || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)
@@ -4980,7 +4980,7 @@ export class AnthropicProvider extends AiProvider {
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
       headers: this.messageHeaders(options, model),
-      body: serializeProviderBody(this.prepareMessageBody(body, options, this.ownsMiniMaxReplay ? messages : history)),
+      body: serializeProviderBody(this.prepareMessageBody(body, options, nativeMiniMaxReplay.has(this) ? messages : history)),
       signal: options?.signal,
     });
 
@@ -5071,7 +5071,7 @@ export class AnthropicProvider extends AiProvider {
       const response = await this.request(url, {
         method: 'POST',
         headers: this.messageHeaders(options, model),
-        body: serializeProviderBody(this.prepareMessageBody(body, options, this.ownsMiniMaxReplay ? messages : history)),
+        body: serializeProviderBody(this.prepareMessageBody(body, options, nativeMiniMaxReplay.has(this) ? messages : history)),
         signal: options?.signal,
       });
 

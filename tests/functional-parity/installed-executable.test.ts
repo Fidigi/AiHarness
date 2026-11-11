@@ -4786,7 +4786,7 @@ it('dispatches native MiniMax through installed public declarations and captured
     import { createServer } from 'node:http';
     import { fileURLToPath } from 'node:url';
     import { MiniMaxProvider, MINIMAX_MODELS, SpecializedModels, getProviderPublishedModel, getSupportedThinkingLevels, ProviderFactory, closeProviderNetworkDispatchers } from '@ai-harness/core';
-    import { sendMiniMaxContinuation, checkMiniMaxContinuation } from './minimax-continuation.mjs';
+    import { sendMiniMaxContinuation, checkMiniMaxContinuation, checkMiniMaxAdmission } from './minimax-continuation.mjs';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const calls = [], model = 'MiniMax-M2.7';
     const usage = { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 4, cache_creation_input_tokens: 1 };
@@ -4829,6 +4829,8 @@ it('dispatches native MiniMax through installed public declarations and captured
       for (const call of calls) { assert.equal(call.url, '/owned%2Fminimax/anthropic/v1/messages'); assert.equal(call.headers['x-api-key'], 'disposable-installed-minimax'); assert.equal(call.headers['anthropic-version'], '2023-06-01'); assert.equal(call.headers.authorization, undefined); assert.equal(call.headers['nvcf-poll-seconds'], undefined); assert.equal(call.body.output_config, undefined); }
       await checkMiniMaxContinuation(provider, calls, 'minimax', 'azure', '/owned%2Fminimax/anthropic/v1/messages', 'disposable-installed-minimax');
       assert.equal(calls.length, 83);
+      await checkMiniMaxAdmission(MiniMaxProvider, calls, 'minimax', 'azure', 'http://127.0.0.1:' + server.address().port + '/owned%2Fminimax/anthropic', '/owned%2Fminimax/anthropic/v1/messages', 'disposable-installed-minimax');
+      assert.equal(calls.length, 91);
     } finally { await closeProviderNetworkDispatchers(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     console.log('installed MiniMax OK');
   `);
@@ -5440,7 +5442,7 @@ it('dispatches native MiniMax CN through installed public declarations and captu
   await writeFile(path.join(consumer, 'minimax-cn-public.mjs'), String.raw`
     import assert from 'node:assert/strict'; import { createServer } from 'node:http'; import { fileURLToPath } from 'node:url';
     import { MiniMaxCnProvider, MINIMAX_CN_MODELS, MINIMAX_MODELS, SpecializedModels, ProviderFactory, getProviderPublishedModel, closeProviderNetworkDispatchers } from '@ai-harness/core';
-    import { sendMiniMaxContinuation, checkMiniMaxContinuation } from './minimax-continuation.mjs';
+    import { sendMiniMaxContinuation, checkMiniMaxContinuation, checkMiniMaxAdmission } from './minimax-continuation.mjs';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).includes('/node_modules/@ai-harness/core/'));
     assert.equal(MINIMAX_CN_MODELS, MINIMAX_MODELS); assert.equal(MINIMAX_CN_MODELS.length, 3); assert(Object.isFrozen(MINIMAX_CN_MODELS)); assert.equal(ProviderFactory.has('minimax-cn'), false);
     const calls=[],usage={input_tokens:5,output_tokens:2,cache_read_input_tokens:4,cache_creation_input_tokens:1},input={id:'u',role:'user',content:'Hello',timestamp:new Date(0)};
@@ -5459,6 +5461,8 @@ it('dispatches native MiniMax CN through installed public declarations and captu
       assert.equal(calls.length,9);for(const call of calls){assert.equal(call.url,'/owned%2Fcn/anthropic/v1/messages');assert.equal(call.headers['x-api-key'],'disposable-installed-cn');assert.equal(call.headers.authorization,undefined);assert.equal(call.headers['anthropic-version'],'2023-06-01');}
       await checkMiniMaxContinuation(provider,calls,'minimax-cn','google','/owned%2Fcn/anthropic/v1/messages','disposable-installed-cn');
       assert.equal(calls.length,90);
+      await checkMiniMaxAdmission(MiniMaxCnProvider,calls,'minimax-cn','google','http://127.0.0.1:'+server.address().port+'/owned%2Fcn/anthropic','/owned%2Fcn/anthropic/v1/messages','disposable-installed-cn');
+      assert.equal(calls.length,98);
     }finally{await closeProviderNetworkDispatchers();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
     console.log('installed MiniMax CN OK');
   `);

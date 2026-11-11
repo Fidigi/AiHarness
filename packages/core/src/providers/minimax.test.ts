@@ -102,6 +102,42 @@ async function fixture(reply?: (body: Record<string, unknown>, response: ServerR
 }
 
 describe('native MiniMax private continuation', () => {
+  it.each((['minimax', 'minimax-cn'] as const).flatMap(scope => (['chat', 'stream'] as const).map(facade => ({ scope, facade }))))(
+    'does not grant or revoke MiniMax replay through mutable fields ($scope/$facade)', async ({ scope, facade }) => {
+      const model = latest, row = continuation.rows.find(row => row.scope === scope && row.model === model)!;
+      const { calls, baseUrl } = await fixture((body, response) => body.stream ? stream(response, continuation.seedEvents)
+        : response.end(JSON.stringify({ type: 'message', model: 'remote-alias', stop_reason: 'tool_use', content: continuation.syntheticJsonContent, usage })));
+      class DerivedGlobal extends providers.MiniMaxProvider {}
+      class DerivedCn extends providers.MiniMaxCnProvider {}
+      const Constructor = scope === 'minimax' ? providers.MiniMaxProvider : providers.MiniMaxCnProvider, Derived = scope === 'minimax' ? DerivedGlobal : DerivedCn;
+      const config = { type: scope, apiKey: 'disposable-minimax-admission', baseUrl, model }, options: providers.ChatOptions = { model, thinking: 'off', maxTokens: 64, cacheRetention: 'none' };
+      const initial: Message[] = [{ ...input, content: 'probe' }], history: Message[] = [...initial,
+        { id: 'a', role: 'assistant', content: 'left!right?', provider: scope, api: row.api, model, timestamp: new Date(1), blocks: structuredClone(continuation.expectedBlocks), toolCalls: [{ id: 'call', name: 'echo', input: { x: 1 } }] },
+        { id: 't', role: 'tool', toolCallId: 'call', content: 'result', timestamp: new Date(2) }, { ...input, id: 'next', content: 'continue' }];
+      const before = structuredClone({ history, options }), legacy = [{ role: 'user', content: 'probe' }, { role: 'assistant', content: [
+        { type: 'text', text: 'firstsecond\n[Reasoning redacted]' }, { type: 'text', text: 'left!right?' }, { type: 'tool_use', id: 'call', name: 'echo', input: { x: 1 } }] },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call', content: 'result' }] }, { role: 'user', content: 'continue' }];
+      for (const native of [false, true]) {
+        const provider = native ? new Constructor(config) : new Derived(config);
+        Object.defineProperty(provider, 'ownsMiniMaxReplay', { value: !native, writable: true, configurable: true });
+        Object.defineProperty(provider, 'constructor', { value: Constructor, configurable: true });
+        const invoke = async (messages: Message[]) => {
+          if (facade === 'chat') return provider.chat(messages, options);
+          let result: providers.ChatResponse | undefined;
+          await provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, options);
+          expect(result).toBeDefined(); return result!;
+        };
+        for (const messages of [initial, history]) {
+          if (native) expect((await invoke(messages)).blocks).toEqual(continuation.expectedBlocks);
+          else await expect(invoke(messages)).rejects.toThrow(/Unsupported MiniMax (reasoning replay|message content)\./);
+          expect(calls.at(-1)!.body).toEqual({ model, max_tokens: 64, stream: facade === 'stream', thinking: { type: 'disabled' },
+            messages: messages === initial ? [{ role: 'user', content: 'probe' }] : native ? row.cases[0].expectedMessages : legacy });
+          expect({ history, options }).toEqual(before);
+        }
+      }
+      expect(calls).toHaveLength(4);
+    });
+
   it('binds the six physical profiles and complete replay arrays to fresh pinned SDK execution', () => {
     expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('6671155239d400520bb007617f1e014a244e5aa6331fe8d080081d70c747ad9b');
     expect(continuation).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff',
@@ -233,7 +269,8 @@ describe('native MiniMax private continuation', () => {
         expect(routed.model).toBe(nextModel); expect(routed.selection).toMatchObject({ provider: 'router', id: 'auto' });
         expect(assistantArrays()).toEqual([foreign, foreign.slice(0, -1)]);
         await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
-        const clone = await restarted.cloneSession(session.id), canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
+        const clone = await restarted.cloneSession(session.id); if (!clone) throw new Error('Expected cloned MiniMax session.');
+        const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);
         expect(JSON.stringify(getSummaryModelMessages(canonical))).not.toMatch(/Signature|opaque-|firstsecond/); expect(canonical).toEqual(beforeSummary);
         await call(canonical); expect(assistantArrays()).toEqual([[native.at(-1)!, { type: 'text', text: 'edited answer' }], nativeRedacted.slice(0, -1)]);
         const sourceBytes = await readFile(file, 'utf8'), cloneRaw = await restarted.getRawEntries(clone.id);
