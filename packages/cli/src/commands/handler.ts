@@ -745,7 +745,7 @@ const commands: CommandEntry[] = [
           await publish(credential);
           signal.throwIfAborted();
           // Explicit login makes the canonical adapter available, not selected.
-          const model = GITHUB_COPILOT_MODELS.find(model => credential.subscription?.availableModelIds.includes(model.id));
+          const model = GITHUB_COPILOT_MODELS.find(model => credential.subscription?.provider === 'github-copilot' && credential.subscription.availableModelIds.includes(model.id));
           if (providerName === 'github-copilot' && model) {
             const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, githubCopilot: {
               model: model.id, credentialSource: cliGitHubCopilotCredentialSource(credentialService, ctx.providerLifetime),

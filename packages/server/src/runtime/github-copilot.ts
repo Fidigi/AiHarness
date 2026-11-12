@@ -15,6 +15,6 @@ export function gitHubCopilotCredentialSource(credentials: ProviderCredentialSer
 export async function resolveGitHubCopilotSubscription(credentials: ProviderCredentialService, lifetime: AbortSignal) {
   const credentialSource = gitHubCopilotCredentialSource(credentials, lifetime);
   const credential = await credentialSource();
-  const model = credential && GITHUB_COPILOT_MODELS.find(model => credential.subscription?.availableModelIds.includes(model.id));
+  const model = credential && GITHUB_COPILOT_MODELS.find(model => credential.subscription?.provider === 'github-copilot' && credential.subscription.availableModelIds.includes(model.id));
   return model ? { model: model.id, credentialSource } : undefined;
 }

@@ -32,6 +32,8 @@ export { getKimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
 export type { KimiCodingOAuthConfig } from './providers/kimi-coding-oauth.js';
 export { getGitHubCopilotOAuthConfig, getGitHubCopilotBaseUrl, exchangeGitHubCopilotToken } from './providers/github-copilot-oauth.js';
 export type { GitHubCopilotOAuthCredential } from './providers/github-copilot-oauth.js';
+export { getOpenAICodexOAuthConfig, beginOpenAICodexDeviceLogin, refreshOpenAICodexToken } from './providers/openai-codex-oauth.js';
+export type { OpenAICodexOAuthCredential, OpenAICodexOAuthOptions, OpenAICodexDeviceLogin } from './providers/openai-codex-oauth.js';
 export { GITHUB_COPILOT_MODELS } from './providers/github-copilot.js';
 export type { GitHubCopilotApi, GitHubCopilotModel, GitHubCopilotChatOptions } from './providers/github-copilot.js';
 export type { MetaProfile } from './providers/meta.js';

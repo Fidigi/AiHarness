@@ -4,7 +4,7 @@
 
 ## Overview
 
-GitHub Copilot has a bounded native subscription implementation, distinct from API-key OpenAI, Anthropic and Google. It does **not** complete MOD-03 or the subscription-provider scope. ChatGPT/Codex remains unimplemented; a Copilot model whose name contains `codex` does not implement ChatGPT authentication.
+GitHub Copilot has a bounded native subscription implementation, distinct from API-key OpenAI, Anthropic and Google. It does **not** complete MOD-03 or the subscription-provider scope. ChatGPT/Codex now has an independent Core device-OAuth/account/refresh foundation, but no inference adapter or host login integration yet. A Copilot model whose name contains `codex` does not implement ChatGPT authentication. The user explicitly authorized starting Codex while Copilot real-account/global qualification remains open; this does not waive either provider's remaining requirements.
 
 [IMPORTANT] Server OAuth now has a native Copilot device-login path as well as existing-credential composition. Web Settings has separate emitted-Server/static-Web EN/FR fixture journeys; interactive CLI now has a separate explicit issuer path and bounded terminal fixtures; full profile/account acceptance remains incomplete. Do not infer live account acceptance from service/HTTP/browser fixtures.
 
@@ -12,6 +12,7 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 
 | File | Responsibility |
 |---|---|
+| `packages/core/src/providers/openai-codex-oauth.ts` | Frozen ChatGPT public client, JSON device authorization, one-shot completion, account claim extraction and account-bound refresh; not a transport |
 | `packages/core/src/providers/github-copilot-oauth.ts` | Explicit public-client configuration, durable GitHub grant exchange, restricted inference endpoint and account catalogue |
 | `packages/core/src/providers/github-copilot.ts` | Immutable 35-model declarations, account intersection, A/C/R headers and request lowering |
 | `packages/core/src/providers/index.ts` | Public `GitHubCopilotProvider`, private protocol delegates and exact native-replay admission |
@@ -87,6 +88,16 @@ The owning HTTP scenario starts without credentials, logs in through authenticat
 The existing provider lifecycle pane uses the reserved native OAuth endpoint for Copilot. Each start/poll belongs to one cancellable operation. Cancel is available before the device response; replacing the login or retiring the mounted pane aborts request transport and cancels a known pending flow. Disconnect retires local polling before Server logout. Delayed old responses cannot restore the retired pane or publish an old canonical reload. Successful login performs a selection-bound canonical readback, not a provider/model-policy mutation.
 
 `e2e/copilot-subscription-live.spec.ts` drives actual emitted Server/static Web and encrypted storage in EN/FR. Only outbound GitHub/Copilot responses are synthetic. It covers initial passive display, cancellation before a flow ID and during account discovery, encrypted login, preserved provider selection, reload, and logout while a real connected poll response is delayed at the browser boundary. Its release-check fixture is deliberately separate from subscription traffic. This is local browser evidence, not a real GitHub authorization, vendor entitlement, installed CLI or production-image certificate.
+
+## ChatGPT/Codex Core OAuth Foundation
+
+`getOpenAICodexOAuthConfig()` fixes the public client and `auth.openai.com` endpoints independently of environment, labels and OpenAI API-key configuration. `beginOpenAICodexDeviceLogin()` implements OpenAI's JSON `device_auth_id`/`user_code` protocol, not the Copilot/RFC polling body. The one-shot result exposes only the human code, fixed verification URL, expiry and completion/cancel methods; the device ID, authorization code and verifier remain inside the operation. Initial polling is immediate; pending403/404 need no JSON body, other pending/slow-down responses retain a minimum one-second interval and five-second increments. Requests are bounded to15 seconds/256KiB, with a15-minute login lifetime and late-body cleanup. Browser PKCE/callback integration is not implemented by this increment.
+
+Completion returns a normalized OAuth value with `subscription: { provider: 'openai-codex', accountId }`, suitable for the existing one-shot `prepareOAuthLogin` publisher. A host must reserve persistent publication **before** starting remote login and bind both to its owner signal; the Core flow does not itself persist or activate anything. `resolve(label, { env: {}, subscriptionProvider: 'openai-codex', signal })` is the explicit consumer selector. Arbitrary labels stay independent of the issuer, and generic/API-key/Copilot consumers cannot obtain these tokens.
+
+The account ID comes only from the access token's `["https://api.openai.com/auth"].chatgpt_account_id` routing claim. Decoding validates bounded UTF-8/base64url and header-safe identity, **not JWT signatures, service entitlement or model availability**. Account identity must match the encrypted subscription metadata. Native refresh rotates access/refresh credentials through the fixed issuer, refuses a different account ID, and reuses the generation/document-revision/cancellation publication guards; generic OAuth endpoint configuration cannot redirect it. Cancelled remote refresh rotation may require explicit reauthentication; local rollback is not remote revocation or undo.
+
+The [Core OAuth receipt](../../audit/pi/evidence/MOD-03-codex-oauth-core.json) separates disposable unsigned-token/transport fixtures from issuer-source review and live acceptance. No account catalogue, nine-model CX dispatch, `openai-codex-responses`, API-key factory registration, CLI/Server/Settings login, automatic provider/model selection or paid-policy activation is added. Those are subsequent increments, not inferred from OAuth success.
 
 ## Associated Tests and Evidence
 

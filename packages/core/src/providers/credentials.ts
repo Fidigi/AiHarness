@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
 import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
+import { openAICodexAccountId, refreshOpenAICodexToken } from './openai-codex-oauth.js';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
   executeShellCommand,
@@ -50,6 +51,9 @@ export interface ProviderOAuthCredential {
     provider: 'github-copilot';
     enterpriseDomain?: string;
     availableModelIds: string[];
+  } | {
+    provider: 'openai-codex';
+    accountId: string;
   };
 }
 
@@ -80,7 +84,7 @@ export interface ProviderOAuthRefreshConfig {
 export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
-  subscriptionProvider?: 'github-copilot';
+  subscriptionProvider?: 'github-copilot' | 'openai-codex';
   cwd?: string;
   signal?: AbortSignal;
   commandTimeoutMs?: number;
@@ -178,16 +182,25 @@ function validateCredential(value: unknown): ProviderCredential {
   if (record.subscription !== undefined) {
     const subscription = record.subscription;
     const invalid = (): never => { throw new ProviderCredentialError('invalid-credential', 'The provider subscription credential is invalid.'); };
-    if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)
-      || subscription.provider !== 'github-copilot' || !credential.refreshToken || credential.expiresAt === undefined
-      || !Array.isArray(subscription.availableModelIds) || subscription.availableModelIds.length > 2048) invalid();
-    const ids = [...subscription.availableModelIds];
-    if (!ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256
-      && !/[\u0000-\u0020\u007f-\u009f]/u.test(id)) || Buffer.byteLength(JSON.stringify(ids)) > MAX_OAUTH_RESPONSE_BYTES) invalid();
-    try { getGitHubCopilotOAuthConfig(subscription.enterpriseDomain); }
-    catch { invalid(); }
-    credential.subscription = { provider: 'github-copilot', availableModelIds: [...new Set(ids)],
-      ...(subscription.enterpriseDomain === undefined ? {} : { enterpriseDomain: subscription.enterpriseDomain.toLowerCase() }) };
+    if (subscription?.provider === 'openai-codex') {
+      if (!credential.refreshToken || /\s/u.test(credential.refreshToken) || credential.expiresAt === undefined) invalid();
+      try {
+        const accountId = openAICodexAccountId(credential.accessToken);
+        if (accountId !== subscription.accountId) invalid();
+        credential.subscription = { provider: 'openai-codex', accountId };
+      } catch { invalid(); }
+    } else {
+      if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)
+        || subscription.provider !== 'github-copilot' || !credential.refreshToken || credential.expiresAt === undefined
+        || !Array.isArray(subscription.availableModelIds) || subscription.availableModelIds.length > 2048) invalid();
+      const ids = [...subscription.availableModelIds];
+      if (!ids.every(id => typeof id === 'string' && id.length > 0 && id.length <= 256
+        && !/[\u0000-\u0020\u007f-\u009f]/u.test(id)) || Buffer.byteLength(JSON.stringify(ids)) > MAX_OAUTH_RESPONSE_BYTES) invalid();
+      try { getGitHubCopilotOAuthConfig(subscription.enterpriseDomain); }
+      catch { invalid(); }
+      credential.subscription = { provider: 'github-copilot', availableModelIds: [...new Set(ids)],
+        ...(subscription.enterpriseDomain === undefined ? {} : { enterpriseDomain: subscription.enterpriseDomain.toLowerCase() }) };
+    }
   }
   return credential;
 }
@@ -1014,6 +1027,17 @@ export class ProviderCredentialService {
       : DEFAULT_REFRESH_TIMEOUT_MS;
     const timeout = AbortSignal.timeout(timeoutMs);
     const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+    if (current.subscription?.provider === 'openai-codex') {
+      try {
+        const refreshed = await refreshOpenAICodexToken(current.refreshToken!, current.subscription.accountId, {
+          signal, fetcher: options.fetcher, redactor: this.redactor,
+        });
+        return { version: 1, type: 'oauth', ...refreshed };
+      } catch {
+        if (options.signal?.aborted) throw options.signal.reason;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+    }
     if (current.subscription?.provider === 'github-copilot') {
       try {
         const exchanged = await exchangeGitHubCopilotToken(current.refreshToken!, {

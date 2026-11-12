@@ -125,7 +125,7 @@ export async function createCliProviderRuntime(
   }
   const credentialSource = cliGitHubCopilotCredentialSource(credentials, lifetime, !offline);
   const subscription = await credentialSource();
-  const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.availableModelIds.includes(model.id));
+  const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.provider === 'github-copilot' && subscription.subscription.availableModelIds.includes(model.id));
   return {
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     credentials,
