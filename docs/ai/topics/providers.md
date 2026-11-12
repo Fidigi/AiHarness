@@ -8,7 +8,7 @@ Providers normalize chat, streaming, reasoning, tool calls, images, discovery, r
 
 Provider responses become persisted messages through the conversation paths described in [`sessions.md`](./sessions.md); do not add a direct call path that bypasses hooks, cancellation, or persistence.
 
-The [subscription-provider contract](./subscription-providers.md) documents the bounded GitHub Copilot implementation: explicit standalone CLI device login, issuer-isolated encrypted refresh, account-gated A/C/R routing and existing-credential Server composition. It is not an API-key factory registration. Server/Web login, full owner policies and distinct ChatGPT/Codex integration remain incomplete.
+The [subscription-provider contract](./subscription-providers.md) documents the bounded GitHub Copilot implementation: explicit standalone CLI and guarded Server device login, issuer-isolated encrypted refresh, account-gated A/C/R routing and lifetime-bound native Server composition. It is not an API-key factory registration. Settings has separate operation-owned EN/FR static-Web fixture journeys. Interactive CLI has explicit issuer login and retired runtime lifetimes; emitted and installed regular/fullscreen/print/JSON/RPC fixtures retain their distinct scopes. Full owner/profile/account qualification and distinct ChatGPT/Codex integration remain incomplete.
 
 ## Architecture
 

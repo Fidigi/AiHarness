@@ -2074,12 +2074,12 @@ export interface ProviderOAuthFlow {
   error?: string;
 }
 
-export function startProviderOAuth(type: string): Promise<ApiResponse<ProviderOAuthFlow>> {
-  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST' });
+export function startProviderOAuth(type: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST', signal });
 }
 
-export function getProviderOAuth(flowId: string): Promise<ApiResponse<ProviderOAuthFlow>> {
-  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}`);
+export function getProviderOAuth(flowId: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}`, { signal });
 }
 
 export function cancelProviderOAuth(flowId: string): Promise<ApiResponse<{ state: 'cancelled' }>> {

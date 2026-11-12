@@ -272,12 +272,16 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
   });
   const extensionRegistry = options.extensionRegistry ?? new ExtensionRegistry();
   let controller: RpcController | undefined;
+  let providerRuntime: Awaited<ReturnType<typeof createCliProviderRuntime>> | undefined;
+  const providerHost = new AbortController();
   let mcpHost: McpSessionHost | undefined;
   let interrupted: 'SIGINT' | 'SIGTERM' | undefined;
   let signalClosedInput = false;
   const stopForSignal = (signal: 'SIGINT' | 'SIGTERM'): void => {
     if (interrupted) return;
     interrupted = signal;
+    providerHost.abort();
+    providerRuntime?.close();
     process.exitCode = signal === 'SIGINT' ? 130 : 143;
     extensionUi.close();
     if (controller) void controller.close().catch(() => undefined);
@@ -469,7 +473,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         process.stderr.write(`${redactor.redact(`Extension ${failure.path}: ${failure.error.message}`)}\n`);
       }
     }
-    const providerRuntime = await createCliProviderRuntime(
+    providerRuntime = await createCliProviderRuntime(
       settingsResolution.agentDir,
       settingsResolution.settings,
       process.env,
@@ -478,10 +482,12 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       extensionRegistry.getProviderDefinitions(),
       redactor,
       offline,
+      providerHost.signal,
     );
     if (!options.noSession) await sessionManager.loadAllSessions();
     const providers = createConfiguredProviders(process.env, {
       credentials: providerRuntime.values,
+      githubCopilot: providerRuntime.githubCopilot,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });
@@ -763,9 +769,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
     if (taskFailure) throw taskFailure;
     await controller.drain();
   } catch (error) {
-    runError = error ?? new Error('RPC mode failed.');
+    // Only our own startup cancellation is an admitted signal shutdown. Other
+    // initialization errors still fail, even when a signal arrived concurrently.
+    if (!interrupted || error !== providerHost.signal.reason) runError = error ?? new Error('RPC mode failed.');
   }
 
+  providerHost.abort();
+  providerRuntime?.close();
   let cleanupError: unknown;
   try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
   try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }

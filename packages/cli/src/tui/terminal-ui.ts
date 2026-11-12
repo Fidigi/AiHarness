@@ -348,7 +348,7 @@ ${chalk.bold('Providers and context')}
   ${chalk.cyan('/provider [name]')}              List or select a provider
   ${chalk.cyan('/model [list|cycle|name]')}      List or select a model
   ${chalk.cyan('/thinking [level]')}             Set off/minimal/low/medium/high/xhigh/max
-  ${chalk.cyan('/login <provider>')}             Start a configured OAuth device flow
+  ${chalk.cyan('/login <provider> [--issuer github-copilot]')}  Start an explicit OAuth device flow
   ${chalk.cyan('/compact [instructions]')}       Compact the active conversation
   ${chalk.cyan('/summarize-branch [id] [text]')} Store a branch summary
   ${chalk.cyan('/fork <id> [index] [title]')}    Fork a conversation

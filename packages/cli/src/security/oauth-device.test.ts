@@ -5,6 +5,25 @@ import { OAuthDeviceClient, type OAuthDeviceConfig } from './oauth-device';
 afterEach(() => vi.restoreAllMocks());
 
 describe('OAuthDeviceClient', () => {
+  it.each(['device', 'token'] as const)('settles caller cancellation before an uncooperative %s fetch returns', async stage => {
+    let entered!: () => void, release!: (response: Response) => void;
+    const ready = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<Response>(resolve => { release = resolve; });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { entered(); return held; });
+    const client = new OAuthDeviceClient(getGitHubCopilotOAuthConfig());
+    const controller = new AbortController();
+    let settled = false;
+    const pending = (stage === 'device' ? client.requestCode(controller.signal)
+      : client.pollCredential({ deviceCode: 'private-device', userCode: 'CODE', verificationUri: 'https://github.com/login/device', expiresIn: 30, interval: 0.001 }, controller.signal))
+      .then(value => ({ value, error: undefined }), error => ({ value: undefined, error }))
+      .then(result => { settled = true; return result; });
+    try {
+      await ready; controller.abort();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(settled).toBe(true);
+      expect((await pending).error).toBeInstanceOf(Error);
+    } finally { release(new Response('{}')); await pending; }
+  });
   it('requests a device code and polls through authorization_pending', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({

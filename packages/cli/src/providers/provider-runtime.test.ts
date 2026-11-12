@@ -49,6 +49,36 @@ describe('CLI provider runtime', () => {
     expect(transport).toHaveBeenCalledTimes(3);
   });
 
+  it.each(['runtime', 'parent', 'caller'] as const)('retires Copilot refresh and future resolution through the %s lifetime', async owner => {
+    const credentials = new ProviderCredentialService(), parent = new AbortController(), caller = new AbortController();
+    const original = { accessToken: 'runtime-original-token', refreshToken: 'runtime-github-grant', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot' as const, availableModelIds: ['gpt-5-mini'] } };
+    await credentials.setOAuth('github-copilot', original, false);
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false, [], undefined, false, parent.signal);
+    const expired = { ...original, expiresAt: Date.now() - 1000 };
+    await credentials.setOAuth('github-copilot', expired, false);
+    let ready!: () => void, release!: (response: Response) => void;
+    const entered = new Promise<void>(resolve => { ready = resolve; });
+    const held = new Promise<Response>(resolve => { release = resolve; });
+    let calls = 0;
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      if (++calls === 1) return Response.json({ token: 'new-runtime-token', expires_at: Math.floor(Date.now() / 1000) + 3600 });
+      ready(); return held;
+    });
+    const pending = runtime.githubCopilot!.credentialSource(caller.signal).then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+    await entered;
+    if (owner === 'runtime') runtime.close();
+    else if (owner === 'parent') parent.abort();
+    else caller.abort();
+    expect((await pending).error).toMatchObject({ name: 'AbortError' });
+    release(Response.json({ data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] }));
+    expect((await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 }))?.credential)
+      .toEqual({ version: 1, type: 'oauth', ...expired });
+    if (owner !== 'caller') await expect(runtime.githubCopilot!.credentialSource()).rejects.toMatchObject({ name: 'AbortError' });
+    expect(transport).toHaveBeenCalledTimes(2);
+    runtime.close();
+  });
+
   it('does not infer subscription consumers from API keys, generic OAuth, or a foreign storage label', async () => {
     for (const kind of ['api-key', 'oauth', 'foreign-label']) {
       const credentials = new ProviderCredentialService();

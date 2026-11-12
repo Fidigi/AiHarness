@@ -30,6 +30,8 @@ export interface CliProviderRuntime {
   redactor: CredentialRedactor;
   /** Internal reload identity; never crosses a CLI output boundary. */
   credentialStoreId: string;
+  signal: AbortSignal;
+  close(): void;
 }
 
 function commandVariable(provider: string): string {
@@ -51,6 +53,18 @@ export function oauthRefreshConfigFromEnv(
   };
 }
 
+/** A subscription resolver borrows the host and each caller, never environment/key sources. */
+export function cliGitHubCopilotCredentialSource(credentials: ProviderCredentialService, lifetime?: AbortSignal, allowRefresh = true) {
+  return async (signal?: AbortSignal) => {
+    const requestSignal = lifetime && signal ? AbortSignal.any([lifetime, signal]) : lifetime ?? signal;
+    requestSignal?.throwIfAborted();
+    const resolved = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot',
+      allowCommands: false, allowRefresh, signal: requestSignal });
+    requestSignal?.throwIfAborted();
+    return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
+  };
+}
+
 /** Resolve ordinary keys locally; subscription consumers retain a fresh credential resolver. */
 export async function createCliProviderRuntime(
   agentDir: string,
@@ -61,7 +75,11 @@ export async function createCliProviderRuntime(
   extensionProviders: ReadonlyArray<{ type: string; definition: ExtensionProvider }> = [],
   runtimeRedactor?: CredentialRedactor,
   offline = false,
+  parentSignal?: AbortSignal,
 ): Promise<CliProviderRuntime> {
+  const controller = new AbortController();
+  const lifetime = parentSignal ? AbortSignal.any([parentSignal, controller.signal]) : controller.signal;
+  lifetime.throwIfAborted();
   const masterKey = env.AI_HARNESS_MASTER_KEY;
   const redactor = existingCredentials?.redactor ?? runtimeRedactor ?? new CredentialRedactor();
   redactor.addEnvironment(env);
@@ -105,11 +123,7 @@ export async function createCliProviderRuntime(
     }
     values.set(provider, value);
   }
-  const credentialSource: CliGitHubCopilotSubscription['credentialSource'] = async signal => {
-    const resolved = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot',
-      allowCommands: false, allowRefresh: !offline, signal });
-    return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
-  };
+  const credentialSource = cliGitHubCopilotCredentialSource(credentials, lifetime, !offline);
   const subscription = await credentialSource();
   const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.availableModelIds.includes(model.id));
   return {
@@ -119,5 +133,7 @@ export async function createCliProviderRuntime(
     network: resolveAgentProviderNetworkSettings(settings),
     redactor,
     credentialStoreId: `${persistCredentials ? 'persistent' : 'memory'}:${path.resolve(agentDir)}`,
+    signal: lifetime,
+    close: () => controller.abort(),
   };
 }

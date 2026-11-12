@@ -109,6 +109,23 @@ function oauthDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+async function abortableFetch(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
+  signal.throwIfAborted();
+  return new Promise<Response>((resolve, reject) => {
+    const abort = (): void => reject(new Error('Authentification OAuth annulée.'));
+    signal.addEventListener('abort', abort, { once: true });
+    fetch(url, init).then(response => {
+      signal.removeEventListener('abort', abort);
+      if (signal.aborted) void response.body?.cancel().catch(() => undefined);
+      resolve(response);
+    }, error => {
+      signal.removeEventListener('abort', abort);
+      reject(error);
+    });
+    if (signal.aborted) abort();
+  });
+}
+
 export class OAuthDeviceClient {
   constructor(private readonly config: OAuthDeviceConfig, private readonly redactor?: CredentialRedactor) {
     const deviceUrl = safeEndpoint(config.deviceAuthorizationUrl);
@@ -145,14 +162,14 @@ export class OAuthDeviceClient {
     const deadline = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
     const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     try {
-      response = await fetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
+      response = await abortableFetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
         method: 'POST',
         redirect: 'manual',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
           ...(this.config.responseProfile === 'github-copilot' ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
         body: new URLSearchParams({ client_id: this.config.clientId, ...(this.config.scope ? { scope: this.config.scope } : {}) }),
         signal: requestSignal,
-      });
+      }, requestSignal);
     } catch {
       throw new Error('OAuth device authorization failed.');
     }
@@ -204,7 +221,7 @@ export class OAuthDeviceClient {
         ? AbortSignal.any([signal, AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS)])
         : AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
       try {
-        response = await fetch(safeEndpoint(this.config.tokenUrl), {
+        response = await abortableFetch(safeEndpoint(this.config.tokenUrl), {
           method: 'POST',
           redirect: 'manual',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
@@ -215,7 +232,7 @@ export class OAuthDeviceClient {
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
           }),
           signal: requestSignal,
-        });
+        }, requestSignal);
       } catch {
         if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
         throw new Error('OAuth token exchange failed.');

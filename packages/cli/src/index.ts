@@ -449,6 +449,7 @@ async function main(): Promise<void> {
   let settingsResolution = await resolveSettingsForTrust(true);
   let builtinExtensions = configuredBuiltinExtensions(settingsResolution, cliArguments);
   let providerRuntime: Awaited<ReturnType<typeof createCliProviderRuntime>>;
+  const providerHost = new AbortController();
   const reloadAgentSettings = async (): Promise<void> => {
     const candidate = await resolveSettingsForTrust();
     const candidateBuiltins = configuredBuiltinExtensions(candidate, cliArguments);
@@ -717,6 +718,8 @@ async function main(): Promise<void> {
     if (filteredInput) process.stdout.write('\x1b[?2004l');
     const themeProbe = systemThemeProbe;
     systemThemeProbe = undefined;
+    providerHost.abort();
+    providerRuntime?.close();
     earlyCleanupPromise = cleanupCliEarlyExit({
       input: inputDriver,
       filteredInput,
@@ -829,6 +832,7 @@ async function main(): Promise<void> {
       extensionRegistry.getProviderDefinitions(),
       outputCredentialRedactor,
       offline,
+      providerHost.signal,
     );
     const refreshedProviders = createConfiguredProviders(process.env, {
       credentials: refreshedRuntime.values,
@@ -840,7 +844,9 @@ async function main(): Promise<void> {
       if (!commandContext.extensionProviderNames.has(name)) configuredProviders.delete(name);
     }
     for (const [name, provider] of refreshedProviders) configuredProviders.set(name, provider);
+    providerRuntime.close();
     providerRuntime = refreshedRuntime;
+    commandContext.providerLifetime = refreshedRuntime.signal;
     commandContext.credentialService = refreshedRuntime.credentials;
     commandContext.providerCredentialValues = refreshedRuntime.values;
     commandContext.providerNetwork = refreshedRuntime.network;
@@ -968,6 +974,7 @@ async function main(): Promise<void> {
       extensionRegistry.getProviderDefinitions(),
       outputCredentialRedactor,
       offline,
+      providerHost.signal,
     );
   } catch (error) {
     reportError(error instanceof Error ? error.message : String(error));
@@ -1001,6 +1008,7 @@ async function main(): Promise<void> {
       agentSettings: () => settingsResolution.settings,
       providers: configuredProviders,
       credentialService: providerRuntime.credentials,
+      providerLifetime: providerRuntime.signal,
       providerCredentialValues: providerRuntime.values,
       allowCredentialReveal: applicationMode === 'interactive'
         && process.stdin.isTTY === true && process.stdout.isTTY === true,
@@ -1380,6 +1388,8 @@ async function main(): Promise<void> {
   const shutdown = (message: string, exitCode?: number): void => {
     if (shuttingDown) return;
     shuttingDown = true;
+    providerHost.abort();
+    providerRuntime.close();
     keybindingGeneration++;
     keyBindings.clearAll();
     hotkeyView = undefined;
@@ -1529,7 +1539,8 @@ async function main(): Promise<void> {
           trimmed = resourceManager.expandPrompt(resourceCommand, resourceArgs);
         } else {
           if (trimmed === '/help') terminal.showHelp();
-          else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone' || resourceCommand === 'mcp') {
+          else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone' || resourceCommand === 'mcp'
+            || resourceCommand === 'login' && /(?:^|\s)--issuer(?:=|\s+)github-copilot(?:\s|$)/u.test(trimmed)) {
             const controller = new AbortController();
             const commandContext = commandHandler.getContext();
             activeAbortController = controller;
@@ -2024,6 +2035,8 @@ async function main(): Promise<void> {
       interrupted ??= signal;
       process.exitCode = interrupted === 'SIGINT' ? 130 : 143;
       activeAbortController?.abort();
+      providerHost.abort();
+      providerRuntime.close();
     };
     const interruptPrint = (): void => stop('SIGINT');
     const terminatePrint = (): void => stop('SIGTERM');

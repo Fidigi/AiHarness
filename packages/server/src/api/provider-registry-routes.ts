@@ -5,6 +5,7 @@ import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
 import { ProviderOAuthService } from '../runtime/provider-oauth.js';
 import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
+import { sessionCopyRequest as requestLifetime } from './session-copy-request.js';
 
 const BUILTIN_ENVIRONMENT: Record<string, string[]> = {
   openai: ['OPENAI_API_KEY'],
@@ -97,8 +98,10 @@ export function createProviderRegistryRouter(
   }));
 
   router.post('/auth/:id/oauth', requireCapability('credentials'), async (request, response, next) => {
-    try { response.status(201).json(await oauth.start(identifier(request.params.id, 'provider id'))); }
+    const lifetime = requestLifetime(request, response);
+    try { response.status(201).json(await oauth.start(identifier(request.params.id, 'provider id'), lifetime.signal)); }
     catch (error) { next(error); }
+    finally { lifetime.dispose(); }
   });
 
   router.get('/auth/oauth/:flowId', requireCapability('credentials'), (request, response) => {
@@ -131,6 +134,7 @@ export function createProviderRegistryRouter(
         response.status(404).json({ error: 'Provider not found.' });
         return;
       }
+      oauth.cancelProvider(id);
       proxy.removeProvider(id);
       await credentialService()?.delete(id);
       response.json({ success: true, type: id, connected: false });

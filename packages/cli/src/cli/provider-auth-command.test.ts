@@ -1,5 +1,6 @@
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createLocalTLSFixture } from './fixtures/oauth-local-tls.mjs';
 import { mkdirSync } from 'node:fs';
 import { createServer, type Server } from 'node:https';
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -28,7 +29,7 @@ const token = 'disposable-fixture-access-741';
 const refresh = 'disposable-fixture-refresh-742';
 const master = 'disposable-fixture-master-key-at-least-32-bytes';
 
-function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
+function launch(args: string[], env: NodeJS.ProcessEnv = {}, input = '') {
   const bin = process.env.AIH_TOP_LEVEL_CLI_BIN;
   const child = spawn(bin ?? process.execPath, bin ? args : [entry, ...args], {
     cwd, env: { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent,
@@ -36,8 +37,9 @@ function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
       AI_HARNESS_OAUTH_OPENAI_DEVICE_URL: `${endpoint}/device`,
       AI_HARNESS_OAUTH_OPENAI_TOKEN_URL: `${endpoint}/token`, AI_HARNESS_OAUTH_OPENAI_CLIENT_ID: 'fixture-client',
       AI_HARNESS_OPENAI_API_KEY_COMMAND: `touch '${path.join(cwd, 'command-ran')}'`, ...env },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
+  child.stdin.end(input);
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += String(chunk); });
   child.stderr.on('data', chunk => { stderr += String(chunk); });
@@ -48,13 +50,13 @@ function launch(args: string[], env: NodeJS.ProcessEnv = {}) {
   });
   return { child, done };
 }
-async function invoke(args: string[], env?: NodeJS.ProcessEnv) { return launch(args, env).done; }
+async function invoke(args: string[], env?: NodeJS.ProcessEnv, input = '') { return launch(args, env, input).done; }
 async function waitForRequest(route: string, childDone: ReturnType<typeof launch>['done']) {
   const deadline = Date.now() + 5000;
   while (!requests.includes(route) && Date.now() < deadline) {
     const closed = await Promise.race([
       childDone.then(({ code, signal }) => ({ code, signal })),
-      new Promise<undefined>(resolve => setTimeout(resolve, 10)),
+      new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), 10)),
     ]);
     if (closed && !requests.includes(route)) {
       throw new Error(`Auth child exited before issuer request was observed (code=${closed.code}, signal=${closed.signal}).`);
@@ -73,9 +75,7 @@ beforeEach(async () => {
   transportErrors = caseTransportErrors;
   const caseIssuerForms: typeof issuerForms = [];
   issuerForms = caseIssuerForms;
-  await execute('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', path.join(root, 'key.pem'),
-    '-out', path.join(root, 'cert.pem'), '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1']);
-  server = createServer({ key: await readFile(path.join(root, 'key.pem')), cert: await readFile(path.join(root, 'cert.pem')) }, (req, res) => {
+  server = createServer(await createLocalTLSFixture(root), (req, res) => {
     requests.push(req.url!);
     activeResponses++;
     res.once('close', () => { activeResponses--; });
@@ -218,7 +218,7 @@ globalThis.fetch = (input, init) => {
     expect(await readdir(cwd)).toEqual([]);
   });
 
-  it('uses an encrypted Copilot login for an actual CLI inference turn and refuses it after logout', async () => {
+  it.each(['print', 'json', 'rpc'])('uses an encrypted Copilot login for an actual %s inference turn and refuses it after logout', async mode => {
     copilotPickerModel = 'gpt-5-mini';
     const fixture = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
       rows: Array<{ model: string; case: string; responseEvents: unknown[] }>;
@@ -236,12 +236,16 @@ globalThis.fetch = (input, init) => {
     const login = await invoke(['auth', 'login', 'github-copilot', '--issuer=github-copilot'], env);
     expect(login, login.stderr).toMatchObject({ code: 0, signal: null });
     const sessions = path.join(root, 'sessions');
-    const args = ['--approve', '--mode', 'json', '--session-dir', sessions, '--provider', 'github-copilot', '--model', copilotPickerModel, '--thinking', 'off', 'probe'];
-    const turn = await invoke(args, env);
+    const args = ['--approve', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), '--session-dir', sessions, '--provider', 'github-copilot', '--model', copilotPickerModel, '--thinking', 'off', ...(mode === 'rpc' ? [] : ['probe'])];
+    const input = mode === 'rpc' ? JSON.stringify({ type: 'prompt', id: 'copilot-prompt', message: 'probe' }) + '\n' : '';
+    const turn = await invoke(args, env, input);
     expect(turn, turn.stderr).toMatchObject({ code: 0, signal: null });
-    const records = turn.stdout.trim().split('\n').map(line => JSON.parse(line));
-    expect(records.find(record => record.type === 'message_end' && record.message?.role === 'assistant')?.message)
-      .toMatchObject({ provider: 'github-copilot', api: 'openai-responses', model: copilotPickerModel });
+    if (mode === 'print') expect(turn.stdout).toBe('ok\n');
+    else {
+      const records = turn.stdout.trim().split('\n').map(line => JSON.parse(line));
+      expect(records.find(record => record.type === 'message_end' && record.message?.role === 'assistant')?.message)
+        .toMatchObject({ provider: 'github-copilot', api: 'openai-responses', model: copilotPickerModel });
+    }
     expect(requests).toEqual(['/login/device/code', '/login/oauth/access_token', '/copilot_internal/v2/token', '/models', '/responses']);
     const request = issuerForms.at(-1)!;
     expect(request).toMatchObject({ method: 'POST', originalUrl: 'https://api.individual.githubcopilot.com/responses', authorization: `Bearer ${token}` });
@@ -253,10 +257,28 @@ globalThis.fetch = (input, init) => {
       provider: 'github-copilot', api: 'openai-responses', model: copilotPickerModel }));
     expect((await stat(path.join(agent, 'credentials.enc'))).mode & 0o777).toBe(0o600);
     for (const secret of [token, refresh]) expect(login.stdout + login.stderr + turn.stdout + turn.stderr + journal).not.toContain(secret);
+    if (mode === 'rpc') {
+      const service = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(agent, 'credentials.enc'), master) });
+      await service.load();
+      await service.setOAuth('github-copilot', { accessToken: token, refreshToken: refresh, expiresAt: 1,
+        subscription: { provider: 'github-copilot', availableModelIds: [copilotPickerModel] } });
+      holdCopilotCatalogue = true;
+      const starting = launch(args, env, input);
+      const deadline = Date.now() + 5000;
+      while (requests.filter(route => route === '/models').length < 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+      expect(requests.filter(route => route === '/models')).toHaveLength(2);
+      starting.child.kill('SIGTERM');
+      const stopped = await starting.done;
+      expect(stopped, stopped.stderr).toMatchObject({ code: 143, signal: null });
+      releaseCopilotCatalogue?.(); holdCopilotCatalogue = false;
+      await service.load();
+      expect(service.list().find(item => item.provider === 'github-copilot')?.expiresAt).toBe(1);
+      expect(requests.slice(-2)).toEqual(['/copilot_internal/v2/token', '/models']);
+    }
     expect((await invoke(['auth', 'logout', 'github-copilot'])).code).toBe(0);
-    const withdrawn = await invoke(args, env);
+    const withdrawn = await invoke(args, env, input);
     expect(withdrawn.signal).toBeNull(); expect(withdrawn.code).not.toBe(0);
-    expect(requests).toHaveLength(5);
+    expect(requests).toHaveLength(mode === 'rpc' ? 7 : 5);
   }, 30000);
 
   it('lists metadata without credential commands, refresh or agents', async () => {
@@ -288,7 +310,7 @@ globalThis.fetch = (input, init) => {
 
   it('performs a real HTTPS flow, persists encrypted before success and deletes durably', async () => {
     const result = await invoke(['auth', 'login', 'openai']);
-    expect(result).toMatchObject({ code: 0, signal: null, stdout: 'Provider credentials encrypted and saved.\n' });
+    expect(result, result.stderr).toMatchObject({ code: 0, signal: null, stdout: 'Provider credentials encrypted and saved.\n' });
     expect(requests).toEqual(['/device', '/token']);
     expect(result.stderr).toContain('User code: VISIBLE-123');
     for (const secret of [token, refresh, master, 'private-device-code-743', 'do-not-print']) expect(result.stdout + result.stderr).not.toContain(secret);

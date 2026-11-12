@@ -986,10 +986,16 @@ export class ProviderCredentialService {
     this.rememberCredential(refreshed);
     this.assertCurrent(provider, generation, options.signal);
     if (source === 'encrypted-store') {
-      const published = await this.options.store!.compareAndSet(this.storageName(provider), expected,
-        JSON.stringify({ ...refreshed, revision: randomUUID() }));
+      const serialized = JSON.stringify({ ...refreshed, revision: randomUUID() });
+      const published = await this.options.store!.compareAndSet(this.storageName(provider), expected, serialized);
       if (!published) throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
-      this.assertCurrent(provider, generation, options.signal);
+      try {
+        this.assertCurrent(provider, generation, options.signal);
+      } catch (error) {
+        // Withdraw only this refresh, never logout or a newer writer's value.
+        await this.options.store!.compareAndSet(this.storageName(provider), serialized, expected);
+        throw error;
+      }
     } else {
       this.generations.set(provider, generation + 1);
       this.volatile.set(provider, structuredClone(refreshed));

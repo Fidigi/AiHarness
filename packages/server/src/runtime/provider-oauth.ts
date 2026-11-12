@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
-import type { ProviderCredentialService } from '@ai-harness/core';
+import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
+import { gitHubCopilotCredentialSource } from './github-copilot.js';
 
 const SUPPORTED = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'local']);
 const MAX_OAUTH_RESPONSE_BYTES = 256 * 1024;
@@ -12,6 +13,8 @@ interface OAuthConfig {
   tokenUrl: string;
   clientId: string;
   scope?: string;
+  subscription?: true;
+  enterpriseDomain?: string;
 }
 
 interface OAuthFlow {
@@ -26,6 +29,8 @@ interface OAuthFlow {
   deviceCode: string;
   error?: string;
   controller: AbortController;
+  credentials?: ProviderCredentialService;
+  publish?: Awaited<ReturnType<ProviderCredentialService['prepareOAuthLogin']>>;
 }
 
 export interface PublicOAuthFlow {
@@ -59,7 +64,10 @@ function safeEndpoint(value: string, label: string, status = 400): string {
 }
 
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+  if (signal.aborted) {
+    void promise.catch(() => undefined);
+    return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+  }
   return new Promise<T>((resolve, reject) => {
     const abort = (): void => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
     signal.addEventListener('abort', abort, { once: true });
@@ -118,6 +126,12 @@ function boundedRemoteValue(value: unknown, maxBytes: number): string | undefine
 }
 
 function config(provider: string): OAuthConfig | undefined {
+  if (provider === 'github-copilot') {
+    const issuer = getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN);
+    return { deviceUrl: issuer.deviceAuthorizationUrl, tokenUrl: issuer.tokenUrl,
+      clientId: issuer.clientId, scope: issuer.scope, subscription: true,
+      ...(issuer.enterpriseDomain === undefined ? {} : { enterpriseDomain: issuer.enterpriseDomain }) };
+  }
   const key = prefix(provider);
   const deviceUrl = process.env[`${key}_DEVICE_URL`];
   const tokenUrl = process.env[`${key}_TOKEN_URL`];
@@ -141,6 +155,8 @@ function config(provider: string): OAuthConfig | undefined {
 /** Bounded in-memory OAuth device grants; access tokens go directly to the credential store/provider. */
 export class ProviderOAuthService {
   private readonly flows = new Map<string, OAuthFlow>();
+  private readonly starting = new Map<string, AbortController>();
+  private readonly lifetime = new AbortController();
 
   private readonly requestTimeoutMs: number;
 
@@ -156,17 +172,40 @@ export class ProviderOAuthService {
   }
 
   isSupported(provider: string): boolean {
-    try { return SUPPORTED.has(provider) && Boolean(config(provider)); } catch { return false; }
+    try { return (SUPPORTED.has(provider) || provider === 'github-copilot') && Boolean(config(provider)); } catch { return false; }
   }
 
-  async start(providerValue: string): Promise<PublicOAuthFlow> {
+  async start(providerValue: string, signal?: AbortSignal): Promise<PublicOAuthFlow> {
     if (typeof providerValue !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerValue)) {
       throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
     }
     const provider = providerValue.trim().toLowerCase();
-    if (!SUPPORTED.has(provider)) throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
+    if (!SUPPORTED.has(provider) && provider !== 'github-copilot') throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
+    if (this.lifetime.signal.aborted) throw Object.assign(new Error('OAuth service is closed.'), { status: 409 });
     const settings = config(provider);
     if (!settings) throw Object.assign(new Error('OAuth device flow is not configured for this provider.'), { status: 409 });
+    const controller = new AbortController();
+    const credentials = settings.subscription ? this.credentials() : undefined;
+    if (settings.subscription && !credentials?.hasPersistentStore()) {
+      throw Object.assign(new Error('OAuth credential storage is unavailable.'), { status: 409 });
+    }
+    // Reserve before the first remote request, including an unpublished device request.
+    if (settings.subscription) this.cancelProvider(provider);
+    this.starting.set(provider, controller);
+    const abort = (): void => controller.abort();
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const publish = credentials ? await credentials.prepareOAuthLogin(provider, controller.signal) : undefined;
+      return await this.startFlow(provider, settings, controller, credentials, publish);
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      if (this.starting.get(provider) === controller) this.starting.delete(provider);
+    }
+  }
+
+  private async startFlow(provider: string, settings: OAuthConfig, controller: AbortController,
+    credentials?: ProviderCredentialService, publish?: OAuthFlow['publish']): Promise<PublicOAuthFlow> {
     this.prune();
     if (this.flows.size >= 100) {
       for (const [id, flow] of this.flows) {
@@ -176,12 +215,14 @@ export class ProviderOAuthService {
     }
     if (this.flows.size >= 100) throw Object.assign(new Error('Too many active OAuth flows.'), { status: 429 });
     let response: Response;
-    const requestSignal = AbortSignal.timeout(this.requestTimeoutMs);
+    const requestSignal = AbortSignal.any([controller.signal, this.lifetime.signal, AbortSignal.timeout(this.requestTimeoutMs)]);
     try {
+      if (requestSignal.aborted) throw requestSignal.reason;
       response = await abortable(this.fetcher(settings.deviceUrl, {
         method: 'POST',
         redirect: 'manual',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+          ...(settings.subscription ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
         body: new URLSearchParams({ client_id: settings.clientId, ...(settings.scope ? { scope: settings.scope } : {}) }),
         signal: requestSignal,
       }), requestSignal);
@@ -221,6 +262,7 @@ export class ProviderOAuthService {
       || intervalSeconds < 1 || intervalSeconds > 30) {
       throw Object.assign(new Error('OAuth response is invalid.'), { status: 502 });
     }
+    if (requestSignal.aborted) throw Object.assign(new Error('OAuth device authorization cancelled.'), { status: 409 });
     const flow: OAuthFlow = {
       id: crypto.randomUUID(), provider, state: 'pending',
       userCode,
@@ -228,10 +270,17 @@ export class ProviderOAuthService {
       ...(safeVerificationUriComplete ? { verificationUriComplete: safeVerificationUriComplete } : {}),
       expiresAt: new Date(Date.now() + expiresIn * 1_000).toISOString(),
       intervalSeconds,
-      deviceCode, controller: new AbortController(),
+      deviceCode, controller, credentials, publish,
     };
     this.flows.set(flow.id, flow);
-    void this.poll(flow, settings);
+    const expiry = setTimeout(() => {
+      if (flow.state === 'pending') {
+        flow.state = 'expired';
+        flow.deviceCode = '';
+        controller.abort();
+      }
+    }, expiresIn * 1_000);
+    void this.poll(flow, settings).finally(() => clearTimeout(expiry));
     return this.public(flow);
   }
 
@@ -250,7 +299,17 @@ export class ProviderOAuthService {
     return true;
   }
 
+  cancelProvider(provider: string): void {
+    this.starting.get(provider)?.abort();
+    for (const flow of this.flows.values()) {
+      if (flow.provider === provider) this.cancel(flow.id);
+    }
+  }
+
   close(): void {
+    this.lifetime.abort();
+    for (const controller of this.starting.values()) controller.abort();
+    this.starting.clear();
     for (const flow of this.flows.values()) {
       flow.deviceCode = '';
       if (flow.state === 'pending') {
@@ -283,9 +342,11 @@ export class ProviderOAuthService {
           flow.controller.signal,
           AbortSignal.timeout(this.requestTimeoutMs),
         ]);
+        if (requestSignal.aborted) throw requestSignal.reason;
         const response = await abortable(this.fetcher(settings.tokenUrl, {
           method: 'POST', signal: requestSignal, redirect: 'manual',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+            ...(settings.subscription ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
           body: new URLSearchParams({
             client_id: settings.clientId, device_code: flow.deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
@@ -295,6 +356,23 @@ export class ProviderOAuthService {
         const accessToken = boundedRemoteValue(data.access_token, MAX_OAUTH_TOKEN_BYTES);
         if (accessToken) {
           if (!response.ok) throw new Error('OAuth response is invalid.');
+          if (settings.subscription) {
+            const credentials = flow.credentials!;
+            const exchanged = await exchangeGitHubCopilotToken(accessToken, {
+              enterpriseDomain: settings.enterpriseDomain, signal: flow.controller.signal,
+              fetcher: this.fetcher, redactor: credentials.redactor,
+            });
+            await flow.publish!({ accessToken: exchanged.accessToken, refreshToken: exchanged.refreshToken,
+              expiresAt: exchanged.expiresAt, subscription: { provider: 'github-copilot',
+                availableModelIds: exchanged.availableModelIds,
+                ...(exchanged.enterpriseDomain === undefined ? {} : { enterpriseDomain: exchanged.enterpriseDomain }) } });
+            // No await after durable admission: runtime publication is synchronous.
+            const model = GITHUB_COPILOT_MODELS.find(model => exchanged.availableModelIds.includes(model.id));
+            if (model) this.proxy.setGitHubCopilotSubscription(model.id, gitHubCopilotCredentialSource(credentials, this.lifetime.signal));
+            flow.state = 'connected';
+            flow.deviceCode = '';
+            return;
+          }
           const refreshToken = data.refresh_token === undefined
             ? undefined : boundedRemoteValue(data.refresh_token, MAX_OAUTH_TOKEN_BYTES);
           const tokenType = data.token_type === undefined

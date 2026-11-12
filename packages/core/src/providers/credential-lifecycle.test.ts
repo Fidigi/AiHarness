@@ -197,6 +197,31 @@ it.each(['before', 'after-write', 'after-newer-write'] as const)('cancels prepar
     .toEqual(moment === 'after-newer-write' ? { version: 1, type: 'api-key', apiKey: 'newer-key' } : { version: 1, type: 'oauth', ...copilotOriginal });
 });
 
+it.each(['after-write', 'after-newer-write', 'after-logout'] as const)(
+  'withdraws its own cancelled Copilot refresh %s without restoring over another writer', async moment => {
+    const { service, reopen, store } = await fixture(true, copilotOriginal), controller = new AbortController();
+    const compareAndSet = store.compareAndSet.bind(store);
+    const spy = vi.spyOn(store, 'compareAndSet').mockImplementationOnce(async (...args) => {
+      const published = await compareAndSet(...args);
+      if (moment === 'after-newer-write') await reopen().setApiKey('openai', 'newer-key');
+      if (moment === 'after-logout') await reopen().delete('openai');
+      controller.abort();
+      return published;
+    });
+    let requests = 0;
+    await expect(service.resolve('openai', { ...copilotResolve, now: 200_000, signal: controller.signal,
+      fetcher: (async () => new Response(JSON.stringify(++requests === 1 ? { token: copilotAccess, expires_at: 2000 }
+        : { data: [{ id: 'new-model', model_picker_enabled: true }] }))) as typeof fetch,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    spy.mockRestore();
+    const reader = reopen(); await reader.load();
+    expect((await reader.resolve('openai', { env: {}, now: 0,
+      ...(moment === 'after-write' ? { subscriptionProvider: 'github-copilot' as const } : {}) }))?.credential)
+      .toEqual(moment === 'after-write' ? { version: 1, type: 'oauth', ...copilotOriginal }
+        : moment === 'after-newer-write' ? { version: 1, type: 'api-key', apiKey: 'newer-key' } : undefined);
+    expect(service.redactor.redact(copilotAccess)).toBe('[REDACTED]');
+  });
+
 it('keeps the previous Copilot credential and redacts the exchanged token when catalogue retrieval fails', async () => {
   const { service, reopen } = await fixture(true, copilotOriginal);
   let calls = 0;

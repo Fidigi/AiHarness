@@ -66,6 +66,15 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   const [providers, setProviders] = useState<CustomProviderDefinition[]>([]);
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
+  const [oauthStarting, setOauthStarting] = useState(false);
+  const oauthOperation = useRef<{ provider: string; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
+  const retireOAuth = () => {
+    const previous = oauthOperation.current;
+    oauthOperation.current = undefined;
+    if (previous) ++loadSequence.current;
+    previous?.controller.abort();
+    if (previous?.flow?.state === 'pending') void cancelProviderOAuth(previous.flow.id);
+  };
   const [form, setForm] = useState({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
   const [busy, setBusy] = useState(false);
   const load = async () => {
@@ -145,19 +154,39 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     void reconcile(undefined, false).catch(() => {
       if (mounted.current) setRenameCapability({ supported: false, mode: 'disabled', reason: 'unavailable' });
     });
-    return () => { mounted.current = false; ++epoch.current; };
+    return () => { mounted.current = false; ++epoch.current; retireOAuth(); };
   }, []);
   useEffect(() => {
-    if (!oauthFlow || oauthFlow.state !== 'pending') return;
+    const operation = oauthOperation.current;
+    if (!oauthFlow || oauthFlow.state !== 'pending' || !operation) return;
+    let active = true;
     const timer = window.setTimeout(async () => {
-      const result = await getProviderOAuth(oauthFlow.id);
+      const result = await getProviderOAuth(oauthFlow.id, operation.controller.signal);
+      if (!active || !mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) return;
       if (result.success && result.data) {
+        operation.flow = result.data;
         setOauthFlow(result.data);
-        if (result.data.state === 'connected') await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
+        if (result.data.state === 'connected') await reconcile().catch(() => {
+          if (mounted.current && oauthOperation.current === operation) error();
+        });
       } else error(result.error);
     }, 2_000);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [oauthFlow]);
+  const login = async (provider: string) => {
+    retireOAuth();
+    const operation = { provider, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
+    oauthOperation.current = operation;
+    setOauthFlow(undefined); setOauthStarting(true);
+    const result = await startProviderOAuth(provider, operation.controller.signal);
+    if (!mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) {
+      if (result.data?.state === 'pending') void cancelProviderOAuth(result.data.id);
+      return;
+    }
+    setOauthStarting(false);
+    if (!result.success || !result.data) error(result.error);
+    else { operation.flow = result.data; setOauthFlow(result.data); }
+  };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -191,9 +220,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           {status.usage ? ` · ${status.usage.requests ?? 0} requests · ${(status.usage.inputTokens ?? 0) + (status.usage.outputTokens ?? 0)} tokens · $${(status.usage.costUsd ?? 0).toFixed(4)}` : ''}
         </span>
         <div>
-          {status.method === 'oauth' && <button type="button" onClick={async () => {
-            const result = await startProviderOAuth(status.type);
-            if (!result.success || !result.data) error(result.error); else setOauthFlow(result.data);
+          {status.method === 'oauth' && <button type="button" disabled={oauthStarting} onClick={() => {
+            void login(status.type);
           }}>{status.connected ? t('settings.reconnect') : t('settings.connect')}</button>}
           <button type="button" disabled={!status.connected} onClick={async () => {
             const result = await testProviderConnection(status.type);
@@ -203,19 +231,31 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             } else error(result.error);
           }}>{t('settings.testConnection')}</button>
           {status.disconnectSupported && <button type="button" onClick={async () => {
+            const generation = epoch.current;
+            if (oauthOperation.current?.provider === status.type) {
+              retireOAuth(); setOauthFlow(undefined); setOauthStarting(false);
+            }
             const result = await disconnectProvider(status.type);
-            if (!result.success) error(result.error); else await load();
+            if (!mounted.current || epoch.current !== generation) return;
+            if (!result.success) error(result.error); else await reconcile().catch(() => {
+              if (mounted.current && epoch.current === generation) error();
+            });
           }}>{t('settings.disconnect')}</button>}
         </div>
       </article>)}
     </div>
-    {oauthFlow && <aside className="oauth-device-flow" role="status">
+    {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status">
       <strong>{t('settings.oauth.title')}</strong>
+      {oauthStarting && <button type="button" onClick={() => {
+        retireOAuth(); setOauthStarting(false);
+      }}>{t('common.cancel')}</button>}
+      {oauthFlow && <>
       {oauthFlow.state === 'pending' ? <>
         <p>{t('settings.oauth.code')}: <code>{oauthFlow.userCode}</code></p>
         <a href={oauthFlow.verificationUriComplete || oauthFlow.verificationUri} target="_blank" rel="noopener noreferrer">{t('settings.oauth.open')}</a>
-        <button type="button" onClick={async () => { await cancelProviderOAuth(oauthFlow.id); setOauthFlow(undefined); }}>{t('common.cancel')}</button>
+        <button type="button" onClick={() => { retireOAuth(); setOauthFlow(undefined); }}>{t('common.cancel')}</button>
       </> : <p>{oauthFlow.state === 'connected' ? t('settings.oauth.connected') : oauthFlow.error || oauthFlow.state}</p>}
+      </>}
     </aside>}
     <details className="custom-resource-editor" open={Boolean(editing)}>
       <summary>{t('settings.customProviders.manage')}</summary>

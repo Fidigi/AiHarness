@@ -124,6 +124,7 @@ interface CredentialRuntime {
   readonly filePath: string;
   readonly services: Promise<RuntimeServices>;
   readonly exclusiveHost: boolean;
+  readonly controller: AbortController;
   service?: ProviderCredentialService;
   mcpOAuth?: McpOAuthCredentialManager;
   mcpOAuthFlows?: McpOAuthFlowService;
@@ -240,7 +241,7 @@ function initializeCredentials(
         ? JSON.stringify({ bearerToken: value }) : value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
-    const copilot = await resolveGitHubCopilotSubscription(credentials);
+    const copilot = await resolveGitHubCopilotSubscription(credentials, runtime.controller.signal);
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
     if (copilot) proxy.setGitHubCopilotSubscription(copilot.model, copilot.credentialSource);
     let mcpOAuth: McpOAuthCredentialManager | undefined;
@@ -403,7 +404,7 @@ export function createApp(config?: ServerConfig): express.Application {
   const replacedProxy = proxyServer;
   const replacedCredentials = activeCredentialRuntime;
   activeServices = undefined;
-  if (replacedCredentials) replacedCredentials.closed = true;
+  if (replacedCredentials) { replacedCredentials.closed = true; replacedCredentials.controller.abort(); }
   activeCredentialRuntime = undefined;
   if (replacedCredentials?.mcpOAuthFlows) void replacedCredentials.mcpOAuthFlows.shutdown();
   if (replacedServices) void shutdownRuntimeServices(replacedServices, replacedProxy);
@@ -435,6 +436,7 @@ export function createApp(config?: ServerConfig): express.Application {
   void servicesPromise.catch(() => undefined);
   const credentialRuntime: CredentialRuntime = {
     filePath: path.join(dataDir, 'credentials.enc'),
+    controller: new AbortController(),
     services: servicesPromise,
     exclusiveHost,
   };
@@ -1656,7 +1658,7 @@ export async function stop(): Promise<void> {
   httpServer = null;
   proxyServer = null;
   const closingCredentials = activeCredentialRuntime;
-  if (closingCredentials) closingCredentials.closed = true;
+  if (closingCredentials) { closingCredentials.closed = true; closingCredentials.controller.abort(); }
   activeCredentialRuntime = undefined;
   const cleanup = Promise.allSettled([
     shutdownRuntimeServices(services, closingProxy),

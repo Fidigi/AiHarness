@@ -615,6 +615,18 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
         mode: scenario.split('/')[0], signal: scenario.split('/')[1] });
     });
 
+  it.each(['regular', 'fullscreen', 'print', 'json', 'rpc'])('owns native Copilot login and withdrawal through the installed executable (%s)', async mode => {
+    const probe = path.join(consumer, `copilot-interactive-${mode}.mjs`);
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/copilot-interactive-probe.mjs'), probe);
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/oauth-local-tls.mjs'), path.join(consumer, 'oauth-local-tls.mjs'));
+    const reference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/github-copilot-routing-reference.json'), 'utf8'));
+    const response = path.join(consumer, `copilot-response-${mode}.json`);
+    await writeFile(response, JSON.stringify(reference.rows.find((row: { model: string; case: string }) => row.model === 'gpt-5-mini' && row.case === 'user').responseEvents));
+    expect(await run(process.execPath, [probe, mode], consumer, { ...environment,
+      AIH_COPILOT_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_COPILOT_RESPONSE_FILE: response }, '', 25000))
+      .toEqual({ code: 0, stdout: `COPILOT_INTERACTIVE_OK ${mode}\n`, stderr: '' });
+  }, 30000);
+
   it.each(['regular', 'fullscreen'])('joins an admitted append before installed TTY shutdown (%s)', async mode => {
     const probe = path.join(consumer, `interactive-settlement-${mode}.mjs`);
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/interactive-settlement-probe.mjs'), probe);

@@ -14,6 +14,8 @@ import {
   createProviderBranchSummarizer,
   flattenModelCatalog,
   getSupportedThinkingLevels,
+  getGitHubCopilotOAuthConfig,
+  GITHUB_COPILOT_MODELS,
   getSessionAccounting,
   getSessionCacheWarmingStatus,
   prepareCompactionContext,
@@ -58,6 +60,8 @@ import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
 import { createConfiguredProviders } from '../providers/configured-providers.js';
+import { cliGitHubCopilotCredentialSource } from '../providers/provider-runtime.js';
+import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
 
 interface ExplicitCredentialRevealOutput {
@@ -132,6 +136,7 @@ export interface CommandContext {
   offline?: boolean;
   /** Foreground command lifetime supplied by the interactive input owner. */
   signal?: AbortSignal;
+  providerLifetime?: AbortSignal;
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
@@ -179,6 +184,7 @@ export interface CommandMcpControl {
 
 export interface CommandWorkspaceContext {
   offline?: boolean;
+  providerLifetime?: AbortSignal;
   writeWarning?: (message: string) => void;
   cwd: string;
   workspaceManager?: WorkspaceManager;
@@ -704,15 +710,50 @@ const commands: CommandEntry[] = [
   {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth device',
-    usage: '/login <provider>',
+    usage: '/login <provider> [--issuer github-copilot]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
-      if (!providerName) return chalk.red('Usage: /login <provider>');
+      const copilot = args.length === 3 && args[1] === '--issuer' && args[2] === 'github-copilot'
+        || args.length === 2 && args[1] === '--issuer=github-copilot';
+      if (!providerName || args.length !== 1 && !copilot) return chalk.red('Usage: /login <provider> [--issuer github-copilot]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
       if (!credentialService?.hasPersistentStore?.()) {
         return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
+      }
+      if (copilot) {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const deadline = performance.now() + 300_000;
+        let timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          const publish = await credentialService.prepareOAuthLogin(providerName, signal);
+          const client = new OAuthDeviceClient(getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN), credentialService.redactor);
+          const prompt = await client.requestCode(signal);
+          signal.throwIfAborted();
+          credentialService.redactor.add(prompt.deviceCode);
+          const code = credentialService.redactor.redact(prompt.userCode);
+          if (Buffer.from(prompt.userCode, 'utf8').toString('utf8') !== prompt.userCode
+            || terminalText(prompt.userCode) !== prompt.userCode || code !== prompt.userCode) throw new Error('Invalid OAuth code.');
+          const uri = new URL(prompt.verificationUri);
+          ctx.terminal.writeOutput(`Ouvrez ${credentialService.redactor.redact(`${uri.origin}${uri.pathname}`)} et saisissez le code ${code}.`);
+          clearTimeout(timer);
+          timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(deadline - performance.now(), prompt.expiresIn * 1000)));
+          const credential = await client.pollCredential(prompt, signal);
+          signal.throwIfAborted();
+          await publish(credential);
+          signal.throwIfAborted();
+          // Explicit login makes the canonical adapter available, not selected.
+          const model = GITHUB_COPILOT_MODELS.find(model => credential.subscription?.availableModelIds.includes(model.id));
+          if (providerName === 'github-copilot' && model) {
+            const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, githubCopilot: {
+              model: model.id, credentialSource: cliGitHubCopilotCredentialSource(credentialService, ctx.providerLifetime),
+            } }).get('github-copilot')!;
+            ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
       }
       const config = oauthConfigFromEnv(providerName);
       if (!config) {
@@ -1625,6 +1666,7 @@ export class CommandHandler {
       enabledToolNames: workspace.enabledToolNames,
       modelPatterns: workspace.modelPatterns,
       offline: workspace.offline,
+      providerLifetime: workspace.providerLifetime,
       settingsInfo: workspace.settingsInfo,
       agentSettings: workspace.agentSettings,
       credentialService: workspace.credentialService,
