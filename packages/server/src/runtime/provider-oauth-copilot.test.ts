@@ -23,7 +23,7 @@ afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
-async function fixture(hold?: 'device' | 'catalogue', expiresIn = 600) {
+async function fixture(hold?: 'device' | 'token' | 'exchange' | 'catalogue', expiresIn = 600) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-server-copilot-login-')); roots.push(root);
   const file = path.join(root, 'credentials.enc'), master = 'disposable-server-login-master';
   const reopen = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(file, master) });
@@ -37,8 +37,14 @@ async function fixture(hold?: 'device' | 'catalogue', expiresIn = 600) {
       if (hold === 'device') { reached.resolve(); return held.promise; }
       return json({ ...device, expires_in: expiresIn });
     }
-    if (target === 'https://github.com/login/oauth/access_token') return json({ access_token: grant });
-    if (target === 'https://api.github.com/copilot_internal/v2/token') return json({ token, expires_at: Math.floor(Date.now() / 1000) + 3600 });
+    if (target === 'https://github.com/login/oauth/access_token') {
+      if (hold === 'token') { reached.resolve(); return held.promise; }
+      return json({ access_token: grant });
+    }
+    if (target === 'https://api.github.com/copilot_internal/v2/token') {
+      if (hold === 'exchange') { reached.resolve(); return held.promise; }
+      return json({ token, expires_at: Math.floor(Date.now() / 1000) + 3600 });
+    }
     if (target === 'https://api.business.githubcopilot.com/models') {
       reached.resolve();
       return hold === 'catalogue' ? held.promise : json(catalogue);
@@ -50,6 +56,44 @@ async function fixture(hold?: 'device' | 'catalogue', expiresIn = 600) {
   const service = new ProviderOAuthService(proxy, () => credentials, fetcher); services.push(service);
   return { file, credentials, reopen, reached, held, calls, fetcher, proxy, flatten, mount, service };
 }
+
+it.each(['device', 'token', 'exchange', 'catalogue'] as const)('abandons a late %s response body after login cancellation', async stage => {
+  const f = await fixture(stage);
+  const pending = f.service.start('github-copilot').then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+  if (stage !== 'device') expect((await pending).value?.state).toBe('pending');
+  await f.reached.promise;
+  f.service.cancelProvider('github-copilot');
+  if (stage === 'device') expect((await pending).error).toBeInstanceOf(Error);
+  const cancelled = vi.fn();
+  const response = new Response(new ReadableStream<Uint8Array>({ cancel: cancelled }));
+  f.held.resolve(response);
+  await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  const reader = f.reopen(); await reader.load();
+  expect(await reader.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' })).toBeUndefined();
+  expect(f.calls).toHaveLength(['device', 'token', 'exchange', 'catalogue'].indexOf(stage) + 1);
+  expect(f.mount).not.toHaveBeenCalled(); expect(f.flatten).not.toHaveBeenCalled();
+});
+
+it.each(['device', 'exchange'] as const)('releases a %s body when cancellation interleaves with fetch settlement', async stage => {
+  const f = await fixture(), implementation = f.fetcher.getMockImplementation()!;
+  const held = deferred<Response>(), reached = deferred<void>();
+  const target = stage === 'device' ? 'https://github.com/login/device/code' : 'https://api.github.com/copilot_internal/v2/token';
+  f.fetcher.mockImplementation((url, init) => {
+    if (String(url) !== target) return implementation(url, init);
+    reached.resolve(); return held.promise;
+  });
+  const pending = f.service.start('github-copilot').catch(() => undefined);
+  await reached.promise;
+  // Abort after the fetch promise's first handler but before downstream awaits.
+  void held.promise.then(() => f.service.cancelProvider('github-copilot'));
+  const cancelled = vi.fn();
+  held.resolve(new Response(new ReadableStream<Uint8Array>({ cancel: cancelled })));
+  await pending;
+  await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  const reader = f.reopen(); await reader.load();
+  expect(await reader.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' })).toBeUndefined();
+  expect(f.mount).not.toHaveBeenCalled(); expect(f.flatten).not.toHaveBeenCalled();
+});
 
 it('uses the explicit Copilot issuer, persists grant/catalogue separately and composes a fresh native resolver', async () => {
   vi.stubEnv('AI_HARNESS_OAUTH_GITHUB_COPILOT_DEVICE_URL', 'https://unrelated.test/device');

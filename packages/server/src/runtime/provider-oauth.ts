@@ -63,15 +63,16 @@ function safeEndpoint(value: string, label: string, status = 400): string {
   return url.toString();
 }
 
-function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void promise.catch(() => undefined);
-    return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
-  }
+function abortable<T>(promise: Promise<T>, signal: AbortSignal, abandon?: (value: T) => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const abort = (): void => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
-    signal.addEventListener('abort', abort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    promise.then(value => {
+      signal.removeEventListener('abort', abort);
+      if (signal.aborted) abandon?.(value);
+      resolve(value);
+    }, error => { signal.removeEventListener('abort', abort); reject(error); });
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
   });
 }
 
@@ -204,6 +205,12 @@ export class ProviderOAuthService {
     }
   }
 
+  private request(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
+    return abortable(this.fetcher(url, init), signal, response => {
+      void response.body?.cancel('oauth-response-abandoned').catch(() => undefined);
+    });
+  }
+
   private async startFlow(provider: string, settings: OAuthConfig, controller: AbortController,
     credentials?: ProviderCredentialService, publish?: OAuthFlow['publish']): Promise<PublicOAuthFlow> {
     this.prune();
@@ -218,14 +225,14 @@ export class ProviderOAuthService {
     const requestSignal = AbortSignal.any([controller.signal, this.lifetime.signal, AbortSignal.timeout(this.requestTimeoutMs)]);
     try {
       if (requestSignal.aborted) throw requestSignal.reason;
-      response = await abortable(this.fetcher(settings.deviceUrl, {
+      response = await this.request(settings.deviceUrl, {
         method: 'POST',
         redirect: 'manual',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
           ...(settings.subscription ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
         body: new URLSearchParams({ client_id: settings.clientId, ...(settings.scope ? { scope: settings.scope } : {}) }),
         signal: requestSignal,
-      }), requestSignal);
+      }, requestSignal);
     } catch {
       throw Object.assign(new Error('OAuth device authorization failed.'), { status: 502 });
     }
@@ -343,7 +350,7 @@ export class ProviderOAuthService {
           AbortSignal.timeout(this.requestTimeoutMs),
         ]);
         if (requestSignal.aborted) throw requestSignal.reason;
-        const response = await abortable(this.fetcher(settings.tokenUrl, {
+        const response = await this.request(settings.tokenUrl, {
           method: 'POST', signal: requestSignal, redirect: 'manual',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
             ...(settings.subscription ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
@@ -351,7 +358,7 @@ export class ProviderOAuthService {
             client_id: settings.clientId, device_code: flow.deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
           }),
-        }), requestSignal);
+        }, requestSignal);
         const data = await boundedJson(response, requestSignal);
         const accessToken = boundedRemoteValue(data.access_token, MAX_OAUTH_TOKEN_BYTES);
         if (accessToken) {

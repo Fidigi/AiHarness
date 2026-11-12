@@ -59,14 +59,16 @@ export function getGitHubCopilotBaseUrl(accessToken: string, enterpriseDomain?: 
   return host === 'github.com' ? 'https://api.individual.githubcopilot.com' : `https://copilot-api.${host}`;
 }
 
-function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+function abortable<T>(operation: Promise<T>, signal: AbortSignal, abandon?: (value: T) => void): Promise<T> {
   return new Promise((resolve, reject) => {
     const abort = () => reject(new Error('GitHub Copilot authentication cancelled.'));
-    if (signal.aborted) { operation.catch(() => undefined); abort(); return; }
-    signal.addEventListener('abort', abort, { once: true });
-    operation.then(value => { signal.removeEventListener('abort', abort); resolve(value); }, error => {
-      signal.removeEventListener('abort', abort); reject(error);
-    });
+    operation.then(value => {
+      signal.removeEventListener('abort', abort);
+      if (signal.aborted) abandon?.(value);
+      resolve(value);
+    }, error => { signal.removeEventListener('abort', abort); reject(error); });
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
   });
 }
 
@@ -76,7 +78,9 @@ async function requestJson(url: string, bearer: string, signal: AbortSignal, fet
     method: 'GET', redirect: 'manual', signal,
     headers: { Accept: 'application/json', Authorization: `Bearer ${bearer}`, ...HEADERS,
       ...(catalogue ? { 'X-GitHub-Api-Version': '2026-06-01' } : {}) },
-  }), signal);
+  }), signal, response => {
+    void response.body?.cancel('oauth-response-abandoned').catch(() => undefined);
+  });
   const length = response.headers.get('content-length');
   if (!response.ok || length !== null && (!/^(0|[1-9]\d*)$/u.test(length) || Number(length) > MAX_RESPONSE_BYTES)) {
     void response.body?.cancel().catch(() => undefined);
