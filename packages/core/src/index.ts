@@ -34,6 +34,8 @@ export { getGitHubCopilotOAuthConfig, getGitHubCopilotBaseUrl, exchangeGitHubCop
 export type { GitHubCopilotOAuthCredential } from './providers/github-copilot-oauth.js';
 export { getOpenAICodexOAuthConfig, beginOpenAICodexDeviceLogin, refreshOpenAICodexToken } from './providers/openai-codex-oauth.js';
 export type { OpenAICodexOAuthCredential, OpenAICodexOAuthOptions, OpenAICodexDeviceLogin } from './providers/openai-codex-oauth.js';
+export { OPENAI_CODEX_MODELS } from './providers/openai-codex.js';
+export type { OpenAICodexModel, OpenAICodexChatOptions } from './providers/openai-codex.js';
 export { GITHUB_COPILOT_MODELS } from './providers/github-copilot.js';
 export type { GitHubCopilotApi, GitHubCopilotModel, GitHubCopilotChatOptions } from './providers/github-copilot.js';
 export type { MetaProfile } from './providers/meta.js';
@@ -93,6 +95,7 @@ export {
   MiniMaxCnProvider,
   MINIMAX_CN_MODELS,
   GitHubCopilotProvider,
+  OpenAICodexProvider,
   OpenCodeGoProvider,
   OPENCODE_GO_MODELS,
   OpenCodeProvider,

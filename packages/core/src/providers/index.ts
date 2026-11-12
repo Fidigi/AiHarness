@@ -59,6 +59,7 @@ import { applyCompletionHistory, createCompletionCapture } from './completions-r
 import { createMistralCapture, mistralReplayMessages } from './mistral-replay.js';
 import { GITHUB_COPILOT_MODELS, githubCopilotModel, githubCopilotAccountModels, githubCopilotRoute, githubCopilotHeaders, githubCopilotCompletionsBody, githubCopilotResponsesBody, githubCopilotMessagesBody, githubCopilotMessageHeaders, githubCopilotCompletionsValidator, type GitHubCopilotChatOptions } from './github-copilot.js';
 import type { ProviderOAuthCredential } from './credentials.js';
+import { OPENAI_CODEX_MODELS, OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, openAICodexModel, openAICodexCredential, openAICodexHeaders, openAICodexBody, openAICodexAccountModels, type OpenAICodexChatOptions } from './openai-codex.js';
 import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeBase, opencodeHeaders, prepareOpenCodeMessage, prepareOpenCodeChat, prepareOpenCodeResponse, prepareOpenCodeOutputBudget, opencodeUsage, mergeOpenCodeUsage, opencodeReasoning, validateOpenCodeMessage, validateOpenCodeChat, opencodeMessageText, opencodeStreamValidator, opencodeFailure, opencodeGoogleBody } from './opencode.js';
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
@@ -3590,6 +3591,85 @@ export class OpenAiResponsesProvider extends AiProvider {
         Object.entries(this.customHeaders).sort(([left], [right]) => left.localeCompare(right)),
       )}${owner ? `\0${JSON.stringify(owner)}` : ''}`)
       .digest('hex');
+  }
+}
+
+class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly credential: ProviderOAuthCredential) { super(config); }
+  override getModelApi(): string { return 'openai-codex-responses'; }
+  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override responseUrl(): string { return OPENAI_CODEX_RESPONSES_URL; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override headers(_websocket: boolean, sessionId?: string): Record<string, string> {
+    return { ...super.headers(false, sessionId), ...openAICodexHeaders(this.credential) };
+  }
+  protected override requestBody(messages: Message[], options?: OpenAICodexChatOptions): ResponsesRequest {
+    return openAICodexBody(openAICodexModel(options?.model ?? this.config.model!), toolImageMessages(messages), options);
+  }
+}
+
+/** Dedicated subscription facade. Shared SSE parsing grants no API-key auth or private R replay authority. */
+export class OpenAICodexProvider extends AiProvider {
+  constructor(config: ProviderConfig, private readonly credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>) {
+    if (typeof credentialSource !== 'function' || typeof config.model !== 'string') throw new Error('OpenAI Codex subscription and model are required.');
+    if (config.transport && !['auto', 'sse'].includes(config.transport)) throw new Error('OpenAI Codex WebSocket transport is not qualified.');
+    openAICodexModel(config.model);
+    super({ ...config, type: 'openai-codex', apiKey: undefined, baseUrl: undefined, headers: undefined, transport: 'sse' });
+  }
+  override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
+  override getModelApi(): string { return 'openai-codex-responses'; }
+  override canDiscoverModels(): boolean { return true; }
+  override isModelDiscoveryAuthoritative(): boolean { return true; }
+  override setConfiguredModel(model: string): void { openAICodexModel(model); super.setConfiguredModel(model); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return OPENAI_CODEX_MODELS.map(model => ({ id: model.id, name: model.name, api: model.api,
+      contextWindow: model.contextWindow, maxOutputTokens: model.maxTokens, thinkingLevelMap: { ...model.thinkingLevelMap },
+      capabilities: { reasoning: true, imageInput: model.input.includes('image'), toolCalls: true } }));
+  }
+  private async accountModels(credential: ProviderOAuthCredential, signal?: AbortSignal): Promise<string[]> {
+    const ids = await openAICodexAccountModels(await this.request(OPENAI_CODEX_MODELS_URL, {
+      method: 'GET', headers: { ...openAICodexHeaders(credential), Accept: 'application/json' }, signal,
+    }));
+    const current = openAICodexCredential(await this.credentialSource(signal));
+    if (current.accessToken !== credential.accessToken) throw new Error('OpenAI Codex credential changed during discovery.');
+    return ids;
+  }
+  override async getAvailableModels(): Promise<string[]> {
+    const supplied = await this.credentialSource();
+    if (!supplied) return [];
+    return this.accountModels(openAICodexCredential(supplied));
+  }
+  override async chat(messages: Message[], options?: OpenAICodexChatOptions): Promise<ChatResponse> {
+    let result: ChatResponse | undefined;
+    await this.streamChat(messages, () => {}, response => { result = response; }, undefined, options);
+    if (!result) throw new Error('OpenAI Codex response is incomplete.');
+    return result;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: OpenAICodexChatOptions): Promise<void> {
+    const active = () => { if (options?.signal?.aborted) throw new Error('OpenAI Codex request cancelled.'); };
+    try {
+      active();
+      const credential = openAICodexCredential(await this.credentialSource(options?.signal));
+      const model = openAICodexModel(options?.model ?? this.config.model!);
+      if (!(await this.accountModels(credential, options?.signal)).includes(model.id)) throw new Error('OpenAI Codex account model is unavailable.');
+      active();
+      for (const message of messages) for (const image of messageImages(message)) if (!parseDataImage(image.url)) throw new Error('Invalid OpenAI Codex image input.');
+      const delegate = new OpenAICodexResponsesDelegate({ ...this.config, model: model.id, baseUrl: 'https://chatgpt.com/backend-api/codex' }, credential);
+      let result: ChatResponse | undefined;
+      await delegate.streamChat(messages, async (text, event) => {
+        active();
+        const visible = event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text }
+          : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        await onChunk(text, visible); active();
+      }, response => { result = response; }, error => { throw error; }, { ...options, model: model.id });
+      active();
+      if (!result || !result.content.trim() && !result.reasoning?.trim() && !result.toolCalls?.length) throw new Error('OpenAI Codex response has no visible output.');
+      await onComplete?.({ ...result, provider: 'openai-codex', api: 'openai-codex-responses', model: model.id }); active();
+    } catch (error) {
+      const failure = error instanceof ProviderContextOverflowError ? error : new Error(options?.signal?.aborted ? 'OpenAI Codex request cancelled.' : 'OpenAI Codex request failed.');
+      if (onError) await onError(failure); else throw failure;
+    }
   }
 }
 

@@ -4,7 +4,7 @@
 
 ## Overview
 
-GitHub Copilot has a bounded native subscription implementation, distinct from API-key OpenAI, Anthropic and Google. It does **not** complete MOD-03 or the subscription-provider scope. ChatGPT/Codex now has an independent Core device-OAuth/account/refresh foundation, but no inference adapter or host login integration yet. A Copilot model whose name contains `codex` does not implement ChatGPT authentication. The user explicitly authorized starting Codex while Copilot real-account/global qualification remains open; this does not waive either provider's remaining requirements.
+GitHub Copilot has a bounded native subscription implementation, distinct from API-key OpenAI, Anthropic and Google. It does **not** complete MOD-03 or the subscription-provider scope. ChatGPT/Codex now has an independent Core device-OAuth/account/refresh foundation, plus a bounded dedicated CX SSE adapter and account catalogue. Host login integration remains missing. A Copilot model whose name contains `codex` does not implement ChatGPT authentication. The user explicitly authorized starting Codex while Copilot real-account/global qualification remains open; this does not waive either provider's remaining requirements.
 
 [IMPORTANT] Server OAuth now has a native Copilot device-login path as well as existing-credential composition. Web Settings has separate emitted-Server/static-Web EN/FR fixture journeys; interactive CLI now has a separate explicit issuer path and bounded terminal fixtures; full profile/account acceptance remains incomplete. Do not infer live account acceptance from service/HTTP/browser fixtures.
 
@@ -12,6 +12,7 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 
 | File | Responsibility |
 |---|---|
+| `packages/core/src/providers/openai-codex.ts`, `providers/index.ts` | Immutable nine-model CX declarations, account-listed discovery and explicit subscription SSE facade/delegate |
 | `packages/core/src/providers/openai-codex-oauth.ts` | Frozen ChatGPT public client, JSON device authorization, one-shot completion, account claim extraction and account-bound refresh; not a transport |
 | `packages/core/src/providers/github-copilot-oauth.ts` | Explicit public-client configuration, durable GitHub grant exchange, restricted inference endpoint and account catalogue |
 | `packages/core/src/providers/github-copilot.ts` | Immutable 35-model declarations, account intersection, A/C/R headers and request lowering |
@@ -27,7 +28,7 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 ## Public Contracts and Invariants
 
 - Construct `GitHubCopilotProvider(config, credentialSource)` with a pinned model and asynchronous credential source. The adapter fixes owner `github-copilot`; API-key/base-URL configuration is not subscription authority. There is no API-key `ProviderFactory` registration.
-- `ProviderOAuthCredential.subscription.provider` records the issuer separately from its storage label. Only `resolve(..., { subscriptionProvider: 'github-copilot' })` obtains it. Generic consumers cannot flatten it into an ordinary API key; subscription consumers cannot resolve environment, command, API-key or generic OAuth records.
+- `ProviderOAuthCredential.subscription.provider` records the issuer separately from its storage label. For Copilot, only `resolve(..., { subscriptionProvider: 'github-copilot' })` obtains it; Codex uses its separate `openai-codex` selector. Generic consumers cannot flatten it into an ordinary API key; subscription consumers cannot resolve environment, command, API-key or generic OAuth records.
 - `refreshToken` stores the durable GitHub grant. Refresh repeats Copilot exchange and catalogue retrieval, not a generic `refresh_token` POST. The inference token and expiry are distinct from the grant and model catalogue.
 - Token-selected endpoints are restricted to Individual, Business and Enterprise Copilot tiers. An enterprise domain is explicit operator input, never authority inferred from token text.
 - Discovery does not enable model policies. No implicit policy POST, subscription purchase or interactive login is allowed.
@@ -97,7 +98,19 @@ Completion returns a normalized OAuth value with `subscription: { provider: 'ope
 
 The account ID comes only from the access token's `["https://api.openai.com/auth"].chatgpt_account_id` routing claim. Decoding validates bounded UTF-8/base64url and header-safe identity, **not JWT signatures, service entitlement or model availability**. Account identity must match the encrypted subscription metadata. Native refresh rotates access/refresh credentials through the fixed issuer, refuses a different account ID, and reuses the generation/document-revision/cancellation publication guards; generic OAuth endpoint configuration cannot redirect it. Cancelled remote refresh rotation may require explicit reauthentication; local rollback is not remote revocation or undo.
 
-The [Core OAuth receipt](../../audit/pi/evidence/MOD-03-codex-oauth-core.json) separates disposable unsigned-token/transport fixtures from issuer-source review and live acceptance. No account catalogue, nine-model CX dispatch, `openai-codex-responses`, API-key factory registration, CLI/Server/Settings login, automatic provider/model selection or paid-policy activation is added. Those are subsequent increments, not inferred from OAuth success.
+The [Core OAuth receipt](../../audit/pi/evidence/MOD-03-codex-oauth-core.json) separates disposable unsigned-token/transport fixtures from issuer-source review and live acceptance. That OAuth increment adds no catalogue or inference transport by itself. The later SDK subset below is separate evidence; neither increment adds API-key factory registration, CLI/Server/Settings login, automatic selection or paid-policy activation.
+
+## Dedicated Codex SDK SSE Subset
+
+`OpenAICodexProvider(config, credentialSource)` fixes owner/API to `openai-codex`/`openai-codex-responses`, strips supplied API keys/base URLs/headers, and requires an explicit pinned model and current issuer/account credential. It is not factory-registered. The private delegate shares bounded Responses SSE parsing, not API-key authentication or original OpenAI private-replay authority. The default/auto path is SSE; explicit WebSocket requests are refused, not silently reinterpreted.
+
+`OPENAI_CODEX_MODELS` publishes nine immutable declarations. `getAvailableModels()` separately reads `https://chatgpt.com/backend-api/codex/models?client_version=0.167.2` with Bearer/account headers, intersecting `visibility:list` slugs with those declarations. The URL/query/response schema are reviewed against official Codex `rust-v0.167.2`, independently of the pinned Pi model table. Empty/failed discovery grants no static/custom fallback. Discovery and each turn recheck local credentials after fetching the account list; withdrawal/replacement prevents the following inference POST. Listing is current account catalogue evidence, not guaranteed inference entitlement or instantaneous remote revocation.
+
+Inference posts only to `/backend-api/codex/responses` with `chatgpt-account-id`, the experimental Responses header, AiHarness originator/user agent and per-session headers. Dedicated policy includes instructions, low verbosity, encrypted-content request, parallel ordinary tools and per-model effort maps; it does not borrow OpenAI API-key defaults. The backend request omits `max_output_tokens` even if `ChatOptions.maxTokens` is supplied, matching the captured SDK raw path; this is **not** a physical output/spending-cap guarantee. API list prices are not subscription billing metadata. Completion requires terminal authority and visible output, and caller callbacks are awaited.
+
+The [transport receipt](../../audit/pi/evidence/MOD-03-codex-transport.json) distinguishes27 normalized, independently executed SDK fetch projections from Core cases and emitted public-Core smoke. Earlier27 legacy-context captures contain no intended system/tools normalization and stay separately retained, not combined into54 matching cases. Request compression/user agent differ deliberately: Core sends uncompressed JSON with AiHarness identity. No live vendor, installed CLI, HTTP host, browser or production acceptance follows.
+
+This subset has no WebSocket/cached continuation, request compression, grammar/strict tool declarations, tool search, mid-conversation system instructions, complete image preparation or private CX signed/encrypted replay. Ordinary text/tool results are portable; foreign private reasoning is never borrowed. Private carriers/text IDs are not preserved merely because the endpoint uses Responses syntax. Complete profile/default/context/media/lifecycle and host login remain open.
 
 ## Associated Tests and Evidence
 
