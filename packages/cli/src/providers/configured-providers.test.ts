@@ -52,6 +52,19 @@ describe('configured CLI providers', () => {
       .resolves.toMatchObject({ providerName: 'mistral-conversations', model: 'magistral-medium-latest', thinkingLevel: 'high' });
   });
 
+  it('keeps other CLI providers usable when the host transport cannot compose Codex', async () => {
+    let resolutions = 0;
+    const providers = createConfiguredProviders({ OPENAI_API_KEY: 'ordinary-key' }, { openaiCodex: {
+      model: 'gpt-6.1-sol', credentialSource: async () => { resolutions++; return undefined; },
+    }, network: { transport: 'websocket', httpIdleTimeoutMs: 12, websocketConnectTimeoutMs: 34,
+      requestTimeoutMs: 56, maxRetries: 0, maxRetryDelayMs: 78 } });
+    expect(providers.has('openai-codex')).toBe(false); expect(providers.has('openai')).toBe(true);
+    expect((await resolveStartupProvider(providers, {}, {})).providerName).toBe('mock');
+    await expect(resolveStartupProvider(providers, { provider: 'openai-codex', model: 'gpt-6.1-sol' }, {}))
+      .rejects.toThrow('Provider unavailable: openai-codex');
+    expect(resolutions).toBe(0);
+  });
+
   it('shares one bounded environment resolver across CLI modes', () => {
     const providers = createConfiguredProviders({
       OPENAI_API_KEY: 'test-openai',

@@ -488,6 +488,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
     const providers = createConfiguredProviders(process.env, {
       credentials: providerRuntime.values,
       githubCopilot: providerRuntime.githubCopilot,
+      openaiCodex: providerRuntime.openaiCodex,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });

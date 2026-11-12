@@ -9,6 +9,7 @@ import {
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
   GitHubCopilotProvider,
+  OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
   resolveModelReference,
   resolveModelScope,
@@ -22,7 +23,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -91,6 +92,7 @@ function attempt(
 
 export interface CreateConfiguredProvidersOptions {
   githubCopilot?: CliGitHubCopilotSubscription;
+  openaiCodex?: CliSubscription;
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -131,6 +133,11 @@ export function createConfiguredProviders(
   const network = networkConfig(options.network);
   if (options.githubCopilot) providers.set('github-copilot', new GitHubCopilotProvider(
     { ...network, type: 'github-copilot', model: options.githubCopilot.model }, options.githubCopilot.credentialSource));
+  if (options.openaiCodex) {
+    try { providers.set('openai-codex', new OpenAICodexProvider(
+      { ...network, type: 'openai-codex', model: options.openaiCodex.model }, options.openaiCodex.credentialSource)); }
+    catch { /* Unsupported subscription configuration must not disable other providers. */ }
+  }
   const openAiKey = configuredCredential('openai', env.OPENAI_API_KEY, options.credentials);
   const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
   const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);

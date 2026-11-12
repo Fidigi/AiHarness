@@ -328,6 +328,7 @@ async function main(): Promise<void> {
       const providers = createConfiguredProviders(process.env, {
         credentials: providerRuntime.values,
         githubCopilot: providerRuntime.githubCopilot,
+        openaiCodex: providerRuntime.openaiCodex,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -837,6 +838,7 @@ async function main(): Promise<void> {
     const refreshedProviders = createConfiguredProviders(process.env, {
       credentials: refreshedRuntime.values,
       githubCopilot: refreshedRuntime.githubCopilot,
+      openaiCodex: refreshedRuntime.openaiCodex,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -987,6 +989,7 @@ async function main(): Promise<void> {
   const configuredProviders: Map<string, AiProvider> = createConfiguredProviders(process.env, {
     credentials: providerRuntime.values,
     githubCopilot: providerRuntime.githubCopilot,
+    openaiCodex: providerRuntime.openaiCodex,
     network: providerRuntime.network,
   });
 
@@ -1540,7 +1543,7 @@ async function main(): Promise<void> {
         } else {
           if (trimmed === '/help') terminal.showHelp();
           else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone' || resourceCommand === 'mcp'
-            || resourceCommand === 'login' && /(?:^|\s)--issuer(?:=|\s+)github-copilot(?:\s|$)/u.test(trimmed)) {
+            || resourceCommand === 'login' && /(?:^|\s)--issuer(?:=|\s+)(?:github-copilot|openai-codex)(?:\s|$)/u.test(trimmed)) {
             const controller = new AbortController();
             const commandContext = commandHandler.getContext();
             activeAbortController = controller;

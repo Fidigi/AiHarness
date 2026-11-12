@@ -16,6 +16,7 @@ import {
   getSupportedThinkingLevels,
   getGitHubCopilotOAuthConfig,
   GITHUB_COPILOT_MODELS,
+  OPENAI_CODEX_MODELS,
   getSessionAccounting,
   getSessionCacheWarmingStatus,
   prepareCompactionContext,
@@ -60,7 +61,8 @@ import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
 import { createConfiguredProviders } from '../providers/configured-providers.js';
-import { cliGitHubCopilotCredentialSource } from '../providers/provider-runtime.js';
+import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
+import { loginOpenAICodex } from '../security/codex-login.js';
 import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
 
@@ -710,19 +712,37 @@ const commands: CommandEntry[] = [
   {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth device',
-    usage: '/login <provider> [--issuer github-copilot]',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
-      const copilot = args.length === 3 && args[1] === '--issuer' && args[2] === 'github-copilot'
-        || args.length === 2 && args[1] === '--issuer=github-copilot';
-      if (!providerName || args.length !== 1 && !copilot) return chalk.red('Usage: /login <provider> [--issuer github-copilot]');
+      const issuer = args.length === 3 && args[1] === '--issuer' ? args[2]
+        : args.length === 2 && args[1]?.startsWith('--issuer=') ? args[1].slice('--issuer='.length) : undefined;
+      if (!providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
       if (!credentialService?.hasPersistentStore?.()) {
         return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
       }
-      if (copilot) {
+      if (issuer === 'openai-codex') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          await loginOpenAICodex(credentialService, providerName, (uri, code) => {
+            ctx.terminal.writeOutput(`Ouvrez ${uri} et saisissez le code ${code}.`);
+          }, signal);
+          if (providerName === 'openai-codex') {
+            const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, openaiCodex: {
+              model: OPENAI_CODEX_MODELS[0]!.id,
+              credentialSource: cliSubscriptionCredentialSource(credentialService, 'openai-codex', ctx.providerLifetime),
+            } }).get('openai-codex');
+            if (provider) ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
+      }
+      if (issuer === 'github-copilot') {
         const controller = new AbortController();
         const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
         const deadline = performance.now() + 300_000;

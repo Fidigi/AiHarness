@@ -627,6 +627,18 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       .toEqual({ code: 0, stdout: `COPILOT_INTERACTIVE_OK ${mode}\n`, stderr: '' });
   }, 30000);
 
+  it.each(['regular', 'fullscreen', 'print', 'json', 'rpc'])('owns independent Codex login and withdrawal through the installed executable (%s)', async mode => {
+    const probe = path.join(consumer, `codex-cli-${mode}.mjs`);
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/codex-cli-probe.mjs'), probe);
+    await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/oauth-local-tls.mjs'), path.join(consumer, 'oauth-local-tls.mjs'));
+    const reference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/openai-codex-reference.json'), 'utf8'));
+    const response = path.join(consumer, `codex-response-${mode}.json`);
+    await writeFile(response, JSON.stringify({ responseEvents: reference.responseEvents }));
+    expect(await run(process.execPath, [probe, mode], consumer, { ...environment,
+      AIH_CODEX_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_CODEX_RESPONSE_FILE: response }, '', 25000))
+      .toEqual({ code: 0, stdout: `CODEX_CLI_OK ${mode}\n`, stderr: '' });
+  }, 30000);
+
   it.each(['regular', 'fullscreen'])('joins an admitted append before installed TTY shutdown (%s)', async mode => {
     const probe = path.join(consumer, `interactive-settlement-${mode}.mjs`);
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/interactive-settlement-probe.mjs'), probe);

@@ -7,6 +7,7 @@ import { createConfiguredProviders, resolveStartupProvider } from './configured-
 import { createCliProviderRuntime } from './provider-runtime.js';
 
 const roots: string[] = [];
+const codexToken = 'eyJhbGciOiJub25lIn0.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'runtime-account' } })).toString('base64url') + '.c2ln';
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
@@ -92,6 +93,62 @@ describe('CLI provider runtime', () => {
       expect(createConfiguredProviders({}, { credentials: runtime.values, githubCopilot: runtime.githubCopilot }).has('github-copilot')).toBe(false);
       if (kind === 'foreign-label') expect(runtime.values.has('openai')).toBe(false);
     }
+  });
+
+  it('composes Codex independently of API-key OpenAI, without startup discovery or automatic selection', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('openai-codex', { accessToken: codexToken, refreshToken: 'runtime-codex-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'openai-codex', accountId: 'runtime-account' } }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const runtime = await createCliProviderRuntime('/unused', {}, { OPENAI_API_KEY: 'ordinary-openai-key' }, credentials, false);
+    const providers = createConfiguredProviders({}, { credentials: runtime.values, openaiCodex: runtime.openaiCodex });
+    expect(runtime.values.get('openai')).toBe('ordinary-openai-key');
+    expect(runtime.values.has('openai-codex')).toBe(false); expect(runtime.githubCopilot).toBeUndefined();
+    expect(providers.get('openai-codex')?.getModelApi?.()).toBe('openai-codex-responses');
+    expect((await resolveStartupProvider(providers, {}, {})).providerName).toBe('mock');
+    expect(fetch).not.toHaveBeenCalled();
+    runtime.close(); await expect(runtime.openaiCodex!.credentialSource()).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it.each(['runtime', 'parent', 'caller'] as const)('retires held Codex refresh through the %s lifetime', async owner => {
+    const credentials = new ProviderCredentialService(), parent = new AbortController(), caller = new AbortController();
+    const original = { accessToken: codexToken, refreshToken: 'runtime-codex-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'openai-codex' as const, accountId: 'runtime-account' } };
+    await credentials.setOAuth('openai-codex', original, false);
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false, [], undefined, false, parent.signal);
+    const expired = { ...original, expiresAt: Date.now() - 1000 };
+    await credentials.setOAuth('openai-codex', expired, false);
+    let ready!: () => void, release!: (response: Response) => void;
+    const entered = new Promise<void>(resolve => { ready = resolve; });
+    const held = new Promise<Response>(resolve => { release = resolve; });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async url => {
+      expect(String(url)).toBe('https://auth.openai.com/oauth/token'); ready(); return held;
+    });
+    const pending = runtime.openaiCodex!.credentialSource(caller.signal).then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+    await entered;
+    if (owner === 'runtime') runtime.close(); else if (owner === 'parent') parent.abort(); else caller.abort();
+    expect((await pending).error).toMatchObject({ name: 'AbortError' });
+    release(Response.json({ access_token: codexToken, refresh_token: 'rotated-codex-refresh', expires_in: 3600 }));
+    expect((await credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 }))?.credential)
+      .toEqual({ version: 1, type: 'oauth', ...expired });
+    if (owner !== 'caller') await expect(runtime.openaiCodex!.credentialSource()).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch).toHaveBeenCalledTimes(1); runtime.close();
+  });
+
+  it.each(['api-key', 'generic-oauth', 'foreign-label', 'copilot', 'offline-expired'] as const)('does not compose Codex from %s authority', async kind => {
+    const credentials = new ProviderCredentialService();
+    if (kind === 'api-key') await credentials.setApiKey('openai-codex', 'disposable-api-key', false);
+    else await credentials.setOAuth(kind === 'foreign-label' ? 'openai' : 'openai-codex', {
+      accessToken: codexToken, refreshToken: 'disposable-refresh', expiresAt: kind === 'offline-expired' ? 1 : Date.now() + 120000,
+      ...(kind === 'generic-oauth' ? {} : { subscription: kind === 'copilot'
+        ? { provider: 'github-copilot' as const, availableModelIds: ['gpt-5-mini'] }
+        : { provider: 'openai-codex' as const, accountId: 'runtime-account' } }),
+    }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false, [], undefined, kind === 'offline-expired');
+    expect(runtime.openaiCodex).toBeUndefined(); expect(runtime.values.has('openai-codex')).toBe(false);
+    if (kind === 'foreign-label') expect(runtime.values.has('openai')).toBe(false);
+    expect(fetch).not.toHaveBeenCalled(); runtime.close();
   });
 
   it('does not refresh expired Copilot credentials when the CLI is offline', async () => {

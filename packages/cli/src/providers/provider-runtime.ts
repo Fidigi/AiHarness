@@ -2,6 +2,7 @@ import path from 'node:path';
 import {
   CredentialRedactor,
   GITHUB_COPILOT_MODELS,
+  OPENAI_CODEX_MODELS,
   bedrockCredentialConfig,
   EncryptedCredentialStore,
   ProviderCredentialService,
@@ -17,13 +18,16 @@ export const CLI_CREDENTIAL_PROVIDERS = [
   'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
-export interface CliGitHubCopilotSubscription {
+export interface CliSubscription {
   model: string;
   credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>;
 }
 
+export type CliGitHubCopilotSubscription = CliSubscription;
+
 export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
+  openaiCodex?: CliSubscription;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -55,10 +59,19 @@ export function oauthRefreshConfigFromEnv(
 
 /** A subscription resolver borrows the host and each caller, never environment/key sources. */
 export function cliGitHubCopilotCredentialSource(credentials: ProviderCredentialService, lifetime?: AbortSignal, allowRefresh = true) {
+  return cliSubscriptionCredentialSource(credentials, 'github-copilot', lifetime, allowRefresh);
+}
+
+export function cliSubscriptionCredentialSource(
+  credentials: ProviderCredentialService,
+  issuer: 'github-copilot' | 'openai-codex',
+  lifetime?: AbortSignal,
+  allowRefresh = true,
+) {
   return async (signal?: AbortSignal) => {
     const requestSignal = lifetime && signal ? AbortSignal.any([lifetime, signal]) : lifetime ?? signal;
     requestSignal?.throwIfAborted();
-    const resolved = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot',
+    const resolved = await credentials.resolve(issuer, { env: {}, subscriptionProvider: issuer,
       allowCommands: false, allowRefresh, signal: requestSignal });
     requestSignal?.throwIfAborted();
     return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
@@ -107,7 +120,7 @@ export async function createCliProviderRuntime(
     ...extensionProviders.map(item => item.type),
   ]);
   for (const provider of providers) {
-    if (provider === 'github-copilot') continue;
+    if (provider === 'github-copilot' || provider === 'openai-codex') continue;
     const resolved = await credentials.resolve(provider, {
       env: commandEnv,
       allowCommands: !offline,
@@ -126,8 +139,11 @@ export async function createCliProviderRuntime(
   const credentialSource = cliGitHubCopilotCredentialSource(credentials, lifetime, !offline);
   const subscription = await credentialSource();
   const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.provider === 'github-copilot' && subscription.subscription.availableModelIds.includes(model.id));
+  const codexSource = cliSubscriptionCredentialSource(credentials, 'openai-codex', lifetime, !offline);
+  const codex = await codexSource();
   return {
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
+    ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),
     credentials,
     values,
     network: resolveAgentProviderNetworkSettings(settings),
