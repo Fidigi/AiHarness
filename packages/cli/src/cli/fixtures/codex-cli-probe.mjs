@@ -18,12 +18,13 @@ const root = await mkdtemp(os.tmpdir() + '/aih-codex-cli-');
 const cwd = root + '/work', agent = root + '/agent', sessions = root + '/sessions';
 const master = 'disposable-codex-cli-master', refresh = 'private-codex-cli-refresh', account = 'cli-codex-account', model = 'gpt-6.1-sol';
 const token = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.c2ln';
+const rotatedToken = token.slice(0, token.lastIndexOf('.') + 1) + 'cm90YXRlZA', rotatedRefresh = 'private-codex-cli-rotated-refresh';
 const events = JSON.parse(await readFile(process.env.AIH_CODEX_RESPONSE_FILE ?? new URL('../../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents;
 const replay = privateReplay ? JSON.parse(await readFile(process.env.AIH_CODEX_CONTINUATION_FILE ?? new URL('../../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) : undefined;
 const privateFinal = replay?.events.filter(event => !String(event.type).includes('function_call_arguments') && event.item?.type !== 'function_call')
   .map(event => event.type === 'response.completed' ? { ...event, response: { ...event.response, output: replay.items.filter(item => item.type !== 'function_call') } } : event);
-let privateTurns = 0;
-const secrets = [token, refresh, 'private-codex-device', 'private-codex-code', 'private-codex-verifier'];
+let privateTurns = 0, refreshes = 0;
+const secrets = [token, refresh, 'private-codex-device', 'private-codex-code', 'private-codex-verifier', ...(privateReplay ? [rotatedToken, rotatedRefresh] : [])];
 let wire, occupied, terminal, exit, output = '', privacyTail = '', held, hold = false, fixtureError, browserAuthorization;
 const calls = [], children = new Set(), deliveredStates = new Set();
 const wait = async (predicate, label) => {
@@ -69,9 +70,15 @@ try {
       const url = new URL(request.headers['x-fixture-original-url']);
       if (url.hostname === 'auth.openai.com') {
         assert.equal(request.method, 'POST'); assert.equal(request.headers.authorization, undefined);
+        const renewing = privateReplay && url.pathname === '/oauth/token' && new URLSearchParams(body).get('grant_type') === 'refresh_token';
+        if (renewing) {
+          assert.equal(url.href, 'https://auth.openai.com/oauth/token'); assert.equal(request.headers['x-api-key'], undefined); assert.equal(refreshes, 0);
+          assert.deepEqual(Object.fromEntries(new URLSearchParams(body)), { grant_type: 'refresh_token', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', refresh_token: refresh });
+          refreshes++;
+        }
         const data = url.pathname.endsWith('/usercode') ? { device_auth_id: 'private-codex-device', user_code: 'CODEX-CODE', interval: 1 }
           : url.pathname.endsWith('/deviceauth/token') ? { authorization_code: 'private-codex-code', code_verifier: 'private-codex-verifier' }
-          : url.pathname === '/oauth/token' ? { access_token: token, refresh_token: refresh, expires_in: 3600 } : undefined;
+          : url.pathname === '/oauth/token' ? { access_token: renewing ? rotatedToken : token, refresh_token: renewing ? rotatedRefresh : refresh, expires_in: 3600 } : undefined;
         assert(data, 'Unexpected issuer target'); response.setHeader('content-type', 'application/json');
         if (browser && url.pathname === '/oauth/token' && new URLSearchParams(body).get('grant_type') === 'authorization_code') {
           const form = new URLSearchParams(body), verifier = form.get('code_verifier');
@@ -83,7 +90,8 @@ try {
         if (url.pathname === '/oauth/token' && hold) { held = response; return; }
         response.end(JSON.stringify(data)); return;
       }
-      assert.equal(request.headers.authorization, `Bearer ${token}`); assert.equal(request.headers['chatgpt-account-id'], account);
+      const inferenceToken = privateReplay && refreshes ? rotatedToken : token;
+      assert.equal(request.headers.authorization, `Bearer ${inferenceToken}`); assert.equal(request.headers['chatgpt-account-id'], account);
       assert.equal(request.headers['x-api-key'], undefined);
       if (url.pathname === '/backend-api/codex/models') {
         assert.equal(url.search, '?client_version=0.167.2'); assert.equal(request.method, 'GET');
@@ -92,7 +100,7 @@ try {
       assert.equal(url.href, 'https://chatgpt.com/backend-api/codex/responses'); assert.equal(request.method, 'POST');
       assert.equal(JSON.parse(body).model, model); assert.equal(JSON.parse(body).store, false);
       const selected = !privateReplay ? events : ++privateTurns === 1 ? replay.events : privateTurns === 2 ? privateFinal : replay.finalEvents;
-      const frames = JSON.parse(JSON.stringify(selected).replaceAll('opaque-sensitive-tail', 'opaque-' + token + '-tail'));
+      const frames = JSON.parse(JSON.stringify(selected).replaceAll('opaque-sensitive-tail', 'opaque-' + inferenceToken + '-tail'));
       response.writeHead(200, { 'content-type': 'text/event-stream' }); response.end(frames.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
     } catch (error) { fixtureError = error; response.writeHead(500).end(); }
   });
@@ -179,7 +187,21 @@ try {
       assert(bytes.includes('visible thought')); assert.equal((await stat(file)).mode & 0o777, 0o600); exports.push(bytes, JSON.stringify(exported));
       assert.equal(await readFile(journalFile, 'utf8'), journal);
     }
+    const credentials = reader(); await credentials.load();
+    const current = await credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
+    assert.equal(current?.credential.type, 'oauth'); assert.equal(current.credential.accessToken, token); assert.equal(current.credential.refreshToken, refresh);
+    assert.equal(refreshes, 0); await credentials.setOAuth('openai-codex', { ...current.credential, expiresAt: Date.now() - 1000 });
+    const beforeResume = calls.length;
     const resumed = await run(args(true, 'continue'), input('continue')); assert.equal(resumed.code, 0, JSON.stringify(resumed)); assert.equal(resumed.signal, null);
+    assert.equal(refreshes, 1);
+    const resumedCalls = calls.slice(beforeResume).map(call => call.url);
+    assert(resumedCalls.length >= 3); assert.equal(resumedCalls[0], 'https://auth.openai.com/oauth/token');
+    assert.equal(resumedCalls.at(-1), 'https://chatgpt.com/backend-api/codex/responses');
+    assert(resumedCalls.slice(1, -1).every(url => url === 'https://chatgpt.com/backend-api/codex/models?client_version=0.167.2'));
+    const refreshed = reader(); await refreshed.load();
+    const durable = await refreshed.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
+    assert.equal(durable?.credential.type, 'oauth'); assert.equal(durable.credential.accessToken, rotatedToken); assert.equal(durable.credential.refreshToken, rotatedRefresh);
+    assert.deepEqual(durable.credential.subscription, { provider: 'openai-codex', accountId: account }); assert(durable.credential.expiresAt > Date.now());
     assert.equal(bodies().length, 3); assert.deepEqual(bodies()[2].input, [...toolInput, ...finalInput, exact.at(-1)]);
     assert.equal(await readFile(effects, 'utf8'), 'effect\n');
     const restarted = await readFile(journalFile, 'utf8'), assistants = restarted.trim().split('\n').map(line => JSON.parse(line)).filter(record => record.type === 'message' && record.role === 'assistant');
