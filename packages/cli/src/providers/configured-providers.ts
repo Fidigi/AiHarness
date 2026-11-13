@@ -120,9 +120,11 @@ const NATIVE_PROVIDERS = {
   typesafe: TypesafeProvider,
 };
 
-/** Native non-conversational sources only; a provider name never grants classifier authority. */
+/** Existing native specialized services only; names/Mock factories never grant auxiliary authority. */
 export function getConfiguredSpecializedProviders(providers: ReadonlyMap<string, AiProvider>): ReadonlyMap<string, AiProvider> {
-  return new Map([...providers].filter(([, provider]) => provider instanceof TypesafeProvider));
+  return new Map([...providers].filter(([, provider]) => provider instanceof TypesafeProvider
+    || provider instanceof OpenRouterProvider || provider instanceof OpenCodeProvider
+    || provider instanceof CloudflareWorkersAiMixedProvider));
 }
 
 function createProvider(config: ProviderConfig): AiProvider {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, collectProviderModelCatalog } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -27,6 +27,21 @@ describe('configured CLI providers', () => {
       expect(overridden.get('typesafe')).toBeInstanceOf(MockProvider);
       expect(getConfiguredSpecializedProviders(overridden).size).toBe(0);
     } finally { unregister(); }
+  });
+
+  it('admits configured native specialized services without adding an auxiliary Mock image fallback', () => {
+    const providers = createConfiguredProviders({ DEEPSEEK_API_KEY: 'synthetic-chat', TYPESAFE_API_KEY: 'synthetic-t',
+      OPENROUTER_API_KEY: 'synthetic-router', OPENCODE_API_KEY: 'synthetic-zen',
+      CLOUDFLARE_WORKERS_AI_API_KEY: 'synthetic-cf', CLOUDFLARE_ACCOUNT_ID: 'synthetic-account' });
+    const source = getConfiguredSpecializedProviders(providers);
+    expect([...source.keys()]).toEqual(['opencode', 'openrouter', 'cloudflare-workers-ai', 'typesafe']);
+    const bridge = new SpecializedModels(providers.get('deepseek')!, undefined, undefined, () => source);
+    const images = bridge.getAvailableOfType('image');
+    expect(images).toHaveLength(61); expect(images.every(model => model.provider === 'openrouter' && model.api === 'openrouter-images')).toBe(true);
+    expect(bridge.getModelOfType('image')).toMatchObject({ provider: 'openrouter', api: 'openrouter-images' });
+    expect(bridge.getAvailableOfType('classifier').map(model => model.api))
+      .toEqual(expect.arrayContaining(['typesafe-system-one', 'cloudflare-workers-ai-system-one']));
+    expect(providers.get('deepseek')?.getConfiguredModel()).toBe('deepseek-flash');
   });
 
   it.each([

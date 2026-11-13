@@ -270,7 +270,7 @@ export async function createRuntimeServices(
     extensionRegistry,
     resolveProvider: provider => proxy.getAgentProvider(provider),
     specializedProviders: () => new Map(providerRegistry.listProviders()
-      .filter(provider => provider.dialect === 'typesafe')
+      .filter(provider => ['typesafe', 'openrouter', 'opencode', 'cloudflare-workers-ai', 'openai'].includes(provider.dialect))
       .flatMap(provider => {
         const adapter = proxy.getAgentProvider(provider.id);
         return adapter ? [[provider.id, adapter] as const] : [];
