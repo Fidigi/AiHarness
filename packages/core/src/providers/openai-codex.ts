@@ -12,6 +12,7 @@ export interface OpenAICodexModel {
   readonly api: 'openai-codex-responses'; readonly provider: 'openai-codex';
   readonly contextWindow: number; readonly maxTokens: number;
   readonly input: readonly ('text' | 'image')[];
+  readonly supportsMidConvoSystemMessages?: boolean;
   readonly thinkingLevelMap: Readonly<Partial<Record<'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max', string | null>>>;
 }
 export interface OpenAICodexChatOptions extends ChatOptions {
@@ -23,10 +24,10 @@ export interface OpenAICodexChatOptions extends ChatOptions {
 // Pinned nine-model CX declarations; they are not account entitlement or subscription prices.
 const models: OpenAICodexModel[] = [
   { id: 'gpt-5.3-codex-spark', name: 'GPT-5.3 Codex Spark', api: 'openai-codex-responses', provider: 'openai-codex', contextWindow: 128000, maxTokens: 128000, input: ['text'], thinkingLevelMap: { xhigh: 'xhigh', minimal: 'low' } },
-  { id: 'gpt-5.5', name: 'GPT-5.5', api: 'openai-codex-responses', provider: 'openai-codex', contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'], thinkingLevelMap: { xhigh: 'xhigh', minimal: 'low' } },
-  ...(['luna', 'sol', 'terra'] as const).map(suffix => ({ id: `gpt-5.6-${suffix}`, name: `GPT-5.6 ${suffix.charAt(0).toUpperCase() + suffix.slice(1)}`, api: 'openai-codex-responses' as const, provider: 'openai-codex' as const, contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'] as const, thinkingLevelMap: { xhigh: 'xhigh', max: 'max', minimal: 'low' } })),
-  ...(['astra', 'luna', 'sol'] as const).map(suffix => ({ id: `gpt-6-${suffix}`, name: `GPT-6 ${suffix.charAt(0).toUpperCase() + suffix.slice(1)}`, api: 'openai-codex-responses' as const, provider: 'openai-codex' as const, contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'] as const, thinkingLevelMap: { off: suffix === 'astra' ? null : 'none', minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } })),
-  { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', api: 'openai-codex-responses', provider: 'openai-codex', contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'], thinkingLevelMap: { off: null, minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } },
+  { id: 'gpt-5.5', name: 'GPT-5.5', api: 'openai-codex-responses', provider: 'openai-codex', contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'], supportsMidConvoSystemMessages: true, thinkingLevelMap: { xhigh: 'xhigh', minimal: 'low' } },
+  ...(['luna', 'sol', 'terra'] as const).map(suffix => ({ id: `gpt-5.6-${suffix}`, name: `GPT-5.6 ${suffix.charAt(0).toUpperCase() + suffix.slice(1)}`, api: 'openai-codex-responses' as const, provider: 'openai-codex' as const, contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'] as const, supportsMidConvoSystemMessages: true, thinkingLevelMap: { xhigh: 'xhigh', max: 'max', minimal: 'low' } })),
+  ...(['astra', 'luna', 'sol'] as const).map(suffix => ({ id: `gpt-6-${suffix}`, name: `GPT-6 ${suffix.charAt(0).toUpperCase() + suffix.slice(1)}`, api: 'openai-codex-responses' as const, provider: 'openai-codex' as const, contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'] as const, supportsMidConvoSystemMessages: true, thinkingLevelMap: { off: suffix === 'astra' ? null : 'none', minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } })),
+  { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', api: 'openai-codex-responses', provider: 'openai-codex', contextWindow: 272000, maxTokens: 128000, input: ['text', 'image'], supportsMidConvoSystemMessages: true, thinkingLevelMap: { off: null, minimal: 'low', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' } },
 ];
 for (const model of models) { Object.freeze(model.input); Object.freeze(model.thinkingLevelMap); Object.freeze(model); }
 export const OPENAI_CODEX_MODELS: readonly OpenAICodexModel[] = Object.freeze(models);
@@ -59,10 +60,16 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
   if (options.textVerbosity !== undefined && !['low', 'medium', 'high'].includes(options.textVerbosity)) throw new Error('Invalid OpenAI Codex verbosity.');
   if (options.reasoningSummary !== undefined && !['auto', 'concise', 'detailed'].includes(options.reasoningSummary)) throw new Error('Invalid OpenAI Codex reasoning summary.');
   const initial = messages[0]?.role === 'system' ? messages[0] : undefined;
+  const updates = messages.filter(message => message !== initial && message.role === 'system');
+  const instructions = [options.systemPrompt || initial?.content || '',
+    ...(!model.supportsMidConvoSystemMessages ? updates.map(message => message.content) : []),
+  ].filter(text => text.length > 0).join('\n\n') || 'You are a helpful assistant.';
+  // Omitted/empty system slots must not advance the private replay converter's cursor.
+  const history = messages.filter(message => message !== initial
+    && (message.role !== 'system' || model.supportsMidConvoSystemMessages && message.content.length > 0));
   let input: Record<string, unknown>[] = [];
-  for (const message of messages) {
-    if (message === initial) continue;
-    if (message.role === 'system') throw new Error('OpenAI Codex mid-conversation instructions are not qualified.');
+  for (const message of history) {
+    if (message.role === 'system') { input.push({ role: 'developer', content: message.content }); continue; }
     if (message.role === 'tool') {
       input.push({ type: 'function_call_output', call_id: nativeReplay ? message.toolCallId ?? message.id : (message.toolCallId ?? message.id).split('|')[0], output: message.content || '(no tool output)' }); continue;
     }
@@ -83,21 +90,21 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
     for (const call of message.toolCalls ?? []) input.push({ type: 'function_call', call_id: call.id.split('|')[0], name: call.name, arguments: JSON.stringify(call.input) });
   }
   if (nativeReplay) {
-    const history = messages.filter(message => message !== initial).map(message => message.role !== 'assistant' || message.blocks ? message : { ...message,
+    const replayHistory = history.map(message => message.role !== 'assistant' || message.blocks ? message : { ...message,
       blocks: [
         ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
         ...(message.toolCalls ?? []).map(call => ({ type: 'tool_call' as const, ...call })),
       ],
     });
     const body = { input }, owner = { provider: 'openai-codex', api: 'openai-codex-responses', model: model.id };
-    applyResponsesReplay(body, history, owner); applyResponsesSplitIdHistory(body, history, owner);
+    applyResponsesReplay(body, replayHistory, owner); applyResponsesSplitIdHistory(body, replayHistory, owner);
     input = body.input;
   }
   if (options.tools?.some(tool => tool.constrainedSampling)) throw new Error('OpenAI Codex constrained tools are not qualified.');
   const requested = options.thinking;
   const effort = requested === undefined || requested === 'off' ? model.thinkingLevelMap.off ?? (model.thinkingLevelMap.off === null ? null : 'none') : model.thinkingLevelMap[requested] ?? requested;
   return { model: model.id, store: false, stream: true as const,
-    instructions: options.systemPrompt || initial?.content || 'You are a helpful assistant.', input,
+    instructions, input,
     text: { verbosity: options.textVerbosity ?? 'low' }, include: ['reasoning.encrypted_content'], tool_choice: options.toolChoice ?? 'auto', parallel_tool_calls: true,
     ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
     ...(effort === null ? {} : { reasoning: { effort, ...(requested !== undefined ? { summary: options.reasoningSummary ?? 'auto' } : {}) } }),

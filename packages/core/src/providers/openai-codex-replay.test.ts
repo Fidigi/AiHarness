@@ -70,6 +70,29 @@ it.each(reference.rows)('$model captures and replays independently bound native/
   expect(f.calls).toHaveLength(16);
 });
 
+it.each([
+  { model: 'gpt-5.5', inPlace: true }, { model: 'gpt-5.3-codex-spark', inPlace: false },
+])('$model preserves system updates and private replay without mutating history', async ({ model, inPlace }) => {
+  const f = fixture(model), row = reference.rows.find(row => row.model === model)!;
+  const exact = row.projections.find(projection => projection.case === 'exact')!.expected;
+  const initial: Message = { ...user, id: 'initial', role: 'system', content: 'History prompt' };
+  const update: Message = { ...initial, id: 'update', content: 'Use the revised instructions.' };
+  const lastUpdate: Message = { ...update, id: 'last-update', content: 'Keep the tool result.' };
+  for (const stream of [false, true]) {
+    f.respond(reference.events); const first = await f.call(stream, [user]);
+    const history: Message[] = [initial, user, update, { ...update, id: 'empty-update', content: '' }, source(first, model),
+      { id: 'result', role: 'tool', name: 'echo', toolCallId: 'call_native|fc_native', content: 'result', timestamp: new Date(3) },
+      lastUpdate, { id: 'continue', role: 'user', content: 'continue', timestamp: new Date(4) }];
+    const before = structuredClone(history); f.respond(reference.finalEvents);
+    await f.call(stream, history, { tools: reference.tools, systemPrompt: 'Follow instructions' });
+    expect(f.calls.at(-1)?.instructions).toBe(inPlace ? 'Follow instructions' : 'Follow instructions\n\nUse the revised instructions.\n\nKeep the tool result.');
+    expect(f.calls.at(-1)?.input).toEqual(inPlace ? [exact[0], { role: 'developer', content: update.content },
+      ...exact.slice(1, -1), { role: 'developer', content: lastUpdate.content }, exact.at(-1)] : exact);
+    expect(history).toEqual(before);
+  }
+  expect(f.calls).toHaveLength(4);
+});
+
 it('does not admit derived instances or mutable names as native CX replay authority', async () => {
   const f = fixture(undefined, true);
   Object.assign(f.provider, { ownsNativeProfiles: true, ownsReplay: true });

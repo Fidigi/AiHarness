@@ -52,6 +52,16 @@ The [static review](./evidence/MOD-03-subscription-current-review.json) checks n
 
 This is one module's source/emitted provenance, not whole-product/context/dependency equality. It does not turn older results into failures or newer matches into whole-host acceptance. No campaign denominators are combined. Adding more fixture combinations cannot resolve real-account consent or retroactively repair native HOLDs; further qualification/diagnosis must identify its own bounded decision and stop rule.
 
+## Functional Implementation Priorities
+
+The user's latest direction is to implement confirmed subscription gaps rather than repeat baseline qualification. No additional missing Copilot login/host feature was identified in this review; the previously delivered paths must not be reclassified as TODOs.
+
+1. **Delivered: Codex plain-text system updates.** The former builder refusal blocked valid later system messages. Local pinned model policy now sends updates in place on eight profiles and folds them into instructions on Spark, preserving prompt precedence and private replay alignment. [Contract](../../ai/topics/subscription-providers.md#codex-mid-conversation-system-instructions), [receipt](./evidence/MOD-03-codex-system-updates.json): two pre-fix failures, fresh Make build,69 Core cases/two files and workspace/parity plus two strict test roots pass. No new account or host campaign; older host receipts do not qualify this changed builder.
+2. **Next functional candidate: constrained tools.** `OpenAICodexChatOptions` exposes the shared tool declaration type, but the CX builder rejects constrained declarations. Implement the actual per-model strict/grammar contract before adding broader tool combinations; do not assume every profile supports every mode.
+3. **Later transport gap: explicit WebSocket.** The dedicated facade still refuses this public transport choice. Its implementation must keep account ownership, cancellation and cached continuation separate from API-key OpenAI; do not enable shared caches without that review.
+
+Request compression is deferred as an optimization, not a new prerequisite for subscription authentication. Complete image preparation and other broader MOD-01 profile work require a concrete in-scope missing behavior before scheduling. Synthetic-only testing and user-owned manual account validation remain unchanged; no host-by-model qualification matrix is scheduled by these priorities.
+
 ## Open Acceptance, Not New Implementation Claims
 
 ### 1. User-owned manual validation; no live-account tests
@@ -64,7 +74,7 @@ Manual consent/catalogue/entitlement/refresh/inference/logout results remain pen
 
 ### 2. Local scope remains bounded
 
-Complete profile/context/media/default/error/overflow/compaction/fork/cross-account/private-terminal lifecycle acceptance remains open. Codex WebSocket/cached delta, compression, grammar/strict tools, tool search, mid-conversation system instructions and complete image preparation are not delivered by the SSE subset. These limits must remain visible; they are not a reason to repeat already qualified device/PKCE/login/restart scenarios or silently add the full host×model×feature cross-product to this objective. Further work should name one missing behavior or host boundary and its acceptance before adding tests.
+Complete profile/context/media/default/error/overflow/compaction/fork/cross-account/private-terminal lifecycle acceptance remains open. Codex WebSocket/cached delta, compression, grammar/strict tools, tool search and complete image preparation are not delivered by the SSE subset. Plain-text mid-conversation system instructions are now delivered separately above; complete transcript parity is not implied. These limits must remain visible; they are not a reason to repeat already qualified device/PKCE/login/restart scenarios or silently add the full host×model×feature cross-product to this objective. Further work should name one missing behavior or host boundary and its acceptance before adding tests.
 
 ### 3. Non-waived qualification holds remain separate
 

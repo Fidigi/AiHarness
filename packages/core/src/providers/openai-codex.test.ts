@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, createProviderNetworkScope, closeProviderNetworkDispatchers, PROVIDER_NETWORK_SCOPE, type Message, type ProviderOAuthCredential, type OpenAICodexModel } from '../index.js';
 import { OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, openAICodexAccountModels } from './openai-codex.js';
 const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')) as {
-  models: OpenAICodexModel[];
+  models: Array<OpenAICodexModel & { compat?: { supportsMidConvoSystemMessages?: boolean } }>;
   responseEvents: Array<Record<string, unknown>>;
   rows: Array<{ model: string; case: string; request: { url: string; body: Record<string, unknown> } }>;
 };
@@ -35,6 +35,8 @@ it('owns immutable nine-model CX metadata without API-key factory or subscriptio
   expect(f.provider.getModelApi()).toBe('openai-codex-responses');
   expect(OPENAI_CODEX_MODELS.map(model => [model.id, model.name, model.contextWindow, model.maxTokens, model.input, model.thinkingLevelMap]))
     .toEqual(reference.models.map(model => [model.id, model.name, model.contextWindow, model.maxTokens, model.input, model.thinkingLevelMap]));
+  expect(OPENAI_CODEX_MODELS.map(model => model.supportsMidConvoSystemMessages === true))
+    .toEqual(reference.models.map(model => model.compat?.supportsMidConvoSystemMessages === true));
   expect(Object.isFrozen(OPENAI_CODEX_MODELS)).toBe(true);
   expect(Object.isFrozen(OPENAI_CODEX_MODELS[0].thinkingLevelMap)).toBe(true);
   expect(f.provider.getPublishedModels().every(model => model.api === 'openai-codex-responses' && model.pricing === undefined)).toBe(true);
