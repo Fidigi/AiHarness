@@ -5,11 +5,11 @@ import { expect, it, vi } from 'vitest';
 import { EncryptedCredentialStore, ProviderCredentialService, type ModelCatalog, type Session } from '@ai-harness/core';
 import { start, stop } from '../index.js';
 
-it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/final replay and account withdrawal', async () => {
+it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-codex-http-master', model = 'gpt-6.1-sol', account = 'codex-http-account';
   const token = (signature: string) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + signature;
-  let access = token('c2ln'), refreshes = 0;
+  let access = token('c2ln'), refreshes = 0, modelVisible = true;
   const events = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents as unknown[];
   const replay = JSON.parse(await readFile(new URL('../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) as {
     events: Array<Record<string, unknown>>; finalEvents: Array<Record<string, unknown>>; items: Array<Record<string, unknown>>;
@@ -43,7 +43,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/fin
       return Response.json({ access_token: access, refresh_token: 'private-http-refresh-' + refreshes, expires_in: 3600 });
     }
     expect(headers.get('authorization')).toBe(`Bearer ${access}`); expect(headers.get('chatgpt-account-id')).toBe(account); expect(headers.get('x-api-key')).toBeNull();
-    if (target.pathname.endsWith('/models')) return Response.json({ models: [{ slug: model, visibility: 'list' }, { slug: 'gpt-5.5', visibility: 'hide' }] });
+    if (target.pathname.endsWith('/models')) return Response.json({ models: [{ slug: model, visibility: modelVisible ? 'list' : 'hide' }, { slug: 'gpt-5.5', visibility: 'hide' }] });
     expect(target.href).toBe('https://chatgpt.com/backend-api/codex/responses'); expect(JSON.parse(body)).toMatchObject({ model, stream: true, store: false });
     const selected = !privateActive ? events : privateTurns++ === 0 ? replay.events : privateTurns === 2 ? finalEvents : replay.finalEvents;
     const frames = JSON.stringify(selected).replaceAll('opaque-sensitive-tail', 'opaque-' + access + '-tail');
@@ -140,6 +140,26 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/fin
           expect(await readFile(sessionFile, 'utf8')).toBe(journal);
         }
         if (generation === 1) { await stop(); continue; }
+        const committed = await readFile(file), beforeRemote = calls.length, inferenceCount = responses().length;
+        modelVisible = false;
+        const removedCatalog = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
+        expect(removedCatalog.providers.find(row => row.provider === 'openai-codex')!.models.every(row => !row.available)).toBe(true);
+        expect(removedCatalog.providers.find(row => row.provider === 'openai-codex')!.models).toContainEqual(expect.objectContaining({ id: model, available: false }));
+        expect(calls.length).toBeGreaterThan(beforeRemote);
+        const removed = await post('/api/chat', { provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } });
+        expect(removed.status).toBe(200); const removedText = await removed.text();
+        expect(removedText).toContain('event: error'); expect(removedText).not.toContain('event: message_end'); expect(removedText).not.toContain(access);
+        const remoteRun = await post('/api/agent/runs', { sessionId, cwd, provider: 'openai-codex', model, input: 'removed by account', autoCompaction: false, maxRetries: 0 });
+        expect(remoteRun.status).toBe(202); const { run: removedRun } = await remoteRun.json() as { run: { id: string } };
+        await vi.waitFor(async () => expect(await fetch(base + '/api/agent/runs/' + removedRun.id, { headers }).then(response => response.json())).toMatchObject({ phase: 'failed' }));
+        expect(responses()).toHaveLength(inferenceCount); expect(privateTurns).toBe(3); expect(refreshes).toBe(1);
+        expect(calls.slice(beforeRemote).every(call => call.url === 'https://chatgpt.com/backend-api/codex/models?client_version=0.167.2' && call.method === 'GET')).toBe(true);
+        expect(await readFile(file)).toEqual(committed); expect(await readFile(marker, 'utf8')).toBe('effect\n');
+        expect((await readFile(sessionFile, 'utf8')).trim().split('\n').map(line => JSON.parse(line)).filter(entry => entry.type === 'message' && entry.role === 'assistant')).toHaveLength(3);
+        modelVisible = true;
+        const restored = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
+        expect(restored.providers.find(row => row.provider === 'openai-codex')!.models.filter(row => row.available).map(row => row.id)).toEqual([model]);
+        expect(await readFile(file)).toEqual(committed); expect(refreshes).toBe(1);
         await reader.delete('openai-codex');
         const withdrawn = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
         expect(withdrawn.providers.find(row => row.provider === 'openai-codex')?.models.every(row => !row.available)).toBe(true);
