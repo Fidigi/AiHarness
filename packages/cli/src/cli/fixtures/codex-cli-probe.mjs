@@ -10,14 +10,19 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
 import { createLocalTLSFixture } from './oauth-local-tls.mjs';
 const { spawn } = await import(process.env.AIH_TEST_PTY_MODULE ?? 'node-pty');
-const requestedMode = process.argv[2], browser = requestedMode.startsWith('browser-');
-const mode = browser ? requestedMode.slice('browser-'.length) : requestedMode;
+const requestedMode = process.argv[2], browser = requestedMode.startsWith('browser-'), privateReplay = requestedMode.startsWith('private-');
+const mode = requestedMode.replace(/^(?:browser|private)-/u, '');
+assert(!privateReplay || ['print', 'json', 'rpc'].includes(mode));
 assert(['regular', 'fullscreen', 'print', 'json', 'rpc', 'deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh', 'port', 'wait', 'return'].includes(mode));
 const root = await mkdtemp(os.tmpdir() + '/aih-codex-cli-');
 const cwd = root + '/work', agent = root + '/agent', sessions = root + '/sessions';
 const master = 'disposable-codex-cli-master', refresh = 'private-codex-cli-refresh', account = 'cli-codex-account', model = 'gpt-6.1-sol';
 const token = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.c2ln';
 const events = JSON.parse(await readFile(process.env.AIH_CODEX_RESPONSE_FILE ?? new URL('../../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents;
+const replay = privateReplay ? JSON.parse(await readFile(process.env.AIH_CODEX_CONTINUATION_FILE ?? new URL('../../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) : undefined;
+const privateFinal = replay?.events.filter(event => !String(event.type).includes('function_call_arguments') && event.item?.type !== 'function_call')
+  .map(event => event.type === 'response.completed' ? { ...event, response: { ...event.response, output: replay.items.filter(item => item.type !== 'function_call') } } : event);
+let privateTurns = 0;
 const secrets = [token, refresh, 'private-codex-device', 'private-codex-code', 'private-codex-verifier'];
 let wire, occupied, terminal, exit, output = '', privacyTail = '', held, hold = false, fixtureError, browserAuthorization;
 const calls = [], children = new Set(), deliveredStates = new Set();
@@ -86,7 +91,9 @@ try {
       }
       assert.equal(url.href, 'https://chatgpt.com/backend-api/codex/responses'); assert.equal(request.method, 'POST');
       assert.equal(JSON.parse(body).model, model); assert.equal(JSON.parse(body).store, false);
-      response.writeHead(200, { 'content-type': 'text/event-stream' }); response.end(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
+      const selected = !privateReplay ? events : ++privateTurns === 1 ? replay.events : privateTurns === 2 ? privateFinal : replay.finalEvents;
+      const frames = JSON.parse(JSON.stringify(selected).replaceAll('opaque-sensitive-tail', 'opaque-' + token + '-tail'));
+      response.writeHead(200, { 'content-type': 'text/event-stream' }); response.end(frames.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
     } catch (error) { fixtureError = error; response.writeHead(500).end(); }
   });
   await new Promise(resolve => wire.listen(0, '127.0.0.1', resolve));
@@ -133,7 +140,65 @@ try {
   };
   const turn = ['--approve', '--no-extensions', '--no-context-files', '--no-tools', '--provider', 'openai-codex', '--model', model,
     '--thinking', 'off', '--session-dir', sessions, '--session-id', 'codex-terminal', ...(mode === 'print' ? ['--print', 'probe'] : ['--mode', mode === 'rpc-refresh' ? 'rpc' : mode, ...(mode === 'rpc' || mode === 'rpc-refresh' ? [] : ['probe'])])];
-  if (mode === 'return') {
+  if (privateReplay) {
+    const authorized = await runLogin(); assert.equal(authorized.code, 0, JSON.stringify(authorized)); assert.equal(authorized.signal, null);
+    const extension = cwd + '/echo.mjs', effects = root + '/echo-effects', journalFile = sessions + '/codex-terminal.jsonl';
+    await writeFile(extension, `import { appendFile } from 'node:fs/promises';
+      export default api => api.registerTool({ ...${JSON.stringify(replay.tools[0])}, execute: async input => {
+        if (input.x !== 1) throw new Error('Invalid fixture input.');
+        await appendFile(${JSON.stringify(effects)}, 'effect\\n'); return { content: 'result' };
+      } });`);
+    const args = (resume, prompt) => ['--approve', '--no-extensions', '--no-context-files', '-e', extension, '--tools', 'echo',
+      '--provider', 'openai-codex', '--model', model, '--thinking', 'off', '--session-dir', sessions,
+      ...(resume ? ['--session', journalFile] : ['--session-id', 'codex-terminal']),
+      ...(mode === 'print' ? ['--print', prompt] : ['--mode', mode, ...(mode === 'rpc' ? [] : [prompt])])];
+    const input = prompt => mode === 'rpc' ? JSON.stringify({ type: 'prompt', id: 'codex', message: prompt }) + '\n' : '';
+    const row = replay.rows.find(row => row.model === model);
+    const redact = value => JSON.parse(JSON.stringify(value).replaceAll('opaque-sensitive-tail', 'opaque-[REDACTED]-tail'));
+    const exact = redact(row.projections.find(vector => vector.case === 'exact').expected), toolInput = exact.slice(0, -1);
+    const finalInput = exact.slice(1, -2).filter(item => item.type !== 'function_call');
+    const blocks = redact(row.firstObserved.content.map(block => block.type === 'thinking'
+      ? { type: 'reasoning', text: block.thinking, thinkingSignature: block.thinkingSignature }
+      : block.type === 'text' ? block : { type: 'tool_call', id: block.id, name: block.name, input: block.arguments }));
+    const result = await run(args(false, 'probe'), input('probe')); assert.equal(result.code, 0, JSON.stringify(result)); assert.equal(result.signal, null);
+    if (mode === 'print') assert.equal(result.stdout, 'leftright\n');
+    else assert.equal(result.stdout.trim().split('\n').map(line => JSON.parse(line)).filter(record => record.type === 'message_end' && record.message?.role === 'assistant' && record.message.api === 'openai-codex-responses').length, 2);
+    const bodies = () => calls.filter(call => call.url.endsWith('/responses')).map(call => JSON.parse(call.body));
+    assert.equal(bodies().length, 2); assert(bodies()[0].tools.some(tool => tool.type === 'function' && tool.name === 'echo'));
+    assert.deepEqual(bodies()[1].input, toolInput); assert.equal(await readFile(effects, 'utf8'), 'effect\n');
+    const journal = await readFile(journalFile, 'utf8'), records = journal.trim().split('\n').map(line => JSON.parse(line));
+    assert.deepEqual(records.filter(record => record.type === 'message' && record.role === 'assistant').map(record => record.blocks), [blocks, blocks.filter(block => block.type !== 'tool_call')]);
+    assert(records.some(record => record.type === 'message' && record.role === 'tool' && record.toolCallId === 'call_native|fc_native' && record.content === 'result'));
+    assert.equal((await stat(journalFile)).mode & 0o777, 0o600); assert(journal.includes('opaque-[REDACTED]-tail'));
+    const exports = [];
+    for (const complete of [false, true]) {
+      const file = cwd + '/' + (complete ? 'complete' : 'ordinary') + '.json';
+      const exported = await run(['export', '--session', journalFile, '--session-dir', sessions, '--format', 'json', '--output', file, '--approve', ...(complete ? ['--include-opaque-continuations'] : [])]);
+      assert.equal(exported.code, 0, JSON.stringify(exported)); assert.equal(exported.signal, null);
+      const bytes = await readFile(file, 'utf8'); assert.equal(bytes.includes('opaque-'), complete); assert.equal(bytes.includes('textSignature'), complete);
+      assert(bytes.includes('visible thought')); assert.equal((await stat(file)).mode & 0o777, 0o600); exports.push(bytes, JSON.stringify(exported));
+      assert.equal(await readFile(journalFile, 'utf8'), journal);
+    }
+    const resumed = await run(args(true, 'continue'), input('continue')); assert.equal(resumed.code, 0, JSON.stringify(resumed)); assert.equal(resumed.signal, null);
+    assert.equal(bodies().length, 3); assert.deepEqual(bodies()[2].input, [...toolInput, ...finalInput, exact.at(-1)]);
+    assert.equal(await readFile(effects, 'utf8'), 'effect\n');
+    const restarted = await readFile(journalFile, 'utf8'), assistants = restarted.trim().split('\n').map(line => JSON.parse(line)).filter(record => record.type === 'message' && record.role === 'assistant');
+    assert.equal(assistants.length, 3); assert.deepEqual(assistants.slice(0, 2).map(record => record.blocks), [blocks, blocks.filter(block => block.type !== 'tool_call')]);
+    assert.equal(assistants[2].provider, 'openai-codex'); assert.equal(assistants[2].api, 'openai-codex-responses'); assert.equal(assistants[2].model, model);
+    assert.deepEqual(assistants[2].blocks, [{ type: 'text', text: 'ok', textSignature: '{"v":1,"id":"msg_final"}' }]);
+    if (mode === 'print') assert.equal(resumed.stdout, 'ok\n');
+    else {
+      const completed = resumed.stdout.trim().split('\n').map(line => JSON.parse(line)).filter(record => record.type === 'message_end' && record.message?.role === 'assistant');
+      assert.equal(completed.length, 1); assert.equal(completed[0].message.api, 'openai-codex-responses');
+      assert.deepEqual(completed[0].message.content, [{ type: 'text', text: 'ok' }]);
+    }
+    const encrypted = await readFile(agent + '/credentials.enc', 'utf8'); assert.equal((await stat(agent + '/credentials.enc')).mode & 0o777, 0o600);
+    const logout = await run(['auth', 'logout', 'openai-codex']); assert.equal(logout.code, 0); await absent();
+    const count = calls.length, withdrawn = await run(args(true, 'withdrawn'), input('withdrawn')); assert.notEqual(withdrawn.code, 0); assert.equal(withdrawn.signal, null); assert.equal(calls.length, count);
+    assert.equal(await readFile(effects, 'utf8'), 'effect\n'); assert.equal(privateTurns, 3);
+    const publicOutput = JSON.stringify([authorized, result, resumed, logout, withdrawn]); assert(!publicOutput.includes('opaque-')); assert(!publicOutput.includes('textSignature'));
+    for (const secret of secrets) assert(!(publicOutput + journal + restarted + encrypted + exports.join('\n')).includes(secret));
+  } else if (mode === 'return') {
     assert(browser); const result = await runLogin(); assert.equal(result.code, 130, JSON.stringify(result)); assert.equal(result.signal, null);
     assert.equal(result.stdout, ''); assert(result.stderr.endsWith('Auth cancelled.\n'));
     const credentials = reader(); await credentials.load();
