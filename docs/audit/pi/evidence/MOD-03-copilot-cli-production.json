@@ -1,0 +1,554 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-13",
+  "baseCommit": "776475e6250f0af8695a5d2791d655707ffa95b9",
+  "status": "PARTIAL",
+  "goalComplete": false,
+  "scope": "Fresh minimal production image qualification of existing nine private Copilot A/C/R print/JSON/RPC paths. No repository product/test/assertion/deadline/dependency change; documentation/evidence only.",
+  "gap": "Node24 test-image emitted/installed private journeys did not qualify Node26 production emit, runtime-only dependency tree, non-root filesystem permissions or network-none execution. Earlier production smoke was simple R, not private A/C/R.",
+  "validation": {
+    "build": {
+      "status": "PASS",
+      "artifact": "build.log",
+      "exit": "build.exit",
+      "command": "make build-prod IMAGE_PROD=ai-harness:copilot-cli-production",
+      "image": "ai-harness:copilot-cli-production"
+    },
+    "production": {
+      "status": "PASS",
+      "artifact": "run-r3.log",
+      "exit": "run-r3.exit",
+      "node": "v26.13.1",
+      "npm": "12.1.0",
+      "uid": 999,
+      "gid": 999,
+      "network": "none",
+      "cases": 9,
+      "apis": [
+        "anthropic-messages",
+        "openai-completions",
+        "openai-responses"
+      ],
+      "modes": [
+        "print",
+        "json",
+        "rpc"
+      ],
+      "entry": "/app/packages/cli/dist/index.js",
+      "scope": "Documented compiled CLI entry, not installed PATH bin or Web launcher. No compiled product overlay; only qualification inputs copied."
+    },
+    "documentation": {
+      "status": "PASS",
+      "artifact": "docs.log",
+      "scope": "Separate predictive Docker documentation lint over current tracked/nonignored snapshot; not a new unit/type/browser campaign."
+    }
+  },
+  "coverage": [
+    "Reuses unchanged existing private-a/c/r-print/json/rpc probe assertions and child deadlines. Three selected profiles: claude-fable-5.1,gemini-3.5-flash C details,gpt-5-mini. Each path owns native standalone device login/canonical encrypted credential composition, one explicit echo effect, private tool/final blocks and token-bearing carrier redaction.",
+    "Per path seven CLI invocations/four OAuth-exchange-catalogue calls/three inference POSTs, two complete conversational-array comparisons, two standalone0600 exports, fresh-process journal replay and attributed third ok, then logout and pretransport refusal without repeated effect. C/R generated instruction exclusion and A host short-cache expectations retain earlier explicit limits, not new full-request/SDK/default/profile binding.",
+    "Actual Node26 production modules run as uid/gid999 under Docker network none. TypeScript and Vitest are absent. Compilation/build and runtime-only dependency tree are distinct from the previous Node24 image and genuine outside-checkout installed consumer.",
+    "Production lacks OpenSSL. The existing verified local-TLS helper generates a disposable certificate/key in the test image; a qualification-only adapter reads those inputs, validates time bounds and supplies the same trusted real HTTPS fixture. No runtime package, TLS-verification bypass, application network/issuer/endpoint policy or compiled product code is changed.",
+    "Production documents its compiled CLI entry rather than an ai-harness PATH link; the final run uses that executable entry. Installed PATH proof remains in its separate receipt. The existing production ai-harness-web launcher is not exercised here."
+  ],
+  "development": [
+    {
+      "artifact": "run.log",
+      "status": "SETUP FAIL",
+      "exit": 127,
+      "protocolCases": 0,
+      "detail": "Initial unchanged TLS setup preflight invokes missing OpenSSL in minimal image. Failure occurs before probe invocation; retain it without adding a production dependency."
+    },
+    {
+      "artifact": "run-r2.log",
+      "status": "SETUP FAIL",
+      "exit": 1,
+      "protocolCases": 0,
+      "detail": "Certificate adapter is supplied, but runner assumes an ai-harness PATH bin that the image does not provide. command -v fails before probes. Inspection confirms executable0755 compiled CLI, existing Web launcher, absent TypeScript/Vitest; invocation is corrected to documented compiled entry, not treated as a product/packaging fix."
+    }
+  ],
+  "limits": [
+    "Synthetic fixture consent/grant/token/catalogue/signature/encryption is not real GitHub authorization, cryptographic verification, subscription entitlement, remote refresh/inference/revocation or cross-account acceptance.",
+    "Nine bounded production paths do not qualify all35 profiles/lanes/media/context/default/budget/overflow/error/compaction/fork/cached/regular/fullscreen/terminal lifecycles, actual Web launcher/browser or registry distribution. No forced refresh, new SDK acquisition or full-root/parity/type campaign.",
+    "Local image identity and bounded source/emitted/dependency/fixture hashes are not whole-context/clean-commit/distribution/SDK/archive closure attestations. Source inputs are current host snapshot; pre-existing dirty compiler work remains excluded from staging. Disposable fixture PEM material is not committed; only hashes/modes recorded.",
+    "The successful current image does not repair earlier native compiler/application exits or authorize identical retries. The three user-waived incidents were not reopened or executed as targeted tests; other historical holds retain their source scopes.",
+    "MOD-03 PARTIAL/MOD-01 IN PROGRESS/audit37/43 and active goal remain unchanged; real accounts and complete qualification remain open."
+  ],
+  "identity": {
+    "node": "v26.13.1",
+    "versions": {
+      "node": "26.13.1",
+      "acorn": "8.19.0",
+      "ada": "4.0.0",
+      "amaro": "1.1.11",
+      "ares": "1.34.9",
+      "brotli": "1.2.1",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "libffi": "3.8.0",
+      "lief": "1.0.0",
+      "llhttp": "9.4.4",
+      "merve": "1.2.2",
+      "modules": "147",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.70.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "3.5.9",
+      "simdjson": "5.0.3",
+      "simdutf": "7.7.0",
+      "sqlite": "3.54.1",
+      "tz": "2026e",
+      "undici": "8.12.4",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "14.6.202.34-node.40",
+      "zlib": "1.3.2.1-motley-456ae73",
+      "zstd": "1.5.7"
+    },
+    "uid": 999,
+    "gid": 999,
+    "sourceCount": 15,
+    "emittedCount": 10,
+    "dependencyCount": 7,
+    "files": [
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/fixtures/copilot-interactive-probe.mjs",
+        "bytes": 22434,
+        "sha256": "a027edabee1cf6567021cba043e45a97e8118f1120fa9dd7db2265e95a7e3521",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/github-copilot-routing-reference.json",
+        "bytes": 950677,
+        "sha256": "9420a2b0ebfbda454cbd19388ecea214d98c16a38a25aae5082b818e0ce62d95",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/github-copilot-continuation-reference.json",
+        "bytes": 2018684,
+        "sha256": "fc40b8c1360ea84111d03cd6df8e623cadd290b8064576a49c2133486b3cdea7",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/index.ts",
+        "bytes": 422532,
+        "sha256": "451e661e85da3761f7b7dbc7cb2c73218cbef9cb04abcf198acbff0d998a78ac",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/github-copilot.ts",
+        "bytes": 44699,
+        "sha256": "ce8e50ffb99d613e7fdc12fa7b7a715c9c164f470f1c22997be4cfe8aeb4c384",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/credentials.ts",
+        "bytes": 49290,
+        "sha256": "103b2fb206ac242e0dca1c0f6ce86b80e8b155f95714f00ba0d0b853589f767f",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/agent/tool-loop.ts",
+        "bytes": 26211,
+        "sha256": "d1fb26008e85cc71149be38a190dc38f41f47d5ac48518257f727d0625348475",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/responses-replay.ts",
+        "bytes": 10683,
+        "sha256": "5a99946ff33401cbd1f7975199ea8a5935ac10058f30fa2feb83b980c7079cb6",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/completions-replay.ts",
+        "bytes": 8334,
+        "sha256": "399c48f76bfdafef87f04f108ff653042f94fb9a773ecc5503e664b848423bfa",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/index.ts",
+        "bytes": 106806,
+        "sha256": "c174000a68465428b5ab6ad4b6f144b7ea99459d2d0035cd3c3d19f0f049b964",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/providers/provider-runtime.ts",
+        "bytes": 6550,
+        "sha256": "4f39f89abf3337113949e50984a68367064bc035aed6fe09a59b4c089a17390d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/providers/configured-providers.ts",
+        "bytes": 15027,
+        "sha256": "7ef5c354d6dc3fe59a0042443b4b83c47b81b201eff4ccb3ab413d7483715f4d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/rpc/rpc-server.ts",
+        "bytes": 36944,
+        "sha256": "30f30686ae8e75159cfb47ccd4dc2f70beeff92186f9222e7b563d041d273200",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": ".docker/Dockerfile.prod",
+        "bytes": 2743,
+        "sha256": "02a829d0ca5f92c6aca446900b753f33c7d55080d7f49e69cbaaaae25d374d78",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "scripts/run-typescript.mjs",
+        "bytes": 1156,
+        "sha256": "b090d6a6213be0b082e8d79b9578fa7e71112d44c2c71a418c55132b77e1b215",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/index.js",
+        "bytes": 117737,
+        "sha256": "3f4961d36fc235e6ba9117f6f91aab99bc02f1dfb66303815079ee709e9c3af3",
+        "mode": 493
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/providers/provider-runtime.js",
+        "bytes": 5652,
+        "sha256": "b9fc34b4d321d9ef67cc9bfa214c2b5a151e0e11c25935a26dd6554e0dc367da",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/providers/configured-providers.js",
+        "bytes": 13883,
+        "sha256": "22464ac6addf9548099813fd03f7543bd69809cb4d01999c33cdfe7ea4f84970",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/rpc/rpc-server.js",
+        "bytes": 37975,
+        "sha256": "7571ae8971b8fe05cada16d168dc695129fa707397e9ed755340405d73e3e58d",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/index.js",
+        "bytes": 411403,
+        "sha256": "8482f3f4b4f125582a04da21a87364b7d54712d7a12d06242a65e33fd9df8354",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/github-copilot.js",
+        "bytes": 46254,
+        "sha256": "07ed2c64d21f8841970f1f9d9c308896f07feb7e94109e28d06202080fb607da",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/credentials.js",
+        "bytes": 49750,
+        "sha256": "7f99914eab4101fc6c0a56d3f4824f6e3fc3e3d1dfb4b9a81758065040fee78f",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/agent/tool-loop.js",
+        "bytes": 26169,
+        "sha256": "d52b014dc6721a3337078b92470784ddec132ba02cc9e3106f2aa4269af4d7f6",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/responses-replay.js",
+        "bytes": 11915,
+        "sha256": "e3c3ffe2d253102985d490663851ccfcb430ad43d5c146074a0e9fd8b83cbd11",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/completions-replay.js",
+        "bytes": 9514,
+        "sha256": "f09eab72f37d98afaf8b5629ce442ccf4b1b9009361c1d1fab3186a5a8a15e70",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "package.json",
+        "bytes": 2623,
+        "sha256": "0f42e9749053dcc4a7945a5e52c8788c52cc804f2a8cc1fe405a8b33644cb6dc",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "package-lock.json",
+        "bytes": 298847,
+        "sha256": "4831259a0f7d37d4c8ba43947dc1b0b5d93f74b2202b5ffdd759ff8faa3db2b9",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "packages/core/package.json",
+        "bytes": 900,
+        "sha256": "e468a885549b92deecd1e60ba3e41590007a96ec6ff535a9157b0815cdb2dcab",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "packages/cli/package.json",
+        "bytes": 638,
+        "sha256": "62ce85f241948b37e6c24f813280126eeaedf24d4a9d1f9826e00822a6276f7f",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "packages/server/package.json",
+        "bytes": 963,
+        "sha256": "3f6b992c96662ae86dc8f8b4fbb57e914baf707551a031976558a0a0f6bbe2f7",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "node_modules/undici/package.json",
+        "bytes": 6290,
+        "sha256": "0fedea32b64c5efbadeec2c6cacd1b6cbb2fab9535456ef5cde3e6192e078748",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "node_modules/node-pty/package.json",
+        "bytes": 1615,
+        "sha256": "f8b6a14f7022c14f1cd5d109486f5dacd32bffb63a9a63e38eced37dacb47439",
+        "mode": 420
+      }
+    ],
+    "fixture": [
+      {
+        "path": "copilot-interactive-probe.mjs",
+        "bytes": 22434,
+        "sha256": "a027edabee1cf6567021cba043e45a97e8118f1120fa9dd7db2265e95a7e3521",
+        "mode": 420
+      },
+      {
+        "path": "oauth-local-tls.mjs",
+        "bytes": 699,
+        "sha256": "056252b742d840a42022e59f17533121ac79ebc68db7234ef8c08fab6d5428dc",
+        "mode": 420
+      },
+      {
+        "path": "github-copilot-routing-reference.json",
+        "bytes": 950677,
+        "sha256": "9420a2b0ebfbda454cbd19388ecea214d98c16a38a25aae5082b818e0ce62d95",
+        "mode": 420
+      },
+      {
+        "path": "github-copilot-continuation-reference.json",
+        "bytes": 2018684,
+        "sha256": "fc40b8c1360ea84111d03cd6df8e623cadd290b8064576a49c2133486b3cdea7",
+        "mode": 420
+      },
+      {
+        "path": "fixture-cert.pem",
+        "bytes": 4011,
+        "sha256": "9e90fd60ace1594b8d67ff5ac2349ff574d25cb62ca262e6ac0a685107fc81b7",
+        "mode": 420
+      },
+      {
+        "path": "fixture-key.pem",
+        "bytes": 1704,
+        "sha256": "ec816b09f617c7e2b1751b5a3172ddbcd14b28311f2048b21a7550a6c2388aaf",
+        "mode": 420
+      },
+      {
+        "path": "run.sh",
+        "bytes": 488,
+        "sha256": "83943f82efa360cbd9dc18d093bd2dfe79056b2b167830370810ed7da7b4e804",
+        "mode": 420
+      }
+    ],
+    "scope": "Host-snapshot bounded source plus actual production-image emitted/dependency and qualification-input identities. Not whole-context/distribution/SDK/archive closure or clean-commit attestation. Test PEM key/certificate are disposable fixture material; only hashes recorded. TypeScript and Vitest absent from runtime."
+  },
+  "runtime": {
+    "image": "sha256:e8ef6785a40f4a5e4ca27f5449da1b01587d517dc8d6ae4b24d76fedad7b62bd",
+    "user": "aiharness",
+    "network": "none",
+    "exit": 0,
+    "command": [
+      "bash",
+      "/app/qualification/run.sh"
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "build.log",
+      "bytes": 15419,
+      "sha256": "2f0c2bb82480a1b29d397ac3ab67915b8f2f4d973c276149f369e269f2150d3c",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "build.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPgAgASzUp+AgAAAA=="
+    },
+    {
+      "name": "run.log",
+      "bytes": 128,
+      "sha256": "03c3513fa6ec3b3c4449839bc6e2fb523ed0bd2a7f365c7ffdaba02e066505d0",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAy3GsQ7CIBAA0J2vuNzcgNRoAqs6dLA1TTsbUmgloQdKcTH+u4tvere+O4+noenaez+2Q3O9wAcpWoca3/WRyz2XWGHxFrVSqsLlvy+TNZd8x4RJSTyLCX72k9l8JPEqxPNDQ/Dk4KAhJkc5Bw1TXFdDFihuMMdClv0AUqQIBoAAAAA="
+    },
+    {
+      "name": "run.exit",
+      "bytes": 4,
+      "sha256": "743c7850cccfba5e53a9002663ec1ddd1079315a98bdbfdde10e6044f56abefe",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzM0MucCAAw47j4EAAAA"
+    },
+    {
+      "name": "run-r2.log",
+      "bytes": 66,
+      "sha256": "e94746652224889862b9b0bdb0227cb389975bbf832a3cc4690997126d3a2b04",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwsI8ncJdQ7x9PeLDwr1C/H0dVWoVsrLT0lVslIqMzLTMzTWM1TSUSrNTFGysrS01FFKh7JquQyN9Az1DLgAukbv/UIAAAA="
+    },
+    {
+      "name": "run-r2.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPkAgBT/FFnAgAAAA=="
+    },
+    {
+      "name": "run-r3.log",
+      "bytes": 461,
+      "sha256": "db0517f1a25454a9d96cc63880dc5db4adfc3df138834c79c86145bd05eed5b9",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA43NQQuCMACG4bu/QnbWLQ0Cu8XyMLJNxgw6ydiGzELHNAmi/x5E0NHdvsPL99ScHRssCKMtb6gg5zJ+gWHUBuzBku9gtoUZSMDDarAviiIB3W+9oyyHGdxE9f8BV6QtqeDXGEnnkJPqJjszIXW3SNtpRnbQ5gn7KcKsJhUTLaGi5AcsyKVs2Sl23i5yNqlMnbfDvJ710zisV96ptUiFiSpIVCGiDxN9kOi/4gcwtbuLzQEAAA=="
+    },
+    {
+      "name": "run-r3.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPgAgASzUp+AgAAAA=="
+    },
+    {
+      "name": "run-initial.sh",
+      "bytes": 450,
+      "sha256": "a827cf96a665ae0018a922379748b100114804c5a675f250fe9bea35a4106122",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA12QwU7CQBCG732KsZLQRrb1DOGkHDARDMKZLO20DGln1p1t1Rjf3ZRAol4mmT//5Jt8tzf5gTg/WD1GigEMRiwlgkEYU5U4LwWqZjWGjsoknc/n92k4enmHhffik3gjEqBT9EAKLAHeOttQRVjG6awQVmkwa6RO4pfN+nH3sF2uV/vNbrVdPi8gvnt6Xa8yDZ64puoz+Rrg0yu1R68kPOmonP7/ZFL/Desh/E7TccSuBWMut5E4ZNUGrnshbWu5BNODJXO0nlE1CqgBzAfk1rl8+GHfStk1qHk26PnVrMSDdQTEYKEAP4NSIoAhbgdxxOA8cYCTCoN3xaUAcPZ6BlwUFTaQcF6Io0aCIQ7obRGoR+O8HDBrTwqx89TbgGZkHZnRwIgjgFIYo/P4AY0/DNPCAQAA"
+    },
+    {
+      "name": "run-r2.sh",
+      "bytes": 434,
+      "sha256": "a7ae778cfc834ef68c3f1be6d098ca5bd9d04d045f4653c05ad57d5007e39968",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA12QQU/CQBCF7/srxkpiG9nWM4STcsBEMAhnsuxOy5B2Zt3dosb4300JJuplDi/v5Zt811fVnrjam3hQERNoVCwOQSPcUJ37IBZjLBtMPbm8mM1md0U6BHmDeQgS8mwtkqCPGIAisCR47U1LNaHLiqkVjtJi2UqTZ8/r1cP2frNYLXfr7XKzeJpDdvv4slqWMQXihuqP/HOAT36oJwyRhMc9ucn/T8bN37AZwq+iuFHsO9D6slVWus6wA30CQ/pgAmOMKmFMoN+hMt5XA3PXietbjFU56PjVrCWA8QTEYMBCmIITBTDE3SCKGHwgTnCMwhC8vRQAzh7PgIsSaxIJV1Y8tZI0ccJgbKITah9kj2V3jJD5QCeTUI+MJz0aGJkCcMKozucbXHGVE7IBAAA="
+    },
+    {
+      "name": "run.sh",
+      "bytes": 488,
+      "sha256": "83943f82efa360cbd9dc18d093bd2dfe79056b2b167830370810ed7da7b4e804",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA4WQwU7CQBCG7/sUYyWhjWzrGcIJOWC0mAoHT2TZnZbBsrPuLogxvrspwRhNjJc5/JmZ75u5vCjWZIu1ChsRMIJEYdkgSIQ+1anzrDGEvMG4J5Nm4/H4Oosbz68w9Z59mlTMEfYBPVAAyxFe9qqlmtAk2UizDdxi3nKTJg/V/GY5Wczm5apalovZ/RSSq9vHeZmH6Mk2VL+l7x18+EU9oA/EdrAnM/xtMmh+hk0XfmRZX1i3AynPsyJiiCCPUCjnCqf0s2owFLqlwlCIBVmDx3wbvq/+y3lyN1tNy0X19N+qJOuLmj0oR0AWFGjwIzAsALp414HIgvNkI2wDW/BOnxsATh4nwvmRWkViW2h21HKUZCN6pSMdUDrPa8x32wCJ83RQEWVPOZK9jpEIAMMWxal8Asn+a3foAQAA"
+    },
+    {
+      "name": "production-tls.mjs",
+      "bytes": 699,
+      "sha256": "056252b742d840a42022e59f17533121ac79ebc68db7234ef8c08fab6d5428dc",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA42SQWvcMBCF7/4V72ab7NqBkEKzTS4tezKEdrfQq5DHjYgtidF4HbPsfy+ywuL20ugkRu99zLyRGbxjgQqBWNCxG5Bb19JDqtRB2GjJd5lJwjN+3d9+/kospjNaCeGydmmevbi1nEm1e9PTBhMboXj929KF2rMbTKCQ77K6xvdR9QlunN06289QrfJC/ADPFIhPFLH9Bidi0xlq0TutehybAyYjL24UqLY19jeePdnDoYE4eHbtqCO0yujtfezZanSjXcrQTEqoiaxjc9ibNxmZCnZOSpwzQDsbBDom9Qg1KSPX8QpLE37+aIq8qrtk3EZh5WnIN0hxVAOJqkbuy3J3xb3S/CHaK83/h+nVYh4RKf+sq4iKxZAWXHxTQpVXHNLTu6w6qd60e3ZDiS9YNNZNRYkt7j7dxvNRxtGVeFoRkm+Z9vohlohxg7xeRXZtlElGtjjHpFIZl112yf4AbzmfZbsCAAA="
+    },
+    {
+      "name": "certificate.log",
+      "bytes": 31,
+      "sha256": "aa69cc8f66107b1426564db97b3d7d66926c66bf24820eeb486328b2dd7c037c",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwsI8ncJdQ7x9PeLD/EJjnfzjAgJDXKNdw5ydQxxdeECADiHGBYfAAAA"
+    },
+    {
+      "name": "inspection.log",
+      "bytes": 402,
+      "sha256": "a9790a2abac423bf4ae3b376280661e719044d078b8bb3797a325bbc1c66e613",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA53PXQrCMBAE4HePsc9plqoIzVVEJDZb3RrT0E38ofTuoqAovqgHmG9mBgidIzBwnC50OdMlKMjswFRVpaBhTwJmOUC0aQcG0MaI0dZ7uyXB2jM6loQcHJ11K6CAzixJwKQ+k4LDHZ9Xs1G9G7fW9aFz2ZOg3nBAy8XO9oHkVWmslycTsvevTpYefVdbj+/54kSbP5ekSySpe47p8VK30oVvF314R04kP1ircXIFdb1DSJIBAAA="
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 176,
+      "sha256": "cc9023f8837e7d43f1955ac7192feb6077f09ca6414d92cdba1febfa4b6890bf",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXByw7CIBAF0L2fcdfEPsKj8ivGxcAMQrS0ljaaGP/dc74oM90FHi3TaKyXSZJ1kyHdJ01GdKTRJaP1hWkI/WAmx2ZwHCe2JDqMmp1NwsQu2DEwFI4mGzyoZNqqtAaFKvt72R7wqEsVKMin7PC9QlzmmSrDXxGoZSh0tK7d66BnSSXSXpbabUc9t4zb7/QHt0angrAAAAA="
+    },
+    {
+      "name": "identity.mjs",
+      "bytes": 3280,
+      "sha256": "7b41d9a54d16c60ebb532eed2827842545bedaf8e176afc9383f5687965f9939",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA6VWS28jNwy++1foVNnwPLoLtAcbbg9Jik27TRaN24trBLKG9ijRSKpIZWME+e+F5uF34i16sGeGIj++RarKWU9MIIIntvS2YtzYAkYNJUfyShIf91TD+MI8iOIXpSFhSIIS9tUrgoYgpARE9rqLs8TceVspBNxFkR4EwSeB5T679GtHlo97jf7MWLr6Jwjdd95G8GwFFFTRHyTfD8Y9aQ0SKwWWk8WaACc/bXH7HEvx8Ycf+SALrhAE/ZplkBVqBUh9XsIz32CgDV7CZMadkI9iBZhLrXL0sn4u1TMFH4nWKW0pVYbAC0nqCVLn7QKy6gF5wgmQcMu+UlSGRdpJeRtImVXqYQkejITsAa05KyatIWWCIGXNkWxvx2LroTbZefukCvCYK1PAc0bRtPfY9hWe55ceCjCkhMa3mMUKDOVkrU61te48pgd01iBg6sFpsf4GK2zlNMSo7Mn0jnN4Mgzt2Rave0t9MKQqOCsgrVmqVfBQpBviG0Le1b8UwT+Bb5iywspH8Pll/VgqDZnztuAJR+mVI8x9MCmtHTTfdY3Nu4qFShFBcViyhUJq/X04sqQ+fMfhsxInPX5D6sDlBzwu1gP0k2af4Dso1/MCu/X6FvdhwZ5HParYbzDkuGR3c1qAA1OAkQpwm9julmg/U23l4wGt1XZaoMnJW2dNeg6P42V8X9kiaMA8mELJI4Q9lviROlrvM20ci8WNk9l83Fta329os0dlisQJKnHO7JLNZry5hXnSPOfJjLdVzpP2JdI2UVrzZDdi8/lgix5xI2qNP3hpiN5amkS1k8mkU/Yzz6lyeWmRcj7iuXAu5+OGvxkq4qtQtJl7/QgyjLCDce1W5gKW/ZeNN0ktNar/Mw1mRWXSjKJRnFTtGEqqOO76DXacpDu4gywefvfDhw+vg/HrJoT1dDgIYufmjJ8bTVYEKmPtCJ2Sxpb6rRPqv4wk3pqayjjBHVQ7pEdYtxQfTIYln3e5ORnrJh1xAVBLJWt1Od8Ev4Zsw/9/Iv+OloNUnAr8Xh9sb+t32+VJxZF/0CyDxqR28/HwAJKw3yxVrY2tVcmLjD7wq5vbq5spfx2Me43sZhnrN1Wt6muP1q0Rv97d3mRxpTMrtVz3X+qVq9usnsCjsiZpn3h4gElQxehoD1vtE1c1semtCxsMjZr3Lh9tHzdH7Ud3tm3s5ni3uTueuuWSNvdJD6V1MOKfLFKKRjgsLbGFDaaAol3qmNMBmZAUhGZxwAZZl62qxAq6MZpvdTNhCrZXDKkyLhBrgxmNYTeW2NfSaqhbAZ6pvum9WoS6eu4uf8uFl6V6Aia1xeCBWc+kBmFSaasq5pliDdQKMjYFJPbl6nf2COs89k2jHJjwwAqFzqJYaOhuAVYJAq+EHjNr9LpegQGZB2l9AUXGpmsHd3Ud1u78VdcbEwsE06753cznr4kJWicfB0P+t+k2Yqsh03bV5xe3X64/307vLz5f33/54/byz4vp9e3N/fXl1c30enp9ddetzny4l+gh32wofLif5yHfH3R8eCLRQ7658fiwa/XNUVAR9rAWB+Pev4nyf+7QDAAA"
+    },
+    {
+      "name": "identity.json",
+      "bytes": 9442,
+      "sha256": "5c011efdfb047c85b3af0b0b8dac896da455d82fda1087491eb2079488fe0a25",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "image-id.txt",
+      "bytes": 72,
+      "sha256": "f9748ef518324dc9ad4d98d252a3f4cf90dd9b3bbc41fb40b038186c0a88a3d2",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXByQ2AMAwEwD/VJJYv6GadtcWf/iVmvhdi/nT2eKRB1yis9UBiTPUmdq1tGbQdPElHa4kyfJpglEvx+gGP3AbQSAAAAA=="
+    },
+    {
+      "name": "base-commit.txt",
+      "bytes": 41,
+      "sha256": "fda44fa0a7de0b6622eef50be83504198b161a04033a2e77cff37eaf6359ba1d",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXBwREAIAgDsL/TIGdbOw6esv8IJhKX8JiIjupNo3BTnpeAQt1lHI8PwrtN7ykAAAA="
+    },
+    {
+      "name": "receipt.mjs",
+      "bytes": 6277,
+      "sha256": "e85dd5ab7dcfad13a7a8e46436aaef8e31cb110ca14f4bb5f9f9c2e04c1cc7bc",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "verify.mjs",
+      "bytes": 2339,
+      "sha256": "f9e8e584c6842b3915bf2e341b214831f9470dec5914fa318992d95fff65ac45",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA71WTVPkNhC98ytUc4jsGo/NQIDAlJMiA1uZhGUoIHtZCCXstqeDLXmlNl+7/PeUrPk0DJtccrPl163XT0/dxrJSmpgwBjSxTKuScalSOHArkSGNCfHBBjrgV6ZBpB+wgIAZEsReloMyE1ValWjALIckGgTBb8JMVuGJfqpILSPzWj5jdfEkk1Xkc4G3fLCRKGmIaUgAK4p/vxifhpXQBjzxIJDm1DweUVlFH8dHvc3tXqIqLBT1kgJ7lVZpnRAqGf5tlOQBryn7ifv+LPdEmEl8+0Rg4p8XtD1uJmJrZ5f7YV2lgsBrIH6YYg6GPD6BR+4HQhNmIiETS3hgH0Xl+YONTGnP5UaCkqlsxj+cw/2vDuD2XWjg/VpnGejQCuHZ6DAVJAJ+Kwzs/mhZu1MK4UstCscpLEDmNAkaeLPiHqUooYW3tU4LcRhX5Ap+RjE0QN78Q+C2InVBGmXu+f7gZalQC7GFfua3NRZpCI9IPOC6lj297d6u/RUqi31yIK/ZOySNpecHfJMHjszGOyE2ucu8COxv7fFWya+DenrrVRyf20HXMn4rZjssVN5O7lkOpaBk4kV/Dcdno5Px5c3o9PL4/HB4Ofp0fDP+g0V56X/79vnan53T/opFRIVOOMEDnljN+LW/+FyqdCpspVFaTacu1lUyl7ShgTIp6hSMx9cQqTTeC4Ie74oKu7zHuzZ5l1/J5jZMC3PV6FoGUcdexM5B535r9yrsb1+F/U7QqTHtHOzv7wedfPoUtc9p5nZdS8ISQgn0oPRdwKWS0JawDa4N6IALnAgtwZjvwe1BBpvfAWEpcghap9os9jAN6XFhhXWl2MZXm4CfHZ5fjg5P1rHKlSiGqqwKIAgyUZjFBXS6tjikKjHOV0F0pJK6BEnC9ipWoLwzTMiU3YM2qCTKnN2qWqZCIxgmNLB7UWC6Vn1MQRLSU2hUrRMYqlpS0N9Zw3yOhhKJIJ3C1yk7h6dQgUxBJk8uYu/d/jcPy7CAeRPUSlHcdJo7lGkcx9xR5r+4rj5RhiJ+wCNRVREfLHfO1hSwmbpNpkrQ5L80vzfw7zbXN/DTkWSt0ibih/aq/bDT77to+7ac5+XfafZItYbV0fFqDFqNLB3MMGmsFPH/U5GXmRmlouMmqNIqAdMYvsbU8+1tbXqtKsB6f9Gvhiejm7Pz8dGfw8vR+PTm0/H56MPo+IgthizvLo0nfIYuZ84qcX+HTZ0b9zfZ3JUIJt5jU+XiPbb4G4j3WY1pzLttfv5g4x/ktwnkIwkAAA=="
+    },
+    {
+      "name": "docs.log",
+      "bytes": 124,
+      "sha256": "2753115804281b1ae6d1a1cd9ad32d683c185636d5a8ae8b7848908112c505a4",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAy3MMQ7CMAxG4b2n+Ee6VGoZKmZYOYSJDVhxbZSk4fqoEvv73vUtKQtjni+4U8kcX8dTTSrIGct5XWCRyGDqueL0KcKamnbBFizjNNwi7Zt4o6bh/+ywXUrVcPUXHrE7U9HjWgSdTHkafh8mnvV8AAAA"
+    }
+  ]
+}
