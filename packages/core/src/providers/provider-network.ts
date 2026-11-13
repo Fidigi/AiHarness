@@ -50,6 +50,11 @@ function activeScope(scope: ProviderNetworkScope | undefined): ProviderNetworkSc
   return resolved;
 }
 
+/** Capture this scope generation so an owned body reader can borrow its lifetime. */
+export function providerNetworkScopeSignal(scope?: ProviderNetworkScope): AbortSignal {
+  return scopeState(activeScope(scope)).controller.signal;
+}
+
 interface ScopedProxyDispatcher { scope: ProviderNetworkScope; dispatcher: ProxyAgent }
 interface ScopedWebSocketEntry extends ProviderWebSocketCacheEntry { scope: ProviderNetworkScope }
 

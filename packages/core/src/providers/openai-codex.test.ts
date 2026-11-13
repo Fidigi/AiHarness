@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
-import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, type Message, type ProviderOAuthCredential, type OpenAICodexModel } from '../index.js';
+import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, createProviderNetworkScope, closeProviderNetworkDispatchers, PROVIDER_NETWORK_SCOPE, type Message, type ProviderOAuthCredential, type OpenAICodexModel } from '../index.js';
 import { OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, openAICodexAccountModels } from './openai-codex.js';
 const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')) as {
   models: OpenAICodexModel[];
@@ -94,6 +94,45 @@ it.each(['pre-aborted', 'pending-read'] as const)('cancels an owned catalogue bo
   const failure = expect(pending).rejects.toThrow('Invalid OpenAI Codex catalogue.');
   if (stage === 'pending-read') { await reading; caller.abort(); }
   await failure; expect(cancelled).toHaveBeenCalledTimes(1);
+});
+
+it.each(['discovery', 'turn'] as const)('retires an owned catalogue body on network-scope shutdown during %s', async mode => {
+  const f = fixture(), scope = createProviderNetworkScope(), cancelled = vi.fn(() => new Promise<void>(() => undefined));
+  const provider = new OpenAICodexProvider(Object.assign({ type: 'openai-codex', model: OPENAI_CODEX_MODELS[0].id }, { [PROVIDER_NETWORK_SCOPE]: scope }), f.source);
+  let reached!: () => void, finish!: () => void, upstream: AbortSignal | null | undefined;
+  const reading = new Promise<void>(resolve => { reached = resolve; });
+  f.fetcher.mockImplementationOnce(async (url, init) => {
+    expect(String(url)).toBe(OPENAI_CODEX_MODELS_URL); upstream = init?.signal;
+    return new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"models":[')); finish = () => controller.close(); },
+      pull() { reached(); return new Promise<void>(() => undefined); }, cancel: cancelled,
+    }));
+  });
+  const pending = (mode === 'discovery' ? provider.getAvailableModels() : provider.chat([user])).catch((error: unknown) => error);
+  try {
+    await reading; await closeProviderNetworkDispatchers(scope, { permanent: true });
+    expect(upstream?.aborted).toBe(true);
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+    expect(await pending).toBeInstanceOf(Error); expect(f.fetcher).toHaveBeenCalledOnce();
+  } finally {
+    await closeProviderNetworkDispatchers(scope, { permanent: true });
+    try { finish(); } catch { /* Already cancelled streams are closed. */ }
+    await pending;
+  }
+});
+
+it('does not publish old catalogue IDs after scope reset during credential readback', async () => {
+  const f = fixture(), scope = createProviderNetworkScope();
+  const provider = new OpenAICodexProvider(Object.assign({ type: 'openai-codex', model: OPENAI_CODEX_MODELS[0].id }, { [PROVIDER_NETWORK_SCOPE]: scope }), f.source);
+  let reached!: () => void, release!: () => void;
+  const ready = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  f.source.mockImplementationOnce(async () => original).mockImplementationOnce(async () => { reached(); await held; return original; });
+  const pending = provider.getAvailableModels().catch((error: unknown) => error);
+  try {
+    await ready; await closeProviderNetworkDispatchers(scope); release();
+    expect(await pending).toBeInstanceOf(Error); expect(f.fetcher).toHaveBeenCalledOnce();
+    expect(await provider.getAvailableModels()).toEqual(OPENAI_CODEX_MODELS.map(model => model.id));
+  } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
 });
 
 it('rechecks local credential withdrawal after a held account discovery before inference', async () => {

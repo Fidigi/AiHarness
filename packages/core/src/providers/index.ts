@@ -99,6 +99,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   acquireProviderWebSocket,
   fetchProviderResponse,
+  providerNetworkScopeSignal,
   PROVIDER_NETWORK_SCOPE,
   ProviderNetworkError,
   type ProviderNetworkScope,
@@ -3634,10 +3635,13 @@ export class OpenAICodexProvider extends AiProvider {
       capabilities: { reasoning: true, imageInput: model.input.includes('image'), toolCalls: true } }));
   }
   private async accountModels(credential: ProviderOAuthCredential, signal?: AbortSignal): Promise<string[]> {
+    const scopeSignal = providerNetworkScopeSignal(providerNetworkScope(this.config));
+    const lifetime = signal ? AbortSignal.any([signal, scopeSignal]) : scopeSignal;
     const ids = await openAICodexAccountModels(await this.request(OPENAI_CODEX_MODELS_URL, {
       method: 'GET', headers: { ...openAICodexHeaders(credential), Accept: 'application/json' }, signal,
-    }), signal);
-    const current = openAICodexCredential(await this.credentialSource(signal));
+    }), lifetime);
+    const current = openAICodexCredential(await this.credentialSource(lifetime));
+    lifetime.throwIfAborted();
     if (current.accessToken !== credential.accessToken) throw new Error('OpenAI Codex credential changed during discovery.');
     return ids;
   }
