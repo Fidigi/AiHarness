@@ -1,10 +1,76 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MockProvider, OpenAiProvider, ProviderFactory } from './index.js';
+import { MockProvider, OpenAiProvider, ProviderFactory, TypesafeProvider, type AiProvider } from './index.js';
 import { SpecializedModels, validateGeneratedImages } from './specialized-models.js';
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII=';
 
 describe('credential-private specialized model SDK', () => {
+  it('routes explicitly qualified auxiliary TypeSafe models without changing current IDs or conversational credentials', async () => {
+    const chat = new MockProvider({ type: 'mock', model: 'chat' });
+    const native = new TypesafeProvider({ type: 'operator-label', apiKey: 'private-typesafe-key' });
+    const source = new Map<string, AiProvider>([['typesafe', native]]);
+    const classify = vi.spyOn(native, 'classify').mockResolvedValue({ label: 'yes', usage: { inputTokens: 4, outputTokens: 1, totalTokens: 5 } });
+    const chatClassify = vi.spyOn(chat, 'classify');
+    const bridge = new SpecializedModels(chat, value => value.replaceAll('private-typesafe-key', '[REDACTED]'), undefined, () => source);
+    expect(bridge.getModelsOfType('classifier')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'chat:classifier', provider: 'mock' }),
+      expect.objectContaining({ id: 'typesafe::jev-latest', provider: 'typesafe', model: 'jev-latest', api: 'typesafe-system-one', type: 'classifier' }),
+    ]));
+    expect(JSON.stringify(bridge.getModelsOfType('classifier'))).not.toContain('private-typesafe-key');
+    expect(await bridge.classify({ model: 'typesafe::jev-latest', input: 'Approve', labels: ['yes', 'no'] })).toMatchObject({ label: 'yes', usage: { totalTokens: 5 } });
+    expect(classify).toHaveBeenCalledWith({ model: 'jev-latest', input: 'Approve', labels: ['yes', 'no'] }, expect.objectContaining({ api: 'typesafe-system-one', signal: expect.any(AbortSignal) }));
+    expect(chatClassify).not.toHaveBeenCalled(); expect(chat.getConfiguredModel()).toBe('chat');
+    await expect(bridge.classify({ model: 'typesafe::jev-latest', input: 'Approve', labels: ['yes'], images: [{ mediaType: 'image/png', data: png }] })).rejects.toThrow('does not support image');
+    await expect(bridge.generateImages({ model: 'typesafe::jev-latest', prompt: 'image' })).rejects.toThrow('not available');
+    expect(classify).toHaveBeenCalledTimes(1);
+    vi.spyOn(native, 'validateConfig').mockReturnValue(false);
+    expect(bridge.getAvailableOfType('classifier').map(model => model.id)).toEqual(['chat:classifier']);
+  });
+
+  it('does not turn an auxiliary namespace into a pricing or API identity', async () => {
+    const chat = new MockProvider({ type: 'mock', model: 'chat' });
+    const auxiliary = new MockProvider({ type: 'private-adapter', model: 'gpt-4o' });
+    const classify = vi.spyOn(auxiliary, 'classify').mockResolvedValue({ label: 'yes', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+    const bridge = new SpecializedModels(chat, undefined, undefined, () => new Map([['openai', auxiliary]]));
+    const result = await bridge.classify({ model: 'openai::gpt-4o:classifier', input: 'Approve', labels: ['yes'] });
+    expect(result.usage?.costUsd).toBeUndefined();
+    expect(classify.mock.calls[0][1]).not.toHaveProperty('api');
+  });
+
+  it('revalidates auxiliary ownership after hooks and refuses withdrawn authority before effects', async () => {
+    const chat = new MockProvider({ type: 'mock', model: 'chat' });
+    const original = new TypesafeProvider({ type: 'original', apiKey: 'synthetic-first' });
+    const replacement = new TypesafeProvider({ type: 'replacement', apiKey: 'synthetic-second' });
+    const source = new Map<string, AiProvider>([['typesafe', original]]);
+    const first = vi.spyOn(original, 'classify'), second = vi.spyOn(replacement, 'classify').mockResolvedValue({ label: 'yes' });
+    const bridge = new SpecializedModels(chat, undefined, async (_type, request) => { source.set('typesafe', replacement); return request; }, () => source);
+    await expect(bridge.classify({ model: 'typesafe::jev-latest', input: 'Approve', labels: ['yes'] })).resolves.toMatchObject({ label: 'yes' });
+    expect(first).not.toHaveBeenCalled(); expect(second).toHaveBeenCalledTimes(1);
+    const withdrawn = new SpecializedModels(chat, undefined, async (_type, request) => { source.delete('typesafe'); return request; }, () => source);
+    await expect(withdrawn.classify({ model: 'typesafe::jev-latest', input: 'Approve', labels: ['yes'] })).rejects.toThrow('operation failed');
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['classify', 'classifyQuestions', 'generateImages'] as const)('rejects retired auxiliary %s publication while preserving observed failed-call usage', async method => {
+    const chat = new MockProvider({ type: 'mock', model: 'chat' }), auxiliary = new MockProvider({ type: 'auxiliary', model: 'aux-chat' });
+    const source = new Map<string, AiProvider>([['aux', auxiliary]]);
+    let entered!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const usage = { inputTokens: 10, outputTokens: 2, totalTokens: 12 };
+    const wait = async () => { entered(); await held; return usage; };
+    if (method === 'classify') vi.spyOn(auxiliary, method).mockImplementation(async () => ({ label: 'yes', usage: await wait() }));
+    else if (method === 'classifyQuestions') vi.spyOn(auxiliary, method).mockImplementation(async () => ({ answers: {}, usage: await wait() }));
+    else vi.spyOn(auxiliary, method).mockImplementation(async () => ({ images: [{ mediaType: 'image/png', data: png }], usage: await wait() }));
+    const bridge = new SpecializedModels(chat, undefined, undefined, () => source);
+    const operation = method === 'classify' ? bridge.classify({ model: 'aux::aux-chat:classifier', input: 'Approve', labels: ['yes'] })
+      : method === 'classifyQuestions' ? bridge.classifyQuestions({ model: 'aux::aux-chat:classifier', state: {}, questions: { approved: { type: 'boolean', prompt: 'Approved?' } } })
+        : bridge.generateImages({ model: 'aux::mock-image', prompt: 'pixel' });
+    const pending = operation.then(value => ({ value, error: undefined }), error => ({ value: undefined, error }));
+    await started; source.set('aux', new MockProvider({ type: 'auxiliary', model: 'aux-chat' })); release();
+    const result = await pending;
+    expect(result.value).toBeUndefined(); expect(result.error).toMatchObject({ message: 'Specialized model operation failed or was cancelled.', usage });
+  });
+
   it('executes a typed virtual classifier without changing the conversational model', async () => {
     const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' }, ['{"label":"yes"}']);
     const bridge = new SpecializedModels(provider);

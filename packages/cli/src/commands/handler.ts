@@ -60,7 +60,7 @@ import { DIAGNOSTIC_PRIVACY_WARNING, EXPORT_PRIVACY_WARNING, SHARE_PRIVACY_WARNI
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
-import { createConfiguredProviders } from '../providers/configured-providers.js';
+import { createConfiguredProviders, getConfiguredSpecializedProviders } from '../providers/configured-providers.js';
 import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { terminalText } from '../tui/terminal-text.js';
@@ -314,6 +314,7 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     sessionManager: ctx.sessionManager,
     currentSessionId: ctx.currentSessionId,
     provider: ctx.provider,
+    specializedProviders: () => getConfiguredSpecializedProviders(ctx.providers),
     providerName: String((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type ?? 'unknown'),
     cwd: ctx.cwd,
     workspaceId: ctx.workspaceId,

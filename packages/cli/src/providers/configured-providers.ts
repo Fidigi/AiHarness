@@ -29,6 +29,7 @@ import {
   OpenCodeGoProvider,
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
+  TypesafeProvider,
   QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider,
   GitHubCopilotProvider,
@@ -116,7 +117,13 @@ const NATIVE_PROVIDERS = {
   'qwen-token-plan-individual': QwenTokenPlanIndividualProvider,
   'xiaomi-token-plan-ams': XiaomiTokenPlanAmsProvider, 'xiaomi-token-plan-cn': XiaomiTokenPlanCnProvider,
   'xiaomi-token-plan-sgp': XiaomiTokenPlanSgpProvider, 'zai-coding-cn': ZaiCodingCnProvider,
+  typesafe: TypesafeProvider,
 };
+
+/** Native non-conversational sources only; a provider name never grants classifier authority. */
+export function getConfiguredSpecializedProviders(providers: ReadonlyMap<string, AiProvider>): ReadonlyMap<string, AiProvider> {
+  return new Map([...providers].filter(([, provider]) => provider instanceof TypesafeProvider));
+}
 
 function createProvider(config: ProviderConfig): AiProvider {
   if (ProviderFactory.has(config.type)) return ProviderFactory.create(config);

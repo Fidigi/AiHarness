@@ -1,6 +1,7 @@
 import type { AiProvider, ChatResponse, ChatToolDefinition, ThinkingBudgets } from '../providers/index.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
+import type { SpecializedProviderSource } from '../providers/specialized-models.js';
 import type {
   ExtensionInteractionRequest,
   ExtensionInteractionHandle,
@@ -80,6 +81,8 @@ export interface AgentRuntimeOptions {
   sessionManager: SessionManager;
   extensionRegistry: ExtensionRegistry;
   resolveProvider(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
+  /** Explicit auxiliary model providers, separate from conversation selection. */
+  specializedProviders?: SpecializedProviderSource;
   /** Resolve live reasoning immediately before each model turn; never mutates an in-flight request. */
   resolveThinking?(session: Session, initial: Session['thinking']): Session['thinking'];
   journal?: AgentEventJournal;
@@ -238,6 +241,7 @@ export class AgentRuntime {
   private readonly sessionManager: SessionManager;
   private readonly extensionRegistry: ExtensionRegistry;
   private readonly resolveProvider: AgentRuntimeOptions['resolveProvider'];
+  private readonly specializedProviders?: SpecializedProviderSource;
   private readonly resolveThinking: NonNullable<AgentRuntimeOptions['resolveThinking']>;
   private readonly isProjectTrusted: NonNullable<AgentRuntimeOptions['isProjectTrusted']>;
   private readonly onUsage?: AgentRuntimeOptions['onUsage'];
@@ -251,6 +255,7 @@ export class AgentRuntime {
     this.sessionManager = options.sessionManager;
     this.extensionRegistry = options.extensionRegistry;
     this.resolveProvider = options.resolveProvider;
+    this.specializedProviders = options.specializedProviders;
     this.resolveThinking = options.resolveThinking ?? ((session, initial) => session.thinking ?? initial);
     this.journal = options.journal ?? new AgentEventJournal();
     this.isProjectTrusted = options.isProjectTrusted ?? (() => false);
@@ -1025,6 +1030,8 @@ export class AgentRuntime {
       currentSessionId: run.snapshot.sessionId,
       provider,
       providerName: run.snapshot.provider,
+      specializedProviders: this.specializedProviders ? () => run.controller.signal.aborted || run.settled
+        ? new Map() : this.specializedProviders!() : undefined,
       toolPreset: request.toolPreset,
       allowedSkills: request.allowedSkills ? [...request.allowedSkills] : undefined,
       cwd: run.snapshot.cwd,

@@ -6,7 +6,7 @@ import { CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, Moonshot
   AntLingProvider, BasetenProvider, FireworksProvider, HuggingFaceProvider, KimiCodingProvider, MetaProvider,
   MiniMaxProvider, MiniMaxCnProvider, OpenCodeGoProvider, OpenCodeProvider, TogetherProvider, XaiProvider, XiaomiProvider, MoonshotCnProvider,
   QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, TypesafeProvider } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ProviderRegistryService } from './provider-registry.js';
 
@@ -29,6 +29,23 @@ afterEach(async () => {
 });
 
 describe('ProviderRegistryService', () => {
+  it('admits native TypeSafe credentials without inventing conversational models or discovery', async () => {
+    const { root, proxy, service } = await fixture();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected discovery'));
+    await service.upsertProvider({ id: 'owned-typesafe', name: 'Owned TypeSafe', dialect: 'typesafe', apiKey: 'synthetic-typesafe', baseUrl: 'http://127.0.0.1/owned/v1' });
+    const provider = proxy.getAgentProvider('owned-typesafe')!;
+    expect(provider).toBeInstanceOf(TypesafeProvider); expect(provider.getConfiguredModel()).toBeUndefined();
+    expect(provider.getSpecializedModels()).toMatchObject([{ id: 'jev-latest', type: 'classifier', api: 'typesafe-system-one' }]);
+    expect(await service.importProviderModels('owned-typesafe')).toEqual([]);
+    expect(service.getModels()).toEqual([]);
+    await expect(service.testProvider('owned-typesafe')).rejects.toMatchObject({ status: 409 });
+    const before = await readFile(path.join(root, 'providers.json'), 'utf8');
+    await expect(service.upsertModel({ provider: 'owned-typesafe', id: 'jev-latest' })).rejects.toMatchObject({ status: 400, code: 'INVALID_MODEL' });
+    expect(await readFile(path.join(root, 'providers.json'), 'utf8')).toBe(before);
+    expect(await readFile(path.join(root, 'secrets.enc'), 'utf8')).not.toContain('synthetic-typesafe');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['ant-ling', AntLingProvider, 3], ['baseten', BasetenProvider, 22], ['fireworks', FireworksProvider, 22],
     ['huggingface', HuggingFaceProvider, 78], ['kimi-coding', KimiCodingProvider, 4], ['meta', MetaProvider, 6],

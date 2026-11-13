@@ -7,6 +7,7 @@ import type { QuestionClassificationRequest } from './classification-questions.j
 import type { NativeClassifierRequest } from './native-classification.js';
 import { runCodemode } from '../tools/codemode.js';
 import type { ExtensionRuntimeContext } from '../extensions/extension-registry.js';
+import { SessionManager } from '../sessions/session-manager.js';
 
 const request: QuestionClassificationRequest = { model: 'jev-latest', state: { approved: true }, questions: {
   approved: { type: 'boolean', prompt: 'Approved?' },
@@ -18,6 +19,9 @@ const body = () => ({ answers: {
   route: { type: 'choice', choice: 'safe', probabilities: { safe: 0.75, review: 0.25 }, confidence: 0.75 },
   level: { type: 'choice', choice: '4', probabilities: { 0: 0, 2: 0.25, 4: 0.75 }, confidence: 0.75 },
 }, usage: { input_tokens: 10, output_tokens: 2 } });
+function modelContext(provider: TypesafeProvider): ExtensionRuntimeContext {
+  return { provider, sessionManager: new SessionManager(), notify() {} };
+}
 const servers: Server[] = [];
 afterEach(async () => { vi.unstubAllGlobals(); for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
 async function fixture(reply: (response: import('node:http').ServerResponse) => void = response => response.end(JSON.stringify(body()))) {
@@ -181,12 +185,12 @@ describe('native TypeSafe System One classifier', () => {
   it('reaches the real guest bridge and conserves successful billed usage once even after a later script failure', async () => {
     const { provider, calls } = await fixture();
     const result = await runCodemode({ code: `const m=await models.getModelOfType('classifier'); text(m.api); text((await models.classifyQuestions(${JSON.stringify(request)})).answers.level.value); store('ok',true);`,
-      context: { provider } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      context: modelContext(provider), tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
     expect(result.isError, result.content).toBe(false); expect(result.content).toContain('typesafe-system-one');
     expect(result.details).toMatchObject({ costComplete: true, usage: { totalTokens: 12, costUsd: 0 }, store: { ok: true } });
     expect(result.details?.nestedCalls).toHaveLength(1);
     const failed = await runCodemode({ code: `await models.classifyQuestions(${JSON.stringify(request)}); store('bad',true); throw Error('after classifier');`,
-      context: { provider } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      context: modelContext(provider), tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
     expect(failed.isError).toBe(true); expect(failed.details?.store).toBeUndefined();
     expect(failed.details?.usage?.totalTokens).toBe(12); expect(calls).toHaveLength(2);
   });
@@ -232,7 +236,7 @@ describe('native TypeSafe System One classifier', () => {
     const { provider, calls, baseUrl } = await fixture(response => response.end(JSON.stringify({ answers: {}, usage: { input_tokens: 10, output_tokens: 2 } })));
     for (const handled of [false, true]) {
       const code = `store('pending',true); ${handled ? 'try {' : ''} await models.classifyQuestions(${JSON.stringify(request)}); ${handled ? '} catch (error) {text(error.message)}' : ''}`;
-      const result = await runCodemode({ code, context: { provider } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      const result = await runCodemode({ code, context: modelContext(provider), tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
       expect(result.isError).toBe(!handled);
       expect(result.details).toMatchObject({ costComplete: true, usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12, costUsd: 0 },
         nestedCalls: [{ kind: 'classifier', state: 'failed', isError: true, usage: { totalTokens: 12 } }] });
@@ -242,7 +246,7 @@ describe('native TypeSafe System One classifier', () => {
     }
     const unknown = new TypesafeProvider({ type: 'typesafe', apiKey: 'disposable', baseUrl, model: 'unpublished' });
     const failed = await runCodemode({ code: `await models.classifyQuestions(${JSON.stringify({ ...request, model: 'unpublished' })});`,
-      context: { provider: unknown } as ExtensionRuntimeContext, tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
+      context: modelContext(unknown), tools: () => [], execute: async () => { throw new Error('Unexpected tool'); } });
     expect(failed.isError).toBe(true);
     expect(failed.details?.usage).toEqual({ inputTokens: 10, outputTokens: 2, totalTokens: 12 });
     expect(failed.details?.costComplete).toBe(false);

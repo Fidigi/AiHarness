@@ -46,6 +46,7 @@ import {
   TOKEN_PLAN_MODELS,
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
+  TypesafeProvider,
   CLOUDFLARE_CHAT_MODELS,
   OPENROUTER_MESSAGE_MODELS,
   OPENROUTER_COMPLETION_MODELS,
@@ -150,6 +151,7 @@ const NATIVE_DIALECTS = {
   'xiaomi-token-plan-cn': { Adapter: XiaomiTokenPlanCnProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-cn'] },
   'xiaomi-token-plan-sgp': { Adapter: XiaomiTokenPlanSgpProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-sgp'] },
   'zai-coding-cn': { Adapter: ZaiCodingCnProvider, models: TOKEN_PLAN_MODELS['zai-coding-cn'] },
+  typesafe: { Adapter: TypesafeProvider, models: [] }, // Classifier-only: never import or admit a chat row.
 };
 
 function nativeDialect(value: string | undefined) {

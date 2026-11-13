@@ -113,6 +113,7 @@ import { cliToolsDisabled, cliToolSelectionOptions, unknownCliToolNames } from '
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
+  getConfiguredSpecializedProviders,
   resolveStartupProvider,
 } from './providers/configured-providers.js';
 import { createCliProviderRuntime } from './providers/provider-runtime.js';
@@ -1736,6 +1737,7 @@ async function main(): Promise<void> {
           sessionManager,
           currentSessionId,
           provider,
+          specializedProviders: () => getConfiguredSpecializedProviders(ctx.providers),
           providerName,
           toolPreset: currentSession?.toolPreset,
           cwd: workspaceCwd,

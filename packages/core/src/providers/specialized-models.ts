@@ -26,6 +26,9 @@ export class SpecializedModelError extends Error {
 }
 export type SpecializedModelRequest = ClassificationRequest | QuestionClassificationRequest | ImageGenerationRequest;
 export type BeforeSpecializedModel = (type: SpecializedModelType, request: SpecializedModelRequest, signal: AbortSignal) => Promise<SpecializedModelRequest>;
+/** Explicit live host authority; metadata never constructs providers or resolves credentials. */
+export type SpecializedProviderSource = () => ReadonlyMap<string, AiProvider>;
+interface ResolvedSpecializedModel { model: SpecializedModel; provider: AiProvider; pricingProvider: string }
 export const SPECIALIZED_MODEL_LIMITS = Object.freeze({ models: 100, inputBytes: 32_768, labels: 100,
   images: 4, imageBytes: 8 * 1024 * 1024, responseBytes: 12 * 1024 * 1024, timeoutMs: 10_000 });
 
@@ -87,8 +90,8 @@ export function validateGeneratedImages(value: unknown, count = 4): GeneratedIma
 /** A live, credential-private provider bridge shared by SDK and every code-mode host. */
 export class SpecializedModels {
   constructor(private readonly provider: AiProvider, private readonly redact: (value: string) => string = value => value,
-    private readonly before?: BeforeSpecializedModel) {}
-  getModelsOfType(type: SpecializedModelType): SpecializedModel[] {
+    private readonly before?: BeforeSpecializedModel, private readonly additional?: SpecializedProviderSource) {}
+  private ownModelsOfType(type: SpecializedModelType): SpecializedModel[] {
     if (!['classifier', 'image'].includes(type)) throw new Error('Invalid specialized model type.');
     try {
       const candidates = this.provider.getSpecializedModels();
@@ -117,27 +120,63 @@ export class SpecializedModels {
       });
     } catch { throw new Error('Specialized model metadata is unavailable.'); }
   }
+  private collect(type: SpecializedModelType, available: boolean): ResolvedSpecializedModel[] {
+    if (!['classifier', 'image'].includes(type)) throw new Error('Invalid specialized model type.');
+    const sources: Array<[string | undefined, AiProvider]> = [[undefined, this.provider]];
+    const additional = this.additional?.();
+    if (additional) {
+      if (additional.size > SPECIALIZED_MODEL_LIMITS.models) throw new Error('Invalid model metadata.');
+      for (const [name, provider] of additional) {
+        if (!/^[a-z0-9][a-z0-9._-]{0,127}$/u.test(name)) throw new Error('Invalid model metadata.');
+        if (provider !== this.provider) sources.push([name, provider]);
+      }
+    }
+    const result: ResolvedSpecializedModel[] = [], seen = new Set<string>();
+    for (const [name, provider] of sources) {
+      if (available && !provider.validateConfig()) continue;
+      for (const candidate of new SpecializedModels(provider, this.redact).ownModelsOfType(type)) {
+        const model = name ? { ...candidate, id: this.redact(`${name}::${candidate.id}`), provider: this.redact(name) } : candidate;
+        if (!text(model.id, 500) || seen.has(model.id)) throw new Error('Invalid model metadata.');
+        seen.add(model.id); result.push({ model, provider, pricingProvider: candidate.provider });
+        if (result.length > SPECIALIZED_MODEL_LIMITS.models) throw new Error('Invalid model metadata.');
+      }
+    }
+    return result;
+  }
+  getModelsOfType(type: SpecializedModelType): SpecializedModel[] {
+    try { return this.collect(type, false).map(item => item.model); }
+    catch { throw new Error('Specialized model metadata is unavailable.'); }
+  }
   getAvailableOfType(type: SpecializedModelType): SpecializedModel[] {
-    try { return this.provider.validateConfig() ? this.getModelsOfType(type) : []; }
+    try { return this.collect(type, true).map(item => item.model); }
     catch { throw new Error('Specialized model availability is unavailable.'); }
+  }
+  private assertCurrent(type: SpecializedModelType, id: string, captured: ResolvedSpecializedModel, usage?: TokenUsage): void {
+    if (captured.provider === this.provider) return;
+    try {
+      const current = this.resolve(type, id);
+      if (current.provider === captured.provider && current.model.model === captured.model.model && current.model.api === captured.model.api) return;
+    } catch { /* Withdrawn or malformed live authority cannot publish a result. */ }
+    throw new SpecializedModelError('Specialized model changed during execution.', usage);
   }
   getModelOfType(type: SpecializedModelType): SpecializedModel | undefined { return this.getAvailableOfType(type)[0]; }
   async classify(request: ClassificationRequest, options: SpecializedModelOptions = {}): Promise<ClassificationResult> {
     request = copyClassificationRequest(request);
     const initialModel = this.resolve('classifier', request.model);
-    if (request.images && initialModel.imageInput !== true) throw new Error('Classification model does not support image input.');
+    if (request.images && initialModel.model.imageInput !== true) throw new Error('Classification model does not support image input.');
     return this.bounded(options.signal, async signal => {
       const transformed = this.before ? await this.before('classifier', request, signal) : request;
       validateClassificationRequest(transformed);
       if (signal.aborted) throw new Error('Cancelled.');
       request = copyClassificationRequest(transformed);
-      const model = this.resolve('classifier', request.model);
+      const selected = this.resolve('classifier', request.model), model = selected.model;
       if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
-      const result = await this.provider.classify({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
+      const result = await selected.provider.classify({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
+      this.assertCurrent('classifier', request.model, selected, result.usage);
       if (!object(result) || !request.labels.includes(result.label)) throw new Error('Invalid classification result.');
       const usage = safeUsage(result.usage);
       if (usage && usage.costUsd === undefined && usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
-        usage.costUsd = calculatePublishedModelCost(model.provider, model.model, usage);
+        usage.costUsd = calculatePublishedModelCost(selected.pricingProvider, model.model, usage);
       }
       return { label: this.redact(result.label), usage };
     });
@@ -145,18 +184,19 @@ export class SpecializedModels {
   async classifyQuestions(request: QuestionClassificationRequest, options: SpecializedModelOptions = {}): Promise<QuestionClassificationResult> {
     request = copyQuestionClassificationRequest(request);
     const initial = this.resolve('classifier', request.model);
-    if (request.images && initial.imageInput !== true) throw new Error('Classification model does not support image input.');
+    if (request.images && initial.model.imageInput !== true) throw new Error('Classification model does not support image input.');
     return this.bounded(options.signal, async signal => {
       const transformed = this.before ? await this.before('classifier', request, signal) : request;
       if (signal.aborted) throw new Error('Cancelled.');
       request = copyQuestionClassificationRequest(transformed);
-      const model = this.resolve('classifier', request.model);
+      const selected = this.resolve('classifier', request.model), model = selected.model;
       if (request.images && model.imageInput !== true) throw new Error('Classification model does not support image input.');
-      const result = await this.provider.classifyQuestions({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
+      const result = await selected.provider.classifyQuestions({ ...request, model: model.model }, { signal, ...(model.api ? { api: model.api } : {}) });
+      this.assertCurrent('classifier', request.model, selected, result.usage);
       const answers = copyQuestionAnswers(result.answers, request.questions);
       const usage = safeUsage(result.usage);
       if (usage && usage.costUsd === undefined && usage.inputTokens !== undefined && usage.outputTokens !== undefined) {
-        usage.costUsd = calculatePublishedModelCost(model.provider, model.model, usage);
+        usage.costUsd = calculatePublishedModelCost(selected.pricingProvider, model.model, usage);
       }
       const scrub = (value: string | number | boolean) => typeof value === 'string' ? this.redact(value) : value;
       return { answers: Object.fromEntries(Object.entries(answers).map(([id, answer]) => [this.redact(id), {
@@ -172,13 +212,17 @@ export class SpecializedModels {
       validateImageGenerationRequest(transformed);
       if (signal.aborted) throw new Error('Cancelled.');
       request = transformed;
-      const model = this.resolve('image', request.model);
-      const result = await this.provider.generateImages({ ...request, model: model.model }, { signal });
+      const selected = this.resolve('image', request.model), model = selected.model;
+      const result = await selected.provider.generateImages({ ...request, model: model.model }, { signal });
+      this.assertCurrent('image', request.model, selected, result.usage);
       return { images: validateGeneratedImages(result.images, request.count ?? 1), usage: safeUsage(result.usage) };
     });
   }
-  private resolve(type: SpecializedModelType, id: string): SpecializedModel {
-    const model = this.getAvailableOfType(type).find(model => model.id === id);
+  private resolve(type: SpecializedModelType, id: string): ResolvedSpecializedModel {
+    let candidates: ResolvedSpecializedModel[];
+    try { candidates = this.collect(type, true); }
+    catch { throw new Error('Specialized model availability is unavailable.'); }
+    const model = candidates.find(item => item.model.id === id);
     if (!model) throw new Error('Specialized model is not available.');
     return model;
   }

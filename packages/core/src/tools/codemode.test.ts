@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ExtensionRegistry, type ExtensionRuntimeContext } from '../extensions/extension-registry.js';
 import { SessionManager } from '../sessions/session-manager.js';
-import { MockProvider } from '../providers/index.js';
+import { MockProvider, TypesafeProvider, type AiProvider } from '../providers/index.js';
 import { SpecializedModelError } from '../providers/specialized-models.js';
 import type { CodemodeProgress } from '../types/index.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { collectCodemodeStore, runCodemode, testCodemodeSandbox } from './codemode.js';
 import { createAgentToolLoadout } from './tool-search.js';
+import { toChatToolDefinitions } from './tool-selection.js';
 
 const context = {} as ExtensionRuntimeContext;
 const read = { name: 'read', description: 'Read documentation', extensionId: 'builtin:workspace-tools',
@@ -193,6 +194,42 @@ describe('bounded QuickJS codemode', () => {
     expect((await run('return 42;')).isError).toBe(false);
   });
 
+  it('uses explicit auxiliary TypeSafe authority through the worker without borrowing conversational credentials', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'chat' });
+    const auxiliary = new TypesafeProvider({ type: 'operator-typesafe', apiKey: 'synthetic-private-key' });
+    const classify = vi.spyOn(auxiliary, 'classify').mockResolvedValue({ label: 'safe', usage: { inputTokens: 4, outputTokens: 1, totalTokens: 5 } });
+    const chatClassify = vi.spyOn(provider, 'classify');
+    const result = await run(`
+      const model = (await models.getAvailableOfType('classifier')).find(model => model.id === 'typesafe::jev-latest');
+      const result = await models.classify({model: model.id, input: 'reviewed', labels: ['safe', 'review']});
+      store('label', result.label); return result;
+    `, { context: { ...context, provider, specializedProviders: () => new Map([['typesafe', auxiliary]]), toolCallId: 'outer' } });
+    expect(result.isError).toBe(false); expect(result.content).toContain('"label":"safe"');
+    expect(result.details).toMatchObject({ parentId: 'outer', store: { label: 'safe' }, costComplete: false,
+      usage: { totalTokens: 5 }, nestedCalls: [{ id: 'outer:2', kind: 'classifier', state: 'completed', usage: { totalTokens: 5 } }] });
+    expect(classify).toHaveBeenCalledTimes(1); expect(chatClassify).not.toHaveBeenCalled();
+    expect(provider.getConfiguredModel()).toBe('chat'); expect(JSON.stringify(result)).not.toContain('synthetic-private-key');
+  });
+
+  it('accounts a retired auxiliary call once without publishing its answer into guest state', async () => {
+    const provider = new MockProvider({ type: 'mock', model: 'chat' });
+    const auxiliary = new TypesafeProvider({ type: 'operator-typesafe', apiKey: 'synthetic-private-key' });
+    const source = new Map<string, AiProvider>([['typesafe', auxiliary]]);
+    vi.spyOn(auxiliary, 'classify').mockImplementation(async () => {
+      source.clear(); return { label: 'safe', usage: { inputTokens: 4, outputTokens: 1, totalTokens: 5 } };
+    });
+    const result = await run(`
+      try { const result = await models.classify({model:'typesafe::jev-latest', input:'reviewed', labels:['safe']});
+        store('answer', result.label); return result; }
+      catch { return 'retired'; }
+    `, { context: { ...context, provider, specializedProviders: () => source, toolCallId: 'outer' } });
+    expect(result.isError).toBe(false); expect(result.content).toContain('retired');
+    expect(result.details?.store ?? {}).not.toHaveProperty('answer');
+    expect(result.details).toMatchObject({ usage: { totalTokens: 5 }, costComplete: false,
+      nestedCalls: [{ id: 'outer:1', kind: 'classifier', state: 'failed', usage: { totalTokens: 5 } }] });
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-key');
+  });
+
   it('bridges classifier/image models with stable parent IDs, bounded progress and exact outer accounting', async () => {
     const provider = new MockProvider({ type: 'mock', model: 'virtual-chat' }, ['{"label":"safe"}']);
     const original = provider.classify.bind(provider);
@@ -324,7 +361,7 @@ describe('bounded QuickJS codemode', () => {
     const execute = vi.fn();
     const loadout = createAgentToolLoadout({ staticTools: [], codemode: { enabled: true }, dynamicSource: {
       directTools: [], hasPotentialSearchableTools: true, currentSearchableTools: () => [],
-      waitForSearchableTools: () => new Promise(() => undefined), has: () => false,
+      waitForSearchableTools: () => new Promise<never>(() => undefined), has: () => false,
     } });
     const controller = new AbortController();
     const running = loadout.executeCodemode({ code: 'return 1' }, context, execute, controller.signal);
@@ -342,8 +379,8 @@ describe('bounded QuickJS codemode', () => {
       let round = 0;
       await runToolLoop({ sessionManager: manager, sessionId: session.id, extensionRegistry: registry,
         toolContext: { sessionManager: manager, currentSessionId: session.id, notify() {} },
-        resolveTools: () => loadout.getTools(),
-        executeTool: (name, input, ctx, signal) => loadout.executeCodemode(input, ctx, vi.fn(), signal),
+        resolveTools: () => toChatToolDefinitions(loadout.getTools()),
+        executeTool: (_name, input, ctx, signal) => loadout.executeCodemode(input, ctx, vi.fn(), signal),
         getToolResultMetadata: (name, result) => loadout.resultMetadata(name, result),
         streamTurn: async () => round++ === 0 ? { content: '', toolCalls: [{ id: 'script', name: 'codemode', input: { code } }] } : { content: 'done' },
       });

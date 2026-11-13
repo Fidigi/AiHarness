@@ -44,6 +44,7 @@ import { configuredBuiltinExtensions, configuredExtensionSelectors, explicitExte
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
+  getConfiguredSpecializedProviders,
   resolveStartupProvider,
 } from '../providers/configured-providers.js';
 import { createCliProviderRuntime } from '../providers/provider-runtime.js';
@@ -679,6 +680,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       toolContext: {
         sessionManager,
         provider: startup.provider,
+        specializedProviders: () => getConfiguredSpecializedProviders(providers),
         providerName: startup.providerName,
         currentSessionId: '',
         cwd: canonicalCwd,

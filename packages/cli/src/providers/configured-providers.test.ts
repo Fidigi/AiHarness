@@ -1,13 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, collectProviderModelCatalog } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
+  getConfiguredSpecializedProviders,
   resolveStartupProvider,
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it('composes TypeSafe as an explicit native auxiliary source, never a chat catalogue or name-based grant', async () => {
+    expect(createConfiguredProviders({}).has('typesafe')).toBe(false);
+    const providers = createConfiguredProviders({ TYPESAFE_API_KEY: 'synthetic-typesafe', TYPESAFE_BASE_URL: 'http://127.0.0.1/v1' },
+      { network: { transport: 'sse', requestTimeoutMs: 123, maxRetries: 0, httpIdleTimeoutMs: 100,
+        websocketConnectTimeoutMs: 100, maxRetryDelayMs: 100 } });
+    expect(providers.get('typesafe')).toBeInstanceOf(TypesafeProvider);
+    expect(providers.get('typesafe')?.getNetworkSettings()).toMatchObject({ requestTimeoutMs: 123, maxRetries: 0 });
+    expect([...getConfiguredSpecializedProviders(providers).keys()]).toEqual(['typesafe']);
+    expect((await collectProviderModelCatalog(providers, { discover: false, includePublishedProviders: false }))
+      .find(provider => provider.provider === 'typesafe')?.models).toEqual([]);
+    expect(createConfiguredProviders({}, { credentials: { typesafe: 'synthetic-stored' } }).get('typesafe')).toBeInstanceOf(TypesafeProvider);
+    expect(ProviderFactory.has('typesafe')).toBe(false);
+    const unregister = ProviderFactory.register('typesafe', config => new MockProvider({ ...config, model: 'operator-chat' }));
+    try {
+      const overridden = createConfiguredProviders({ TYPESAFE_API_KEY: 'synthetic-typesafe' });
+      expect(overridden.get('typesafe')).toBeInstanceOf(MockProvider);
+      expect(getConfiguredSpecializedProviders(overridden).size).toBe(0);
+    } finally { unregister(); }
+  });
+
   it.each([
     ['deepseek', DeepSeekProvider, 'deepseek-flash'],
     ['groq', GroqProvider, 'qwen/qwen3.6-27b'],

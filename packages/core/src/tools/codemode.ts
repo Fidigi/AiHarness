@@ -117,7 +117,7 @@ export async function runCodemode(options: RunCodemodeOptions): Promise<Extensio
   const started = performance.now();
   const nestedCalls: CodemodeDetails['nestedCalls'] = [];
   const parentId = options.context.toolCallId ?? randomUUID();
-  const models = options.context.provider ? new SpecializedModels(options.context.provider, redact, options.context.beforeSpecializedModel) : undefined;
+  const models = options.context.provider ? new SpecializedModels(options.context.provider, redact, options.context.beforeSpecializedModel, options.context.specializedProviders) : undefined;
   const progress = (call: CodemodeCall) => {
     if (settled) return;
     try { options.context.onCodemodeProgress?.({ parentId, call: structuredClone(call) }); } catch { /* Presentation cannot grant authority. */ }

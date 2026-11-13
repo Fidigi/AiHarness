@@ -269,6 +269,12 @@ export async function createRuntimeServices(
     sessionManager,
     extensionRegistry,
     resolveProvider: provider => proxy.getAgentProvider(provider),
+    specializedProviders: () => new Map(providerRegistry.listProviders()
+      .filter(provider => provider.dialect === 'typesafe')
+      .flatMap(provider => {
+        const adapter = proxy.getAgentProvider(provider.id);
+        return adapter ? [[provider.id, adapter] as const] : [];
+      })),
     resolveThinking: session => resolveEffectiveConfiguration({ configurationStore }, {
       projectId: session.workspaceId, sessionId: session.id, session,
     }).values.thinking,

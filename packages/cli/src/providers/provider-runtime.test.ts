@@ -190,7 +190,8 @@ describe('CLI provider runtime', () => {
     ['xiaomi-token-plan-ams', 'XIAOMI_TOKEN_PLAN_AMS_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_AMS_API_KEY'],
     ['xiaomi-token-plan-cn', 'XIAOMI_TOKEN_PLAN_CN_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_CN_API_KEY'],
     ['xiaomi-token-plan-sgp', 'XIAOMI_TOKEN_PLAN_SGP_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_SGP_API_KEY'],
-    ['zai-coding-cn', 'ZAI_CODING_CN_API_KEY', 'AI_HARNESS_ZAI_CODING_CN_API_KEY']] as const)(
+    ['zai-coding-cn', 'ZAI_CODING_CN_API_KEY', 'AI_HARNESS_ZAI_CODING_CN_API_KEY'],
+    ['typesafe', 'TYPESAFE_API_KEY', 'AI_HARNESS_TYPESAFE_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);

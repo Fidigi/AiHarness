@@ -1,6 +1,6 @@
 import type { AiProvider, ChatOptions, ChatResponse } from '../providers/index.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
-import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest } from '../providers/specialized-models.js';
+import type { BeforeSpecializedModel, SpecializedModelType, SpecializedModelRequest, SpecializedProviderSource } from '../providers/specialized-models.js';
 import { ProviderFactory } from '../providers/index.js';
 import { VirtualModelRegistry, VirtualSelectionProvider, type VirtualModelDefinition } from '../providers/virtual-models.js';
 import type { CacheWarmer, CacheWarmingDecision } from '../providers/cache-warmer.js';
@@ -115,6 +115,8 @@ export interface ExtensionRuntimeContext {
   /** Host-authorized, cancellation-bound nested tools. No model/guest-supplied authority. */
   executeTool?(name: string, input: unknown): Promise<ExtensionToolResult>;
   beforeSpecializedModel?: BeforeSpecializedModel;
+  /** Explicit live auxiliary model authority; never supplied by guest/model input. */
+  specializedProviders?: SpecializedProviderSource;
   /** Optional raw subprocess output sink; awaiting it applies downstream backpressure. */
   onProcessOutput?(chunk: string): void | Promise<void>;
   /** Host-owned path where the same complete subprocess stream is retained. */
