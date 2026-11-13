@@ -1,0 +1,101 @@
+{
+  "schema": "mod03-closure-v1",
+  "date": "2026-11-13",
+  "criterion": "MOD-03",
+  "status": "DONE",
+  "reviewedProductCommit": "eda7593",
+  "initialCommit": "30302b2",
+  "initialAndFinalProductWorkingTree": "Clean. Four implementation/test files changed in the two functional commits; no credential, endpoint, catalogue declaration, session schema, dependency, compiler flag or historical fixture changes.",
+  "decision": {
+    "authority": "User delegated the outstanding scope decision: 'Tu as tous pouvoirs. Je t’autorise'. This follows the explicit two-option media question, not an implicit waiver.",
+    "selected": "Model-owned prompt/tool image decoding, resizing and normalization/persistence remain required under MOD-01.04b, not MOD-03. MOD-03 retains explicit unknown-media/heuristic estimates and their separation from response-reported usage.",
+    "notAuthorizedByInference": "No real-account automation, operation on pi/qwen-moe, incident-waiver extension, historical result rewrite or complete-platform acceptance.",
+    "contract": "The existing MOD-03 close clause is retained: model-specific request/replay fixtures for the approved native matrix; thinking clamps/off/output reserve; safe model switches/private blocks; CLI/RPC/Web settings; estimated context distinct from billed usage. MOD-01 continues to own missing provider integrations, complete defaults/media/tool/auth profiles and wider host composition. Adding a new native owner/policy requires its own MOD-03 invariant evidence; a legacy compatible path does not gain private replay authority."
+  },
+  "functionalCommits": [
+    { "commit": "8ff9033", "requirement": "Final numeric answer reserve", "change": "Original Anthropic zero-budget fallback now refuses output ceilings leaving fewer than 1024 answer tokens.", "evidence": "MOD-03-anthropic-zero-reserve.json" },
+    { "commit": "eda7593", "requirement": "Model-specific budgets and effort maps", "change": "Copilot A/C/R validates explicit output caps; numeric A reserves answer space within the exact cap; A/R maps explicit non-off logical levels through its immutable declarations.", "evidence": "MOD-03-copilot-request-budgets.json" }
+  ],
+  "requirementAudit": [
+    {
+      "axis": "Model-specific reasoning/request matrix",
+      "implementation": ["providers/anthropic-thinking.ts", "providers/google-profiles.ts", "providers/bedrock-profiles.ts", "providers/minimax.ts", "providers/openai-responses.ts", "providers/github-copilot.ts", "providers/openai-codex.ts", "owning compatible adapter policies"],
+      "proof": "Existing independent per-owner fixtures remain immutable. Final current-source selection executes native numeric, adaptive/managed, discrete/automatic, effort-only and no-explicit-effort branches, including independently owned Go/Zen dispatch and Copilot A/C/R. Copilot's missing clamp/map/cap boundaries have five RED-to-GREEN tests; no original-vendor policy is inferred merely from a shared model name.",
+      "disposition": "Satisfied for the admitted native reasoning/request policies. Complete raw-versus-simple defaults, deferred tools, newly missing providers and account entitlements remain MOD-01, not silently certified by this closure."
+    },
+    {
+      "axis": "Numeric budgets, clamps/off, output/context reserve",
+      "implementation": ["providers/thinking-budgets.ts", "providers/provider-output-budget.ts", "providers/anthropic-thinking.ts", "providers/bedrock-profiles.ts", "providers/minimax.ts", "providers/github-copilot.ts", "agent/provider-turn.ts", "agent/provider-request-estimate.ts"],
+      "proof": "Final tests include 254 Anthropic profile cases with unchanged six-ID pinned allocation vectors and two new zero-fallback boundaries; 113 native preflight, 37 thinking-budget, 36 request-budget and 27 option-flow cases. Bedrock647 and MiniMax50 retain private context allocation; Google251 retains valid override/default/discrete exceptions. Copilot105 checks exact caps, 1024 answer reserve and mapping exceptions. Refusal precedes inference and does not mutate caller inputs. Off/unused numeric maps stay distinct from effort-only APIs.",
+      "disposition": "Satisfied. The two confirmed unsafe request gaps are corrected, not accepted. No universal cap expansion or exact tokenizer/spending promise."
+    },
+    {
+      "axis": "Ordered private capture → shared agent → durable reload → exact-owner replay",
+      "implementation": ["providers/index.ts private owner/delegate registries and actual-body identities", "providers/anthropic-response.ts", "providers/google-replay.ts", "providers/responses-replay.ts", "providers/completions-replay.ts", "providers/bedrock-replay.ts", "providers/mistral-replay.ts", "providers/message-replay.ts", "agent/provider-turn.ts", "agent/tool-loop.ts"],
+      "proof": "Existing independent whole-array captures bind each native owner. Final policy tests exercise ordered A, contiguous G, completed-item R, coalesced C, binary Bedrock and native Mistral, with derived/forged/foreign/failed refusal. Both tool and final append paths retain physical provenance. Virtual admission27, tool-results23, stream-error69 and actual WebSocket7 supplement producer/durable scenarios. Codex20 replay cases and73 transport/tool cases retain the separate CX grant; Copilot105 retains existing A/C/R arrays and scope/body cancellation controls.",
+      "disposition": "Satisfied. No signature fabrication or cryptographic authentication claim. Account/token/session/model/generation socket isolation remains covered by the separately acquired Codex WebSocket receipt; unchanged ownership mechanisms are not redeveloped."
+    },
+    {
+      "axis": "Retention/edit/export safety",
+      "implementation": ["sessions/session-manager.ts", "sessions/session-context-state.ts", "sessions/serialization.ts", "sessions/summary-model-messages.ts", "sessions/compaction-model-messages.ts", "agent/tool-loop.ts"],
+      "proof": "Final serialization4, summary13, compaction-projection11, context-state10 and clone-prefix10 pass alongside native durable scenarios. Existing distinct installed native-compaction/fork/overflow/withdrawal/missing-terminal/reset receipts bind shared generated-summary and process-restart ownership, not every model-host pairing. Raw ancestry/later signatures survive target-only edits and copies; default versus explicit opaque exports retain credential redaction; summary providers see only the public projection.",
+      "disposition": "Satisfied by shared mechanics plus independently admitted producer policies. No secure-erasure or private-terminal Cartesian lifecycle certificate."
+    },
+    {
+      "axis": "CLI/RPC/Web settings and continuation composition",
+      "implementation": ["cli/index.ts", "cli/rpc/rpc-controller.ts", "server/index.ts resolveThinkingBudgets", "server/api/proxy.ts", "server/api/websocket.ts", "server/api/agent-routes.ts", "server/runtime/subagent-runtime.ts", "web/components/EcosystemSettings.tsx and scoped defaults controls"],
+      "proof": "Final host selection: CLI thinking-budgets-process11 (print/JSON/RPC native wire, trusted merging, PTY reload, emitted public Core); configuration-defaults11 (detached/child and six-profile ordinary HTTP/compact/WebSocket maps); websocket17; subagent-runtime19; Copilot HTTP8 (native composition/private replay/refresh/withdrawal/body cancellation). Existing two EN/FR Settings-to-parent/child native-wire cases and native replay browser journeys remain their own historical evidence. No browser or installed result is claimed for the newly changed scalar boundary; its real owning Core facades supply that evidence.",
+      "disposition": "Satisfied at the relevant configuration/admission boundaries. Adding another host/model copy without distinct policy is not required. Real-account verification remains manual and pending, outside automated MOD-03 closure."
+    },
+    {
+      "axis": "Independent pinned reference",
+      "implementation": "Owning tests consume tests/fixtures/*reference.json and independent per-owner continuation fixtures, with explicit Core safety/privacy divergences.",
+      "proof": "Anthropic17, Google/Vertex35, OpenAI/Azure Responses88, Bedrock193 and independent compatible-owner references were already acquired. Final selection reuses whole bodies/arrays and retained refusals; no reference was edited or reacquired. Copilot's 35 declarations/210 routing vectors and private A/C/R capture remain separately bound; Codex's nine-profile replay plus strict/grammar and WebSocket captures retain their original scope.",
+      "disposition": "Satisfied without fresh SDK acquisition. Current scalar safety corrections are native regression evidence, not manufactured SDK/service parity."
+    },
+    {
+      "axis": "Media/context estimation versus usage",
+      "implementation": ["agent/provider-request-estimate.ts", "providers/simple-context-estimate.ts", "providers/anthropic-thinking.ts", "agent/provider-turn.ts usage normalization", "sessions/session-accounting.ts"],
+      "proof": "Final estimator29/budget36 cases bind canonical UTF-8/4, inert own data, unknown media and independently known overhead/output. Native allocation fixtures preserve approximate transcript/usage-anchor behavior, while current response accounting remains separate; no estimate is substituted for reported billing.",
+      "disposition": "Satisfied under the explicit delegated decision. Model-owned image preparation remains absent and tracked under MOD-01.04b. Browser generic compression, fixed image heuristics and valid-image projection do not certify it."
+    },
+    {
+      "axis": "Final integrated acceptance",
+      "implementation": "Current product build and focused cross-boundary qualification, not a platform-wide release gate.",
+      "proof": "Fresh Make build/workspace-parity types pass; 2463 Core tests/29 files and separate66 host tests/5 files pass on the same image. Changed Copilot test root strict typing passes. Original Anthropic standalone test root's17 pre-existing diagnostics remain documented; product typing passes and new tests add no diagnostic. Relevant unchanged SDK/installed/browser evidence is reused only within its original claims.",
+      "disposition": "Satisfied for functional MOD-03. QUA-01 retains global/native/toolchain/browser/production qualification and historical failed outcomes. Selecting applicable gates is not a waiver or a claim that the global suites passed."
+    }
+  ],
+  "policyGroupingAndExceptions": {
+    "A": "Original Anthropic strict nonblank signatures, six numeric profiles, six adaptive and five managed effort profiles; independently admitted MiniMax global/CN, Kimi's two unsigned policies, Fireworks, OpenRouter A, Go A, Zen A and Copilot A. Common carrier code does not grant another owner's signature or effort policy.",
+    "G": "Original Google and Vertex retain separate physical owners; Zen G has its own private delegate grant. Contiguous signed parts and structural base64 differ from A/R. Model-specific numeric/discrete defaults remain in their owning tables.",
+    "R": "Original OpenAI/Azure requested-model identity precedes deployment rewriting; Meta/xAI/Go whole-ID and Zen split/hash policies remain separately acquired. Codex CX is not API-key OpenAI or Copilot R, and owns separate account/generation continuation keys.",
+    "C": "Independent original Azure C, OpenRouter C, Cloudflare C, Cerebras, DeepSeek, Groq, Z.ai, Moonshot global/CN, NVIDIA, Hugging Face, Xiaomi, Together, Baseten, Ant Ling, Fireworks C, Go C, Zen C and Copilot C keep private constructor/body admission and owner-specific empty-reasoning/marker/ID behavior. Their earlier acquired whole-array/durable evidence is not repeated as a host product cross-product.",
+    "Bedrock": "193 exact profiles: Claude signed versus other unsigned native reasoning, plus separate numeric/adaptive/nested/flat/GovCloud request exceptions. No authority inferred merely from a region/name resemblance.",
+    "Mistral": "40 independently acquired native profiles use their own ordered unsigned reasoning and tool-ID pairing, not generic C authority.",
+    "LegacyAndFuture": "Unknown/derived/legacy paths retain their documented conservative projections, not borrowed private admission. Future provider integrations in MOD-01 must independently establish these invariants; this closure does not mark absent integrations usable."
+  },
+  "validation": {
+    "image": "ai-harness:mod03-final@sha256:373e8abd721de9b1bfc61b95568fde9115c9f7c3d064fdf601759deed3f60532",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod03-final",
+    "coreCommand": "npx vitest run packages/core/src/providers/{anthropic-profiles,anthropic-thinking,google-profiles,openai-responses,azure-completions,bedrock-converse-stream,minimax,mistral-continuation,opencode-go,opencode,github-copilot,github-copilot-transport,openai-codex,openai-codex-replay,virtual-model-admission,provider-output-budget,thinking-budgets,stream-error-frames,provider-websocket.integration}.test.ts packages/core/src/agent/{provider-request-budget,provider-request-estimate,provider-request-options-flow,tool-results,context-recovery}.test.ts packages/core/src/sessions/{serialization,summary-model-messages,compaction-model-messages,session-context-state,session-clone-prefix}.test.ts",
+    "coreResult": "2463 PASS / 29 files; exit0, no skipped cases or worker errors. Shell brace expansion produces the explicit input list in the log.",
+    "hostCommand": "npx vitest run packages/cli/src/cli/thinking-budgets-process.test.ts packages/server/src/api/configuration-defaults.test.ts packages/server/src/api/websocket.test.ts packages/server/src/api/github-copilot-http.test.ts packages/server/src/runtime/subagent-runtime.test.ts",
+    "hostResult": "66 PASS / 5 files; exit0, no skipped cases or worker errors. Preceded by the successful explicit Copilot strict test-root command recorded in MOD-03-copilot-request-budgets.json.",
+    "logs": ["/tmp/mod03-closure/final-build-typecheck.log", "/tmp/mod03-closure/final-policies.log", "/tmp/mod03-closure/final-hosts.log"],
+    "testSafety": "All tests/type checks run in Docker. Runtime selections use --network none with mocked/loopback services and synthetic/disposable credentials. No real-account/personal-store inputs or simulated-to-live switch were introduced.",
+    "notRun": "No global unit/parity, fresh SDK, browser, installed or production campaign. Existing proofs are reused only for unchanged behaviors; no platform-wide current snapshot or distribution certificate.",
+    "documentation": "make lint-docs in Docker PASS:120 Markdown files/2563 local links. git diff --check PASS. Current criterion tally is38 DONE/4 PARTIAL/1 IN PROGRESS out of43.",
+    "sourceBinding": "The four changed implementation/test files compare byte-for-byte with the final image in a disposable network-none container; closure JSON parses with eight axes/zero mandatory gaps. Initial bind-mount preparation failed ENOENT before comparison because the Docker host did not expose the checkout; corrected bounded tar-over-stdin comparison passes. Both operational outputs remain at /tmp/mod03-closure/final-source-audit{,-tar}.log. No source overlay or application rerun.",
+    "preservationCheck": "git diff --name-only --diff-filter=M 30302b2 -- docs/audit/pi/evidence tests/fixtures is empty. The three-incident acceptance compares unchanged to30302b2. Product/build/runner/dependency paths compare unchanged toeda7593; this final commit changes documentation only."
+  },
+  "historicalEvidencePolicy": {
+    "unchanged": "All pre-existing evidence files, pinned fixtures and the QUA acceptance document remain unchanged from30302b2. A later positive selection never rewrites a failed historical gate.",
+    "acceptedIncidentsExactly": ["QUA-REPAIR-CLI-SIGSEGV", "QUA-REPAIR-COMPILER-SIGSEGV", "QUA-REPAIR-OAUTH-EXIT"],
+    "otherHolds": "Earlier ordinary/native global failures, subscription browser-refresh/emitted holds and standalone strict-root diagnostics remain source-bound and unwaived. They do not establish a current unresolved MOD-03 behavior after this requirement audit. Their qualification owner remains QUA-01 or the relevant wider MOD-01 task; no diagnosis/reproduction/repair is inferred."
+  },
+  "remainingMandatoryMOD03Gaps": [],
+  "stillOpenElsewhere": ["MOD-01 provider/auth/default/tool/media breadth, explicitly including image preparation", "User-owned manual service/account validation", "QUA-01 global platform/toolchain/runtime/browser qualification and other open QUA criteria", "CLI-04 installation/update"],
+  "reexaminationTriggers": ["A new or changed native model/owner/API reasoning or private replay policy", "A regression in budgets, physical model switches, terminal publication, retention/privacy or settings authority", "An explicit requirement for vendor tokenization, complete media preparation or real-service equivalence"],
+  "goalInstructionAudit": "Initial Git30302b2 was clean and work preserved; required instructions/map/current criteria/acceptance were read. Eight-axis matrix classified actual defects, missing proof, stale documentation, other-criterion work and the delegated media decision. Both confirmed code gaps were reproduced, fixed, qualified and committed using existing fixtures. Qualification was announced by concrete risk, no new framework/hash campaign/cartesian host matrix. English repository docs/French exchanges; pi/qwen-moe untouched. Closure is requirement-to-implementation-to-proof, not a passing-count shortcut or completion of only the earlier subscription goal."
+}

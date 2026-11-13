@@ -80,6 +80,8 @@ Use npm from the repository root so workspace packages are linked consistently. 
 
 Start at `packages/core/src/index.ts`, which defines the public package exports.
 
+**Current MOD-03 status — 2026-11-13:** reasoning/private replay/request budgets are DONE under the [eight-axis closure audit](../audit/pi/evidence/MOD-03-closure.json), including Anthropic zero-fallback reserve and Copilot explicit cap/numeric-reserve/effort-map corrections. The detailed source-local subsets below remain bounded historical evidence. MOD-01 still owns complete provider/auth/default/tool/media delivery, explicitly model-owned image preparation; QUA still owns wider qualification. No full-profile/account/platform certificate follows.
+
 | Area | Files | Responsibility |
 |---|---|---|
 | Shared contracts | `src/{index,public-api-version}.ts`, `src/types/{index,resource-batches}.ts` | Versioned public entry point plus `Message`, `Session`, provider/model metadata and pricing, OAuth/custom providers, tools, skill registry, plugins/sub-agents, extension interactions and run snapshots |

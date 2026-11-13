@@ -1,8 +1,10 @@
 # MOD-01 — Delivery Tasks and Local Acceptance
 
-> **Status: IN PROGRESS** (2026-11-11)
+> **Status: IN PROGRESS** (2026-11-13)
 
 > **Authority:** [AUDIT-5](./AUDIT-5.md), MOD-01; [pinned provider/API/auth inventory](../../ai/topics/provider-matrix.md). Target Pi 1.2.0 commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, not the installed agent's moving release.
+
+**MOD-03 closure and retained media ownership — 2026-11-13:** the [final eight-axis audit](./evidence/MOD-03-closure.json) closes MOD-03 through product `eda7593`, after the Anthropic and Copilot budget corrections and bounded Docker qualification. Following the user's explicit delegation, model-owned image decoding/resizing/normalization and its persistence/switch/reload policy remain required under **MOD-01.04b**; neither the old reference utility nor browser compression implements them. Complete provider/auth/default/tool/media breadth remains MOD-01 IN PROGRESS; QUA owns wider qualification. AUDIT-5 is38/43. Dated statuses/failed gates below are preserved checkpoints, not current MOD-03 blockers or new incident waivers.
 
 **Bounded Copilot subscription dependency — 2026-11-11:** [contract](../../ai/topics/subscription-providers.md), [receipt](./evidence/MOD-03-copilot-subscription.json), base1bcaea4. Keep issuer, storage label, durable GitHub grant, inference token, account catalogue and endpoint authority separate. Explicit standalone CLI login and guarded first publication complement issuer-bound refresh; any intervening encrypted-document write conservatively rejects the reserved publication, including unrelated writes and absent-key logout. Native A/C/R transport and exact private replay use 35 independently captured model declarations; 738 continuation bodies comprise716 exact matches/22 deliberate data-less redaction omissions. Native CLI/existing-credential Server composition never flattens subscription tokens into API keys; discovery never enables model policies. Final development and canonical selections separately pass284/13 strict roots; existing browser14 is regression evidence only. Production Core compiler SIGABRT prevents final image/runtime. Receipt retains all canonical outcomes and earlier native/typing holds without repair. Server/Web login, full owner policies/installed qualification and separate ChatGPT/Codex remain incomplete. Existing23 tasks/eight MOD-03 axes/37-of43/partial statuses and image-preparation refusal remain unchanged; this checkpoint is not goal completion.
 
@@ -462,7 +464,7 @@ The register below preserves all 23 requirements and their acceptance boundaries
 | Task | Work | Local acceptance |
 |---|---|---|
 | MOD-01.04a | Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors. | Omitted and explicit values compared separately to pinned policy; metadata does not manufacture effective defaults. |
-| MOD-01.04b | Complete supported media preparation and private/signed/encrypted reasoning continuation. Coordinate the reasoning portion with MOD-03. | Carrier/export/redactor and scoped native replay are delivered,not to be reimplemented. Complete the [named remaining media/model/host/lifecycle boundaries](./MOD-01-tracking.md#reconciled-mod-03-coverage-boundaries--2026-11-08),with actual bounded media inputs,same/foreign-owner multi-turn controls and unsupported-path refusal before I/O. |
+| MOD-01.04b | Complete supported model-owned media preparation; preserve the now-closed MOD-03 reasoning/replay contract when adding or changing native owners. | Carrier/export/redactor and native replay are delivered,not to be reimplemented. Under the [delegated media decision](./MOD-01-tracking.md#media-ownership-decision), define decoding/resizing/normalization,persistence and physical-model-switch/reload policy,then qualify bounded prompt/tool media and unsupported-path refusal before I/O. Dated lifecycle limits do not mandate a provider × model × host product. |
 
 ### 5. Define freshness and offline behaviour
 
