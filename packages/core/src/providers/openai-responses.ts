@@ -49,7 +49,7 @@ export function responseItemHash(value: string): string {
 
 /** Only private native owners call this on freshly converted bodies, before deployment rewriting. */
 export function applyNativeResponsesToolHistory(body: Record<string, unknown>, messages: Message[],
-  provider: 'openai' | 'azure', model: string, api: string, physicalProvider = provider as string): void {
+  provider: 'openai' | 'azure' | 'openai-codex', model: string, api: string, physicalProvider = provider as string): void {
   if (!Array.isArray(body.input)) return;
   const ids = new Map<string, { callId: string; itemId?: string; customInput?: string }>();
   const results = new Map(messages.filter(message => message.role === 'tool').map(message => [message.toolCallId ?? message.id, message]));
@@ -94,7 +94,8 @@ export function applyNativeResponsesToolHistory(body: Record<string, unknown>, m
 }
 
 /** Called only after private native profile admission; generic/derived/unknown R policy stays legacy. */
-function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options: ResponsesChatOptions | undefined, supportsGrammar: boolean): void {
+export function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options: ResponsesChatOptions | undefined,
+  supportsGrammar: boolean, defaultStrict: false | null = false): void {
   const invalid = (): never => { throw new Error('Invalid Responses tool policy.'); };
   const choice: unknown = options?.toolChoice;
   if (choice !== undefined && !((typeof choice === 'string' && ['auto', 'none', 'required'].includes(choice))
@@ -103,7 +104,7 @@ function applyNativeResponsesToolPolicy(body: Record<string, unknown>, options: 
   if (Array.isArray(body.tools)) body.tools = body.tools.map((tool, index) => {
     if (!record(tool)) return invalid();
     const sampling = options?.tools?.[index]?.constrainedSampling;
-    let parameters = tool.parameters, strict = false;
+    let parameters = tool.parameters, strict: boolean | null = defaultStrict;
     if (sampling !== undefined && sampling !== false) {
       if (!record(sampling)) return invalid();
       if (sampling.type === 'grammar') {

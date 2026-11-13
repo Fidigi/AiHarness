@@ -1,11 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
-import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, createProviderNetworkScope, closeProviderNetworkDispatchers, PROVIDER_NETWORK_SCOPE, type Message, type ProviderOAuthCredential, type OpenAICodexModel } from '../index.js';
+import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, createProviderNetworkScope, closeProviderNetworkDispatchers, PROVIDER_NETWORK_SCOPE, type Message, type ProviderOAuthCredential, type OpenAICodexModel, type OpenAICodexChatOptions, type ChatResponse } from '../index.js';
 import { OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, openAICodexAccountModels } from './openai-codex.js';
 const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')) as {
   models: Array<OpenAICodexModel & { compat?: { supportsMidConvoSystemMessages?: boolean } }>;
   responseEvents: Array<Record<string, unknown>>;
   rows: Array<{ model: string; case: string; request: { url: string; body: Record<string, unknown> } }>;
+};
+const constrained = JSON.parse(await readFile(new URL('../../../../tests/fixtures/codex-constrained-reference.json', import.meta.url), 'utf8')) as {
+  capabilities: Array<{ model: string; strict: boolean; grammar: boolean }>;
+  events: Array<Record<string, unknown>>; raw: string;
+  rows: Array<{ model: string; case: string; tool: NonNullable<OpenAICodexChatOptions['tools']>[number]; refused: boolean; body?: Record<string, unknown> }>;
+  replays: Array<{ model: string; case: string; expected: Array<Record<string, unknown>> }>;
 };
 const accountId = 'fixture-codex-account';
 const accessToken = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: accountId } })).toString('base64url') + '.fixture-signature';
@@ -262,4 +268,70 @@ it('does not grant generic OpenAI private replay and refuses unsupported explici
   await f.provider.chat([{ ...user, role: 'assistant', provider: 'openai', api: 'openai-responses', model: OPENAI_CODEX_MODELS[0].id,
     blocks: [{ type: 'reasoning', text: 'visible', thinkingSignature: 'private-ciphertext' }] }, user]);
   expect(JSON.stringify(f.calls[1].body)).not.toContain('private-ciphertext');
+});
+
+it('binds pinned Codex strict/grammar capabilities without trusting account catalogue metadata', () => {
+  expect(constrained.capabilities).toEqual(OPENAI_CODEX_MODELS.map(model => ({ model: model.id, strict: true, grammar: true })));
+  expect(reference.models.every(model => (model.compat as Record<string, unknown>)?.supportsOpenAIGrammarTools === true)).toBe(true);
+});
+
+it.each(constrained.rows)('projects or refuses constrained $model/$case against the independent SDK capture', async row => {
+  const f = fixture(), options: OpenAICodexChatOptions = { model: row.model, tools: [row.tool] };
+  const before = structuredClone(options);
+  for (const stream of [false, true]) {
+    f.calls.length = 0;
+    const call = async () => {
+      if (!stream) return f.provider.chat([user], options);
+      await f.provider.streamChat([user], () => {}, undefined, error => { throw error; }, options);
+      return undefined;
+    };
+    if (row.refused) {
+      await expect(call()).rejects.toThrow('OpenAI Codex request failed.');
+      expect(f.calls.map(call => call.url)).toEqual([OPENAI_CODEX_MODELS_URL]);
+    } else {
+      await call(); expect(f.calls.at(-1)?.body).toEqual(row.body);
+    }
+    expect(options).toEqual(before);
+  }
+});
+
+it('refuses constrained tools on derived facades and malformed grammar input before publication', async () => {
+  const f = fixture(), row = constrained.rows.find(row => row.case === 'lark')!;
+  class Derived extends OpenAICodexProvider {}
+  const derived = new Derived({ type: 'openai-codex', model: row.model }, f.source);
+  Object.assign(derived, { ownsNativeProfiles: true });
+  await expect(derived.chat([user], { tools: [row.tool] })).rejects.toThrow('OpenAI Codex request failed.');
+  expect(f.calls.every(call => call.url === OPENAI_CODEX_MODELS_URL)).toBe(true);
+  const complete = vi.fn(), failed = vi.fn();
+  const malformed = constrained.events.map(event => event.type === 'response.output_item.done'
+    ? { ...event, item: { ...(event.item as Record<string, unknown>), input: 42 } } : event);
+  f.fetcher.mockResolvedValueOnce(catalogue()).mockResolvedValueOnce(sse(malformed));
+  await f.provider.streamChat([user], () => {}, complete, failed, { model: row.model, tools: [row.tool] });
+  expect(complete).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce();
+});
+
+it.each(['gpt-5.3-codex-spark', 'gpt-6.1-sol'])('%s maps raw grammar input and paired native/foreign/function replay on both facades', async model => {
+  const f = fixture(), grammarTool = constrained.rows.find(row => row.model === model && row.case === 'lark')!.tool;
+  for (const stream of [false, true]) {
+    const call = async (messages: Message[], tools = [grammarTool]) => {
+      if (!stream) return f.provider.chat(messages, { model, tools });
+      let result: ChatResponse | undefined;
+      await f.provider.streamChat(messages, () => {}, value => { result = value; }, error => { throw error; }, { model, tools });
+      return result!;
+    };
+    f.fetcher.mockResolvedValueOnce(catalogue()).mockResolvedValueOnce(sse(constrained.events));
+    const first = await call([user]);
+    expect(first.toolCalls).toEqual([{ id: 'call_native|ctc_native', name: 'echo', input: { source: constrained.raw } }]);
+    expect(first.blocks).toEqual([{ type: 'tool_call', ...first.toolCalls![0] }]);
+    for (const vector of constrained.replays.filter(row => row.model === model)) {
+      const assistant: Message = { id: 'assistant', role: 'assistant', content: first.content, blocks: structuredClone(first.blocks),
+        toolCalls: structuredClone(first.toolCalls), provider: 'openai-codex', api: 'openai-codex-responses', model, timestamp: new Date(2) };
+      if (vector.case === 'foreign-provider') assistant.provider = 'openai';
+      if (vector.case === 'foreign-model') assistant.model = 'other';
+      const history: Message[] = [user, assistant, { id: 'result', role: 'tool', name: 'echo', toolCallId: 'call_native|ctc_native', content: 'result', timestamp: new Date(3) }];
+      const before = structuredClone(history);
+      await call(history, vector.case === 'function' ? [{ ...grammarTool, constrainedSampling: false }] : [grammarTool]);
+      expect(f.calls.at(-1)?.body?.input, vector.case).toEqual(vector.expected); expect(history).toEqual(before);
+    }
+  }
 });

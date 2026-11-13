@@ -2,7 +2,8 @@ import type { Message } from '../types/index.js';
 import type { ChatOptions, ResponsesChatOptions } from './index.js';
 import type { ProviderOAuthCredential } from './credentials.js';
 import { openAICodexAccountId } from './openai-codex-oauth.js';
-import { applyResponsesReplay, applyResponsesSplitIdHistory } from './responses-replay.js';
+import { applyResponsesReplay } from './responses-replay.js';
+import { applyNativeResponsesToolPolicy, applyNativeResponsesToolHistory } from './openai-responses.js';
 
 export const OPENAI_CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
 // Models endpoint contract reviewed separately against official Codex rust-v0.167.2.
@@ -89,21 +90,22 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
     ] });
     for (const call of message.toolCalls ?? []) input.push({ type: 'function_call', call_id: call.id.split('|')[0], name: call.name, arguments: JSON.stringify(call.input) });
   }
+  let replayHistory = history;
   if (nativeReplay) {
-    const replayHistory = history.map(message => message.role !== 'assistant' || message.blocks ? message : { ...message,
+    replayHistory = history.map(message => message.role !== 'assistant' || message.blocks ? message : { ...message,
       blocks: [
         ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
         ...(message.toolCalls ?? []).map(call => ({ type: 'tool_call' as const, ...call })),
       ],
     });
     const body = { input }, owner = { provider: 'openai-codex', api: 'openai-codex-responses', model: model.id };
-    applyResponsesReplay(body, replayHistory, owner); applyResponsesSplitIdHistory(body, replayHistory, owner);
+    applyResponsesReplay(body, replayHistory, owner);
     input = body.input;
   }
-  if (options.tools?.some(tool => tool.constrainedSampling)) throw new Error('OpenAI Codex constrained tools are not qualified.');
+  if (!nativeReplay && options.tools?.some(tool => tool.constrainedSampling)) throw new Error('OpenAI Codex constrained tools require native construction.');
   const requested = options.thinking;
   const effort = requested === undefined || requested === 'off' ? model.thinkingLevelMap.off ?? (model.thinkingLevelMap.off === null ? null : 'none') : model.thinkingLevelMap[requested] ?? requested;
-  return { model: model.id, store: false, stream: true as const,
+  const body = { model: model.id, store: false, stream: true as const,
     instructions, input,
     text: { verbosity: options.textVerbosity ?? 'low' }, include: ['reasoning.encrypted_content'], tool_choice: options.toolChoice ?? 'auto', parallel_tool_calls: true,
     ...(options.temperature === undefined ? {} : { temperature: options.temperature }),
@@ -111,6 +113,10 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
     ...(options.tools?.length ? { tools: options.tools.map(tool => ({ type: 'function', name: tool.name, description: tool.description, parameters: structuredClone(tool.parameters), strict: null })) } : {}),
     ...(options.sessionId ? { prompt_cache_key: options.sessionId } : {}),
   };
+  // All nine pinned CX profiles support strict schema and OpenAI grammar tools.
+  applyNativeResponsesToolPolicy(body, { ...options, toolChoice: options.toolChoice ?? 'auto' }, true, null);
+  if (nativeReplay) applyNativeResponsesToolHistory(body, replayHistory, 'openai-codex', model.id, 'openai-codex-responses');
+  return body;
 }
 
 /** Read only account-listed pinned models; no instructions/policy from the remote catalogue become configuration. */

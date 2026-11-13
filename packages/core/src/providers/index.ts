@@ -3648,6 +3648,9 @@ class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string {
     return (nativeResponsesOwners.has(body) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body);
   }
+  protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined {
+    return nativeResponsesOwners.has(body) ? nativeResponsesGrammarProperty(body, name) : undefined;
+  }
 }
 
 /** Dedicated subscription facade. Shared SSE parsing grants no API-key auth or private R replay authority. */
