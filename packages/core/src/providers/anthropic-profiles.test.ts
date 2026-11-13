@@ -695,6 +695,31 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect({ messages, options }).toEqual(before);
     }
   });
+  for (const source of ['explicit cap', 'context clamp'] as const) it(`preserves the numeric answer reserve after zero-budget fallback: ${source}`, async () => {
+    // All six native numeric IDs share this allocation policy; one owner binds its boundary.
+    const profile = numericProfiles[0], f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
+    for (const maximum of [1024, 1025, 2047, 2048]) {
+      const options: ChatOptions = { thinking: 'high', thinkingBudgets: { high: 0 },
+        maxTokens: source === 'explicit cap' ? maximum : profile.maxTokens };
+      const messages = source === 'explicit cap' ? input : allocationMessages({ usage: profile.contextWindow - 4096 - maximum });
+      const before = structuredClone({ options, messages }), count = f.fetch.mock.calls.length;
+      if (maximum < 2048) {
+        expect(() => prepare(options, messages)).toThrow(ProviderOutputBudgetError);
+        for (const stream of [false, true]) await expect(f.call(stream, 'none', options, messages)).rejects.toThrow('Invalid Anthropic thinking allocation.');
+        expect(f.fetch).toHaveBeenCalledTimes(count);
+      } else {
+        const prepared = prepare(options, messages);
+        expect(prepared.maxTokens).toBe(2048);
+        for (const stream of [false, true]) {
+          await f.call(stream, 'none', prepared.options, messages);
+          const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
+          expect(body.max_tokens).toBe(2048);
+          expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: 1024, display: 'summarized' });
+        }
+      }
+      expect({ options, messages }).toEqual(before);
+    }
+  });
   for (const profile of numericProfiles) it(`${profile.id}: fits numeric answer room without double allocation or borrowing mutable metadata`, async () => {
     const f = fixture(profile.id), prepare = captureNativeOutputBudget(f.provider)!;
     const published = f.provider.getPublishedModels().find(row => row.id === profile.id)!;

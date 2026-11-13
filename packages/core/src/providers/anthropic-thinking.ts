@@ -106,8 +106,8 @@ function applyNumericAnthropicThinking(body: Record<string, unknown>, options: C
   const maximum = Math.min(requested >= policy.maxTokens - base ? policy.maxTokens : base + requested, available);
   // The raw builder falls back to 1024 for a zero budget; preserve that only when it fits.
   const budget = Math.min(requested, Math.max(0, maximum - 1024)) || 1024;
-  // Do not reproduce invalid sub-1024 thinking blocks or consume the whole output ceiling.
-  if (budget < 1024 || budget >= maximum) throw new Error('Invalid Anthropic thinking allocation.');
+  // Preserve the final answer reserve even when a zero budget falls back to 1024.
+  if (budget < 1024 || maximum - budget < 1024) throw new Error('Invalid Anthropic thinking allocation.');
   body.max_tokens = maximum;
   body.thinking = { type: 'enabled', budget_tokens: budget, display: 'summarized' };
   delete body.temperature;
