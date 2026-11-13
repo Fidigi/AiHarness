@@ -15,6 +15,15 @@ import {
   MiniMaxProvider,
   MiniMaxCnProvider,
   KimiCodingProvider,
+  MoonshotProvider,
+  MoonshotCnProvider,
+  AntLingProvider,
+  BasetenProvider,
+  TogetherProvider,
+  HuggingFaceProvider,
+  XiaomiProvider,
+  MetaProvider,
+  XaiProvider,
   GitHubCopilotProvider,
   OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
@@ -91,6 +100,9 @@ export interface ResolvedStartupProvider {
 const NATIVE_PROVIDERS = {
   deepseek: DeepSeekProvider, groq: GroqProvider, zai: ZaiProvider, nvidia: NvidiaProvider,
   minimax: MiniMaxProvider, 'minimax-cn': MiniMaxCnProvider, 'kimi-coding': KimiCodingProvider,
+  moonshotai: MoonshotProvider, 'moonshotai-cn': MoonshotCnProvider, 'ant-ling': AntLingProvider,
+  baseten: BasetenProvider, together: TogetherProvider, huggingface: HuggingFaceProvider,
+  xiaomi: XiaomiProvider, meta: MetaProvider, xai: XaiProvider,
 };
 
 function createProvider(config: ProviderConfig): AiProvider {

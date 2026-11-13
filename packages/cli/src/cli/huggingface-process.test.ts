@@ -9,8 +9,9 @@ import { describe, expect, it } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI explicit HuggingFace registration', () => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves native C wire, owned windows and durable provenance', async ({ mode, thinking }) => {
+describe('emitted CLI HuggingFace composition', () => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => [false, true].flatMap(native => (native ? ['high'] as const : ['off', 'high'] as const).map(thinking => ({ mode, thinking, native })))) )('$mode/$thinking/native=$native conserves native C wire, owned windows and durable provenance', async ({ mode, thinking, native }) => {
+    const provider = native ? 'huggingface' : 'huggingface-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-huggingface-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-huggingface-key', model = 'Qwen/Qwen3.8-2.4T-A95B', api = 'openai-completions';
@@ -30,12 +31,13 @@ describe('emitted CLI explicit HuggingFace registration', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/huggingface.mjs'), `import { HuggingFaceProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/huggingface.mjs'), `import { HuggingFaceProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('huggingface-native', { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fhuggingface/v1' }, create(config) { return new HuggingFaceProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `huggingface-native/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { HUGGINGFACE_API_KEY: key, HUGGINGFACE_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fhuggingface/v1` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -58,8 +60,8 @@ describe('emitted CLI explicit HuggingFace registration', () => {
           expect(records.find(record => record.id === 'huggingface-state')?.data.thinkingLevel).toBe(thinking === 'off' ? 'low' : 'xhigh');
           expect(records.find(record => record.id === 'huggingface-levels')?.data.levels).toEqual(['low', 'medium', 'xhigh']);
           const models = records.find(record => record.id === 'huggingface-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'huggingface-native')).toHaveLength(78);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'huggingface-native', ...profile }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(78);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
@@ -70,7 +72,7 @@ describe('emitted CLI explicit HuggingFace registration', () => {
       for (const name of ['x-api-key', 'api-key', 'anthropic-version']) expect(calls[0]?.headers[name]).toBeUndefined();
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'huggingface-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, outputTokens: 2, totalTokens: 12 }) }));
       expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }

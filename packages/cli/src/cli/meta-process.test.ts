@@ -8,10 +8,11 @@ import { describe, expect, it } from 'vitest';
 
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
-const cases = (['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => [mode, thinking] as const));
+const cases = (['print', 'json', 'rpc'] as const).flatMap(mode => [false, true].flatMap(native => (native ? ['high'] as const : ['off', 'high'] as const).map(thinking => [mode, thinking, native] as const)));
 
-describe('emitted CLI explicit native Meta SDK', () => {
-  it.each(cases)('%s %s uses physical R policy and actual-adapter clamping through trusted registration', async (mode, thinking) => {
+describe('emitted CLI Meta composition', () => {
+  it.each(cases)('%s %s native=%s uses physical R policy and actual-adapter clamping', async (mode, thinking, native) => {
+    const provider = native ? 'meta' : 'meta-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-meta-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-meta-key', model = 'muse-spark-1.3', api = 'openai-responses', selected = thinking === 'off' ? 'minimal' : 'high';
@@ -33,12 +34,13 @@ describe('emitted CLI explicit native Meta SDK', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/meta.mjs'), `import { MetaProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/meta.mjs'), `import { MetaProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('meta-native', { defaultConfig: { transport:'sse',model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy%2Fowned/v1/responses' }, create(config) { return new MetaProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `meta-native/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { META_API_KEY: key, META_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy%2Fowned/v1/responses` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -57,8 +59,8 @@ describe('emitted CLI explicit native Meta SDK', () => {
             cost: { input: 1.25, output: 4.25, cacheRead: 0.15, cacheWrite: 0 } };
           expect(records.find(record => record.id === 'meta-state')?.data.model).toMatchObject(profile); expect(records.find(record => record.id === 'meta-state')?.data.thinkingLevel).toBe(selected);
           const models = records.find(record => record.id === 'meta-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'meta-native')).toHaveLength(6);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'meta-native', ...profile }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(6);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
@@ -66,7 +68,7 @@ describe('emitted CLI explicit native Meta SDK', () => {
       expect(calls[0].body).not.toHaveProperty('prompt_cache_retention'); expect(calls[0].body).not.toHaveProperty('prompt_cache_options');
       for (const name of ['x-api-key', 'api-key', 'anthropic-version', 'cf-aig-authorization', 'nvcf-poll-seconds']) expect(calls[0]?.headers[name]).toBeUndefined();
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8')))).flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'meta-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, outputTokens: 2, totalTokens: 12 }) }));
       expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }

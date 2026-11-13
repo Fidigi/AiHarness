@@ -169,7 +169,16 @@ describe('CLI provider runtime', () => {
     ['nvidia', 'NVIDIA_API_KEY', 'AI_HARNESS_NVIDIA_API_KEY'],
     ['minimax', 'MINIMAX_API_KEY', 'AI_HARNESS_MINIMAX_API_KEY'],
     ['minimax-cn', 'MINIMAX_CN_API_KEY', 'AI_HARNESS_MINIMAX_CN_API_KEY'],
-    ['kimi-coding', 'KIMI_CODING_API_KEY', 'AI_HARNESS_KIMI_CODING_API_KEY']] as const)(
+    ['kimi-coding', 'KIMI_CODING_API_KEY', 'AI_HARNESS_KIMI_CODING_API_KEY'],
+    ['moonshotai', 'MOONSHOTAI_API_KEY', 'AI_HARNESS_MOONSHOTAI_API_KEY'],
+    ['moonshotai-cn', 'MOONSHOTAI_CN_API_KEY', 'AI_HARNESS_MOONSHOTAI_CN_API_KEY'],
+    ['ant-ling', 'ANT_LING_API_KEY', 'AI_HARNESS_ANT_LING_API_KEY'],
+    ['baseten', 'BASETEN_API_KEY', 'AI_HARNESS_BASETEN_API_KEY'],
+    ['together', 'TOGETHER_API_KEY', 'AI_HARNESS_TOGETHER_API_KEY'],
+    ['huggingface', 'HUGGINGFACE_API_KEY', 'AI_HARNESS_HUGGINGFACE_API_KEY'],
+    ['xiaomi', 'XIAOMI_API_KEY', 'AI_HARNESS_XIAOMI_API_KEY'],
+    ['meta', 'META_API_KEY', 'AI_HARNESS_META_API_KEY'],
+    ['xai', 'XAI_API_KEY', 'AI_HARNESS_XAI_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);
@@ -192,6 +201,26 @@ describe('CLI provider runtime', () => {
     expect(restored.redactor.redact('synthetic-cerebras-stored')).toBe('[REDACTED]');
     const bytes = await readFile(path.join(agentDir, 'credentials.enc'), 'utf8');
     for (const secret of [key, 'synthetic-cerebras-stored', 'synthetic-cerebras-command', 'synthetic-cerebras-first']) expect(bytes).not.toContain(secret);
+  });
+
+  it('does not resolve absent credential sources while preserving fresh external reload admission', async () => {
+    const absent = new ProviderCredentialService();
+    const resolve = vi.spyOn(absent, 'resolve');
+    const empty = await createCliProviderRuntime('/unused', {}, { GROQ_API_KEY: 'synthetic-selected-key' }, absent, false);
+    expect(resolve.mock.calls.map(([provider]) => provider).sort()).toEqual(['github-copilot', 'groq', 'openai-codex']);
+    empty.close();
+    const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-fresh-source-')); roots.push(agentDir);
+    const env = { AI_HARNESS_MASTER_KEY: 'synthetic-reload-only-master-key-long-enough' };
+    const first = await createCliProviderRuntime(agentDir, {}, env);
+    const writer = await createCliProviderRuntime(agentDir, {}, env);
+    await writer.credentials.setApiKey('moonshotai-cn', 'synthetic-later-key');
+    const added = await createCliProviderRuntime(agentDir, {}, env, first.credentials);
+    expect(added.values.get('moonshotai-cn')).toBe('synthetic-later-key');
+    expect(added.values.has('moonshotai')).toBe(false);
+    await writer.credentials.delete('moonshotai-cn');
+    const removed = await createCliProviderRuntime(agentDir, {}, env, first.credentials);
+    expect(removed.values.has('moonshotai-cn')).toBe(false);
+    for (const runtime of [first, writer, added, removed]) runtime.close();
   });
 
   it('retains Kimi OAuth auth mode without guessing its issuer and keeps environment keys independent', async () => {

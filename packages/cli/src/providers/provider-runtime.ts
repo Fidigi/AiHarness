@@ -6,6 +6,7 @@ import {
   bedrockCredentialConfig,
   EncryptedCredentialStore,
   ProviderCredentialService,
+  providerCredentialEnvironmentKeys,
   resolveAgentProviderNetworkSettings,
   type AgentProviderNetworkSettings,
   type AgentSettings,
@@ -15,7 +16,9 @@ import {
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
-  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia', 'minimax', 'minimax-cn', 'kimi-coding', 'azure', 'vertex', 'bedrock', 'local',
+  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia',
+  'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
+  'huggingface', 'xiaomi', 'meta', 'xai', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {
@@ -108,21 +111,26 @@ export async function createCliProviderRuntime(
     ? new EncryptedCredentialStore(path.join(agentDir, 'credentials.enc'), masterKey)
     : undefined;
   const credentials = existingCredentials ?? new ProviderCredentialService({ store, redactor });
-  if (!existingCredentials) await credentials.load();
+  await credentials.load();
   const commandEnv = { ...env };
   for (const [provider, command] of Object.entries(settings.providerApiKeyCommands ?? {})) {
     commandEnv[commandVariable(provider)] = command;
   }
   const values = new Map<string, string>();
   let kimiCodingAuthMode: CliProviderRuntime['kimiCodingAuthMode'];
+  const present = new Set(credentials.list().map(item => item.provider));
   const providers = new Set<string>([
     ...CLI_CREDENTIAL_PROVIDERS,
     ...Object.keys(settings.providerApiKeyCommands ?? {}),
-    ...credentials.list().map(item => item.provider),
+    ...present,
     ...extensionProviders.map(item => item.type),
   ]);
   for (const provider of providers) {
     if (provider === 'github-copilot' || provider === 'openai-codex') continue;
+    // Fresh inventory only skips absent sources. Selected stored credentials still
+    // revalidate through resolve(), including external withdrawal/replacement.
+    if (!present.has(provider) && !providerCredentialEnvironmentKeys(provider).some(name => commandEnv[name])
+      && !commandEnv[commandVariable(provider)]) continue;
     const resolved = await credentials.resolve(provider, {
       env: commandEnv,
       allowCommands: !offline,

@@ -9,8 +9,10 @@ import { describe, expect, it } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI explicit Moonshot registration', () => {
-  it.each((['MoonshotProvider', 'MoonshotCnProvider'] as const).flatMap(constructor => (['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ constructor, registration: constructor === 'MoonshotProvider' ? 'moonshot-native' : 'moonshot-cn-native', mode, thinking })))))('$constructor $mode/$thinking conserves physical effort, windows and C provenance', async ({ constructor, registration, mode, thinking }) => {
+describe('emitted CLI Moonshot composition', () => {
+  it.each((['MoonshotProvider', 'MoonshotCnProvider'] as const).flatMap(constructor => [false, true].flatMap(native => (['print', 'json', 'rpc'] as const).flatMap(mode => (native ? ['high'] as const : ['off', 'high'] as const).map(thinking => ({ constructor, native, mode, thinking }))))))('$constructor $mode/$thinking/native=$native conserves physical effort, windows and C provenance', async ({ constructor, native, mode, thinking }) => {
+    const registration = constructor === 'MoonshotProvider' ? native ? 'moonshotai' : 'moonshot-native' : native ? 'moonshotai-cn' : 'moonshot-cn-native';
+    const prefix = registration.toUpperCase().replace(/-/g, '_');
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-moonshot-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-moonshot-key', model = 'kimi-k3', api = 'openai-completions', effective = thinking === 'off' ? 'low' : 'high';
@@ -30,12 +32,13 @@ describe('emitted CLI explicit Moonshot registration', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/moonshot.mjs'), `import { ${constructor} } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/moonshot.mjs'), `import { ${constructor} } from ${JSON.stringify(core)};
         export default api => api.registerProvider(${JSON.stringify(registration)}, { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fmoonshot/v1' }, create(config) { return new ${constructor}(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
           '--model', `${registration}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { [`${prefix}_API_KEY`]: key, [`${prefix}_BASE_URL`]: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fmoonshot/v1` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);

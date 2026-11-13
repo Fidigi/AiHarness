@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -67,6 +67,29 @@ describe('configured CLI providers', () => {
     const override = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'override' }, {});
     expect(override.provider).toBeInstanceOf(Adapter);
     expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'override', baseUrl: endpoint });
+  });
+
+  it.each([
+    ['moonshotai', MoonshotProvider], ['moonshotai-cn', MoonshotCnProvider],
+    ['ant-ling', AntLingProvider], ['baseten', BasetenProvider], ['together', TogetherProvider],
+    ['huggingface', HuggingFaceProvider], ['xiaomi', XiaomiProvider], ['meta', MetaProvider], ['xai', XaiProvider],
+  ] as const)('admits supplied-key %s through the existing native CLI mechanism', async (name, Adapter) => {
+    const prefix = name.toUpperCase().replace(/-/g, '_');
+    expect(createConfiguredProviders({}).has(name)).toBe(false);
+    const providers = createConfiguredProviders({ [`${prefix}_API_KEY`]: 'environment', [`AI_HARNESS_${prefix}_API_KEY`]: 'first',
+      [`${prefix}_BASE_URL`]: 'http://127.0.0.1/native/v1' }, { credentials: { [name]: 'stored' } });
+    const provider = providers.get(name);
+    expect(provider).toBeInstanceOf(Adapter);
+    expect((provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'first' });
+    expect(createConfiguredProviders({}, { credentials: new Map([[name, 'stored']]) }).get(name)).toBeInstanceOf(Adapter);
+    const model = provider!.getConfiguredModel()!;
+    const { selection } = applyAgentModelSettings({}, { defaultProvider: name, defaultModel: model });
+    await expect(resolveStartupProvider(providers, selection, {})).resolves.toMatchObject({ providerName: name, model });
+    const selected = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'ephemeral' }, {});
+    expect(selected.provider).toBeInstanceOf(Adapter);
+    expect((selected.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'ephemeral' });
+    expect(ProviderFactory.has(name)).toBe(false);
+    if (name.startsWith('moonshotai')) expect(providers.has(name === 'moonshotai' ? 'moonshotai-cn' : 'moonshotai')).toBe(false);
   });
 
   it('uses credential type, not label or token shape, for Kimi auth and overrides OAuth with explicit keys', async () => {
