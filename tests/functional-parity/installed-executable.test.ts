@@ -615,15 +615,17 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
         mode: scenario.split('/')[0], signal: scenario.split('/')[1] });
     });
 
-  it.each(['regular', 'fullscreen', 'print', 'json', 'rpc'])('owns native Copilot login and withdrawal through the installed executable (%s)', async mode => {
+  it.each(['regular', 'fullscreen', 'print', 'json', 'rpc', ...['a', 'c', 'r'].flatMap(api => ['print', 'json', 'rpc'].map(mode => `private-${api}-${mode}`))])('owns native Copilot login and withdrawal through the installed executable (%s)', async mode => {
     const probe = path.join(consumer, `copilot-interactive-${mode}.mjs`);
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/copilot-interactive-probe.mjs'), probe);
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/oauth-local-tls.mjs'), path.join(consumer, 'oauth-local-tls.mjs'));
     const reference = JSON.parse(await readFile(path.join(checkout, 'tests/fixtures/github-copilot-routing-reference.json'), 'utf8'));
     const response = path.join(consumer, `copilot-response-${mode}.json`);
-    await writeFile(response, JSON.stringify(reference.rows.find((row: { model: string; case: string }) => row.model === 'gpt-5-mini' && row.case === 'user').responseEvents));
+    await writeFile(response, JSON.stringify(mode.startsWith('private-') ? reference : reference.rows.find((row: { model: string; case: string }) => row.model === 'gpt-5-mini' && row.case === 'user').responseEvents));
+    const continuation = path.join(consumer, 'copilot-continuation-reference.json');
+    if (mode.startsWith('private-')) await cp(path.join(checkout, 'tests/fixtures/github-copilot-continuation-reference.json'), continuation);
     expect(await run(process.execPath, [probe, mode], consumer, { ...environment,
-      AIH_COPILOT_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_COPILOT_RESPONSE_FILE: response }, '', 25000))
+      AIH_COPILOT_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_COPILOT_RESPONSE_FILE: response, AIH_COPILOT_CONTINUATION_FILE: continuation }, '', 25000))
       .toEqual({ code: 0, stdout: `COPILOT_INTERACTIVE_OK ${mode}\n`, stderr: '' });
   }, 30000);
 
