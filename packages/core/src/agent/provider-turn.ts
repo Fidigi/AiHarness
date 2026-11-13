@@ -143,7 +143,7 @@ export async function streamProviderTurn(options: StreamProviderTurnOptions): Pr
     const metadata = getProviderPublishedModel(selection.provider, selection.id, provider);
     const api = provider.getModelApi?.(selection.id);
     const project = (input: Message[]): Message[] => input.flatMap(message => {
-      const privateReplay = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses'].includes(message.api ?? '')
+      const privateReplay = ['anthropic-messages', 'google-generative-ai', 'google-vertex', 'openai-responses', 'azure-openai-responses', 'openai-codex-responses'].includes(message.api ?? '')
         || message.api === 'bedrock-converse-stream' && hasBedrockProfile(message.model ?? '');
       if (message.role === 'assistant' && privateReplay && message.metadata?.outputError) return [];
       let projected = message;

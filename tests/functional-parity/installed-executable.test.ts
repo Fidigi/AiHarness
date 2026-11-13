@@ -639,6 +639,14 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       .toEqual({ code: 0, stdout: `CODEX_CLI_OK ${mode}\n`, stderr: '' });
   }, 30000);
 
+  it('retains independent Codex CX continuations through the installed public Core root', async () => {
+    const probe = path.join(consumer, 'codex-replay-probe.mjs'), reference = path.join(consumer, 'codex-continuation-reference.json');
+    await cp(path.join(checkout, 'tests/fixtures/codex-replay-probe.mjs'), probe);
+    await cp(path.join(checkout, 'tests/fixtures/codex-continuation-reference.json'), reference);
+    expect(await run(process.execPath, [probe, reference], consumer, environment))
+      .toEqual({ code: 0, stdout: 'CODEX_REPLAY_PUBLIC_OK 72\n', stderr: '' });
+  });
+
   it.each(['regular', 'fullscreen'])('joins an admitted append before installed TTY shutdown (%s)', async mode => {
     const probe = path.join(consumer, `interactive-settlement-${mode}.mjs`);
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/interactive-settlement-probe.mjs'), probe);

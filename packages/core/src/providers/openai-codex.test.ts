@@ -99,7 +99,7 @@ it('requires successful terminal authority and awaits completion/cancellation ca
   expect(complete).not.toHaveBeenCalled(); expect(failure).toHaveBeenCalledOnce();
 });
 
-it('delivers ordinary tool calls and accepts paired text tool results without private item authority', async () => {
+it('retains native composite tool IDs and accepts paired text tool results', async () => {
   const f = fixture();
   const item = { type: 'function_call', id: 'fc_fixture', call_id: 'call_fixture', name: 'echo', arguments: '{"x":1}' };
   f.fetcher.mockResolvedValueOnce(catalogue()).mockResolvedValueOnce(sse([
@@ -109,12 +109,13 @@ it('delivers ordinary tool calls and accepts paired text tool results without pr
     { type: 'response.completed', response: { status: 'completed', output: [item], usage: { input_tokens: 1, output_tokens: 1 } } },
   ]));
   const reply = await f.provider.chat([user]);
-  expect(reply.toolCalls).toEqual([{ id: 'call_fixture', name: 'echo', input: { x: 1 } }]);
-  await f.provider.chat([user, { id: 'assistant', role: 'assistant', content: '', timestamp: new Date(2), toolCalls: reply.toolCalls },
-    { id: 'result', role: 'tool', toolCallId: 'call_fixture', content: 'result', timestamp: new Date(3) }]);
+  expect(reply.toolCalls).toEqual([{ id: 'call_fixture|fc_fixture', name: 'echo', input: { x: 1 } }]);
+  await f.provider.chat([user, { id: 'assistant', role: 'assistant', content: '', timestamp: new Date(2), toolCalls: reply.toolCalls,
+      provider: 'openai-codex', api: 'openai-codex-responses', model: OPENAI_CODEX_MODELS[0].id },
+    { id: 'result', role: 'tool', toolCallId: 'call_fixture|fc_fixture', content: 'result', timestamp: new Date(3) }]);
   expect(f.calls.at(-1)?.body?.input).toEqual([
     { role: 'user', content: [{ type: 'input_text', text: 'probe' }] },
-    { type: 'function_call', call_id: 'call_fixture', name: 'echo', arguments: '{"x":1}' },
+    { type: 'function_call', id: 'fc_fixture', call_id: 'call_fixture', name: 'echo', arguments: '{"x":1}' },
     { type: 'function_call_output', call_id: 'call_fixture', output: 'result' },
   ]);
 });

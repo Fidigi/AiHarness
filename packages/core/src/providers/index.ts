@@ -3594,6 +3594,7 @@ export class OpenAiResponsesProvider extends AiProvider {
   }
 }
 
+const nativeCodexResponses = new WeakSet<AiProvider>();
 class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
   constructor(config: ProviderConfig, private readonly credential: ProviderOAuthCredential) { super(config); }
   override getModelApi(): string { return 'openai-codex-responses'; }
@@ -3604,7 +3605,12 @@ class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
     return { ...super.headers(false, sessionId), ...openAICodexHeaders(this.credential) };
   }
   protected override requestBody(messages: Message[], options?: OpenAICodexChatOptions): ResponsesRequest {
-    return openAICodexBody(openAICodexModel(options?.model ?? this.config.model!), toolImageMessages(messages), options);
+    const body = openAICodexBody(openAICodexModel(options?.model ?? this.config.model!), toolImageMessages(messages), options, nativeCodexResponses.has(this));
+    if (nativeCodexResponses.has(this)) nativeResponsesOwners.set(body, { provider: 'openai-codex', api: 'openai-codex-responses', model: body.model });
+    return body;
+  }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string {
+    return (nativeResponsesOwners.has(body) ? nativeResponsesToolId(item) : undefined) ?? super.responseToolId(item, body);
   }
 }
 
@@ -3615,6 +3621,7 @@ export class OpenAICodexProvider extends AiProvider {
     if (config.transport && !['auto', 'sse'].includes(config.transport)) throw new Error('OpenAI Codex WebSocket transport is not qualified.');
     openAICodexModel(config.model);
     super({ ...config, type: 'openai-codex', apiKey: undefined, baseUrl: undefined, headers: undefined, transport: 'sse' });
+    if (new.target === OpenAICodexProvider) nativeCodexResponses.add(this);
   }
   override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
   override getModelApi(): string { return 'openai-codex-responses'; }
@@ -3656,6 +3663,7 @@ export class OpenAICodexProvider extends AiProvider {
       active();
       for (const message of messages) for (const image of messageImages(message)) if (!parseDataImage(image.url)) throw new Error('Invalid OpenAI Codex image input.');
       const delegate = new OpenAICodexResponsesDelegate({ ...this.config, model: model.id, baseUrl: 'https://chatgpt.com/backend-api/codex' }, credential);
+      if (nativeCodexResponses.has(this)) nativeCodexResponses.add(delegate);
       let result: ChatResponse | undefined;
       await delegate.streamChat(messages, async (text, event) => {
         active();

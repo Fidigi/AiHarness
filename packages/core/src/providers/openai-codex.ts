@@ -2,6 +2,7 @@ import type { Message } from '../types/index.js';
 import type { ChatOptions, ResponsesChatOptions } from './index.js';
 import type { ProviderOAuthCredential } from './credentials.js';
 import { openAICodexAccountId } from './openai-codex-oauth.js';
+import { applyResponsesReplay, applyResponsesSplitIdHistory } from './responses-replay.js';
 
 export const OPENAI_CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses';
 // Models endpoint contract reviewed separately against official Codex rust-v0.167.2.
@@ -47,7 +48,7 @@ export function openAICodexHeaders(credential: ProviderOAuthCredential): Record<
 }
 
 /** CX request policy. Never posts API-key OpenAI output/store fields or infers a different owner. */
-export function openAICodexBody(model: OpenAICodexModel, messages: readonly Message[], options: OpenAICodexChatOptions = {}) {
+export function openAICodexBody(model: OpenAICodexModel, messages: readonly Message[], options: OpenAICodexChatOptions = {}, nativeReplay = false) {
   const levels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
   if (options.thinking !== undefined && (!levels.includes(options.thinking)
     || model.thinkingLevelMap[options.thinking] === null || ['xhigh', 'max'].includes(options.thinking) && model.thinkingLevelMap[options.thinking] === undefined)) {
@@ -58,21 +59,39 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
   if (options.textVerbosity !== undefined && !['low', 'medium', 'high'].includes(options.textVerbosity)) throw new Error('Invalid OpenAI Codex verbosity.');
   if (options.reasoningSummary !== undefined && !['auto', 'concise', 'detailed'].includes(options.reasoningSummary)) throw new Error('Invalid OpenAI Codex reasoning summary.');
   const initial = messages[0]?.role === 'system' ? messages[0] : undefined;
-  const input: Record<string, unknown>[] = [];
+  let input: Record<string, unknown>[] = [];
   for (const message of messages) {
     if (message === initial) continue;
     if (message.role === 'system') throw new Error('OpenAI Codex mid-conversation instructions are not qualified.');
     if (message.role === 'tool') {
-      input.push({ type: 'function_call_output', call_id: (message.toolCallId ?? message.id).split('|')[0], output: message.content || '(no tool output)' }); continue;
+      input.push({ type: 'function_call_output', call_id: nativeReplay ? message.toolCallId ?? message.id : (message.toolCallId ?? message.id).split('|')[0], output: message.content || '(no tool output)' }); continue;
+    }
+    if (nativeReplay && message.role === 'assistant') {
+      if (message.blocks?.some(block => block.type === 'image')) throw new Error('OpenAI Codex assistant image replay is not qualified.');
+      // Rich assistant slots are replaced below; retain the shared converter's cursor shape.
+      if (message.content || !message.toolCalls?.length) input.push({ role: 'assistant', content: message.content });
+      for (const call of message.toolCalls ?? []) input.push({ type: 'function_call', call_id: call.id, name: call.name, arguments: JSON.stringify(call.input) });
+      continue;
     }
     const images = message.blocks?.filter(block => block.type === 'image') ?? [];
     if (images.length && !model.input.includes('image')) throw new Error('OpenAI Codex model does not accept images.');
     const text = message.blocks?.flatMap(block => block.type === 'text' || block.type === 'reasoning' && !block.redacted ? [block.text] : []).join('') || message.content;
-    if (text || images.length) input.push({ role: message.role, content: [
-      ...(text ? [{ type: message.role === 'assistant' ? 'output_text' : 'input_text', text }] : []),
+    if (text || images.length || nativeReplay && message.role === 'user') input.push({ role: message.role, content: [
+      ...(text || nativeReplay && !images.length ? [{ type: message.role === 'assistant' ? 'output_text' : 'input_text', text }] : []),
       ...images.map(image => ({ type: 'input_image', image_url: image.url, detail: 'auto' })),
     ] });
     for (const call of message.toolCalls ?? []) input.push({ type: 'function_call', call_id: call.id.split('|')[0], name: call.name, arguments: JSON.stringify(call.input) });
+  }
+  if (nativeReplay) {
+    const history = messages.filter(message => message !== initial).map(message => message.role !== 'assistant' || message.blocks ? message : { ...message,
+      blocks: [
+        ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
+        ...(message.toolCalls ?? []).map(call => ({ type: 'tool_call' as const, ...call })),
+      ],
+    });
+    const body = { input }, owner = { provider: 'openai-codex', api: 'openai-codex-responses', model: model.id };
+    applyResponsesReplay(body, history, owner); applyResponsesSplitIdHistory(body, history, owner);
+    input = body.input;
   }
   if (options.tools?.some(tool => tool.constrainedSampling)) throw new Error('OpenAI Codex constrained tools are not qualified.');
   const requested = options.thinking;
