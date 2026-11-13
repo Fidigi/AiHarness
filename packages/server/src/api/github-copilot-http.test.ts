@@ -272,10 +272,14 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['logout', 'shutdown', 'request-cancel'] as const)('retires held HTTP login on %s without a late encrypted publication', async mutation => {
+it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel'] as const)('retires held HTTP credential work on %s without a late encrypted publication', async mutation => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-http-retire-'));
   const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-copilot-retirement-master';
+  const refreshStage = mutation === 'refresh-exchange-cancel' ? 'exchange' : mutation === 'refresh-catalogue-cancel' ? 'catalogue' : undefined;
+  const originalToken = 'disposable-http-refresh-original', rotatedToken = 'tid=disposable-http-refresh-rotated;proxy-ep=proxy.business.githubcopilot.com';
+  const refreshCalls: string[] = [];
+  let holdRefresh = false;
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; });
   const held = new Promise<Response>(resolve => { release = resolve; });
@@ -285,6 +289,28 @@ it.each(['logout', 'shutdown', 'request-cancel'] as const)('retires held HTTP lo
   vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'copilot-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'copilot-admin');
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const target = String(url);
+    if (refreshStage && new URL(target).hostname === 'github.com') throw new Error('Unexpected device login during refresh.');
+    if (refreshStage && ['api.github.com', 'api.business.githubcopilot.com'].includes(new URL(target).hostname)) {
+      refreshCalls.push(target);
+      if (target === 'https://api.github.com/copilot_internal/v2/token') {
+        expect(init?.method).toBe('GET'); expect(init?.body).toBeUndefined();
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer disposable-held-grant');
+        if (holdRefresh && refreshStage === 'exchange') { issuerSignal = init?.signal; reached(); return held; }
+        return Response.json({ token: rotatedToken, expires_at: Math.floor(Date.now() / 1000) + 3600 });
+      }
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer ' + rotatedToken);
+      expect(new Headers(init?.headers).get('x-api-key')).toBeNull();
+      if (target === 'https://api.business.githubcopilot.com/models') {
+        if (holdRefresh && refreshStage === 'catalogue') { issuerSignal = init?.signal; reached(); return held; }
+        return Response.json({ data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
+      }
+      expect(target).toBe('https://api.business.githubcopilot.com/responses');
+      const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
+        rows: Array<{ model: string; case: string; responseEvents: unknown[] }>;
+      };
+      const events = reference.rows.find(row => row.model === 'gpt-5-mini' && row.case === 'user')!.responseEvents;
+      return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+    }
     if (target === 'https://github.com/login/device/code') {
       if (mutation === 'request-cancel') { issuerSignal = init?.signal; reached(); return held; }
       return Response.json({ device_code: 'private-held-device', user_code: 'HELD-CODE', verification_uri: 'https://github.com/login/device', expires_in: 600, interval: 1 });
@@ -296,9 +322,42 @@ it.each(['logout', 'shutdown', 'request-cancel'] as const)('retires held HTTP lo
   });
   try {
     await mkdir(cwd); await mkdir(dataDir);
+    const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(dataDir, 'credentials.enc'), master) });
+    if (refreshStage) await credentials.setOAuth('github-copilot', { accessToken: originalToken, refreshToken: 'disposable-held-grant',
+      expiresAt: Date.now() + 3_600_000, subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } });
     const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
     const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer copilot-admin' };
     const caller = new AbortController();
+    if (refreshStage) {
+      expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(refreshCalls).toEqual([]);
+      const current = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+      if (current?.credential.type !== 'oauth') throw new Error('Missing fixture credential.');
+      await credentials.setOAuth('github-copilot', { ...current.credential, expiresAt: 1 });
+      const file = path.join(dataDir, 'credentials.enc'), expired = await readFile(file);
+      holdRefresh = true;
+      const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, signal,
+        body: JSON.stringify({ provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini' } }) });
+      const response = await chat(caller.signal); expect(response.status).toBe(200);
+      const output = response.text().catch((error: unknown) => error);
+      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
+      const late = Response.json(refreshStage === 'exchange' ? { token: rotatedToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }
+        : { data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
+      const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+      expect(await readFile(file)).toEqual(expired);
+      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage === 'catalogue' ? ['https://api.business.githubcopilot.com/models'] : [])]);
+      holdRefresh = false;
+      const resumed = await chat();
+      expect(resumed.status).toBe(200); const text = await resumed.text(); expect(text).toContain('event: message_end'); expect(text).toContain('ok'); expect(text).not.toContain('event: error');
+      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage === 'catalogue' ? ['https://api.business.githubcopilot.com/models'] : []),
+        'https://api.github.com/copilot_internal/v2/token', 'https://api.business.githubcopilot.com/models', 'https://api.business.githubcopilot.com/responses']);
+      const durable = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+      expect(durable?.credential).toMatchObject({ type: 'oauth', accessToken: rotatedToken, refreshToken: 'disposable-held-grant', subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } });
+      expect((await stat(file)).mode & 0o777).toBe(0o600);
+      for (const secret of [originalToken, rotatedToken, 'disposable-held-grant']) { expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret); }
+      return;
+    }
     const pending = fetch(base + '/api/provider-registry/auth/github-copilot/oauth', { method: 'POST', headers, signal: caller.signal });
     let flow: { id: string } | undefined;
     if (mutation === 'request-cancel') {
