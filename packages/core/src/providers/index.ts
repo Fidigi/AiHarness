@@ -5523,7 +5523,9 @@ export class GitHubCopilotProvider extends AiProvider {
   override getModelApi(model = this.config.model!): string { return githubCopilotModel(model).api; }
   override setConfiguredModel(model: string): void { githubCopilotModel(model); super.setConfiguredModel(model); }
   override async getAvailableModels(): Promise<string[]> {
-    const credential = await this.credentialSource();
+    const lifetime = providerNetworkScopeSignal(providerNetworkScope(this.config));
+    const credential = await this.credentialSource(lifetime);
+    lifetime.throwIfAborted();
     if (!credential || credential.subscription?.provider !== 'github-copilot') return [];
     return githubCopilotAccountModels(credential.subscription.availableModelIds).map(model => githubCopilotRoute(credential, model.id).model.id);
   }
@@ -5535,8 +5537,10 @@ export class GitHubCopilotProvider extends AiProvider {
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: GitHubCopilotChatOptions): Promise<void> {
-    const active = () => { if (options?.signal?.aborted) throw new Error('GitHub Copilot request cancelled.'); };
+    let lifetime: AbortSignal | undefined;
+    const active = () => { if (options?.signal?.aborted || lifetime?.aborted) throw new Error('GitHub Copilot request cancelled.'); };
     try {
+      lifetime = providerNetworkScopeSignal(providerNetworkScope(this.config));
       active(); const credential = await this.credentialSource(options?.signal); active();
       if (!credential) throw new Error('GitHub Copilot subscription is unavailable.');
       const route = githubCopilotRoute(credential, options?.model ?? this.config.model!);
@@ -5560,7 +5564,7 @@ export class GitHubCopilotProvider extends AiProvider {
       await onComplete?.({ ...result, provider: 'github-copilot', api: route.model.api, model: route.model.id }); active();
     } catch (error) {
       const failure = error instanceof ProviderContextOverflowError ? error
-        : new Error(options?.signal?.aborted ? 'GitHub Copilot request cancelled.' : 'GitHub Copilot request failed.');
+        : new Error(options?.signal?.aborted || lifetime?.aborted ? 'GitHub Copilot request cancelled.' : 'GitHub Copilot request failed.');
       if (onError) await onError(failure); else throw failure;
     }
   }

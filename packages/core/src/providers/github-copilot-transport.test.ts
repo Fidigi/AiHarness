@@ -4,6 +4,7 @@ import * as providers from './index.js';
 import type { Message, MessageContentBlock, ProviderConfig } from '../types/index.js';
 import type { ProviderOAuthCredential } from './credentials.js';
 import { GITHUB_COPILOT_MODELS, type GitHubCopilotChatOptions } from './github-copilot.js';
+import { closeProviderNetworkDispatchers, createProviderNetworkScope, PROVIDER_NETWORK_SCOPE } from './provider-network.js';
 
 const fixture = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
   rows: { model: string; api: string; case: string; expectedPath: string; expectedBody: Record<string, unknown>; expectedHeaders: Record<string, string>; responseEvents: unknown[] }[];
@@ -207,6 +208,42 @@ describe('Copilot A/C/R transport', () => {
     const controller = new AbortController(), complete = vi.fn();
     await expect(provider.streamChat(history('user', models[0].id), () => { controller.abort(); }, complete, undefined, { signal: controller.signal })).rejects.toThrow('cancelled');
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('retires discovery held in credential resolution across a scope reset', async () => {
+    const scope = createProviderNetworkScope();
+    let release!: (value: ProviderOAuthCredential) => void, signal: AbortSignal | undefined;
+    const held = new Promise<ProviderOAuthCredential>(resolve => { release = resolve; });
+    let reads = 0;
+    const source = vi.fn(async (value?: AbortSignal) => { signal = value; return ++reads === 1 ? held : credential(); });
+    const provider = new providers.GitHubCopilotProvider(Object.assign({ type: 'github-copilot', model: models[0].id }, { [PROVIDER_NETWORK_SCOPE]: scope }), source);
+    const transport = vi.spyOn(globalThis, 'fetch');
+    const pending = provider.getAvailableModels().catch((error: unknown) => error);
+    try {
+      await vi.waitFor(() => expect(source).toHaveBeenCalledTimes(1));
+      await closeProviderNetworkDispatchers(scope); release(credential());
+      expect(await pending).toBeInstanceOf(Error); expect(signal?.aborted).toBe(true);
+      expect(await provider.getAvailableModels()).toEqual(models.map(model => model.id));
+      expect(transport).not.toHaveBeenCalled(); expect(source).toHaveBeenCalledTimes(2);
+    } finally { release(credential()); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
+  });
+
+  it('retires publication held in a chunk consumer across a scope reset', async () => {
+    const scope = createProviderNetworkScope(), model = models[0].id;
+    const provider = new providers.GitHubCopilotProvider(Object.assign({ type: 'github-copilot', model }, { [PROVIDER_NETWORK_SCOPE]: scope }), async () => credential());
+    const row = fixture.rows.find(row => row.model === model)!;
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response(row.responseEvents));
+    let reached!: () => void, release!: () => void;
+    const started = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const completed = vi.fn(), failed = vi.fn(), chunks: string[] = [];
+    const pending = provider.streamChat(history('user', model), async text => { chunks.push(text); reached(); await held; }, completed, failed);
+    try {
+      await started; await closeProviderNetworkDispatchers(scope); release(); await pending;
+      expect(completed).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledTimes(1);
+      expect(failed.mock.calls[0]![0]).toMatchObject({ message: 'GitHub Copilot request cancelled.' });
+      expect(chunks).toHaveLength(1);
+      expect((await provider.chat(history('user', model))).content).toBe('ok'); expect(transport).toHaveBeenCalledTimes(2);
+    } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
   });
 
   it('awaits completion rejection and refuses incomplete streams without success', async () => {
