@@ -1,10 +1,10 @@
 # MOD-03 Subscription Acceptance Checkpoint
 
-> **2026-11-13 · PARTIAL · goal remains active.** Static requirement/evidence review through `40e53dd`, including later source-HTTP/body and fresh production subsets. This review grants no new runtime campaign, real-account authorization or MOD-03 closure. MOD-01 remains IN PROGRESS; AUDIT-5 remains37/43.
+> **2026-11-13 · PARTIAL (MOD-03).** The current functional priority scope is verified through `d426e05`; see the [requirement-to-artifact completion audit](./evidence/MOD-03-subscription-functional-completion.json). The earlier static review through `40e53dd` and historical campaign limits remain source-bound. Functional delivery grants neither real-account authorization nor whole-MOD-03 closure. MOD-01 remains IN PROGRESS; AUDIT-5 remains37/43.
 
 ## Scope and Evidence Rules
 
-This checkpoint maps the active subscription objective: GitHub Copilot first, then independent ChatGPT/Codex. The user separately authorized Codex work while Copilot real-account/global acceptance remains open; that sequencing decision does not accept failed gates.
+This checkpoint retains the earlier Copilot-then-Codex evidence and maps the user's later functional objective: Codex constrained tools first, explicit WebSocket second, then only other confirmed subscription gaps. Copilot manual-account/global qualification does not block those implementations; that sequencing decision does not accept failed gates.
 
 The [subscription contract](../../ai/topics/subscription-providers.md) owns current behavior. Receipts below retain their original source, overlays, failures and campaign boundaries. Their historical `remaining`/`limits` arrays describe those checkpoints: later delivery is recorded here, not rewritten into earlier evidence. In particular, Server/Settings OAuth, interactive CLI, private host continuation and Codex Server/Settings PKCE are no longer unimplemented work.
 
@@ -91,6 +91,8 @@ No wider compiler/provider repair is undertaken here: other MOD-03/MOD-01 work n
 
 ## Closure Decision
 
-**Do not mark the tracked goal complete. Do not close MOD-03 or change AUDIT-5's count.** Native subscription foundations and named local host/race subsets are delivered; user-owned manual account validation, complete qualification and non-waived holds remain pending. No automated real-account harness is required or permitted. A future completion audit must map every then-agreed requirement to actual artifacts and resolve remaining uncertainty, rather than infer completion from this matrix or one green campaign.
+**The current functional implementation scope is verified; MOD-03 is not closed and AUDIT-5's count does not change.** The [final completion audit](./evidence/MOD-03-subscription-functional-completion.json) maps every explicit instruction to implementation, tests, source/image checks or preserved-scope evidence. Strict/grammar tools (`754bbaf`) and explicit isolated WebSocket/private continuation (`d426e05`) are delivered. No further mandatory subscription feature was established; generic tool discovery already exists, while compression and broader native-search/media work need a separately confirmed functional need. There is no required functional work left in this agreed scope.
+
+The original unconditional goal hold belonged to the earlier broader qualification objective, not a new requirement to repeat or complete all MOD-03 qualification. User-owned manual accounts, complete profiles/lifecycles, historical holds and the sixteen pre-existing index-test strict diagnostics remain pending and explicit, without being promoted to feature work or passes. No automated real-account harness is required or permitted. Functional goal completion must rely on the linked artifact audit, not this status paragraph or a green denominator alone.
 
 The original reconciliation (`11331ec`) was documentation only, validated by `make lint-docs` in Docker and `git diff --check`. The later test-only CLI-refresh increment has its own linked build/type, focused, installed and retained-production evidence; the browser-refresh candidate separately retains its successful build/types/focused/development and failed fresh-image browser gate. The reconciliation itself grants no execution or account qualification. The later static review through `40e53dd` verifies referenced artifact integrity/current shared-module provenance only, adds no runtime tests and leaves every closure blocker above open.
