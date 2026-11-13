@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-13",
+  "baseCommit": "71a1554a38c5b7c6e6406c8dcb6255bdd880b709",
+  "status": "HOLD",
+  "goalComplete": false,
+  "scope": "One predeclared supervised observational reproduction of the four-case synthetic browser campaign on the exact retained image. Four cases pass in this observation; no original-failure repair, waiver, causal attribution or qualification promotion. Not a repeated-until-green campaign.",
+  "gap": "Discovery-only control executed no callbacks. Original direct-PID1 exit139 still lacked raw child signal and phase; this bounded actual-journey observation sought supervised process disposition without changing test/runtime policy.",
+  "observation": {
+    "node": "v24.15.0",
+    "versions": {
+      "node": "24.15.0",
+      "acorn": "8.16.0",
+      "ada": "3.4.4",
+      "amaro": "1.1.8",
+      "ares": "1.34.6",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.3.1",
+      "merve": "1.2.2",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.3",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.68.0",
+      "openssl": "3.5.5",
+      "simdjson": "4.5.0",
+      "simdutf": "6.4.0",
+      "sqlite": "3.51.3",
+      "tz": "2026a",
+      "undici": "7.24.4",
+      "unicode": "17.0",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.17-node.48",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "plan": {
+      "date": "2026-11-13",
+      "plannedExecutions": 1,
+      "baseCommit": "71a1554",
+      "image": "sha256:028842b525e9ffc037f829caecd271e14b65b98bdf3901d79a762294934805b8",
+      "childArgs": [
+        "--no-maglev",
+        "node_modules/@playwright/test/cli.js",
+        "test",
+        "--config=copilot-web-refresh.config.ts"
+      ],
+      "network": "bridge",
+      "shmSize": 1073741824,
+      "purpose": "One supervised observational reproduction of the failed four-case browser campaign on its exact retained image, to capture raw child code/signal. Actual synthetic browser journeys execute. Not an acceptance/promotion campaign or repair attempt; original exit139 and HOLD remain regardless of outcome.",
+      "stopRule": "Exactly one child invocation, with original assertions/timeouts/runtime flags/configuration and zero Playwright retries. Record any outcome; no repeat-to-green, automatic retry, new waiver, causal diagnosis from a passing attempt or transfer into qualification."
+    },
+    "result": {
+      "spawned": true,
+      "code": 0,
+      "signal": null
+    },
+    "inputs": [
+      {
+        "path": "/usr/local/bin/node",
+        "bytes": 122889056,
+        "sha256": "d1de76d8edf2fededf6f8b30d244e2c0529ac607923a018283b77e9c74bd932c",
+        "mode": 493
+      },
+      {
+        "path": "/app/node_modules/@playwright/test/cli.js",
+        "bytes": 707,
+        "sha256": "79e23e6a249176295b8490567daa7717448a75866d6ea6f6b296ff3d23305c69",
+        "mode": 493
+      },
+      {
+        "path": "/app/node_modules/@playwright/test/package.json",
+        "bytes": 754,
+        "sha256": "5587f932b8979b6889654b60e3c28aeb7ca0abbac00eec8c176c939a16149536",
+        "mode": 420
+      },
+      {
+        "path": "/app/playwright.config.ts",
+        "bytes": 3025,
+        "sha256": "94230d0b47d4605b1bef0817441f5c08fc75ec3d1eebb5e2f6c8798d0e68be02",
+        "mode": 420
+      },
+      {
+        "path": "/app/copilot-web-refresh.config.ts",
+        "bytes": 551,
+        "sha256": "cf48b129808ce41c8b865cbb571090f356713a41f5bc4f9dc628c89112936249",
+        "mode": 420
+      },
+      {
+        "path": "/app/e2e/copilot-subscription-live.spec.ts",
+        "bytes": 26906,
+        "sha256": "24f7310bb3761ea307b30e6574b75e4113975257faee5929b6c3a28dfb2e8628",
+        "mode": 420
+      },
+      {
+        "path": "/app/e2e/codex-subscription-live.spec.ts",
+        "bytes": 23486,
+        "sha256": "378a9dc1a5f54e9c64fc5ba7ed4f1f08db2a4ad3b3c5959f91756b907203a485",
+        "mode": 420
+      },
+      {
+        "path": "/app/e2e/fixtures/test-budget.ts",
+        "bytes": 1212,
+        "sha256": "e80e2f279de3c1f060afd824eb5e90f7c14666b6961d40322d87cf627d276cae",
+        "mode": 420
+      }
+    ],
+    "reference": {
+      "path": "docs/audit/pi/evidence/MOD-03-copilot-web-refresh.json",
+      "bytes": 101248,
+      "sha256": "c5828eed2f1cf1f6246a3cbb1f9bb36809a12f6b0648b395dedf8f831e9e8f57",
+      "status": "HOLD",
+      "exit": 139
+    },
+    "discoveryReference": {
+      "path": "docs/audit/pi/evidence/MOD-03-copilot-web-discovery.json",
+      "sha256": "a6b5d8b2787be16ecd96e3a24ee3efcab0b98ef6c369aac70452c71e1299c6d7"
+    },
+    "scope": "One supervised full synthetic browser reproduction; not an acceptance/promotion campaign. Process layout adds an observer and is not same-layout causal A/B. Raw code/signal belong only to this new child. Earlier exit139 and HOLD remain regardless of outcome. No product/source/flag/dependency/assertion/deadline change or account operation."
+  },
+  "runtime": {
+    "image": "sha256:028842b525e9ffc037f829caecd271e14b65b98bdf3901d79a762294934805b8",
+    "network": "bridge",
+    "shmSize": 1073741824,
+    "exit": 0,
+    "oomKilled": false,
+    "error": "",
+    "command": [
+      "--no-maglev",
+      "/tmp/observe.mjs"
+    ]
+  },
+  "validation": {
+    "docker": true,
+    "observation": {
+      "status": "PASS",
+      "plannedExecutions": 1,
+      "executions": 1,
+      "artifact": "observation.log",
+      "exit": 0,
+      "rawChild": {
+        "spawned": true,
+        "code": 0,
+        "signal": null
+      },
+      "executedTests": 4,
+      "passed": 4,
+      "failed": 0,
+      "copilotLocales": 2,
+      "codexControls": 2,
+      "workers": 1,
+      "retries": 0,
+      "network": "bridge",
+      "shmSize": 1073741824,
+      "sourceOverlay": false,
+      "build": "REUSED, NOT REBUILT",
+      "qualificationPassesAdded": 0,
+      "scope": "Actual emitted Server/static Web and synthetic vendor/account fixtures. Observer adds a parent and preflight input hashing; not same-process-layout causal A/B, source repair, accepted qualification or registry/production/account evidence."
+    },
+    "browserQualification": {
+      "status": "HOLD",
+      "reference": "MOD-03-copilot-web-refresh.json",
+      "historicalExit": 139,
+      "rawSignal": null,
+      "phase": "UNKNOWN",
+      "cause": "UNKNOWN",
+      "scope": "Original empty-output failure unchanged. Failure was not observed in this one supervised invocation; passing observation neither recovers historical signal nor explains/fixes failure or extends the three-incident user waiver."
+    },
+    "documentation": {
+      "status": "PASS",
+      "artifact": "docs.log",
+      "scope": "Separate predictive Docker lint on tracked/nonignored snapshot with temporary Git metadata."
+    }
+  },
+  "findings": [
+    "Exactly one full Playwright child invocation, one worker/zero retries, with original --no-maglev/configuration/test source/assertions/deadlines and exact retained image. Two Copilot and two Codex EN/FR journeys report PASS; child closes code0/signal-null. No subsequent replay follows.",
+    "Eight bounded Node/CLI/configuration/spec/budget input hashes/modes match the previous discovery observation. Original failure and discovery receipt hashes remain bound; this is not whole-context/dependency/clean-commit equivalence. No compiled source or runtime package is overlaid.",
+    "Unlike the preceding --list observation, test callbacks and browser journeys actually run here. This distinction is explicit; neither selection is added to development/final/historical denominators or promoted to repair evidence.",
+    "Supervision is instrumentation, not a demonstrated native fix. Additional parent/preflight memory/process scheduling differ from the original direct-PID1 layout; no inference assigns the original139 to Node startup, collection, browser, a signal or an optimization tier."
+  ],
+  "limits": [
+    "Original browser-refresh qualification remains HOLD. No acceptance or waiver is inferred from nonoccurrence in one observation; three historically accepted incidents are not reopened or generalized to this incident.",
+    "No product change, new build/type/unit/SDK/CLI/HTTP-application/production/launcher/distribution or real-account qualification. Actual browser journeys are synthetic fixture observations only; no real consent, entitlement, vendor refresh/inference, cryptographic verification or remote revocation.",
+    "Bounded selected three-profile private Copilot and CX regression journeys do not establish full media/context/default/error/overflow/compaction/fork/cached/terminal/cross-account lifecycle or complete browser/root/parity gates.",
+    "Unrelated dirty compiler repair remains preserved/excluded from staging. No assertion/deadline/TLS/runtime flag/dependency/policy modification; protected pi/qwen-moe untouched. Stop rule satisfied; no additional attempt planned by this record.",
+    "MOD-03 PARTIAL/MOD-01 IN PROGRESS/audit37/43 and active goal unchanged. Remaining real-account and qualification uncertainty prevents completion."
+  ],
+  "artifacts": [
+    {
+      "name": "plan.json",
+      "bytes": 932,
+      "sha256": "7c36ca39c125f0dfd3bfafdce0f52b4aacef46523a2e9fcc4d35485b24aaac67",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA0WSXa/TMAyG78+vsHq9bmu3nW0HIYEAiQsECC4RQm7idoY0Lo6znYH47ygdH1dtmtp+nyf5eQdQeTSqHqBq1+193TR1s6kW5fsUMEbyrx7JZWOJqXqAZt7pMNELGUe2UrdvsNnttrciHnGYu6UTtrv7h3V7OGzbbtfu6Nj3br3Z94f26JCcb/cNNdvuftcdD53vN8d14/dH3N+37XF73GwP6113uHV1Jw7+uQ4lwqeqrqPUIw6BztUCqiievozic6C0ejYFvF6Uh5OtjJKtXODl11T+K8vyrGsnsefhqZOJg1h9oa5W6pXSaXnbWlqqPs+TI9lF9Fsh6pT9QLdA6TR+5B8FtFnvN/ttc2i3N2lZJ0mzgXeRIOWJ9MyJPEiXSM9YTGIApUnFZ1eWID3YiaBHDuShl6y1w0TQqVwSKTgcJ+QhgkRgS0CP6AyUDDmSh9n5AkzA4WRZCRQvMDsDJ55WiYeIYQnPnWUMkK7RTmTs/g34KlkjXUvncti0hLdigBHQOZoMo6PVpDLKHPd/HC0cyApoRuNkT0CUBy6A9MjWbI6A0cPrd29egtKIHEFpQPWBUirYks3JSMs/Vk2mDznM9l4VxnAFifQHheNZ3OxvARe20/9ZmBLpfEVXxiNJtrTSHMs79AGHtLoda9a5fM70g1Tg/b/LUmwqU1rCB3KiHjBe/6Z7AlEKKKHVJvWgRHEBmE1GLBZL6XUBkS5wQT6TLsBhThjAMw5REifoVUZAmDAljsNfX8WgKcbUkwJHE/ieMXDPN85ldffr7jeNEmkHpAMAAA=="
+    },
+    {
+      "name": "observe.mjs",
+      "bytes": 2672,
+      "sha256": "277e4bff2bddee551fd257fe60df4c4a2af6a3f3189a4e768a16324a9be79175",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA51WW2/bNhR+96/gw1BKKEXVDVosMpQsaV10WxcXTrcC67KAEY8kFjSpkZQdw/B/HygqtuykWLEXXXi+cz/nk8Si0cYhZi0Yh0qjFwgrzSELJ6l1RhQOT0YiADfINmyl0HaILWoh+W1jdAHWDrEGGH8nJBBkHXMErYxw4A8O9UubNkYvhIUD7cIAc/Ce2frInVk3TuPJqNDKOlQzW+d3awc2P9urRNjW7OWr1zimbcOZg6iDxJSLCqyLcA33OH6w0Uim8l+uZ1e0YcZCxFZMuF34EU7dokk9iH61WmGCW1f+iON4Mgp1ovBPy2TUIfxFAZ/eQ9E6oZUl43jSwzhAM91Du8JdmMqSLzhJlE4WrJKwxKRL9HaheSvBpj81kq1XRlS1Sx1YlxZS0K8WE+zfMMFJUmhViiovdCOkdskK7hIDpQFb0yCizuKbXb4GSjCgCrjs6vZkujtMyDkmu4NhpQ4tHRdkb8MPQGsJfj/78Bbv6nGMWjIpOPNVo3dGrywYCvfCkfHJ6Td1TKucWAAVC1YB6eraPe6S5cIWeglm/Z8d3iEftTlYEqppnc2/3ExGpTZRPztGaIN0ufdD9Z0Fswx5BJ14E8B3T9W7s0Ab5up4EmALzSHvY/SVG0Ji6qXPXo3HhxXxe9APOQnwsAFkaP5Aw9vppYPHAAxh06a1dbTxR9leSjovWXelElTlahJ8ZcMgvM1tPNl2xdMSqNRVhC/ns8/X0/nt7PJ6Ov9jOr+9/nQx/4Tw8645nm9UJcp1tOl2vScVugRjhVbk0XJl485Phq1QlYRkUHomEwON0bwt/CvexoP5t610fR8UrNDHwD+RAavlEvKzzQgFaLejecd60UM0cA/FR1+Ioy3eFCue4ZQ1DSaglrvoQS2JdVzoDAtVgxEOb+PJCElwgU+B5yWTFkj3NjVGmzeaw2QU3FOtCohwJ8QkivOzzYOaMy1Mnizwm/c/f3h7e/3x4vPV1K9c53FoDrwbTLrbg8Wd69ytG9Al6qS08Cd5jkN78LNn6d9fLpI/b/zlRXJ6e7N5QV6fbH9IW+opKdprxef75wz/fvXr1ezzFX4cTCG1BUwijyNWVIrJOD/r2xE9pEsGYkIpjQ6DPj9KYptttnHXdu8vdHv3Dep3fjAwSRiLfvm/ax77uz0W2G40SDBIwjLtCTQLG4W5LmzKWi5c2ogUloJ7afrb7G3y4iR5isxDaGH/Dqn3qUU8ImcSSDgLJEw8s2bjk9Mt2THX/P9HeMydwzi+h2zjeEtsoRvI8EwBsm0DZikscFS2UiK7Vq4GJwrUfxjQcLcnSGmHmEKsKKBxzMfofym0F6KCLRomKkX9mvsuIcnWunWIcW69VpgBMIgpjoTtjFm2gKTHFay1TKKL9JKiOVshP4VpmEJ0B1KrCmkl18hp5GqvD6t+uNGUGSnAIF/s8clp58GXHxlYMKGQgYoZLn1QukS6dYVeAEVXGvXZpVa3poC0lKxKOTSgfAvWaWByoVXKgXEpFKCiZqoCpI0vg26VQ7oBEz5DeEtUKyV5GT/Hf6mHP59vkMabD7Pr6WNKDtPs12lPhMJ1bNFvztE6jrP+3Bfs/Hw8Gf0LtCEuUXAKAAA="
+    },
+    {
+      "name": "observation.log",
+      "bytes": 3011,
+      "sha256": "b40125da648fb80f0d526246a325bbba2a730803deb8a369b94fbdc074e8a004",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA+2WzWrcMBDH736KwacEvP5aOyWGHjYbQ0pDs9ihKYQQtPKsV0QrqZLsfBHoO+TQS56kj5MnKV5vCU1LadLkEJqbRqP/zPzFD6GtYu+gzIvjva0yLz7mxXG5Pyr24dIVskI3c9s48aPUD13PVZwIgVV+hrSxTArjZpHnLvpzhoma40BODeqWdGnCBxqVllVDu9C9crZWvcY773a3j8vJ6OBDvu04RSMEEzUkYNFYA01XCyI4lfoEteMclqhb1EcwYjtECzQGiFKc0WUboFLMWN1orGAmNcytVVkQRPEbP/RDP8rCuwITLVtWoTYZSIWCsLe3N189IMLOtVSM9mEtZc1xlbpo9GrZorZ41q+nWGlJT/qAS0r4SsrsvJkOqFSMS9vv9Z0GVFY/1Iteen03WIGfGzQWZoRxrPx/tZwMo3jzBdoGuL25BojgkM61XLBmcQS3X74BxhgsCw1MMzVUM9Vdw4CzFn2jkPrWZJthlqTL04JY1iKMOwGUaC0TtQEUGVTYMorB5P04By5rJjxQmrXEIow/gUZjibaBRsXJuQeUCIqc91dORNVJZGNhLYr91Ky/cvlwLuNoM32Btldcxs/B5Uw/HZeRH79y+Sgu02T4km3/dWJF8vD3JC/H+QPLUZr8AvNS8/Mzi4Lqc2Wxug/zKBgHxQN43vCjV54fYXmYJhv/Fc/Js/HcPc9PzLPTzauIMVjB2kboh2b93td4vLtX5nDpGkVOBVZuZnWDnkuXX+3Qcw2rBeFuJhrOr5zvtRnIYMMLAAA="
+    },
+    {
+      "name": "observation.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPgAgASzUp+AgAAAA=="
+    },
+    {
+      "name": "observation-result.json",
+      "bytes": 4037,
+      "sha256": "c2339a03648159a3f7a5aea1e4f021930e6c69760bbbb676917bf231de3fccdd",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "runtime.json",
+      "bytes": 207,
+      "sha256": "38e7e4a0b919f885b205fc1d8087e880bc43a5127912b25da4aeab10e7ac5a79",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXBy1LDIBgG0L2P8a2JBQLh8gouu+y4gPCTYkNwIFMdHd/dc35RatgIHuMepF48l9YqGbXU5HJe+WyylW4NtCZpBAkVFx2djSnPjotkXDCLlE65WVmuowXDQedX6w94xF7SRmAY93otPwQvuJmNElYqBvouJzxnaK2+lX2nBJ/DPoiBem8dHmBYW63hSPA3TNPRphq2nZ5guJz189LioP6k1/ox8P738g/z4R86zwAAAA=="
+    },
+    {
+      "name": "base-commit.txt",
+      "bytes": 41,
+      "sha256": "e5af7a1c97919e4635af62a643e197c58d89538a4dad185711ea1a9f143a210e",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXByQEAIAgDsL/TgNKC43C4/womrqmA5YlGefPRhB3TxQ3UTISUy10f1Hv3kykAAAA="
+    },
+    {
+      "name": "receipt.mjs",
+      "bytes": 5557,
+      "sha256": "bfd2040c70ab05636861792901cb7fd0f201b014bd123a9fd35439b9d063f3da",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "verify.mjs",
+      "bytes": 2151,
+      "sha256": "84b258b58ae6a803cbe817b4e595e664640250670b883911d8a4a831047098ad",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA5VVXW/TShB9z68wL6ytOJuW2yJEZKR+BBHEJb1tBQ+Aqo13bC9a75qdcUMK/e9X9qapW5zSvljy7pkzX2dmVVlZR4FABEdB5mwZMGMlvPYnYySnUmKTgfLAX4EDId8qDXGAJCgOlk4RNAfBddc+w3HlbKkQsGudOhAE7wQWd+GpW1Vku8i8NleqOluZ9C7ySqsFmwxSa5CCQmCRLFYEmLy5pQ4ZFuLF/ksW8bqSgiBsIRGXKgekkBXwk0U3HA5SUBUl78/mH3klHEIolkLRJtOQjamsxv/Oj0c7/4xSWyltabSExcguENylIGUN/47WsJjVlL1iUTQZ+AJy+FELHa598KZkNcbs3fzDMYsmvZjcCn1ky0oDQZwJjbAFeCm0kt55NxD4CWlNIM8BCeO9pxk3GJWptP07aSzxQEqQ8c7feRbOLhHcf12K+xmva25ECZgYWAZnQGE0yawL/Y0iKAOb3XSFC0cqEylh9Mv7D5+1xrwQGDZg3vxG0cSfCik7pxPP6QVyK6jwsM4ycLxRlUdLQSJmC4Hwcq/p3p1UW3OuweRUxC28PYk7fu7gG1GuFecxXo1d/PVge8bddihT1U3q3TzuibNlrQQVT4m6B/9g1D349ZA0/e3EEPHSSni+v7vrDZu/LsX14E+nvdPmIAMHJgU/WFEU99XnFuWjvT932/mlwtRegls9yL9Bnf7FUX9wWGviaVOCbePTg0eVG6FjU2v9CKNKC/8xIKft5CtrMN59rGlaKC0PXI5cmVTXEjBko5FWSCy62T4DX8HNpl+XsLBI63Kw+AvnfLuCeaY0gWuFkrzZ6KHZDo7ws6IiZGNRVWN4AWMW/f69gSRJ4m8qLVZLp/KiqajJVM4JWcRLUXVZfThDFgRs2HGjVQrh/iNF5K0fRja0T1PMdtYek4b+G/9ulQnZV8OiYfv129Nq4NrmITuan8w+zM8vPk8PL+aHZ9PTTwfns/nHi9Pp0XR2cn7xaXo6ezubHgebHZqwoV+TqK5gyALfnKQ/rHXn/AYZssDfgfSvQrIXbHsrkp1g/RQkN1v/f/JRehxnCAAA"
+    },
+    {
+      "name": "docs.log",
+      "bytes": 124,
+      "sha256": "fe4516a3ceabb92b6d86bf806453933954391641a4dbcda0f461c49b6d7cd285",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAy3MMQ7CMAxG4b2n+EdYKgjcAFYOYWIDVlwbJWl6fVSJ/X3v9pFchHFOJzyoFo7N8VKTBnJGul4SLDIZTL00HL5VWHPXIViC5ThP98jrIt6pa/g/2+2Q2jRc/Y1nrM5Udb9WwSBTnqcfCyO7z3wAAAA="
+    }
+  ]
+}
