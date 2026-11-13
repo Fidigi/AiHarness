@@ -413,7 +413,8 @@ export class ProviderOAuthService {
               expiresAt: exchanged.expiresAt, subscription: { provider: 'github-copilot',
                 availableModelIds: exchanged.availableModelIds,
                 ...(exchanged.enterpriseDomain === undefined ? {} : { enterpriseDomain: exchanged.enterpriseDomain }) } });
-            // No await after durable admission: runtime publication is synchronous.
+            flow.controller.signal.throwIfAborted();
+            // No await before runtime admission: publication remains owner-bound.
             const model = GITHUB_COPILOT_MODELS.find(model => exchanged.availableModelIds.includes(model.id));
             if (model) this.proxy.setGitHubCopilotSubscription(model.id, gitHubCopilotCredentialSource(credentials, this.lifetime.signal));
             flow.state = 'connected';

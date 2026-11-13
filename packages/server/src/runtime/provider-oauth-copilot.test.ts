@@ -141,6 +141,22 @@ it.each(['before-start', 'after-reservation'] as const)('does not contact GitHub
   expect(f.mount).not.toHaveBeenCalled();
 });
 
+it('does not mount Copilot after shutdown wins the durable-publication return boundary', async () => {
+  const f = await fixture(), committed = deferred<void>();
+  const prepare = f.credentials.prepareOAuthLogin.bind(f.credentials);
+  vi.spyOn(f.credentials, 'prepareOAuthLogin').mockImplementationOnce(async (...args) => {
+    const publish = await prepare(...args);
+    return async credential => {
+      const result = await publish(credential); f.service.close(); committed.resolve(); return result;
+    };
+  });
+  await f.service.start('github-copilot'); await committed.promise;
+  await new Promise(resolve => setTimeout(resolve, 0));
+  expect(f.mount).not.toHaveBeenCalled(); expect(f.flatten).not.toHaveBeenCalled();
+  const reader = f.reopen(); await reader.load();
+  expect((await reader.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' }))?.credential).toMatchObject({ accessToken: token, refreshToken: grant });
+});
+
 it('refuses Copilot login without durable storage before contacting the issuer', async () => {
   const fetcher = vi.fn(), service = new ProviderOAuthService(new AiProxyServer(), () => new ProviderCredentialService(), fetcher);
   services.push(service);
