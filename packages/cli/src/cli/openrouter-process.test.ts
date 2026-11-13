@@ -10,10 +10,11 @@ const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
 describe('emitted CLI explicit OpenRouter composition', () => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => [
-    { mode, model: 'anthropic/claude-sonnet-4.6', api: 'anthropic-messages' },
-    { mode, model: 'google/gemini-3-pro-image', api: 'openai-completions' },
-  ]))('$mode preserves $api with trusted registration and an explicit ephemeral key', async ({ mode, model, api }) => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (mode === 'rpc' ? [false, true] : [false]).flatMap(native => [
+    { mode, model: 'anthropic/claude-sonnet-4.6', api: 'anthropic-messages', native },
+    { mode, model: 'google/gemini-3-pro-image', api: 'openai-completions', native },
+  ])))('$mode/native=$native preserves $api and explicit credential composition', async ({ mode, model, api, native }) => {
+    const provider = native ? 'openrouter' : 'router-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-router-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-router-key';
@@ -38,12 +39,13 @@ describe('emitted CLI explicit OpenRouter composition', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/router.mjs'), `import { OpenRouterProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/router.mjs'), `import { OpenRouterProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('router-native', { defaultConfig: { model:'openai/gpt-4o',baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy/api' }, create(config) { return new OpenRouterProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `router-native/${model}`, '--thinking', 'off', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', 'off', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { OPENROUTER_API_KEY: key, OPENROUTER_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy/api` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -66,8 +68,8 @@ describe('emitted CLI explicit OpenRouter composition', () => {
               cost: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 0.375 } };
           expect(records.find(record => record.id === 'router-state')?.data.model).toMatchObject(profile);
           const models = records.find(record => record.id === 'router-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'router-native')).toHaveLength(393);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'router-native', ...profile }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(393);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
@@ -76,7 +78,7 @@ describe('emitted CLI explicit OpenRouter composition', () => {
       else { expect(calls[0]?.headers.authorization).toBe(`Bearer ${key}`); expect(calls[0]?.headers['x-api-key']).toBeUndefined(); }
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'router-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, outputTokens: 2, totalTokens: 12 }) }));
       expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }

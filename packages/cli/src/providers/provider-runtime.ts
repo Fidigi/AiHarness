@@ -18,7 +18,8 @@ import {
 export const CLI_CREDENTIAL_PROVIDERS = [
   'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia',
   'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
-  'huggingface', 'xiaomi', 'meta', 'xai', 'azure', 'vertex', 'bedrock', 'local',
+  'huggingface', 'xiaomi', 'meta', 'xai', 'fireworks', 'opencode', 'opencode-go', 'openrouter',
+  'cloudflare-workers-ai', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {

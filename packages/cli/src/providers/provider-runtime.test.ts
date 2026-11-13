@@ -178,7 +178,12 @@ describe('CLI provider runtime', () => {
     ['huggingface', 'HUGGINGFACE_API_KEY', 'AI_HARNESS_HUGGINGFACE_API_KEY'],
     ['xiaomi', 'XIAOMI_API_KEY', 'AI_HARNESS_XIAOMI_API_KEY'],
     ['meta', 'META_API_KEY', 'AI_HARNESS_META_API_KEY'],
-    ['xai', 'XAI_API_KEY', 'AI_HARNESS_XAI_API_KEY']] as const)(
+    ['xai', 'XAI_API_KEY', 'AI_HARNESS_XAI_API_KEY'],
+    ['fireworks', 'FIREWORKS_API_KEY', 'AI_HARNESS_FIREWORKS_API_KEY'],
+    ['opencode', 'OPENCODE_API_KEY', 'AI_HARNESS_OPENCODE_API_KEY'],
+    ['opencode-go', 'OPENCODE_GO_API_KEY', 'AI_HARNESS_OPENCODE_GO_API_KEY'],
+    ['openrouter', 'OPENROUTER_API_KEY', 'AI_HARNESS_OPENROUTER_API_KEY'],
+    ['cloudflare-workers-ai', 'CLOUDFLARE_WORKERS_AI_API_KEY', 'AI_HARNESS_CLOUDFLARE_WORKERS_AI_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);

@@ -10,7 +10,8 @@ const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
 describe('emitted CLI explicit Cloudflare composition', () => {
-  it.each(['print', 'json', 'rpc'] as const)('%s preserves C provenance with trusted registration and an explicit ephemeral key', async mode => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => [false, true].map(native => ({ mode, native }))))('$mode/native=$native preserves C provenance and explicit credential composition', async ({ mode, native }) => {
+    const provider = native ? 'cloudflare-workers-ai' : 'cf-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-cf-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-cf-key', model = '@cf/deepseek-ai/deepseek-v4-flash-0731', api = 'openai-completions';
@@ -30,12 +31,13 @@ describe('emitted CLI explicit Cloudflare composition', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/cloudflare.mjs'), `import { CloudflareWorkersAiMixedProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/cloudflare.mjs'), `import { CloudflareWorkersAiMixedProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('cf-native', { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy/accounts/explicit/ai/run' }, create(config) { return new CloudflareWorkersAiMixedProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `cf-native/${model}`, '--thinking', 'off', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', 'off', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { CLOUDFLARE_WORKERS_AI_API_KEY: key, CLOUDFLARE_WORKERS_AI_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/proxy/accounts/explicit/ai/run` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -55,8 +57,8 @@ describe('emitted CLI explicit Cloudflare composition', () => {
             cost: { input: 0.44, output: 1.32, cacheRead: 0.014, cacheWrite: 0 } };
           expect(records.find(record => record.id === 'cf-state')?.data.model).toMatchObject(profile);
           const models = records.find(record => record.id === 'cf-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'cf-native')).toHaveLength(18);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'cf-native', ...profile }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(18);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
@@ -65,7 +67,7 @@ describe('emitted CLI explicit Cloudflare composition', () => {
       for (const name of ['x-api-key', 'api-key', 'anthropic-version', 'cf-aig-authorization']) expect(calls[0]?.headers[name]).toBeUndefined();
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'cf-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, outputTokens: 2, totalTokens: 12 }) }));
       expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -90,6 +90,35 @@ describe('configured CLI providers', () => {
     expect((selected.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'ephemeral' });
     expect(ProviderFactory.has(name)).toBe(false);
     if (name.startsWith('moonshotai')) expect(providers.has(name === 'moonshotai' ? 'moonshotai-cn' : 'moonshotai')).toBe(false);
+  });
+
+  it.each([
+    ['fireworks', FireworksProvider], ['opencode', OpenCodeProvider], ['opencode-go', OpenCodeGoProvider],
+    ['openrouter', OpenRouterProvider], ['cloudflare-workers-ai', CloudflareWorkersAiMixedProvider],
+  ] as const)('composes native mixed %s without converting specialized operations into chat', async (name, Adapter) => {
+    const prefix = name.toUpperCase().replace(/-/g, '_');
+    expect(createConfiguredProviders({}).has(name)).toBe(false);
+    const env = { [`${prefix}_API_KEY`]: 'synthetic-mixed-key', [`${prefix}_BASE_URL`]: 'http://127.0.0.1/owned/v1' };
+    const providers = createConfiguredProviders(env);
+    const provider = providers.get(name);
+    expect(provider).toBeInstanceOf(Adapter);
+    expect(provider?.getPublishedModels?.()?.length).toBeGreaterThan(0);
+    const model = provider!.getConfiguredModel()!;
+    await expect(resolveStartupProvider(providers, { provider: name, model, offline: true }, {})).resolves.toMatchObject({ providerName: name, model });
+    const override = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'ephemeral' }, {});
+    expect(override.provider).toBeInstanceOf(Adapter);
+    expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'ephemeral' });
+    expect(ProviderFactory.has(name)).toBe(false);
+  });
+
+  it('requires explicit Workers AI account or endpoint and preserves account configuration with an ephemeral key', async () => {
+    expect(createConfiguredProviders({ CLOUDFLARE_WORKERS_AI_API_KEY: 'key' }).has('cloudflare-workers-ai')).toBe(false);
+    const env = { CLOUDFLARE_WORKERS_AI_API_KEY: 'key', CLOUDFLARE_ACCOUNT_ID: 'synthetic-account' };
+    const providers = createConfiguredProviders(env);
+    expect(providers.get('cloudflare-workers-ai')).toBeInstanceOf(CloudflareWorkersAiMixedProvider);
+    const model = providers.get('cloudflare-workers-ai')!.getConfiguredModel()!;
+    const selected = await resolveStartupProvider(createConfiguredProviders({}), { provider: 'cloudflare-workers-ai', model, apiKey: 'explicit' }, env);
+    expect((selected.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'explicit', accountId: 'synthetic-account' });
   });
 
   it('uses credential type, not label or token shape, for Kimi auth and overrides OAuth with explicit keys', async () => {

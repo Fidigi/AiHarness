@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-13",
+  "baseline": "1ba419c",
+  "task": "MOD-01.03a",
+  "status": "Delivered bounded mixed-adapter CLI composition; MOD-01 remains IN PROGRESS",
+  "behavior": "The same CLI-only mechanism now composes existing Fireworks, OpenCode Go/Zen, OpenRouter and Cloudflare Workers AI mixed adapters. Existing per-operation delegates, metadata, specialized descriptors and private replay authority are reused unchanged. Explicit registered factories retain priority; no Core factory names reserved.",
+  "contract": {
+    "environment": "AI_HARNESS_<ID>_API_KEY before <ID>_API_KEY; <ID>_MODEL and <ID>_BASE_URL (uppercase/dashes-to-underscores). Command/store/offline/fresh-source rules are inherited from the preceding increment. OPENCODE_GO and OPENCODE credentials remain independently selected.",
+    "workersAi": "Explicit CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_WORKERS_AI_BASE_URL is required. A key alone does not publish an unusable adapter. Cold ephemeral --api-key preserves account configuration. This is Workers AI C/S, not Cloudflare AI Gateway, and no credential/account is inferred from a provider label.",
+    "specialized": "Mixed SDK native classifier/image methods remain non-chat operations. TypeSafe host admission and complete specialized cross-provider composition remain MOD-01.03c, not silently satisfied by adding a constructor. No OAuth issuer or account availability policy is invented."
+  },
+  "validation": {
+    "red": "Previous C/R-filter image plus two changed source test roots: 11 expected failures / 66 passes / 77 cases, exit1. Five missing constructors, five missing environment credential resolutions and missing explicit Workers AI account composition.",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-cli-mixed — exit0; full product build and workspace/parity typechecks pass.",
+    "image": "sha256:5b655d3f03db2ab4477359c1ca2565c816d30b57d34f4ac4faa5e6b1cdaa02b5",
+    "strict": "Temporary Docker strict noEmit project extending root tsconfig, five changed CLI test roots, scripts/run-typescript.mjs — exit0.",
+    "focused": "Docker configured-providers/provider-runtime/OpenCode-process/OpenRouter-process/Cloudflare-process selection:119 PASS / 5 files, exit0, no skipped cases/worker errors.",
+    "processBoundary": "Nine new no-extension native paths: four Zen RPC A/G/C/R, two OpenRouter RPC A/C (including shared C/image identity as chat), three Workers AI print/JSON/RPC. All33 original explicit-extension cases retained,42 total process cases. Exact operation-specific URLs/headers, native clamps/catalogues, journal provenance/usage and credential privacy remain asserted. Fireworks/Go constructor admission and credentials use direct native tests plus unchanged owning SDK/explicit-host evidence, not a claimed new emitted journey for each owner.",
+    "safety": "Tests/typechecks exclusively Docker; runtime --network none with synthetic credentials/disposable stores and mocked/loopback transport. No real-account mode, personal store, protected-container operation, new SDK, weaker assertions/deadlines/flags or qualification infrastructure.",
+    "logs": ["/tmp/mod01-cli-mixed/red.log", "/tmp/mod01-cli-mixed/build-typecheck.log", "/tmp/mod01-cli-mixed/focused.log"],
+    "logAvailability": "Raw logs remain local; no exhaustive input/dependency archive is claimed.",
+    "notRun": "No global/root/parity runtime suite, installed/browser/production/SDK campaign or earlier failure replay. No Core or Server/Web protocol/packaging boundary changed."
+  },
+  "remaining": "Native Server/Settings for SDK-only families, specialized TypeSafe/operation host admission, Radius/gateways/plans, missing issuer/cloud chains, effective-profile review and model-owned media preparation. Kimi automatic issuer-bound refresh remains open. MOD-03 DONE; QUA owns wider qualification and the new earlier139 remains separately OPEN. The exact three historical accepted incidents are unchanged."
+}

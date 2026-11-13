@@ -24,6 +24,11 @@ import {
   XiaomiProvider,
   MetaProvider,
   XaiProvider,
+  FireworksProvider,
+  OpenCodeProvider,
+  OpenCodeGoProvider,
+  OpenRouterProvider,
+  CloudflareWorkersAiMixedProvider,
   GitHubCopilotProvider,
   OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
@@ -103,6 +108,8 @@ const NATIVE_PROVIDERS = {
   moonshotai: MoonshotProvider, 'moonshotai-cn': MoonshotCnProvider, 'ant-ling': AntLingProvider,
   baseten: BasetenProvider, together: TogetherProvider, huggingface: HuggingFaceProvider,
   xiaomi: XiaomiProvider, meta: MetaProvider, xai: XaiProvider,
+  fireworks: FireworksProvider, opencode: OpenCodeProvider, 'opencode-go': OpenCodeGoProvider,
+  openrouter: OpenRouterProvider, 'cloudflare-workers-ai': CloudflareWorkersAiMixedProvider,
 };
 
 function createProvider(config: ProviderConfig): AiProvider {
@@ -206,6 +213,7 @@ export function createConfiguredProviders(
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
     attempt(providers, name, key ? { ...network, type: name, apiKey: key,
       model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
+      ...(name === 'cloudflare-workers-ai' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
       ...(name === 'kimi-coding' ? { kimiAuthMode: providerCredentialEnvironmentKeys(name).some(key => env[key]) ? 'api-key' : options.kimiCodingAuthMode ?? 'api-key' } : {}),
     } : undefined);
   }
@@ -366,6 +374,7 @@ export async function resolveStartupProvider(
       type: providerName as ProviderConfig['type'],
       ...(Object.hasOwn(NATIVE_PROVIDERS, providerName) ? {
         model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
+        ...(providerName === 'cloudflare-workers-ai' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
       } : {}),
     };
     try {
