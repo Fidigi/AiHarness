@@ -1,10 +1,10 @@
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
 import { start, stop } from '../packages/server/dist/index.js';
-import { EncryptedCredentialStore, ProviderCredentialService } from '../packages/core/dist/index.js';
+import { EncryptedCredentialStore, ProviderCredentialService, type MessageContentBlock, type Session } from '../packages/core/dist/index.js';
 
 // Real emitted Server/static Web and encrypted storage; only outbound vendor
 // responses are synthetic. No real subscription or GitHub authorization claim.
@@ -20,8 +20,57 @@ async function fixture() {
   const master = 'disposable-copilot-browser-master', grant = 'PRIVATE_COPILOT_BROWSER_GRANT';
   const token = 'tid=PRIVATE_COPILOT_BROWSER_TOKEN;proxy-ep=proxy.business.githubcopilot.com';
   const device = { device_code: 'PRIVATE_COPILOT_DEVICE', user_code: 'WEB-CODE', verification_uri: 'https://github.com/login/device', expires_in: 600, interval: 1 };
-  const catalogue = { data: [{ id: 'gpt-5-mini', model_picker_enabled: true }, { id: 'claude-fable-5', model_picker_enabled: true, policy: { state: 'disabled' } }] };
-  const calls: Array<{ url: string; method: string; authorization: string | null }> = [];
+  type Item = Record<string, unknown>;
+  type Row = { model: string; api: string; lane: string; seed: { events: Item[]; blocks: MessageContentBlock[] }; cases: Array<{ name: string; body: Item }> };
+  const reference = JSON.parse(await readFile(new URL('../tests/fixtures/github-copilot-continuation-reference.json', import.meta.url), 'utf8')) as { tools: Item[]; rows: Row[] };
+  const routing = JSON.parse(await readFile(new URL('../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
+    rows: Array<{ model: string; case: string; responseEvents: Item[] }>;
+  };
+  const models = ['gpt-5-mini', 'claude-fable-5.1', 'gemini-3.5-flash'];
+  const rows = models.map(model => reference.rows.find(row => row.model === model && (row.api !== 'openai-completions' || row.lane === 'details'))!);
+  const catalogue = { data: [...models.map(id => ({ id, model_picker_enabled: true })), { id: 'claude-fable-5', model_picker_enabled: true, policy: { state: 'disabled' } }] };
+  const payload = <T>(value: T, secret: string): T => JSON.parse(JSON.stringify(value)
+    .replace(/opaque-copilot-(redacted|c-sensitive-one|sensitive-tail)/gu, (_match, suffix: string) => `opaque-${secret}-copilot-${suffix}`));
+  const redact = <T>(value: T): T => payload(value, '[REDACTED]');
+  const history = (body: Item, api: string): Item[] => {
+    const items = body[api === 'openai-responses' ? 'input' : 'messages'] as Item[];
+    if (api === 'anthropic-messages') return items;
+    expect(items[0]).toMatchObject({ role: api === 'openai-responses' ? 'developer' : 'system', content: expect.any(String) });
+    return items.slice(1);
+  };
+  const cases = rows.map(row => {
+    const toolInput = redact(history(row.cases.find(item => item.name === 'same')!.body, row.api));
+    const assistant = structuredClone(toolInput.find(item => item.role === 'assistant') ?? {});
+    if (row.api === 'anthropic-messages') assistant.content = (assistant.content as Item[]).filter(item => item.type !== 'tool_use');
+    else delete assistant.tool_calls;
+    const finalInput = row.api === 'openai-responses' ? toolInput.slice(1, -1).filter(item => item.type !== 'function_call') : [assistant];
+    const user = { ...toolInput[0], content: row.api === 'openai-responses' ? [{ type: 'input_text', text: 'continue' }] : 'continue' };
+    const expected = (resume: boolean): Item[] => {
+      const items = structuredClone(resume ? [...toolInput, ...finalInput, user] : toolInput);
+      if (row.api === 'anthropic-messages') {
+        const last = items.at(-1)!;
+        if (typeof last.content === 'string') last.content = [{ type: 'text', text: last.content }];
+        (last.content as Item[]).at(-1)!.cache_control = { type: 'ephemeral' };
+      }
+      return items;
+    };
+    const finalEvents = row.seed.events.filter(event => row.api === 'anthropic-messages'
+      ? event.index !== row.seed.blocks.findIndex(block => block.type === 'tool_call')
+      : row.api !== 'openai-responses' || event.output_index !== row.seed.blocks.findIndex(block => block.type === 'tool_call'))
+      .map(event => {
+        if (event.type === 'message_delta') return { ...event, delta: { ...(event.delta as Item), stop_reason: 'end_turn' } };
+        if (Array.isArray(event.choices)) return { ...event, choices: (event.choices as Item[]).map(choice => {
+          const delta = { ...(choice.delta as Item) }; delete delta.tool_calls;
+          return { ...choice, delta, finish_reason: choice.finish_reason === 'tool_calls' ? 'stop' : choice.finish_reason };
+        }) };
+        if (event.type === 'response.completed') return { ...event, response: { ...(event.response as Item),
+          output: ((event.response as Item).output as Item[]).filter(item => item.type !== 'function_call') } };
+        return event;
+      });
+    return { ...row, blocks: redact(row.seed.blocks), finalEvents, expected };
+  });
+  const turns = new Map<string, number>(), marker = path.join(cwd, 'echo-effects');
+  const calls: Array<{ url: string; method: string; authorization: string | null; body?: Item }> = [];
   const originalFetch = globalThis.fetch;
   let hold: { target: 'device' | 'catalogue'; reached: ReturnType<typeof deferred<AbortSignal>>; response: ReturnType<typeof deferred<Response>> } | undefined;
   globalThis.fetch = async (url, init) => {
@@ -29,7 +78,8 @@ async function fixture() {
     // Release checks share api.github.com, but are not subscription traffic.
     if (target === 'https://api.github.com/repos/Fidigi/AiHarness/releases/latest') return new Response(null, { status: 404 });
     if (!['github.com', 'api.github.com', 'api.business.githubcopilot.com'].includes(new URL(target).hostname)) return originalFetch(url, init);
-    calls.push({ url: target, method: init?.method ?? 'GET', authorization: new Headers(init?.headers).get('authorization') });
+    calls.push({ url: target, method: init?.method ?? 'GET', authorization: new Headers(init?.headers).get('authorization'),
+      ...(init?.body && new URL(target).hostname === 'api.business.githubcopilot.com' ? { body: JSON.parse(String(init.body)) as Item } : {}) });
     if (target === 'https://github.com/login/device/code') {
       if (hold?.target === 'device') { hold.reached.resolve(init!.signal!); return hold.response.promise; }
       return Response.json(device);
@@ -40,7 +90,14 @@ async function fixture() {
       if (hold?.target === 'catalogue') { hold.reached.resolve(init!.signal!); return hold.response.promise; }
       return Response.json(catalogue);
     }
-    throw new Error('Unexpected Copilot browser outbound request.');
+    expect(new URL(target).hostname).toBe('api.business.githubcopilot.com');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer ' + token); expect(new Headers(init?.headers).get('x-api-key')).toBeNull();
+    const body = calls.at(-1)!.body!, selected = cases.find(row => row.model === body.model)!;
+    expect(new URL(target).pathname).toBe(selected.api === 'anthropic-messages' ? '/v1/messages' : selected.api === 'openai-completions' ? '/chat/completions' : '/responses');
+    const turn = (turns.get(selected.model) ?? 0) + 1; turns.set(selected.model, turn);
+    const events = turn === 1 ? payload(selected.seed.events, token) : turn === 2 ? payload(selected.finalEvents, token)
+      : routing.rows.find(row => row.model === selected.model && row.case === 'user')!.responseEvents;
+    return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + (events[0].type ? '' : 'data: [DONE]\n\n'), { headers: { 'content-type': 'text/event-stream' } });
   };
   process.env.AI_HARNESS_MASTER_KEY = master;
   process.env.AI_HARNESS_AUTH_TOKEN = 'copilot-browser-user'; process.env.AI_HARNESS_ADMIN_TOKEN = 'copilot-browser-admin';
@@ -57,9 +114,17 @@ async function fixture() {
   };
   try {
     await mkdir(cwd); await mkdir(dataDir);
-    const server = await start({ host: '127.0.0.1', port: 0, dataDir, defaultCwd: cwd, allowedRoots: [root],
-      webRoot: fileURLToPath(new URL('../packages/web/dist/', import.meta.url)), enableMockProvider: true });
-    return { base: `http://localhost:${server.port}`, file, token, grant, calls, reader, close,
+    const extensions = path.join(cwd, '.ai-harness', 'extensions'); await mkdir(extensions, { recursive: true });
+    await writeFile(path.join(extensions, 'echo.mjs'), `import { appendFile } from 'node:fs/promises';
+      export default api => api.registerTool({ ...${JSON.stringify(reference.tools[0])}, execute: async input => {
+        if (input.x !== 1) throw new Error('Invalid fixture input.');
+        await appendFile(${JSON.stringify(marker)}, 'effect\\n'); return { content: 'result' };
+      } });`);
+    const options = { host: '127.0.0.1', port: 0, dataDir, defaultCwd: cwd, allowedRoots: [root],
+      webRoot: fileURLToPath(new URL('../packages/web/dist/', import.meta.url)), enableMockProvider: true };
+    const server = await start(options);
+    return { base: `http://localhost:${server.port}`, file, token, grant, calls, reader, close, models, cases, history, marker, cwd, dataDir,
+      async restart() { await stop(); await start({ ...options, port: server.port }); },
       hold(target: 'device' | 'catalogue') {
         const current = { target, reached: deferred<AbortSignal>(), response: deferred<Response>() }; hold = current;
         return { reached: current.reached.promise, release: () => {
@@ -69,11 +134,11 @@ async function fixture() {
   } catch (error) { await close(); throw error; }
 }
 
-for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${locale}: explicit encrypted login, cancellation, reload and logout`, async ({ page }) => {
+for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${locale}: encrypted login, private A/C/R restart/replay, cancellation and logout`, async ({ page }) => {
   const f = await fixture();
   const copy = locale === 'fr'
-    ? { connect: 'Connecter', reconnect: 'Reconnecter', disconnect: 'Déconnecter', cancel: 'Annuler', connected: 'Fournisseur connecté.', select: 'Sélectionner le Provider IA' }
-    : { connect: 'Connect', reconnect: 'Reconnect', disconnect: 'Disconnect', cancel: 'Cancel', connected: 'Provider connected.', select: 'Select the AI Provider' };
+    ? { connect: 'Connecter', reconnect: 'Reconnecter', disconnect: 'Déconnecter', cancel: 'Annuler', connected: 'Fournisseur connecté.', select: 'Sélectionner le Provider IA', model: 'Sélectionner le modèle', newChat: 'Nouvelle conversation', compose: 'Zone de rédaction', send: 'Envoyer' }
+    : { connect: 'Connect', reconnect: 'Reconnect', disconnect: 'Disconnect', cancel: 'Cancel', connected: 'Provider connected.', select: 'Select the AI Provider', model: 'Select the model', newChat: 'New chat', compose: 'Message composer', send: 'Send' };
   try {
     expect((await page.request.post(f.base + '/api/auth/login', { headers: { Origin: f.base }, data: { token: 'copilot-browser-admin' } })).status()).toBe(200);
     await reserveReadBudget(page.request, f.base);
@@ -120,7 +185,7 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
     expect(await page.getByLabel(copy.select, { exact: true }).inputValue()).toBe(selection);
     const stored = f.reader(); await stored.load();
     expect((await stored.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' }))?.credential).toMatchObject({
-      accessToken: f.token, refreshToken: f.grant, subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] },
+      accessToken: f.token, refreshToken: f.grant, subscription: { provider: 'github-copilot', availableModelIds: f.models },
     });
     const encrypted = await readFile(f.file, 'utf8');
     expect((await stat(f.file)).mode & 0o777).toBe(0o600);
@@ -131,6 +196,72 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
     }
     await page.reload();
     await expect(card.getByRole('button', { name: copy.reconnect, exact: true })).toBeVisible();
+
+    expect(mutations.some(path => path.includes('/models/enabled') || path.includes('/configuration/'))).toBe(false);
+    expect((await page.request.post(f.base + '/api/workspaces/trust', { data: { cwd: f.cwd, confirm: true } })).status()).toBe(200);
+    expect((await page.request.post(f.base + '/api/plugins/reload', { data: { cwd: f.cwd } })).status()).toBe(200);
+    const sessions = new Map<string, string>();
+    const bodies = (model: string) => f.calls.filter(call => call.body?.model === model).map(call => call.body!);
+    const assistants = async (id: string) => readFile(path.join(f.dataDir, 'sessions', id + '.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line)).filter(entry => entry.type === 'message' && entry.role === 'assistant'));
+    const send = async (input: string) => {
+      await page.getByRole('textbox', { name: copy.compose, exact: true }).fill(input);
+      const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: copy.send, exact: true }).click();
+      const response = await accepted; expect(response.status()).toBe(202);
+      const result = await response.json() as { run: { id: string }; session: { id: string } };
+      await expect.poll(async () => (await page.request.get(f.base + '/api/agent/runs/' + result.run.id).then(response => response.json()) as { phase: string }).phase).toBe('completed');
+      return result.session.id;
+    };
+    for (const row of f.cases) {
+      // Explicit fixture-owner defaults initialize new drafts only after the no-selection login check.
+      expect((await page.request.patch(f.base + '/api/configuration/scope', { data: { scope: 'global', values: {
+        provider: 'github-copilot', model: row.model, thinking: 'off', toolPreset: 'default', autoCompaction: false,
+      } } })).status()).toBe(200);
+      await page.goto(f.base + '/settings#provider-lifecycle'); await page.reload();
+      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot'); await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
+      await page.getByRole('button', { name: copy.newChat, exact: true }).click();
+      const id = await send('probe'); sessions.set(row.model, id);
+      await expect(page.locator('.message.assistant .message-output').last()).toHaveText(row.blocks.filter(block => block.type === 'text').map(block => block.text).join(''));
+      expect(bodies(row.model)).toHaveLength(2); expect(f.history(bodies(row.model)[1]!, row.api)).toEqual(row.expected(false));
+      expect((await assistants(id)).map(message => message.blocks)).toEqual([row.blocks, row.blocks.filter(block => block.type !== 'tool_call')]);
+      const sessionFile = path.join(f.dataDir, 'sessions', id + '.jsonl'), journal = await readFile(sessionFile, 'utf8');
+      expect(journal).not.toContain(f.token); expect(journal).toContain('opaque-[REDACTED]-copilot'); expect((await stat(sessionFile)).mode & 0o777).toBe(0o600);
+      for (const complete of [false, true]) {
+        const exported = await page.request.get(f.base + '/api/sessions/' + id + '/export?format=json' + (complete ? '&includeOpaqueContinuations=true' : ''));
+        expect(exported.status()).toBe(200); expect(exported.headers()['cache-control']).toBe('no-store'); expect(Boolean(exported.headers()['x-aiharness-export-warning'])).toBe(!complete);
+        const text = await exported.text(); expect(text).not.toContain(f.token); expect(text.includes('opaque-')).toBe(complete);
+        expect(text.includes('thinkingSignature')).toBe(complete); if (row.api === 'openai-responses') expect(text.includes('textSignature')).toBe(complete);
+        expect(await readFile(sessionFile, 'utf8')).toBe(journal);
+      }
+    }
+    expect(await readFile(f.marker, 'utf8')).toBe('effect\neffect\neffect\n');
+    await page.goto('about:blank'); await f.restart();
+    expect((await page.request.post(f.base + '/api/auth/login', { headers: { Origin: f.base }, data: { token: 'copilot-browser-admin' } })).status()).toBe(200);
+    await reserveReadBudget(page.request, f.base);
+    await page.goto(f.base + '/settings#provider-lifecycle');
+    for (const row of f.cases) {
+      const id = sessions.get(row.model)!;
+      const loaded = await page.request.get(f.base + '/api/sessions/' + id).then(response => response.json()) as Session;
+      expect(loaded.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([row.blocks, row.blocks.filter(block => block.type !== 'tool_call')]);
+      await page.goto(f.base + '/settings#provider-lifecycle');
+      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot'); await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
+      await page.locator(`a.session-main[href*="${id}"]`).click();
+      // Earlier drafts inherited changing global defaults; pin this conversation's physical target explicitly.
+      await page.getByLabel(copy.model, { exact: true }).fill(row.model);
+      await expect.poll(async () => (await page.request.get(f.base + '/api/sessions/' + id).then(response => response.json()) as Session).model).toBe(row.model);
+      expect(await send('continue')).toBe(id);
+      await expect(page.locator('.message.assistant .message-output').last()).toHaveText('ok');
+      expect(bodies(row.model)).toHaveLength(3); expect(f.history(bodies(row.model)[2]!, row.api)).toEqual(row.expected(true));
+      const saved = await assistants(id); expect(saved.slice(0, 2).map(message => message.blocks)).toEqual([row.blocks, row.blocks.filter(block => block.type !== 'tool_call')]);
+      expect(saved).toHaveLength(3); expect(saved.at(-1)).toMatchObject({ content: 'ok', provider: 'github-copilot', api: row.api, model: row.model });
+    }
+    expect(await readFile(f.marker, 'utf8')).toBe('effect\neffect\neffect\n');
+    for (const secret of [f.token, f.grant]) {
+      await expect(page.locator('body')).not.toContainText(secret);
+      expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain(secret);
+    }
+    await expect(page.locator('body')).not.toContainText('opaque-');
+    await page.goto(f.base + '/settings#provider-lifecycle'); await expect(card.getByRole('button', { name: copy.reconnect, exact: true })).toBeVisible();
 
     // The poll sampled a connected state before logout; its delayed browser response
     // must not restore retired presentation or start a replacement catalogue reload.
@@ -154,8 +285,15 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
     const withdrawn = f.reader(); await withdrawn.load();
     expect(await withdrawn.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' })).toBeUndefined();
     expect(mutations.some(path => path.includes('/models/enabled') || path.includes('/configuration/'))).toBe(false);
-    expect(f.calls).toHaveLength(13);
-    expect(f.calls.filter(call => call.method !== 'GET').every(call => call.url.startsWith('https://github.com/login/'))).toBe(true);
+    const count = f.calls.length;
+    for (const row of f.cases) {
+      const denied = await page.request.post(f.base + '/api/agent/runs', { data: { sessionId: sessions.get(row.model), cwd: f.cwd, provider: 'github-copilot', model: row.model, input: 'withdrawn', autoCompaction: false, maxRetries: 0 } });
+      expect(denied.status()).toBe(500); expect(await denied.json()).toEqual({ error: 'Internal server error' });
+      expect(await assistants(sessions.get(row.model)!)).toHaveLength(3);
+    }
+    expect(f.calls).toHaveLength(count); expect(await readFile(f.marker, 'utf8')).toBe('effect\neffect\neffect\n');
+    expect(f.calls.filter(call => !call.body)).toHaveLength(13);
+    expect(f.calls.filter(call => call.method !== 'GET' && !call.body).every(call => call.url.startsWith('https://github.com/login/'))).toBe(true);
   } finally {
     // Timeout closes Playwright's page before teardown. Still close the owned
     // Server and restore process-local fixtures; never replace the test failure.
