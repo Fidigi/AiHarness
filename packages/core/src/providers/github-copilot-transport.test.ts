@@ -246,6 +246,56 @@ describe('Copilot A/C/R transport', () => {
     } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
   });
 
+  it.each([
+    ...models.filter((row, index, rows) => rows.findIndex(other => other.api === row.api) === index).map(model => ({ ...model, retirement: 'scope' })),
+    { ...models.find(model => model.api === 'openai-responses')!, retirement: 'caller' },
+  ])('cancels the owned $api inference body on $retirement retirement without awaiting hostile cancellation', async model => {
+      const scope = createProviderNetworkScope(), caller = new AbortController(), cancelled = vi.fn(() => new Promise<void>(() => undefined));
+      const source = vi.fn(async (_signal?: AbortSignal) => credential());
+      const provider = new providers.GitHubCopilotProvider(Object.assign({ type: 'github-copilot', model: model.id }, { [PROVIDER_NETWORK_SCOPE]: scope }), source);
+      let reached!: () => void, finish!: () => void, upstream: AbortSignal | null | undefined;
+      const reading = new Promise<void>(resolve => { reached = resolve; });
+      const transport = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(async (_url, init) => {
+        upstream = init?.signal;
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new TextEncoder().encode('data: ')); finish = () => controller.close(); },
+          pull() { reached(); return new Promise<void>(() => undefined); }, cancel: cancelled,
+        }), { headers: { 'content-type': 'text/event-stream' } });
+      });
+      const chunk = vi.fn(), completed = vi.fn(), failed = vi.fn();
+      const pending = provider.streamChat(history('user', model.id), chunk, completed, failed, { signal: caller.signal });
+      try {
+        await reading;
+        if (model.retirement === 'caller') caller.abort(); else await closeProviderNetworkDispatchers(scope);
+        expect(upstream?.aborted).toBe(true); expect(caller.signal.aborted).toBe(model.retirement === 'caller');
+        await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce()); await pending;
+        expect(chunk).not.toHaveBeenCalled(); expect(completed).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce();
+        expect(failed.mock.calls[0]![0]).toMatchObject({ message: 'GitHub Copilot request cancelled.' });
+        expect(source.mock.calls[0]![0]).toBe(caller.signal);
+        const row = fixture.rows.find(row => row.model === model.id && row.case === 'user')!;
+        transport.mockResolvedValueOnce(response(row.responseEvents));
+        const next = caller.signal.aborted ? new AbortController() : caller;
+        expect((await provider.chat(history('user', model.id), { signal: next.signal })).content).toBe('ok');
+        expect(transport).toHaveBeenCalledTimes(2); expect(cancelled).toHaveBeenCalledOnce();
+      } finally {
+        try { finish(); } catch { /* Already cancelled streams are closed. */ }
+        await pending; await closeProviderNetworkDispatchers(scope, { permanent: true });
+      }
+    });
+
+  it('does not claim an ordinary response body from its consumer based on a subscription label', async () => {
+    const scope = createProviderNetworkScope(), cancelled = vi.fn();
+    class OrdinaryConsumer extends providers.OpenAiProvider { ownedResponse(): Promise<Response> { return this.request('https://ordinary.test'); } }
+    const provider = new OrdinaryConsumer(Object.assign({ type: 'github-copilot', model: models[0].id, httpIdleTimeoutMs: 0, requestTimeoutMs: 0 }, { [PROVIDER_NETWORK_SCOPE]: scope }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new TextEncoder().encode('{"ok":true}')); controller.close(); }, cancel: cancelled,
+    })));
+    try {
+      const owned = await provider.ownedResponse(); await closeProviderNetworkDispatchers(scope);
+      expect(cancelled).not.toHaveBeenCalled(); expect(await owned.json()).toEqual({ ok: true });
+    } finally { await closeProviderNetworkDispatchers(scope, { permanent: true }); }
+  });
+
   it('awaits completion rejection and refuses incomplete streams without success', async () => {
     const provider = candidate(models[0].id), row = fixture.rows.find(row => row.model === models[0].id)!;
     const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(row.responseEvents));

@@ -365,6 +365,38 @@ function providerNetworkScope(config: ProviderConfig): ProviderNetworkScope | un
   return (config as ScopedProviderConfig)[PROVIDER_NETWORK_SCOPE];
 }
 
+const nativeSubscriptionStreamConsumers = new WeakSet<AiProvider>();
+
+/** Only the private subscription delegate owns this response body and borrowed lifetime. */
+function ownedSubscriptionResponse(response: Response, signal: AbortSignal): Response {
+  if (!response.ok || !response.body) return response;
+  const reader = response.body.getReader();
+  let finished = false, onAbort: () => void;
+  const finish = (cancel: boolean, reason?: unknown): boolean => {
+    if (finished) return false;
+    finished = true; signal.removeEventListener('abort', onAbort);
+    if (cancel) void reader.cancel(reason).catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
+    return true;
+  };
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      onAbort = () => { if (finish(true, 'provider-stream-aborted')) controller.error(new Error('The provider request was cancelled.')); };
+      signal.addEventListener('abort', onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    },
+    async pull(controller) {
+      try {
+        const item = await reader.read();
+        if (finished) return;
+        if (item.done) { finish(false); controller.close(); } else controller.enqueue(item.value);
+      } catch (error) { if (finish(false)) controller.error(error); }
+    },
+    cancel(reason) { finish(true, reason); },
+  }, { highWaterMark: 0 });
+  return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
 function providerNetworkSettings(config: ProviderConfig): AgentProviderNetworkSettings {
   const integer = (value: unknown, fallback: number, maximum: number): number => (
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= maximum ? value : fallback
@@ -396,9 +428,12 @@ export abstract class AiProvider {
 
   /** Shared request path for proxy, timeout, idle and provider-level retry policy. */
   protected request(url: string | URL, init: RequestInit = {}, noRetryStatuses?: readonly number[]): Promise<Response> {
-    return fetchProviderResponse(url, init, providerNetworkSettings(this.config), {
+    const scopeSignal = nativeSubscriptionStreamConsumers.has(this) ? providerNetworkScopeSignal(providerNetworkScope(this.config)) : undefined;
+    const lifetime = scopeSignal && init.signal ? AbortSignal.any([init.signal, scopeSignal]) : scopeSignal;
+    const response = fetchProviderResponse(url, init, providerNetworkSettings(this.config), {
       scope: providerNetworkScope(this.config), noRetryStatuses,
     });
+    return lifetime ? response.then(value => ownedSubscriptionResponse(value, lifetime)) : response;
   }
 
   /** Non-secret effective settings for diagnostics and extension adapters. */
@@ -5557,6 +5592,7 @@ export class GitHubCopilotProvider extends AiProvider {
       const delegate: AiProvider = route.model.api === 'openai-completions' ? new GitHubCopilotCompletionsDelegate(config, route, headers)
         : route.model.api === 'openai-responses' ? new GitHubCopilotResponsesDelegate(config, route, headers)
           : new GitHubCopilotMessagesDelegate(config, route, headers);
+      nativeSubscriptionStreamConsumers.add(delegate);
       if (nativeGitHubCopilotReplay.has(this)) nativeGitHubCopilotReplay.add(delegate);
       let result: ChatResponse | undefined;
       await delegate.streamChat(messages, async (text, event) => {
