@@ -164,7 +164,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/fin
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['token', 'catalogue'] as const)('retires Codex HTTP refresh at held %s without undoing committed credentials', async stage => {
+it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP refresh at held %s without undoing committed credentials', async stage => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-cancel-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-codex-http-cancel-master', model = 'gpt-6.1-sol', account = 'codex-http-cancel-account', initialRefresh = 'disposable-codex-refresh-original';
   const token = (generation: number) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + Buffer.from('rotation-' + generation).toString('base64url');
@@ -173,6 +173,7 @@ it.each(['token', 'catalogue'] as const)('retires Codex HTTP refresh at held %s 
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<Response>(resolve => { release = resolve; });
   let hold = false, refreshes = 0, issuerSignal: AbortSignal | null | undefined;
+  const bodyCancelled = vi.fn();
   const calls: string[] = [], originalFetch = globalThis.fetch;
   vi.stubEnv('AI_HARNESS_MASTER_KEY', master); vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'codex-http-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'codex-http-admin');
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -191,6 +192,13 @@ it.each(['token', 'catalogue'] as const)('retires Codex HTTP refresh at held %s 
     if (target === modelsUrl) {
       expect(init?.method).toBe('GET');
       if (hold && stage === 'catalogue') { issuerSignal = init?.signal; reached(); return held; }
+      if (hold && stage === 'catalogue-body') {
+        issuerSignal = init?.signal;
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new TextEncoder().encode('{"models":[')); },
+          pull() { reached(); return new Promise<void>(() => undefined); }, cancel: bodyCancelled,
+        }), { headers: { 'content-type': 'application/json' } });
+      }
       return Response.json({ models: [{ slug: model, visibility: 'list' }] });
     }
     expect(target).toBe(responsesUrl); expect(JSON.parse(String(init?.body))).toMatchObject({ model, stream: true, store: false });
@@ -217,10 +225,14 @@ it.each(['token', 'catalogue'] as const)('retires Codex HTTP refresh at held %s 
       refreshToken: stage === 'token' ? initialRefresh : 'disposable-codex-refresh-1', subscription: { provider: 'openai-codex', accountId: account } });
     if (stage === 'token') expect(boundary).toEqual(expired); else expect(boundary).not.toEqual(expired);
     caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' }); await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
-    const late = Response.json(stage === 'token' ? { access_token: token(1), refresh_token: 'disposable-codex-refresh-1', expires_in: 3600 }
-      : { models: [{ slug: model, visibility: 'list' }] });
-    const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
-    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1)); expect(await readFile(file)).toEqual(boundary);
+    if (stage === 'catalogue-body') await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
+    else {
+      const late = Response.json(stage === 'token' ? { access_token: token(1), refresh_token: 'disposable-codex-refresh-1', expires_in: 3600 }
+        : { models: [{ slug: model, visibility: 'list' }] });
+      const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+    }
+    expect(await readFile(file)).toEqual(boundary);
     expect(calls.slice(initialCalls)).toEqual(stage === 'token' ? [tokenUrl] : [tokenUrl, modelsUrl]);
     hold = false;
     const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();

@@ -3636,7 +3636,7 @@ export class OpenAICodexProvider extends AiProvider {
   private async accountModels(credential: ProviderOAuthCredential, signal?: AbortSignal): Promise<string[]> {
     const ids = await openAICodexAccountModels(await this.request(OPENAI_CODEX_MODELS_URL, {
       method: 'GET', headers: { ...openAICodexHeaders(credential), Accept: 'application/json' }, signal,
-    }));
+    }), signal);
     const current = openAICodexCredential(await this.credentialSource(signal));
     if (current.accessToken !== credential.accessToken) throw new Error('OpenAI Codex credential changed during discovery.');
     return ids;

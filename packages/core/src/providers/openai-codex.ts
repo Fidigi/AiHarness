@@ -107,16 +107,23 @@ export function openAICodexBody(model: OpenAICodexModel, messages: readonly Mess
 }
 
 /** Read only account-listed pinned models; no instructions/policy from the remote catalogue become configuration. */
-export async function openAICodexAccountModels(response: Response): Promise<string[]> {
+export async function openAICodexAccountModels(response: Response, signal?: AbortSignal): Promise<string[]> {
   if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw new Error('OpenAI Codex catalogue is unavailable.'); }
   const limit = 4 * 1024 * 1024, length = response.headers.get('content-length');
   if (length !== null && (!/^(0|[1-9]\d*)$/u.test(length) || Number(length) > limit)) { void response.body?.cancel().catch(() => undefined); throw new Error('Invalid OpenAI Codex catalogue.'); }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Invalid OpenAI Codex catalogue.');
-  const chunks: Uint8Array[] = []; let bytes = 0, complete = false;
+  const chunks: Uint8Array[] = []; let bytes = 0, complete = false, cancelled = false;
+  const cancel = (): void => {
+    if (cancelled) return;
+    cancelled = true; void reader.cancel().catch(() => undefined);
+  };
+  signal?.addEventListener('abort', cancel, { once: true });
   try {
+    signal?.throwIfAborted();
     while (true) {
-      const item = await reader.read(); if (item.done) { complete = true; break; }
+      const item = await reader.read(); signal?.throwIfAborted();
+      if (item.done) { complete = true; break; }
       bytes += item.value.byteLength; if (bytes > limit) throw new Error(); chunks.push(item.value);
     }
     const body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))) as { models?: unknown };
@@ -125,7 +132,8 @@ export async function openAICodexAccountModels(response: Response): Promise<stri
     return models.filter(model => ids.has(model.id)).map(model => model.id);
   } catch { throw new Error('Invalid OpenAI Codex catalogue.'); }
   finally {
-    if (!complete) void reader.cancel().catch(() => undefined);
+    signal?.removeEventListener('abort', cancel);
+    if (!complete) cancel();
     try { reader.releaseLock(); } catch { /* A hostile reader may retain its lock after cancellation. */ }
   }
 }

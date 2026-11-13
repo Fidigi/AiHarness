@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterEach, expect, it, vi } from 'vitest';
 import { OPENAI_CODEX_MODELS, OpenAICodexProvider, ProviderFactory, type Message, type ProviderOAuthCredential, type OpenAICodexModel } from '../index.js';
-import { OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL } from './openai-codex.js';
+import { OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, openAICodexAccountModels } from './openai-codex.js';
 const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')) as {
   models: OpenAICodexModel[];
   responseEvents: Array<Record<string, unknown>>;
@@ -79,6 +79,21 @@ it.each(['absent', 'generic', 'copilot', 'expired', 'wrong-account'] as const)('
     : kind === 'expired' ? { ...original, expiresAt: 1 } : { ...original, subscription: { provider: 'openai-codex', accountId: 'other' } });
   await expect(f.provider.chat([user])).rejects.toThrow('OpenAI Codex request failed.');
   expect(f.fetcher).not.toHaveBeenCalled();
+});
+
+it.each(['pre-aborted', 'pending-read'] as const)('cancels an owned catalogue body after %s without awaiting hostile cancellation', async stage => {
+  const caller = new AbortController(), cancelled = vi.fn(() => new Promise<void>(() => undefined));
+  let reached!: () => void;
+  const reading = new Promise<void>(resolve => { reached = resolve; });
+  const response = new Response(new ReadableStream<Uint8Array>({
+    start(controller) { controller.enqueue(new TextEncoder().encode('{"models":[')); },
+    pull() { reached(); return new Promise<void>(() => undefined); }, cancel: cancelled,
+  }));
+  if (stage === 'pre-aborted') caller.abort();
+  const pending = openAICodexAccountModels(response, caller.signal);
+  const failure = expect(pending).rejects.toThrow('Invalid OpenAI Codex catalogue.');
+  if (stage === 'pending-read') { await reading; caller.abort(); }
+  await failure; expect(cancelled).toHaveBeenCalledTimes(1);
 });
 
 it('rechecks local credential withdrawal after a held account discovery before inference', async () => {
