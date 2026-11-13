@@ -4,7 +4,7 @@ import type { ProviderDialect } from '../types/index.js';
  * Accept API bases or full request endpoints; reject URL credential/query state.
  */
 export function resolveProviderDiscoveryEndpoint(dialect: ProviderDialect, baseUrl: string): string {
-  if (dialect === 'openai' || dialect === 'openrouter' || dialect === 'cloudflare-workers-ai' || dialect === 'cerebras' || dialect === 'deepseek' || dialect === 'groq' || dialect === 'zai' || dialect === 'moonshot' || dialect === 'nvidia') throw new Error('Provider does not support connection discovery.');
+  if (!['openai-completions', 'openai-responses', 'mistral-conversations', 'anthropic', 'google'].includes(dialect)) throw new Error('Provider does not support connection discovery.');
   let url: URL;
   try { url = new URL(baseUrl); } catch { throw new Error('Invalid provider endpoint.'); }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {

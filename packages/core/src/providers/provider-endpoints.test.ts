@@ -25,6 +25,12 @@ async function fixture(body: unknown = { data: [{ id: 'model-a' }] }) {
 }
 
 describe('provider discovery endpoint resolution', () => {
+  it.each<ProviderDialect>(['ant-ling', 'baseten', 'fireworks', 'huggingface', 'kimi-coding', 'meta',
+    'minimax', 'minimax-cn', 'opencode-go', 'opencode', 'together', 'xai', 'xiaomi', 'moonshot-cn'])(
+    'refuses static native %s discovery instead of falling through to Google', dialect => {
+      expect(() => resolveProviderDiscoveryEndpoint(dialect, 'https://example.test/owned/v1/messages'))
+        .toThrow('Provider does not support connection discovery.');
+    });
   it('refuses native mixed OpenAI discovery without changing legacy Responses endpoint resolution', () => {
     expect(() => resolveProviderDiscoveryEndpoint('openai', 'https://example.test/proxy%2Fowned/v1/responses'))
       .toThrow('Provider does not support connection discovery.');

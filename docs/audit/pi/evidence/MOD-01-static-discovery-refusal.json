@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-13",
+  "baseline": "2256087",
+  "task": "MOD-01.05a; new native-dialect dependency",
+  "behavior": "The public discovery-endpoint helper now admits only its five implemented discovery protocols instead of treating the14 newly admitted static native dialects as Google. Existing OpenAI C/R, Mistral, Anthropic and Google endpoint construction remains unchanged; static/non-discovery dialects refuse before URL construction or I/O. No adapter, auth, catalogue, replay or host policy change.",
+  "validation": {
+    "red": "Previous Server image plus only the changed endpoint test source:14 expected wrong-fallthrough failures/25 passes/39 tests, exit1.",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-discovery — exit0; product build/workspace-parity types pass.",
+    "image": "sha256:93a46acc2c782e2cb69544c7dc8f80822a798f4bfe7fa993e677f51d40ae83a8",
+    "focused": "Docker endpoint/registry/native-dialects-http selection:71 PASS/3 files, exit0. Retains25 existing endpoint controls,14 new refusals,31 registry and one12-request HTTP scenario; no skipped cases/worker errors.",
+    "strict": "Docker strict noEmit project extending root tsconfig, changed endpoint test root:exit0.",
+    "logs": ["/tmp/mod01-discovery/red.log", "/tmp/mod01-discovery/build-typecheck.log", "/tmp/mod01-discovery/focused.log", "/tmp/mod01-discovery/strict.log"],
+    "scope": "Local raw logs, not an exhaustive archive. Tests/typechecks Docker-only; runtime network-none with synthetic/disposable credentials and mock/loopback services. No global/SDK/installed/browser/production campaign, real-account mode/personal stores/protected-container operation or assertion/deadline/flag change. Existing Settings proof is unchanged behavior, not rerun."
+  },
+  "remaining": "MOD-01 remains IN PROGRESS; MOD-03 stays DONE. Specialized cross-provider admission, new protocols/plans/issuers/cloud chains/effective profiles and model-owned media remain mandatory. Historical accepted incidents and all earlier failed measurements remain unchanged."
+}
