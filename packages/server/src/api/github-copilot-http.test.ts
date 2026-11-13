@@ -5,9 +5,10 @@ import { expect, it, vi } from 'vitest';
 import { EncryptedCredentialStore, ProviderCredentialService, type MessageContentBlock, type ModelCatalog, type Session } from '@ai-harness/core';
 import { start, stop } from '../index.js';
 
-it('logs in through HTTP, restarts private A/C/R tool/final histories and observes account withdrawal', async () => {
+it('logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-http-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
-  const master = 'disposable-copilot-http-master-key', token = 'disposable-copilot-http-token';
+  const master = 'disposable-copilot-http-master-key', initialToken = 'disposable-copilot-http-token';
+  let token = initialToken, endpoint = 'https://api.individual.githubcopilot.com', exchanges = 0, disableResponses = false;
   const models = ['claude-fable-5', 'gemini-3.5-flash', 'gpt-5-mini'];
   const fixture = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
     rows: Array<{ model: string; api: string; case: string; expectedPath: string; responseEvents: Array<{ type?: string }> }>;
@@ -57,14 +58,17 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
       if (target === 'https://github.com/login/oauth/access_token') return Response.json({ access_token: 'disposable-github-grant' });
       if (target === 'https://api.github.com/copilot_internal/v2/token') {
         expect(new Headers(init?.headers).get('authorization')).toBe('Bearer disposable-github-grant');
+        exchanges++;
+        if (exchanges > 1) { token = `tid=disposable-http-rotation-${exchanges - 1};proxy-ep=proxy.business.githubcopilot.com`; endpoint = 'https://api.business.githubcopilot.com'; }
         return Response.json({ token, expires_at: Math.floor(Date.now() / 1000) + 3600 });
       }
-      expect(target).toBe('https://api.individual.githubcopilot.com/models');
+      expect(target).toBe(endpoint + '/models');
       expect(init?.method).toBe('GET');
       expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${token}`);
-      return Response.json({ data: models.map(id => ({ id, model_picker_enabled: true })) });
+      return Response.json({ data: models.map(id => ({ id, model_picker_enabled: true, ...(disableResponses && id === 'gpt-5-mini' ? { policy: { state: 'disabled' } } : {}) })) });
     }
-    if (new URL(target).hostname !== 'api.individual.githubcopilot.com') return originalFetch(url, init);
+    if (!['api.individual.githubcopilot.com', 'api.business.githubcopilot.com'].includes(new URL(target).hostname)) return originalFetch(url, init);
+    expect(new URL(target).origin).toBe(endpoint);
     const body = JSON.parse(String(init?.body)), headers = new Headers(init?.headers);
     calls.push({ url: String(url), authorization: headers.get('authorization'), apiKey: headers.get('x-api-key'), body });
     const row = fixture.rows.find(row => row.model === body.model && row.case === 'user')!;
@@ -87,9 +91,17 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
     const file = path.join(dataDir, 'credentials.enc');
     const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(file, master) });
     await credentials.load();
+    const expire = async () => {
+      const current = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+      if (current?.credential.type !== 'oauth') throw new Error('Missing fixture OAuth credential.');
+      expect(current.credential.refreshToken).toBe('disposable-github-grant');
+      await credentials.setOAuth('github-copilot', { ...current.credential, expiresAt: 1 });
+    };
     for (const generation of [0, 1, 2]) {
       privateActive = false;
+      if (generation === 2) await expire();
       const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
+      if (generation === 2) expect(exchanges).toBe(1); // Credential initialization belongs to authorized HTTP admission.
       const base = `http://127.0.0.1:${server.port}`, headers = { 'content-type': 'application/json', authorization: 'Bearer copilot-admin' };
       const post = (route: string, body: unknown) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
       if (generation === 0) {
@@ -112,8 +124,14 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
           accessToken: token, refreshToken: 'disposable-github-grant', subscription: { provider: 'github-copilot', availableModelIds: models },
         });
       }
+      if (generation === 2) {
+        expect((await fetch(base + '/api/models')).status).toBe(401);
+        expect(exchanges).toBe(1); // Neither cold startup nor a denied caller redeems the stored grant.
+      }
       const catalog = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
       const copilot = catalog.providers.find(row => row.provider === 'github-copilot')!;
+      expect(exchanges).toBe(generation === 2 ? 2 : 1);
+      if (generation === 2) expect(endpoint).toBe('https://api.business.githubcopilot.com');
       expect(copilot).toBeDefined();
       expect(copilot.models.filter((row: { available: boolean }) => row.available).map((row: { id: string }) => row.id)).toEqual(models);
       expect(JSON.stringify(copilot)).not.toContain(token);
@@ -173,7 +191,7 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
           }
           expect(history(calls.at(-1)!.body, row.api)).toEqual(expectedHistory);
           for (const call of calls.slice(before)) expect(call).toMatchObject({ authorization: `Bearer ${token}`, apiKey: null,
-            url: 'https://api.individual.githubcopilot.com' + fixture.rows.find(item => item.model === row.model)!.expectedPath });
+            url: endpoint + fixture.rows.find(item => item.model === row.model)!.expectedPath });
           const sessionFile = path.join(dataDir, 'sessions', run.sessionId + '.jsonl'), journal = await readFile(sessionFile, 'utf8');
           const messages = journal.trim().split('\n').map(line => JSON.parse(line)).filter(entry => entry.type === 'message');
           expect(messages.filter(message => message.role === 'assistant').map(message => message.blocks).slice(0, 2)).toEqual([blocks, finalBlocks]);
@@ -195,6 +213,27 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
         expect(await readFile(marker, 'utf8')).toBe('effect\neffect\neffect\n');
       }
       if (generation === 2) {
+        // Refresh changes account availability, without buying/enabling a model or deleting the grant.
+        disableResponses = true; await expire();
+        const changed = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
+        expect(exchanges).toBe(3);
+        expect(changed.providers.find(row => row.provider === 'github-copilot')!.models.filter(row => row.available).map(row => row.id)).toEqual(models.slice(0, 2));
+        const refreshed = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+        expect(refreshed?.credential).toMatchObject({ accessToken: token, refreshToken: 'disposable-github-grant',
+          subscription: { provider: 'github-copilot', availableModelIds: models.slice(0, 2) } });
+        const beforeRemote = calls.length;
+        const removed = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini', stream: false } });
+        expect(removed.status).toBe(200); const removedEvents = await removed.text();
+        expect(removedEvents).toContain('event: error'); expect(removedEvents).not.toContain('event: message_end'); expect(calls).toHaveLength(beforeRemote);
+        const removedRun = await post('/api/agent/runs', { cwd, sessionId: sessions.get('gpt-5-mini'), provider: 'github-copilot', model: 'gpt-5-mini',
+          input: 'removed by account', autoCompaction: false, maxRetries: 0 });
+        expect(removedRun.status).toBe(202); const { run } = await removedRun.json() as { run: { id: string } };
+        await vi.waitFor(async () => expect(await fetch(base + '/api/agent/runs/' + run.id, { headers }).then(response => response.json())).toMatchObject({ phase: 'failed' }));
+        expect(calls).toHaveLength(beforeRemote);
+        const allowed = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gemini-3.5-flash', stream: false } });
+        expect(allowed.status).toBe(200); expect(await allowed.text()).toContain('ok'); expect(calls).toHaveLength(beforeRemote + 1);
+        expect(calls.at(-1)).toMatchObject({ url: endpoint + '/chat/completions', authorization: `Bearer ${token}` });
+        expect(await readFile(marker, 'utf8')).toBe('effect\neffect\neffect\n');
         // A different store writer withdraws access; a cached successful catalogue is not authority.
         await credentials.delete('github-copilot');
         const withdrawn = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
@@ -224,11 +263,12 @@ it('logs in through HTTP, restarts private A/C/R tool/final histories and observ
       }
       await stop();
     }
-    expect(calls).toHaveLength(16);
+    expect(calls).toHaveLength(17);
     expect(oauthRequests).toEqual(['https://github.com/login/device/code', 'https://github.com/login/oauth/access_token',
-      'https://api.github.com/copilot_internal/v2/token', 'https://api.individual.githubcopilot.com/models']);
+      'https://api.github.com/copilot_internal/v2/token', 'https://api.individual.githubcopilot.com/models',
+      ...Array(2).fill(['https://api.github.com/copilot_internal/v2/token', 'https://api.business.githubcopilot.com/models']).flat()]);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
-    expect(await readFile(file, 'utf8')).not.toContain(token);
+    for (const secret of [initialToken, token]) expect(await readFile(file, 'utf8')).not.toContain(secret);
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
