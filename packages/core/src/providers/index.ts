@@ -3707,6 +3707,7 @@ export class OpenAICodexProvider extends AiProvider {
       active();
       for (const message of messages) for (const image of messageImages(message)) if (!parseDataImage(image.url)) throw new Error('Invalid OpenAI Codex image input.');
       const delegate = new OpenAICodexResponsesDelegate({ ...this.config, model: model.id, baseUrl: 'https://chatgpt.com/backend-api/codex' }, credential);
+      nativeSubscriptionStreamConsumers.add(delegate);
       if (nativeCodexResponses.has(this)) nativeCodexResponses.add(delegate);
       let result: ChatResponse | undefined;
       await delegate.streamChat(messages, async (text, event) => {
