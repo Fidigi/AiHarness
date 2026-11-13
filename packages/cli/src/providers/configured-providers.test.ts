@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -47,6 +47,36 @@ describe('configured CLI providers', () => {
       expect(overridden.get(name)).toBeInstanceOf(MockProvider);
       expect((await resolveStartupProvider(overridden, { provider: name, model: 'operator-model', apiKey: 'override' }, {})).provider).toBeInstanceOf(MockProvider);
     } finally { unregister(); }
+  });
+
+  it.each([
+    ['minimax', MiniMaxProvider, 'MINIMAX', 'https://api.minimax.io/anthropic/v1/messages'],
+    ['minimax-cn', MiniMaxCnProvider, 'MINIMAX_CN', 'https://api.minimaxi.com/anthropic/v1/messages'],
+    ['kimi-coding', KimiCodingProvider, 'KIMI_CODING', 'https://api.kimi.com/coding/v1/messages'],
+  ] as const)('composes native %s with independent credentials and physical endpoints', async (name, Adapter, prefix, endpoint) => {
+    const providers = createConfiguredProviders({ [`${prefix}_API_KEY`]: 'synthetic-region-key' });
+    const provider = providers.get(name);
+    expect(provider).toBeInstanceOf(Adapter);
+    expect((provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-region-key', baseUrl: endpoint });
+    for (const other of ['minimax', 'minimax-cn', 'kimi-coding']) if (other !== name) expect(providers.has(other)).toBe(false);
+    expect(ProviderFactory.has(name)).toBe(false);
+    const model = provider!.getConfiguredModel()!;
+    await expect(resolveStartupProvider(providers, { models: [`${name}/*:high`], preferredProvider: name, preferredModel: model, offline: true }, {}))
+      .resolves.toMatchObject({ providerName: name, model, thinkingLevel: 'high' });
+    expect(createConfiguredProviders({}, { credentials: new Map([[name, 'stored-key']]) }).get(name)).toBeInstanceOf(Adapter);
+    const override = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'override' }, {});
+    expect(override.provider).toBeInstanceOf(Adapter);
+    expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'override', baseUrl: endpoint });
+  });
+
+  it('uses credential type, not label or token shape, for Kimi auth and overrides OAuth with explicit keys', async () => {
+    const oauth = createConfiguredProviders({}, { credentials: { 'kimi-coding': 'synthetic-oauth' }, kimiCodingAuthMode: 'oauth' });
+    const config = (provider: unknown) => (provider as { config: Record<string, unknown> }).config;
+    expect(config(oauth.get('kimi-coding')).kimiAuthMode).toBe('oauth');
+    expect(config(createConfiguredProviders({ KIMI_CODING_API_KEY: 'env-key' }, { credentials: { 'kimi-coding': 'synthetic-oauth' }, kimiCodingAuthMode: 'oauth' }).get('kimi-coding')))
+      .toMatchObject({ kimiAuthMode: 'api-key', apiKey: 'env-key' });
+    const selected = await resolveStartupProvider(oauth, { provider: 'kimi-coding', model: 'k3', apiKey: 'explicit-key' }, {});
+    expect(config(selected.provider)).toMatchObject({ kimiAuthMode: 'api-key', apiKey: 'explicit-key' });
   });
 
   it('composes native Cerebras credentials, defaults and scoped settings without an extension', async () => {

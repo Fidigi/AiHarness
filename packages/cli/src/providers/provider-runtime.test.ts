@@ -166,7 +166,10 @@ describe('CLI provider runtime', () => {
     ['deepseek', 'DEEPSEEK_API_KEY', 'AI_HARNESS_DEEPSEEK_API_KEY'],
     ['groq', 'GROQ_API_KEY', 'AI_HARNESS_GROQ_API_KEY'],
     ['zai', 'ZAI_API_KEY', 'AI_HARNESS_ZAI_API_KEY'],
-    ['nvidia', 'NVIDIA_API_KEY', 'AI_HARNESS_NVIDIA_API_KEY']] as const)(
+    ['nvidia', 'NVIDIA_API_KEY', 'AI_HARNESS_NVIDIA_API_KEY'],
+    ['minimax', 'MINIMAX_API_KEY', 'AI_HARNESS_MINIMAX_API_KEY'],
+    ['minimax-cn', 'MINIMAX_CN_API_KEY', 'AI_HARNESS_MINIMAX_CN_API_KEY'],
+    ['kimi-coding', 'KIMI_CODING_API_KEY', 'AI_HARNESS_KIMI_CODING_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);
@@ -189,6 +192,19 @@ describe('CLI provider runtime', () => {
     expect(restored.redactor.redact('synthetic-cerebras-stored')).toBe('[REDACTED]');
     const bytes = await readFile(path.join(agentDir, 'credentials.enc'), 'utf8');
     for (const secret of [key, 'synthetic-cerebras-stored', 'synthetic-cerebras-command', 'synthetic-cerebras-first']) expect(bytes).not.toContain(secret);
+  });
+
+  it('retains Kimi OAuth auth mode without guessing its issuer and keeps environment keys independent', async () => {
+    const credentials = new ProviderCredentialService();
+    await credentials.setOAuth('kimi-coding', { accessToken: 'synthetic-kimi-access', expiresAt: Date.now() + 120000 }, false);
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+    expect(runtime.kimiCodingAuthMode).toBe('oauth');
+    const providers = createConfiguredProviders({}, { credentials: runtime.values, kimiCodingAuthMode: runtime.kimiCodingAuthMode });
+    expect((providers.get('kimi-coding') as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-kimi-access', kimiAuthMode: 'oauth' });
+    const keyRuntime = await createCliProviderRuntime('/unused', {}, { KIMI_CODING_API_KEY: 'synthetic-kimi-key' }, credentials, false);
+    expect(keyRuntime.kimiCodingAuthMode).toBe('api-key');
+    expect(keyRuntime.values.get('kimi-coding')).toBe('synthetic-kimi-key');
+    runtime.close(); keyRuntime.close();
   });
 
   it('redacts extension default API keys before use and on reload without changing credential precedence', async () => {

@@ -489,6 +489,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       credentials: providerRuntime.values,
       githubCopilot: providerRuntime.githubCopilot,
       openaiCodex: providerRuntime.openaiCodex,
+      kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });

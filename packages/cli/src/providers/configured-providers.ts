@@ -12,6 +12,9 @@ import {
   GroqProvider,
   ZaiProvider,
   NvidiaProvider,
+  MiniMaxProvider,
+  MiniMaxCnProvider,
+  KimiCodingProvider,
   GitHubCopilotProvider,
   OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
@@ -85,11 +88,14 @@ export interface ResolvedStartupProvider {
 }
 
 // CLI composition only: explicit extension factories keep precedence and names remain unreserved.
-const NATIVE_C_PROVIDERS = { deepseek: DeepSeekProvider, groq: GroqProvider, zai: ZaiProvider, nvidia: NvidiaProvider };
+const NATIVE_PROVIDERS = {
+  deepseek: DeepSeekProvider, groq: GroqProvider, zai: ZaiProvider, nvidia: NvidiaProvider,
+  minimax: MiniMaxProvider, 'minimax-cn': MiniMaxCnProvider, 'kimi-coding': KimiCodingProvider,
+};
 
 function createProvider(config: ProviderConfig): AiProvider {
   if (ProviderFactory.has(config.type)) return ProviderFactory.create(config);
-  const Adapter = NATIVE_C_PROVIDERS[config.type as keyof typeof NATIVE_C_PROVIDERS];
+  const Adapter = NATIVE_PROVIDERS[config.type as keyof typeof NATIVE_PROVIDERS];
   return Adapter ? new Adapter(config) : ProviderFactory.create(config);
 }
 
@@ -106,6 +112,7 @@ function attempt(
 export interface CreateConfiguredProvidersOptions {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
+  kimiCodingAuthMode?: 'api-key' | 'oauth';
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -182,11 +189,13 @@ export function createConfiguredProviders(
   attempt(providers, 'mistral-conversations', mistralKey
     ? { ...network, type: 'mistral-conversations', apiKey: mistralKey, model: env.MISTRAL_MODEL, baseUrl: env.MISTRAL_BASE_URL }
     : undefined);
-  for (const name of Object.keys(NATIVE_C_PROVIDERS)) {
-    const prefix = name.toUpperCase();
+  for (const name of Object.keys(NATIVE_PROVIDERS)) {
+    const prefix = name.toUpperCase().replace(/-/g, '_');
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
     attempt(providers, name, key ? { ...network, type: name, apiKey: key,
-      model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`] } : undefined);
+      model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
+      ...(name === 'kimi-coding' ? { kimiAuthMode: providerCredentialEnvironmentKeys(name).some(key => env[key]) ? 'api-key' : options.kimiCodingAuthMode ?? 'api-key' } : {}),
+    } : undefined);
   }
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
@@ -340,10 +349,10 @@ export async function resolveStartupProvider(
     ?? 'mock';
   let provider = providers.get(providerName);
   if (selection.apiKey) {
-    const prefix = providerName.toUpperCase();
+    const prefix = providerName.toUpperCase().replace(/-/g, '_');
     const base = provider ? providerConfig(provider) : {
       type: providerName as ProviderConfig['type'],
-      ...(Object.hasOwn(NATIVE_C_PROVIDERS, providerName) ? {
+      ...(Object.hasOwn(NATIVE_PROVIDERS, providerName) ? {
         model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
       } : {}),
     };
@@ -352,6 +361,7 @@ export async function resolveStartupProvider(
         ...base,
         type: providerName as ProviderConfig['type'],
         apiKey: selection.apiKey,
+        ...(providerName === 'kimi-coding' ? { kimiAuthMode: 'api-key' } : {}),
         ...(model ? { model } : {}),
       });
       providers.set(providerName, provider);

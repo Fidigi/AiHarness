@@ -15,7 +15,7 @@ import {
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
-  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia', 'azure', 'vertex', 'bedrock', 'local',
+  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia', 'minimax', 'minimax-cn', 'kimi-coding', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {
@@ -28,6 +28,7 @@ export type CliGitHubCopilotSubscription = CliSubscription;
 export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
+  kimiCodingAuthMode?: 'api-key' | 'oauth';
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -113,6 +114,7 @@ export async function createCliProviderRuntime(
     commandEnv[commandVariable(provider)] = command;
   }
   const values = new Map<string, string>();
+  let kimiCodingAuthMode: CliProviderRuntime['kimiCodingAuthMode'];
   const providers = new Set<string>([
     ...CLI_CREDENTIAL_PROVIDERS,
     ...Object.keys(settings.providerApiKeyCommands ?? {}),
@@ -135,6 +137,7 @@ export async function createCliProviderRuntime(
       if (config) redactor.addAll(Object.values(config));
     }
     values.set(provider, value);
+    if (provider === 'kimi-coding') kimiCodingAuthMode = resolved.credential.type;
   }
   const credentialSource = cliGitHubCopilotCredentialSource(credentials, lifetime, !offline);
   const subscription = await credentialSource();
@@ -146,6 +149,7 @@ export async function createCliProviderRuntime(
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),
     credentials,
     values,
+    ...(kimiCodingAuthMode ? { kimiCodingAuthMode } : {}),
     network: resolveAgentProviderNetworkSettings(settings),
     redactor,
     credentialStoreId: `${persistCredentials ? 'persistent' : 'memory'}:${path.resolve(agentDir)}`,

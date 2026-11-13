@@ -12,8 +12,9 @@ const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.ur
 describe.each([
   { region: 'global', constructor: 'MiniMaxProvider', registration: 'minimax-native' },
   { region: 'CN', constructor: 'MiniMaxCnProvider', registration: 'minimax-cn-native' },
-])('emitted CLI explicit MiniMax $region registration', ({ constructor, registration }) => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves physical numeric thinking, windows and A provenance', async ({ mode, thinking }) => {
+].flatMap(region => [false, true].map(native => ({ ...region, native }))))('emitted CLI MiniMax $region/native=$native composition', ({ constructor, registration: extensionRegistration, native }) => {
+  const registration = native ? extensionRegistration.replace(/-native$/, '') : extensionRegistration;
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (native ? ['high'] as const : ['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves physical numeric thinking, windows and A provenance', async ({ mode, thinking }) => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-minimax-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-minimax-key', model = 'MiniMax-M2.7', api = 'anthropic-messages';
@@ -35,12 +36,14 @@ describe.each([
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/minimax.mjs'), `import { ${constructor} } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/minimax.mjs'), `import { ${constructor} } from ${JSON.stringify(core)};
         export default api => api.registerProvider(${JSON.stringify(registration)}, { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fminimax/anthropic' }, create(config) { return new ${constructor}(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
           '--model', `${registration}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { [`${registration.toUpperCase().replace(/-/g, '_')}_API_KEY`]: key,
+              [`${registration.toUpperCase().replace(/-/g, '_')}_BASE_URL`]: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fminimax/anthropic` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);

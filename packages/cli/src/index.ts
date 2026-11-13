@@ -329,6 +329,7 @@ async function main(): Promise<void> {
         credentials: providerRuntime.values,
         githubCopilot: providerRuntime.githubCopilot,
         openaiCodex: providerRuntime.openaiCodex,
+        kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -839,6 +840,7 @@ async function main(): Promise<void> {
       credentials: refreshedRuntime.values,
       githubCopilot: refreshedRuntime.githubCopilot,
       openaiCodex: refreshedRuntime.openaiCodex,
+      kimiCodingAuthMode: refreshedRuntime.kimiCodingAuthMode,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -990,6 +992,7 @@ async function main(): Promise<void> {
     credentials: providerRuntime.values,
     githubCopilot: providerRuntime.githubCopilot,
     openaiCodex: providerRuntime.openaiCodex,
+    kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
     network: providerRuntime.network,
   });
 

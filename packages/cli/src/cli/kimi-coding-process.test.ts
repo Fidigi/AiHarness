@@ -5,12 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
 
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI explicit Kimi Coding registration', () => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves physical adaptive thinking, windows and A provenance', async ({ mode, thinking }) => {
+describe('emitted CLI Kimi Coding composition', () => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => [false, true].flatMap(native => (native ? ['high'] as const : ['off', 'high'] as const).map(thinking => ({ mode, thinking, native })))) )('$mode/$thinking/native=$native conserves physical adaptive thinking, windows and A provenance', async ({ mode, thinking, native }) => {
+    const provider = native ? 'kimi-coding' : 'kimi-coding-native';
+    const oauth = native && mode === 'json';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-kimi-coding-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-kimi-coding-key', model = 'k3', api = 'anthropic-messages';
@@ -33,12 +36,20 @@ describe('emitted CLI explicit Kimi Coding registration', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/kimi-coding.mjs'), `import { KimiCodingProvider } from ${JSON.stringify(core)};
+      const masterKey = 'synthetic-kimi-cli-only-disposable-master-key';
+      if (oauth) {
+        const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(agent, 'credentials.enc'), masterKey) });
+        await credentials.load();
+        await credentials.setOAuth('kimi-coding', { accessToken: key, expiresAt: Date.now() + 120000 });
+      }
+      if (!native) await writeFile(path.join(agent, 'extensions/kimi-coding.mjs'), `import { KimiCodingProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('kimi-coding-native', { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fkimi-coding/anthropic' }, create(config) { return new KimiCodingProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `kimi-coding-native/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { KIMI_CODING_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fkimi-coding/anthropic`,
+              ...(oauth ? { AI_HARNESS_MASTER_KEY: masterKey } : { KIMI_CODING_API_KEY: key }) } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -59,23 +70,25 @@ describe('emitted CLI explicit Kimi Coding registration', () => {
           expect(records.find(record => record.id === 'kimi-coding-state')?.data.thinkingLevel).toBe(selected);
           expect(records.find(record => record.id === 'kimi-coding-levels')?.data.levels).toEqual(['low', 'high', 'max']);
           const models = records.find(record => record.id === 'kimi-coding-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'kimi-coding-native')).toHaveLength(4);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'kimi-coding-native', ...profile }));
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'kimi-coding-native', id: 'k3-256k', contextWindow: 262144, maxTokens: 131072 }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(4);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
+          expect(models).toContainEqual(expect.objectContaining({ provider, id: 'k3-256k', contextWindow: 262144, maxTokens: 131072 }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
       expect(calls[0]).toMatchObject({ url: '/owned%2Fkimi-coding/anthropic/v1/messages', body: { model, stream: true, max_tokens: 131072,
         thinking: { type: 'adaptive', display: 'summarized' }, output_config: { effort: selected } } });
-      expect(calls[0].headers['x-api-key']).toBe(key); expect(calls[0].headers['anthropic-version']).toBe('2023-06-01');
+      expect(calls[0].headers['x-api-key']).toBe(oauth ? undefined : key);
+      expect(calls[0].headers.authorization).toBe(oauth ? `Bearer ${key}` : undefined);
+      expect(calls[0].headers['anthropic-version']).toBe('2023-06-01');
       expect(calls[0].headers['anthropic-beta']).toBeUndefined();
-      for (const name of ['authorization', 'api-key', 'nvcf-poll-seconds', 'x-session-id']) expect(calls[0].headers[name]).toBeUndefined();
+      for (const name of ['api-key', 'nvcf-poll-seconds', 'x-session-id']) expect(calls[0].headers[name]).toBeUndefined();
       for (const name of ['reasoning_effort', 'tool_stream', 'store', 'budget_tokens', 'max_completion_tokens']) expect(calls[0].body).not.toHaveProperty(name);
       expect(Array.isArray(calls[0].body.system)).toBe(true);
       for (const tool of calls[0].body.tools as Array<Record<string, unknown>>) { expect(tool.eager_input_streaming).toBe(true); expect(tool).not.toHaveProperty('strict'); }
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'kimi-coding-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 5, cacheReadTokens: 4, cacheWriteTokens: 1, outputTokens: 2, totalTokens: 12 }) })); expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }
   }, 30_000);
