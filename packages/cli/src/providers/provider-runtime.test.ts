@@ -162,7 +162,11 @@ describe('CLI provider runtime', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
   it.each([['cerebras', 'CEREBRAS_API_KEY', 'AI_HARNESS_CEREBRAS_API_KEY'],
-    ['mistral-conversations', 'MISTRAL_API_KEY', 'AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY']] as const)(
+    ['mistral-conversations', 'MISTRAL_API_KEY', 'AI_HARNESS_MISTRAL_CONVERSATIONS_API_KEY'],
+    ['deepseek', 'DEEPSEEK_API_KEY', 'AI_HARNESS_DEEPSEEK_API_KEY'],
+    ['groq', 'GROQ_API_KEY', 'AI_HARNESS_GROQ_API_KEY'],
+    ['zai', 'ZAI_API_KEY', 'AI_HARNESS_ZAI_API_KEY'],
+    ['nvidia', 'NVIDIA_API_KEY', 'AI_HARNESS_NVIDIA_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);

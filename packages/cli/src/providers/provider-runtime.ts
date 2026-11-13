@@ -15,7 +15,7 @@ import {
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
-  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'azure', 'vertex', 'bedrock', 'local',
+  'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {

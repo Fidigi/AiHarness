@@ -8,6 +8,10 @@ import {
   getProviderPublishedModels,
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
+  DeepSeekProvider,
+  GroqProvider,
+  ZaiProvider,
+  NvidiaProvider,
   GitHubCopilotProvider,
   OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
@@ -80,13 +84,22 @@ export interface ResolvedStartupProvider {
   scopeDiagnostics?: ModelScopeDiagnostic[];
 }
 
+// CLI composition only: explicit extension factories keep precedence and names remain unreserved.
+const NATIVE_C_PROVIDERS = { deepseek: DeepSeekProvider, groq: GroqProvider, zai: ZaiProvider, nvidia: NvidiaProvider };
+
+function createProvider(config: ProviderConfig): AiProvider {
+  if (ProviderFactory.has(config.type)) return ProviderFactory.create(config);
+  const Adapter = NATIVE_C_PROVIDERS[config.type as keyof typeof NATIVE_C_PROVIDERS];
+  return Adapter ? new Adapter(config) : ProviderFactory.create(config);
+}
+
 function attempt(
   providers: Map<string, AiProvider>,
   name: string,
   config: ProviderConfig | undefined,
 ): void {
   if (!config) return;
-  try { providers.set(name, ProviderFactory.create(config)); }
+  try { providers.set(name, createProvider(config)); }
   catch { /* Ignore providers whose environment configuration is incomplete. */ }
 }
 
@@ -169,6 +182,12 @@ export function createConfiguredProviders(
   attempt(providers, 'mistral-conversations', mistralKey
     ? { ...network, type: 'mistral-conversations', apiKey: mistralKey, model: env.MISTRAL_MODEL, baseUrl: env.MISTRAL_BASE_URL }
     : undefined);
+  for (const name of Object.keys(NATIVE_C_PROVIDERS)) {
+    const prefix = name.toUpperCase();
+    const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
+    attempt(providers, name, key ? { ...network, type: name, apiKey: key,
+      model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`] } : undefined);
+  }
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
   attempt(providers, 'vertex', vertexKey && env.GOOGLE_CLOUD_PROJECT
@@ -321,9 +340,15 @@ export async function resolveStartupProvider(
     ?? 'mock';
   let provider = providers.get(providerName);
   if (selection.apiKey) {
-    const base = provider ? providerConfig(provider) : { type: providerName as ProviderConfig['type'] };
+    const prefix = providerName.toUpperCase();
+    const base = provider ? providerConfig(provider) : {
+      type: providerName as ProviderConfig['type'],
+      ...(Object.hasOwn(NATIVE_C_PROVIDERS, providerName) ? {
+        model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
+      } : {}),
+    };
     try {
-      provider = ProviderFactory.create({
+      provider = createProvider({
         ...base,
         type: providerName as ProviderConfig['type'],
         apiKey: selection.apiKey,

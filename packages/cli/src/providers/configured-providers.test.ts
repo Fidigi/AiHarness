@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -7,6 +7,48 @@ import {
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it.each([
+    ['deepseek', DeepSeekProvider, 'deepseek-flash'],
+    ['groq', GroqProvider, 'qwen/qwen3.6-27b'],
+    ['zai', ZaiProvider, 'glm-5.3-flash'],
+    ['nvidia', NvidiaProvider, 'deepseek-ai/deepseek-v4.1-flash'],
+  ] as const)('composes native %s without reserving extension authority', async (name, Adapter, model) => {
+    const prefix = name.toUpperCase();
+    expect(createConfiguredProviders({}).has(name)).toBe(false);
+    const providers = createConfiguredProviders({
+      [`${prefix}_API_KEY`]: 'environment', [`AI_HARNESS_${prefix}_API_KEY`]: 'first',
+      [`${prefix}_MODEL`]: model, [`${prefix}_BASE_URL`]: 'http://127.0.0.1/owned/v1',
+    }, { credentials: { [name]: 'stored' }, network: { transport: 'sse', httpIdleTimeoutMs: 12,
+      websocketConnectTimeoutMs: 34, requestTimeoutMs: 56, maxRetries: 0, maxRetryDelayMs: 78 } });
+    const provider = providers.get(name);
+    expect(provider).toBeInstanceOf(Adapter);
+    expect((provider as unknown as { config: object }).config).toMatchObject({
+      apiKey: 'first', model, baseUrl: 'http://127.0.0.1/owned/v1/chat/completions',
+    });
+    expect(provider?.getNetworkSettings()).toMatchObject({ requestTimeoutMs: 56, maxRetries: 0 });
+    const stored = createConfiguredProviders({}, { credentials: new Map([[name, 'stored']]) });
+    expect(stored.get(name)).toBeInstanceOf(Adapter);
+    expect(stored.get(name)?.validateConfig()).toBe(true);
+    const { selection } = applyAgentModelSettings({}, { defaultProvider: name, defaultModel: model });
+    await expect(resolveStartupProvider(stored, selection, {})).resolves.toMatchObject({ providerName: name, model });
+    await expect(resolveStartupProvider(providers, { models: [`${name}/*:high`], preferredProvider: name, preferredModel: model, offline: true }, {}))
+      .resolves.toMatchObject({ providerName: name, model, thinkingLevel: 'high' });
+    const temporary = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'temporary' }, {});
+    expect(temporary.provider).toBeInstanceOf(Adapter);
+    expect((temporary.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'temporary', baseUrl: 'http://127.0.0.1/owned/v1/chat/completions' });
+    const cold = await resolveStartupProvider(createConfiguredProviders({}), { provider: name, model, apiKey: 'cold-key' }, { [`${prefix}_BASE_URL`]: 'http://127.0.0.1/cold' });
+    expect(cold.provider).toBeInstanceOf(Adapter);
+    expect((cold.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'cold-key', baseUrl: 'http://127.0.0.1/cold/chat/completions' });
+    expect(createConfiguredProviders({ [`${prefix}_API_KEY`]: 'synthetic', [`${prefix}_MODEL`]: 'unknown' }).has(name)).toBe(false);
+    expect(ProviderFactory.has(name)).toBe(false);
+    const unregister = ProviderFactory.register(name, config => new MockProvider({ ...config, model: 'operator-model' }));
+    try {
+      const overridden = createConfiguredProviders({ [`${prefix}_API_KEY`]: 'synthetic' });
+      expect(overridden.get(name)).toBeInstanceOf(MockProvider);
+      expect((await resolveStartupProvider(overridden, { provider: name, model: 'operator-model', apiKey: 'override' }, {})).provider).toBeInstanceOf(MockProvider);
+    } finally { unregister(); }
+  });
+
   it('composes native Cerebras credentials, defaults and scoped settings without an extension', async () => {
     expect(createConfiguredProviders({}).has('cerebras')).toBe(false);
     const providers = createConfiguredProviders({

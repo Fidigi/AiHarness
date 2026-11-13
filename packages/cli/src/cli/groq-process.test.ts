@@ -9,8 +9,9 @@ import { describe, expect, it } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI explicit Groq registration', () => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves physical effort, windows and C provenance', async ({ mode, thinking }) => {
+describe('emitted CLI Groq composition', () => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).flatMap(thinking => [false, true].map(native => ({ mode, thinking, native })))) )('$mode/$thinking/native=$native conserves physical effort, windows and C provenance', async ({ mode, thinking, native }) => {
+    const provider = native ? 'groq' : 'groq-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-groq-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-groq-key', model = 'qwen/qwen3.6-27b', api = 'openai-completions';
@@ -30,12 +31,13 @@ describe('emitted CLI explicit Groq registration', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/groq.mjs'), `import { GroqProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/groq.mjs'), `import { GroqProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('groq-native', { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fgroq/openai/v1' }, create(config) { return new GroqProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `groq-native/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { GROQ_API_KEY: key, GROQ_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fgroq/openai/v1` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -57,9 +59,9 @@ describe('emitted CLI explicit Groq registration', () => {
           expect(records.find(record => record.id === 'groq-state')?.data.thinkingLevel).toBe(thinking);
           expect(records.find(record => record.id === 'groq-levels')?.data.levels).toEqual(['off', 'high']);
           const models = records.find(record => record.id === 'groq-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'groq-native')).toHaveLength(7);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'groq-native', ...profile }));
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'groq-native', id: 'qwen/qwen3.8-27b', name: 'Qwen3.8 27B', contextWindow: 131042, maxTokens: 16384, input: ['text', 'image'], cost: { input: 0.8, output: 4, cacheRead: 0, cacheWrite: 0 } }));
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(7);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
+          expect(models).toContainEqual(expect.objectContaining({ provider, id: 'qwen/qwen3.8-27b', name: 'Qwen3.8 27B', contextWindow: 131042, maxTokens: 16384, input: ['text', 'image'], cost: { input: 0.8, output: 4, cacheRead: 0, cacheWrite: 0 } }));
         }
       }
       expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(1);
@@ -70,7 +72,7 @@ describe('emitted CLI explicit Groq registration', () => {
       for (const name of ['x-api-key', 'api-key', 'anthropic-version']) expect(calls[0]?.headers[name]).toBeUndefined();
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'groq-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 6, cacheReadTokens: 4, outputTokens: 2, totalTokens: 12 }) })); expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }
   }, 30_000);

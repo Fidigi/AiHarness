@@ -9,8 +9,9 @@ import { describe, expect, it } from 'vitest';
 const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const core = fileURLToPath(new URL('../../../core/dist/index.js', import.meta.url));
 
-describe('emitted CLI explicit Z.ai registration', () => {
-  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).map(thinking => ({ mode, thinking }))))('$mode/$thinking conserves physical effort, windows and C provenance', async ({ mode, thinking }) => {
+describe('emitted CLI Z.ai composition', () => {
+  it.each((['print', 'json', 'rpc'] as const).flatMap(mode => (['off', 'high'] as const).flatMap(thinking => [false, true].map(native => ({ mode, thinking, native })))) )('$mode/$thinking/native=$native conserves physical effort, windows and C provenance', async ({ mode, thinking, native }) => {
+    const provider = native ? 'zai' : 'zai-native';
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-zai-cli-'));
     const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions');
     const key = 'disposable-cli-zai-key', model = 'glm-5.3-flash', api = 'openai-completions', effective = thinking === 'off' ? 'low' : 'high';
@@ -30,12 +31,13 @@ describe('emitted CLI explicit Z.ai registration', () => {
     try {
       await mkdir(cwd); await mkdir(path.join(agent, 'extensions'), { recursive: true });
       await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off' }));
-      await writeFile(path.join(agent, 'extensions/zai.mjs'), `import { ZaiProvider } from ${JSON.stringify(core)};
+      if (!native) await writeFile(path.join(agent, 'extensions/zai.mjs'), `import { ZaiProvider } from ${JSON.stringify(core)};
         export default api => api.registerProvider('zai-native', { defaultConfig: { model:${JSON.stringify(model)},baseUrl:'http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fzai/api/coding/paas/v4' }, create(config) { return new ZaiProvider(config); } });`);
       const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }>((resolve, reject) => {
-        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, '--api-key', key,
-          '--model', `zai-native/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
-          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent }, stdio: ['pipe', 'pipe', 'pipe'],
+        const child = spawn(process.execPath, [cli, '--approve', '--offline', '--session-dir', sessions, ...(native ? ['--no-extensions'] : ['--api-key', key]),
+          '--model', `${provider}/${model}`, '--thinking', thinking, ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['hello'])], {
+          cwd, env: { PATH: process.env.PATH, HOME: path.join(root, 'home'), TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent,
+            ...(native ? { ZAI_API_KEY: key, ZAI_BASE_URL: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned%2Fzai/api/coding/paas/v4` } : {}) }, stdio: ['pipe', 'pipe', 'pipe'],
         });
         let stdout = '', stderr = '';
         const timer = setTimeout(() => child.kill('SIGKILL'), 20_000);
@@ -57,9 +59,9 @@ describe('emitted CLI explicit Z.ai registration', () => {
           expect(records.find(record => record.id === 'zai-state')?.data.thinkingLevel).toBe(effective);
           expect(records.find(record => record.id === 'zai-levels')?.data.levels).toEqual(['low', 'high', 'max']);
           const models = records.find(record => record.id === 'zai-models')?.data.models;
-          expect(models.filter((entry: { provider: string }) => entry.provider === 'zai-native')).toHaveLength(7);
-          expect(models).toContainEqual(expect.objectContaining({ provider: 'zai-native', ...profile }));
-          const unpriced = models.find((entry: { provider: string; id: string }) => entry.provider === 'zai-native' && entry.id === 'glm-5.3-highspeed');
+          expect(models.filter((entry: { provider: string }) => entry.provider === provider)).toHaveLength(7);
+          expect(models).toContainEqual(expect.objectContaining({ provider, ...profile }));
+          const unpriced = models.find((entry: { provider: string; id: string }) => entry.provider === provider && entry.id === 'glm-5.3-highspeed');
           expect(unpriced).toMatchObject({ name: 'GLM-5.3 Highspeed', contextWindow: 1000000, maxTokens: 131072, input: ['text'] }); expect(unpriced).not.toHaveProperty('cost');
         }
       }
@@ -71,7 +73,7 @@ describe('emitted CLI explicit Z.ai registration', () => {
       for (const name of ['x-api-key', 'api-key', 'anthropic-version']) expect(calls[0]?.headers[name]).toBeUndefined();
       const entries = (await Promise.all((await readdir(sessions)).filter(name => name.endsWith('.jsonl')).map(name => readFile(path.join(sessions, name), 'utf8'))))
         .flatMap(text => text.trim().split('\n').map(line => JSON.parse(line)));
-      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider: 'zai-native', model, api,
+      expect(entries).toContainEqual(expect.objectContaining({ type: 'message', role: 'assistant', provider, model, api,
         usage: expect.objectContaining({ inputTokens: 6, cacheReadTokens: 4, outputTokens: 2, totalTokens: 12 }) })); expect(JSON.stringify(entries)).not.toContain(key);
     } finally { wire.closeAllConnections(); await new Promise<void>(resolve => wire.close(() => resolve())); await rm(root, { recursive: true, force: true }); }
   }, 30_000);
