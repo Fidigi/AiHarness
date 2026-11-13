@@ -272,17 +272,19 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel'] as const)('retires held HTTP credential work on %s without a late encrypted publication', async mutation => {
+it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel', 'refresh-catalogue-body-cancel'] as const)('retires held HTTP credential work on %s without a late encrypted publication', async mutation => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-http-retire-'));
   const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-copilot-retirement-master';
-  const refreshStage = mutation === 'refresh-exchange-cancel' ? 'exchange' : mutation === 'refresh-catalogue-cancel' ? 'catalogue' : undefined;
+  const refreshStage = mutation === 'refresh-exchange-cancel' ? 'exchange' : mutation === 'refresh-catalogue-cancel' ? 'catalogue'
+    : mutation === 'refresh-catalogue-body-cancel' ? 'catalogue-body' : undefined;
   const originalToken = 'disposable-http-refresh-original', rotatedToken = 'tid=disposable-http-refresh-rotated;proxy-ep=proxy.business.githubcopilot.com';
   const refreshCalls: string[] = [];
   let holdRefresh = false;
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; });
   const held = new Promise<Response>(resolve => { release = resolve; });
+  const bodyCancelled = vi.fn(() => new Promise<void>(() => undefined));
   const originalFetch = globalThis.fetch;
   let issuerSignal: AbortSignal | null | undefined;
   vi.stubEnv('AI_HARNESS_MASTER_KEY', master);
@@ -302,6 +304,13 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
       expect(new Headers(init?.headers).get('x-api-key')).toBeNull();
       if (target === 'https://api.business.githubcopilot.com/models') {
         if (holdRefresh && refreshStage === 'catalogue') { issuerSignal = init?.signal; reached(); return held; }
+        if (holdRefresh && refreshStage === 'catalogue-body') {
+          issuerSignal = init?.signal;
+          return new Response(new ReadableStream<Uint8Array>({
+            start(controller) { controller.enqueue(new TextEncoder().encode('{"data":[')); },
+            pull() { reached(); return new Promise<void>(() => undefined); }, cancel: bodyCancelled,
+          }), { headers: { 'content-type': 'application/json' } });
+        }
         return Response.json({ data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
       }
       expect(target).toBe('https://api.business.githubcopilot.com/responses');
@@ -341,16 +350,19 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
       const output = response.text().catch((error: unknown) => error);
       await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
       await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
-      const late = Response.json(refreshStage === 'exchange' ? { token: rotatedToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }
-        : { data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
-      const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
-      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+      if (refreshStage === 'catalogue-body') await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
+      else {
+        const late = Response.json(refreshStage === 'exchange' ? { token: rotatedToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }
+          : { data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
+        const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
+        await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+      }
       expect(await readFile(file)).toEqual(expired);
-      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage === 'catalogue' ? ['https://api.business.githubcopilot.com/models'] : [])]);
+      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage !== 'exchange' ? ['https://api.business.githubcopilot.com/models'] : [])]);
       holdRefresh = false;
       const resumed = await chat();
       expect(resumed.status).toBe(200); const text = await resumed.text(); expect(text).toContain('event: message_end'); expect(text).toContain('ok'); expect(text).not.toContain('event: error');
-      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage === 'catalogue' ? ['https://api.business.githubcopilot.com/models'] : []),
+      expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage !== 'exchange' ? ['https://api.business.githubcopilot.com/models'] : []),
         'https://api.github.com/copilot_internal/v2/token', 'https://api.business.githubcopilot.com/models', 'https://api.business.githubcopilot.com/responses']);
       const durable = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
       expect(durable?.credential).toMatchObject({ type: 'oauth', accessToken: rotatedToken, refreshToken: 'disposable-held-grant', subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } });
