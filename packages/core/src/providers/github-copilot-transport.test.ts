@@ -173,6 +173,67 @@ describe('Copilot A/C/R transport', () => {
     expect(calls).toBe(12);
   });
 
+  it.each(['anthropic-messages', 'openai-completions', 'openai-responses'])(
+    'refuses invalid explicit %s output caps before inference', async api => {
+      const model = models.find(model => model.api === api)!, provider = candidate(model.id);
+      const row = fixture.rows.find(row => row.model === model.id)!;
+      const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response(row.responseEvents));
+      for (const maxTokens of [0, -1, 1.5, NaN, Infinity, model.maxTokens + 1]) for (const streaming of [false, true]) {
+        const options = { maxTokens, thinking: 'off' as const };
+        const completed = vi.fn();
+        await expect(streaming ? provider.streamChat([], () => {}, completed, undefined, options) : provider.chat([], options)).rejects.toThrow('GitHub Copilot request failed.');
+        expect(completed).not.toHaveBeenCalled();
+      }
+      expect(transport).not.toHaveBeenCalled();
+    });
+
+  it('bounds the Copilot numeric budget by the exact output cap and final answer reserve', async () => {
+    const model = models.find(model => model.api === 'anthropic-messages' && !model.compat?.forceAdaptiveThinking)!;
+    const provider = candidate(model.id), row = fixture.rows.find(row => row.model === model.id)!;
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response(row.responseEvents));
+    for (const maxTokens of [1024, 1025, 2047]) for (const streaming of [false, true]) {
+      const options: GitHubCopilotChatOptions = { maxTokens, thinking: 'high', thinkingBudgets: { high: 0 } };
+      await expect(streaming ? provider.streamChat([], () => {}, undefined, undefined, options) : provider.chat([], options)).rejects.toThrow('GitHub Copilot request failed.');
+    }
+    expect(transport).not.toHaveBeenCalled();
+    for (const [maxTokens, high, budget] of [[2048, 0, 1024], [2048, Number.MAX_SAFE_INTEGER, 1024], [4096, 100000, 3072]] as const) {
+      const options: GitHubCopilotChatOptions = { maxTokens, thinking: 'high', thinkingBudgets: { high } }, before = structuredClone(options);
+      for (const streaming of [false, true]) {
+        if (streaming) await provider.streamChat([], () => {}, undefined, undefined, options); else await provider.chat([], options);
+        const body = JSON.parse(String(transport.mock.calls.at(-1)?.[1]?.body));
+        expect(body.max_tokens).toBe(maxTokens);
+        expect(body.thinking).toEqual({ type: 'enabled', budget_tokens: budget, display: 'summarized' });
+      }
+      expect(options).toEqual(before);
+    }
+  });
+
+  it('maps explicit Copilot A/R logical efforts without changing omitted or off requests', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch');
+    for (const [id, thinking, effort] of [
+      ['claude-sonnet-4.6', 'minimal', 'low'], ['claude-opus-4.7', 'xhigh', 'xhigh'],
+      ['gpt-5-mini', 'minimal', 'low'], ['gpt-5-mini', 'max', 'high'], ['gpt-6-astra', 'minimal', 'low'],
+    ] as const) {
+      const model = models.find(model => model.id === id)!, provider = candidate(id), row = fixture.rows.find(row => row.model === id)!;
+      transport.mockImplementation(async () => response(row.responseEvents));
+      for (const streaming of [false, true]) {
+        const options: GitHubCopilotChatOptions = { thinking, maxTokens: 4096 };
+        if (streaming) await provider.streamChat([], () => {}, undefined, undefined, options); else await provider.chat([], options);
+        const body = JSON.parse(String(transport.mock.calls.at(-1)?.[1]?.body));
+        expect(model.api === 'anthropic-messages' ? body.output_config.effort : body.reasoning.effort).toBe(effort);
+        expect(options.thinking).toBe(thinking);
+      }
+      for (const thinking of [undefined, 'off'] as const) {
+        await provider.chat([], { thinking });
+        const body = JSON.parse(String(transport.mock.calls.at(-1)?.[1]?.body));
+        expect(body.reasoning).toBeUndefined(); expect(body.output_config).toBeUndefined();
+      }
+      const count = transport.mock.calls.length;
+      await expect(provider.chat([], { thinking: 'invalid' as GitHubCopilotChatOptions['thinking'] })).rejects.toThrow('GitHub Copilot request failed.');
+      expect(transport).toHaveBeenCalledTimes(count);
+    }
+  });
+
   it('resolves the current credential for each turn and refuses withdrawn model access before transport', async () => {
     const access = credential(); let current: ProviderOAuthCredential | undefined = access;
     const source = vi.fn(async () => current), provider = candidate(models[0].id, source);

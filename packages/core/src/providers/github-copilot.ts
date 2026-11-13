@@ -1,6 +1,7 @@
 import type { Message } from '../types/index.js';
 import type { ChatOptions } from './index.js';
 import { resolveThinkingBudget } from './thinking-budgets.js';
+import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS } from './model-metadata.js';
 import type { ProviderOAuthCredential } from './credentials.js';
 import { getGitHubCopilotBaseUrl } from './github-copilot-oauth.js';
 
@@ -94,9 +95,23 @@ export function githubCopilotRoute(credential: ProviderOAuthCredential, id: stri
   return { model, url: baseUrl + suffix };
 }
 
+function copilotRequestOptions(model: GitHubCopilotModel, options: GitHubCopilotChatOptions): GitHubCopilotChatOptions {
+  if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > model.maxTokens)) {
+    throw new Error('Invalid GitHub Copilot output limit.');
+  }
+  const requested = options.thinking;
+  if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid GitHub Copilot thinking level.');
+  // Raw omission/off stays omission or native disabled; it does not force an unsupported disable effort.
+  if (requested === undefined || requested === 'off') return options;
+  const available = PUBLISHED_THINKING_LEVELS.filter(level => model.thinkingLevelMap?.[level] !== null
+    && (!['xhigh', 'max'].includes(level) || model.thinkingLevelMap?.[level] !== undefined));
+  return { ...options, thinking: clampPublishedThinkingLevel(requested, available) };
+}
+
 /** Copilot C lowering is independent of the original-vendor and OpenCode dialects. */
 export function githubCopilotCompletionsBody(model: GitHubCopilotModel, messages: readonly Message[], options: GitHubCopilotChatOptions = {}, native = false): Record<string, unknown> {
   if (model.api !== 'openai-completions') throw new Error('GitHub Copilot model protocol is unavailable.');
+  options = copilotRequestOptions(model, options);
   const rows: Record<string, unknown>[] = [];
   let pendingImages: Array<{ type: string; image_url: { url: string } }> = [];
   const flushImages = () => {
@@ -135,6 +150,7 @@ export function githubCopilotCompletionsBody(model: GitHubCopilotModel, messages
 
 export function githubCopilotResponsesBody(model: GitHubCopilotModel, messages: readonly Message[], options: GitHubCopilotChatOptions = {}, native = false): Record<string, unknown> & { model: string; input: Record<string, unknown>[]; stream: true } {
   if (model.api !== 'openai-responses') throw new Error('GitHub Copilot model protocol is unavailable.');
+  options = copilotRequestOptions(model, options);
   const input: Record<string, unknown>[] = [];
   if (options.systemPrompt) input.push({ role: 'developer', content: options.systemPrompt });
   for (const message of messages) {
@@ -166,11 +182,12 @@ export function githubCopilotResponsesBody(model: GitHubCopilotModel, messages: 
     ...(options.tools?.length ? { tools: options.tools.map(tool => ({ type: 'function', name: tool.name,
       description: tool.description, parameters: structuredClone(tool.parameters) })) } : {}),
     ...(options.toolChoice === undefined ? {} : { tool_choice: options.toolChoice }),
-    ...(options.thinking && options.thinking !== 'off' ? { reasoning: { effort: options.thinking, summary: 'auto' }, include: ['reasoning.encrypted_content'] } : {}) };
+    ...(options.thinking && options.thinking !== 'off' ? { reasoning: { effort: model.thinkingLevelMap?.[options.thinking] ?? options.thinking, summary: 'auto' }, include: ['reasoning.encrypted_content'] } : {}) };
 }
 
 export function githubCopilotMessagesBody(model: GitHubCopilotModel, messages: readonly Message[], options: GitHubCopilotChatOptions = {}, nativeAssistantContent?: unknown[]): Record<string, unknown> {
   if (model.api !== 'anthropic-messages') throw new Error('GitHub Copilot model protocol is unavailable.');
+  options = copilotRequestOptions(model, options);
   const rows: Array<{ role: string; content: string | Array<Record<string, unknown>> }> = [];
   const systems = options.systemPrompt ? [options.systemPrompt] : [];
   let assistantIndex = 0;
@@ -218,8 +235,12 @@ export function githubCopilotMessagesBody(model: GitHubCopilotModel, messages: r
     ...(options.temperature !== undefined && !thinking && model.compat?.supportsTemperature !== false ? { temperature: options.temperature } : {}) };
   if (options.thinking && options.thinking !== 'off') {
     if (model.compat?.forceAdaptiveThinking) {
-      body.thinking = { type: 'adaptive', display: 'summarized' }; body.output_config = { effort: options.thinking };
-    } else body.thinking = { type: 'enabled', budget_tokens: resolveThinkingBudget(options.thinking, options.thinkingBudgets, 1024, 1024, model.maxTokens - 1), display: 'summarized' };
+      body.thinking = { type: 'adaptive', display: 'summarized' }; body.output_config = { effort: model.thinkingLevelMap?.[options.thinking] ?? options.thinking };
+    } else {
+      const maximum = options.maxTokens ?? model.maxTokens;
+      if (maximum < 2048) throw new Error('Invalid GitHub Copilot thinking allocation.');
+      body.thinking = { type: 'enabled', budget_tokens: resolveThinkingBudget(options.thinking, options.thinkingBudgets, 1024, 1024, maximum - 1024), display: 'summarized' };
+    }
   } else if (options.thinking === 'off' && model.thinkingLevelMap?.off !== null) body.thinking = { type: 'disabled' };
   if (options.toolChoice !== undefined) body.tool_choice = typeof options.toolChoice === 'string'
     ? { type: options.toolChoice === 'required' ? 'any' : options.toolChoice } : { type: 'tool', name: options.toolChoice.name };

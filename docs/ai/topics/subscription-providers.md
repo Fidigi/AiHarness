@@ -100,6 +100,12 @@ The selected model routes to `/v1/messages?beta=true`, `/chat/completions` or `/
 
 Exact facade/private delegate membership admits native replay; mutable labels, forged fields and subclasses do not. Ordered foreign visible thoughts survive as text without private fields. The continuation fixture preserves an explicit privacy divergence: Core omits a data-less `redacted_thinking` block emitted by the reference after expurgation. Across both facades, 738 continuation requests comprise **716 exact bodies and 22 deliberate omissions**, not 738 exact parity matches.
 
+### Copilot request budgets and logical efforts
+
+Explicit output caps on A/C/R must be safe positive integers within the selected immutable model ceiling. The numeric Messages profile keeps the exact cap, requires room for at least 1,024 thinking plus 1,024 answer tokens, and clamps its numeric override accordingly; it does not borrow original-Anthropic cap expansion. Explicit non-off levels use the published supported-level clamp and A/R physical mappings (for example `minimal` → `low` where declared). Omitted/off requests retain their previous omission/disabled behavior, not a promise that a mandatory-thinking service can disable reasoning. Numeric maps remain irrelevant to adaptive/effort-only dialects.
+
+The [request-budget correction](../../audit/pi/evidence/MOD-03-copilot-request-budgets.json) records five old-product REDs and current both-facade pre-inference refusals/boundaries, while preserving all existing captured bodies and private continuation tests. Credential resolution may occur before a local request refusal; no authentication, entitlement, replay, endpoint or generation authority changes. No new SDK/vendor, full-context/default/media or account qualification is implied.
+
 ### Server composition
 
 Startup prepares a canonical subscription resolver and checks runtime lifetime before proxy publication. Tokens never pass through `setApiKey`. Copilot is reserved against custom-provider namespace replacement. The catalogue rechecks local account discovery rather than retaining stale availability after failure. Legacy `/api/chat` reports late failure as an SSE error after HTTP 200, without a successful `message_end`.
