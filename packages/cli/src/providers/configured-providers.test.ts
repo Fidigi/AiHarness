@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
@@ -9,6 +9,26 @@ import {
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it('keeps explicit native OpenAI R/D separate from legacy C, subscription labels and registered factories', async () => {
+    const legacy = createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-legacy', OPENAI_CODEX_API_KEY: 'synthetic-foreign' });
+    expect(legacy.get('openai')).toBeInstanceOf(OpenAiProvider); expect(legacy.has('openai-native')).toBe(false);
+    const native = createConfiguredProviders({ OPENAI_NATIVE_API_KEY: 'synthetic-native' });
+    expect(native.has('openai')).toBe(false); expect(native.has('openai-codex')).toBe(false);
+    expect(native.get('openai-native')).toBeInstanceOf(OpenAiMixedProvider);
+    const catalog = await collectProviderModelCatalog(native, { discover: false, includePublishedProviders: false });
+    const models = catalog.find(provider => provider.provider === 'openai-native')!.models;
+    expect(models).toHaveLength(44); expect(models.every(model => model.api === 'openai-responses')).toBe(true);
+    expect(native.get('openai-native')?.getSpecializedModels()).toEqual(expect.arrayContaining([expect.objectContaining({ api: 'openai-decisions', type: 'classifier' })]));
+    expect(createConfiguredProviders({ OPENAI_NATIVE_API_KEY: 'synthetic-native', OPENAI_NATIVE_MODEL: 'unknown' }).has('openai-native')).toBe(false);
+    expect(ProviderFactory.has('openai-native')).toBe(false);
+    const unregister = ProviderFactory.register('openai-native', config => new MockProvider({ ...config, model: 'operator-chat' }));
+    try {
+      const overridden = createConfiguredProviders({ OPENAI_NATIVE_API_KEY: 'synthetic-native' });
+      expect(overridden.get('openai-native')).toBeInstanceOf(MockProvider);
+      expect(getConfiguredSpecializedProviders(overridden).size).toBe(0);
+    } finally { unregister(); }
+  });
+
   it('composes TypeSafe as an explicit native auxiliary source, never a chat catalogue or name-based grant', async () => {
     expect(createConfiguredProviders({}).has('typesafe')).toBe(false);
     const providers = createConfiguredProviders({ TYPESAFE_API_KEY: 'synthetic-typesafe', TYPESAFE_BASE_URL: 'http://127.0.0.1/v1' },
@@ -32,15 +52,15 @@ describe('configured CLI providers', () => {
   it('admits configured native specialized services without adding an auxiliary Mock image fallback', () => {
     const providers = createConfiguredProviders({ DEEPSEEK_API_KEY: 'synthetic-chat', TYPESAFE_API_KEY: 'synthetic-t',
       OPENROUTER_API_KEY: 'synthetic-router', OPENCODE_API_KEY: 'synthetic-zen',
-      CLOUDFLARE_WORKERS_AI_API_KEY: 'synthetic-cf', CLOUDFLARE_ACCOUNT_ID: 'synthetic-account' });
+      CLOUDFLARE_WORKERS_AI_API_KEY: 'synthetic-cf', CLOUDFLARE_ACCOUNT_ID: 'synthetic-account', OPENAI_NATIVE_API_KEY: 'synthetic-rd' });
     const source = getConfiguredSpecializedProviders(providers);
-    expect([...source.keys()]).toEqual(['opencode', 'openrouter', 'cloudflare-workers-ai', 'typesafe']);
+    expect([...source.keys()]).toEqual(['opencode', 'openrouter', 'cloudflare-workers-ai', 'typesafe', 'openai-native']);
     const bridge = new SpecializedModels(providers.get('deepseek')!, undefined, undefined, () => source);
     const images = bridge.getAvailableOfType('image');
     expect(images).toHaveLength(61); expect(images.every(model => model.provider === 'openrouter' && model.api === 'openrouter-images')).toBe(true);
     expect(bridge.getModelOfType('image')).toMatchObject({ provider: 'openrouter', api: 'openrouter-images' });
     expect(bridge.getAvailableOfType('classifier').map(model => model.api))
-      .toEqual(expect.arrayContaining(['typesafe-system-one', 'cloudflare-workers-ai-system-one']));
+      .toEqual(expect.arrayContaining(['typesafe-system-one', 'cloudflare-workers-ai-system-one', 'openai-decisions']));
     expect(providers.get('deepseek')?.getConfiguredModel()).toBe('deepseek-flash');
   });
 
@@ -107,7 +127,7 @@ describe('configured CLI providers', () => {
   });
 
   it.each([
-    ['moonshotai', MoonshotProvider], ['moonshotai-cn', MoonshotCnProvider],
+    ['openai-native', OpenAiMixedProvider], ['moonshotai', MoonshotProvider], ['moonshotai-cn', MoonshotCnProvider],
     ['ant-ling', AntLingProvider], ['baseten', BasetenProvider], ['together', TogetherProvider],
     ['huggingface', HuggingFaceProvider], ['xiaomi', XiaomiProvider], ['meta', MetaProvider], ['xai', XaiProvider],
     ['qwen-token-plan', QwenTokenPlanProvider], ['qwen-token-plan-cn', QwenTokenPlanCnProvider],

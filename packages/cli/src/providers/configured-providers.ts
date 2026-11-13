@@ -8,6 +8,7 @@ import {
   getProviderPublishedModels,
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
+  OpenAiMixedProvider,
   DeepSeekProvider,
   GroqProvider,
   ZaiProvider,
@@ -117,13 +118,13 @@ const NATIVE_PROVIDERS = {
   'qwen-token-plan-individual': QwenTokenPlanIndividualProvider,
   'xiaomi-token-plan-ams': XiaomiTokenPlanAmsProvider, 'xiaomi-token-plan-cn': XiaomiTokenPlanCnProvider,
   'xiaomi-token-plan-sgp': XiaomiTokenPlanSgpProvider, 'zai-coding-cn': ZaiCodingCnProvider,
-  typesafe: TypesafeProvider,
+  typesafe: TypesafeProvider, 'openai-native': OpenAiMixedProvider,
 };
 
 /** Existing native specialized services only; names/Mock factories never grant auxiliary authority. */
 export function getConfiguredSpecializedProviders(providers: ReadonlyMap<string, AiProvider>): ReadonlyMap<string, AiProvider> {
   return new Map([...providers].filter(([, provider]) => provider instanceof TypesafeProvider
-    || provider instanceof OpenRouterProvider || provider instanceof OpenCodeProvider
+    || provider instanceof OpenRouterProvider || provider instanceof OpenAiMixedProvider || provider instanceof OpenCodeProvider
     || provider instanceof CloudflareWorkersAiMixedProvider));
 }
 
