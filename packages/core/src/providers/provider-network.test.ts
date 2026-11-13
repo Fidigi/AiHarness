@@ -193,15 +193,41 @@ describe('provider network policy', () => {
     }
   });
 
+  it.each(['pre-aborted', 'pending', 'settlement'] as const)('abandons a late response exactly once after %s caller cancellation', async stage => {
+    const caller = new AbortController();
+    let release!: (response: Response) => void;
+    const response = Response.json({ ok: true }), cancelled = vi.spyOn(response.body!, 'cancel');
+    const pending = new Promise<Response>(resolve => { release = resolve; });
+    if (stage === 'pre-aborted') caller.abort();
+    const request = fetchProviderResponse('https://provider.test', { signal: caller.signal }, policy({ requestTimeoutMs: 0, httpIdleTimeoutMs: 0 }), {
+      fetcher: vi.fn(() => stage === 'pending' ? pending : Promise.resolve(response)),
+    });
+    if (stage !== 'pre-aborted') caller.abort();
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    if (stage === 'pending') release(response);
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not abandon a response already handed to its caller', async () => {
+    const caller = new AbortController(), response = Response.json({ ok: true }), cancelled = vi.spyOn(response.body!, 'cancel');
+    const owned = await fetchProviderResponse('https://provider.test', { signal: caller.signal }, policy({ requestTimeoutMs: 0, httpIdleTimeoutMs: 0 }), {
+      fetcher: vi.fn().mockResolvedValue(response),
+    });
+    caller.abort(); expect(cancelled).not.toHaveBeenCalled(); expect(await owned.json()).toEqual({ ok: true });
+  });
+
   it('bounds the whole request and streamed response idle interval independently', async () => {
     vi.useFakeTimers();
-    const pendingFetch = vi.fn(() => new Promise<Response>(() => undefined));
+    let release!: (response: Response) => void;
+    const pendingFetch = vi.fn(() => new Promise<Response>(resolve => { release = resolve; }));
     const request = fetchProviderResponse('https://provider.test', {}, policy({ requestTimeoutMs: 25 }), {
       fetcher: pendingFetch as typeof fetch,
     });
     const requestAssertion = expect(request).rejects.toMatchObject({ code: 'request-timeout' });
     await vi.advanceTimersByTimeAsync(25);
     await requestAssertion;
+    const late = Response.json({ ok: true }), cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
 
     const response = await fetchProviderResponse('https://provider.test', {}, policy({
       requestTimeoutMs: 0,

@@ -407,15 +407,14 @@ function retryDelay(attempt: number, response: Response | undefined, policy: Age
   return Math.min(delay, policy.maxRetryDelayMs);
 }
 
-function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal): Promise<T> {
+function abortable(promise: PromiseLike<Response>, signal?: AbortSignal): Promise<Response> {
   if (!signal) return Promise.resolve(promise);
-  if (signal.aborted) return Promise.reject(abortError(signal));
-  return new Promise<T>((resolve, reject) => {
+  return new Promise<Response>((resolve, reject) => {
     const aborted = (): void => reject(abortError(signal));
-    signal.addEventListener('abort', aborted, { once: true });
     Promise.resolve(promise).then(
       value => {
         signal.removeEventListener('abort', aborted);
+        if (signal.aborted) void value.body?.cancel('provider-response-abandoned').catch(() => undefined);
         resolve(value);
       },
       error => {
@@ -423,6 +422,8 @@ function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal): Promise<T>
         reject(error);
       },
     );
+    if (signal.aborted) aborted();
+    else signal.addEventListener('abort', aborted, { once: true });
   });
 }
 

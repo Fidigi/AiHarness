@@ -163,3 +163,77 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/fin
     expect((await stat(file)).mode & 0o777).toBe(0o600); expect(await readFile(file, 'utf8')).not.toContain('private-http-refresh');
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
+
+it.each(['token', 'catalogue'] as const)('retires Codex HTTP refresh at held %s without undoing committed credentials', async stage => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-cancel-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
+  const master = 'disposable-codex-http-cancel-master', model = 'gpt-6.1-sol', account = 'codex-http-cancel-account', initialRefresh = 'disposable-codex-refresh-original';
+  const token = (generation: number) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + Buffer.from('rotation-' + generation).toString('base64url');
+  const tokenUrl = 'https://auth.openai.com/oauth/token', modelsUrl = 'https://chatgpt.com/backend-api/codex/models?client_version=0.167.2', responsesUrl = 'https://chatgpt.com/backend-api/codex/responses';
+  const events = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents as unknown[];
+  let reached!: () => void, release!: (response: Response) => void;
+  const started = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<Response>(resolve => { release = resolve; });
+  let hold = false, refreshes = 0, issuerSignal: AbortSignal | null | undefined;
+  const calls: string[] = [], originalFetch = globalThis.fetch;
+  vi.stubEnv('AI_HARNESS_MASTER_KEY', master); vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'codex-http-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'codex-http-admin');
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    const target = String(url);
+    if (!['auth.openai.com', 'chatgpt.com'].includes(new URL(target).hostname)) return originalFetch(url, init);
+    calls.push(target);
+    if (target === tokenUrl) {
+      expect(init?.method).toBe('POST'); expect(new Headers(init?.headers).get('authorization')).toBeNull();
+      expect(Object.fromEntries(new URLSearchParams(String(init?.body)))).toEqual({ grant_type: 'refresh_token', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', refresh_token: initialRefresh });
+      refreshes++;
+      if (hold && stage === 'token') { issuerSignal = init?.signal; reached(); return held; }
+      return Response.json({ access_token: token(refreshes), refresh_token: 'disposable-codex-refresh-' + refreshes, expires_in: 3600 });
+    }
+    const headers = new Headers(init?.headers);
+    expect(headers.get('authorization')).toBe('Bearer ' + token(refreshes)); expect(headers.get('chatgpt-account-id')).toBe(account); expect(headers.get('x-api-key')).toBeNull();
+    if (target === modelsUrl) {
+      expect(init?.method).toBe('GET');
+      if (hold && stage === 'catalogue') { issuerSignal = init?.signal; reached(); return held; }
+      return Response.json({ models: [{ slug: model, visibility: 'list' }] });
+    }
+    expect(target).toBe(responsesUrl); expect(JSON.parse(String(init?.body))).toMatchObject({ model, stream: true, store: false });
+    return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+  });
+  try {
+    await mkdir(cwd); await mkdir(dataDir);
+    const file = path.join(dataDir, 'credentials.enc'), reader = new ProviderCredentialService({ store: new EncryptedCredentialStore(file, master) });
+    await reader.setOAuth('openai-codex', { accessToken: token(0), refreshToken: initialRefresh, expiresAt: Date.now() + 3_600_000,
+      subscription: { provider: 'openai-codex', accountId: account } });
+    const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
+    const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer codex-http-admin', 'content-type': 'application/json' };
+    expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(refreshes).toBe(0); expect(calls.length).toBeGreaterThan(0); expect(calls.every(url => url === modelsUrl)).toBe(true);
+    const initialCalls = calls.length, current = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
+    if (current?.credential.type !== 'oauth') throw new Error('Missing fixture credential.');
+    await reader.setOAuth('openai-codex', { ...current.credential, expiresAt: Date.now() - 1000 });
+    const expired = await readFile(file), caller = new AbortController(); hold = true;
+    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers, signal,
+      body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } }) });
+    const response = await chat(caller.signal); expect(response.status).toBe(200);
+    const output = response.text().catch((error: unknown) => error); await started;
+    const boundary = await readFile(file), committed = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
+    expect(committed?.credential).toMatchObject({ type: 'oauth', accessToken: token(stage === 'token' ? 0 : 1),
+      refreshToken: stage === 'token' ? initialRefresh : 'disposable-codex-refresh-1', subscription: { provider: 'openai-codex', accountId: account } });
+    if (stage === 'token') expect(boundary).toEqual(expired); else expect(boundary).not.toEqual(expired);
+    caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' }); await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
+    const late = Response.json(stage === 'token' ? { access_token: token(1), refresh_token: 'disposable-codex-refresh-1', expires_in: 3600 }
+      : { models: [{ slug: model, visibility: 'list' }] });
+    const cancelled = vi.spyOn(late.body!, 'cancel'); release(late);
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1)); expect(await readFile(file)).toEqual(boundary);
+    expect(calls.slice(initialCalls)).toEqual(stage === 'token' ? [tokenUrl] : [tokenUrl, modelsUrl]);
+    hold = false;
+    const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
+    expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+    expect(refreshes).toBe(stage === 'token' ? 2 : 1);
+    expect(calls.slice(initialCalls)).toEqual(stage === 'token' ? [tokenUrl, tokenUrl, modelsUrl, responsesUrl] : [tokenUrl, modelsUrl, modelsUrl, responsesUrl]);
+    const durable = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
+    expect(durable?.credential).toMatchObject({ type: 'oauth', accessToken: token(refreshes), refreshToken: 'disposable-codex-refresh-' + refreshes, subscription: { provider: 'openai-codex', accountId: account } });
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    for (const secret of [token(0), token(1), token(2), initialRefresh, 'disposable-codex-refresh-1', 'disposable-codex-refresh-2']) {
+      expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret);
+    }
+  } finally {
+    release(Response.json({})); await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+  }
+}, 15000);
