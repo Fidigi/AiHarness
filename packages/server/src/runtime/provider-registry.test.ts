@@ -2,7 +2,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, MoonshotProvider, NvidiaProvider, EncryptedCredentialStore } from '@ai-harness/core';
+import { CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, MoonshotProvider, NvidiaProvider, EncryptedCredentialStore,
+  AntLingProvider, BasetenProvider, FireworksProvider, HuggingFaceProvider, KimiCodingProvider, MetaProvider,
+  MiniMaxProvider, MiniMaxCnProvider, OpenCodeGoProvider, OpenCodeProvider, TogetherProvider, XaiProvider, XiaomiProvider, MoonshotCnProvider } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ProviderRegistryService } from './provider-registry.js';
 
@@ -25,6 +27,49 @@ afterEach(async () => {
 });
 
 describe('ProviderRegistryService', () => {
+  it.each([
+    ['ant-ling', AntLingProvider, 3], ['baseten', BasetenProvider, 22], ['fireworks', FireworksProvider, 22],
+    ['huggingface', HuggingFaceProvider, 78], ['kimi-coding', KimiCodingProvider, 4], ['meta', MetaProvider, 6],
+    ['minimax', MiniMaxProvider, 3], ['minimax-cn', MiniMaxCnProvider, 3], ['opencode-go', OpenCodeGoProvider, 31],
+    ['opencode', OpenCodeProvider, 83], ['together', TogetherProvider, 17], ['xai', XaiProvider, 4],
+    ['xiaomi', XiaomiProvider, 6], ['moonshot-cn', MoonshotCnProvider, 4],
+  ] as const)('composes %s through encrypted native registry lifecycle without discovery or borrowed model admission', async (dialect, Adapter, count) => {
+    const { root, proxy, service } = await fixture();
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected discovery'));
+    const id = 'owned-native', key = 'synthetic-native-first', rotated = 'synthetic-native-rotated';
+    await service.upsertProvider({ id, name: 'Owned native', dialect, apiKey: key, baseUrl: 'http://127.0.0.1/owned/v1' });
+    const provider = proxy.getAgentProvider(id)!;
+    expect(provider).toBeInstanceOf(Adapter);
+    const model = provider.getConfiguredModel()!;
+    const original = provider.getPublishedModels?.()?.find(row => row.id === model)!;
+    expect(provider.getPublishedModels?.()).toHaveLength(count);
+    const override = await service.upsertModel({ provider: id, id: model, name: 'Operator name', contextWindow: 777 });
+    const imported = await service.importProviderModels(id);
+    expect(imported).toHaveLength(count);
+    expect(imported.find(row => row.id === model)).toEqual(override);
+    expect(original.id).toBe(model);
+    await expect(service.testProvider(id)).rejects.toMatchObject({ status: 409 });
+    const before = await readFile(path.join(root, 'providers.json'), 'utf8');
+    const beforeSecrets = await readFile(path.join(root, 'secrets.enc'), 'utf8');
+    await expect(service.upsertModel({ provider: id, id: 'future/private' })).rejects.toMatchObject({ status: 400, code: 'INVALID_MODEL' });
+    expect(await readFile(path.join(root, 'providers.json'), 'utf8')).toBe(before);
+    expect(await readFile(path.join(root, 'secrets.enc'), 'utf8')).toBe(beforeSecrets);
+    await service.upsertProvider({ apiKey: rotated }, id);
+    expect(proxy.getAgentProvider(id)).toBeInstanceOf(Adapter);
+    expect(proxy.getAgentProvider(id)).not.toBe(provider);
+    const restoredProxy = new AiProxyServer();
+    const restored = new ProviderRegistryService(path.join(root, 'providers.json'), restoredProxy, path.join(root, 'secrets.enc'), 'test-master-key-with-32-characters');
+    await restored.load();
+    expect(restoredProxy.getAgentProvider(id)).toBeInstanceOf(Adapter);
+    expect(restored.getModels()).toEqual(service.getModels());
+    expect(restored.listProviders()).toContainEqual(expect.objectContaining({ id, dialect, configured: true }));
+    for (const secret of [key, rotated]) {
+      expect(await readFile(path.join(root, 'providers.json'), 'utf8')).not.toContain(secret);
+      expect(await readFile(path.join(root, 'secrets.enc'), 'utf8')).not.toContain(secret);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('imports native R profile fields without confusing D context or replacing explicit operator metadata', async () => {
     const { root, service, proxy } = await fixture();
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network request'));
@@ -150,12 +195,13 @@ describe('ProviderRegistryService', () => {
       .toEqual(['kimi-k2.6', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k3']);
     await expect(service.testProvider(id)).rejects.toMatchObject({ status: 409 });
     expect(fetch).not.toHaveBeenCalled();
-    expect((await initial.chat([{ role: 'user', content: 'CN host control' }], { maxTokens: 64 })).content).toBe('CN fixture reply');
+    const message = { id: 'cn-host-control', timestamp: new Date(0), role: 'user' as const, content: 'CN host control' };
+    expect((await initial.chat([message], { maxTokens: 64 })).content).toBe('CN fixture reply');
     await service.upsertProvider({ apiKey: rotatedKey }, id);
     const replaced = proxy.getAgentProvider(id)!;
     expect(replaced).not.toBe(initial); expect(replaced).toBeInstanceOf(MoonshotProvider);
     expect(service.listProviders()).toContainEqual(expect.objectContaining({ id, baseUrl, dialect: 'moonshot', configured: true }));
-    await replaced.chat([{ role: 'user', content: 'CN host control' }], { maxTokens: 64 });
+    await replaced.chat([message], { maxTokens: 64 });
     const restoredProxy = new AiProxyServer(), restored = new ProviderRegistryService(
       path.join(root, 'providers.json'), restoredProxy, path.join(root, 'secrets.enc'), 'test-master-key-with-32-characters',
     );
@@ -163,7 +209,7 @@ describe('ProviderRegistryService', () => {
     expect(restored.listProviders()).toContainEqual(expect.objectContaining({ id, baseUrl, dialect: 'moonshot', configured: true, modelCount: 4 }));
     const reloaded = restoredProxy.getAgentProvider(id)!;
     expect(reloaded).toBeInstanceOf(MoonshotProvider);
-    await reloaded.chat([{ role: 'user', content: 'CN host control' }], { maxTokens: 64 });
+    await reloaded.chat([message], { maxTokens: 64 });
     expect(requests).toEqual([
       { url: `${baseUrl}/chat/completions`, authorization: `Bearer ${firstKey}` },
       { url: `${baseUrl}/chat/completions`, authorization: `Bearer ${rotatedKey}` },

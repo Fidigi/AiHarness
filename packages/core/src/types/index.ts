@@ -145,7 +145,9 @@ export interface ModelPricing {
   cacheWritePerMillion?: number;
 }
 
-export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-responses' | 'anthropic' | 'google' | 'mistral-conversations' | 'openrouter' | 'cloudflare-workers-ai' | 'cerebras' | 'deepseek' | 'groq' | 'zai' | 'moonshot' | 'nvidia';
+export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-responses' | 'anthropic' | 'google' | 'mistral-conversations' | 'openrouter' | 'cloudflare-workers-ai' | 'cerebras' | 'deepseek' | 'groq' | 'zai' | 'moonshot' | 'nvidia'
+  | 'ant-ling' | 'baseten' | 'fireworks' | 'huggingface' | 'kimi-coding' | 'meta' | 'minimax' | 'minimax-cn'
+  | 'opencode-go' | 'opencode' | 'together' | 'xai' | 'xiaomi' | 'moonshot-cn';
 
 /** Public metadata for an operator-managed provider. Header values and credentials never cross the API. */
 export interface CustomProviderDefinition {

@@ -27,6 +27,20 @@ import {
   MOONSHOT_MODELS,
   NvidiaProvider,
   NVIDIA_MODELS,
+  AntLingProvider, ANT_LING_MODELS,
+  BasetenProvider, BASETEN_MODELS,
+  FireworksProvider, FIREWORKS_MODELS,
+  HuggingFaceProvider, HUGGINGFACE_MODELS,
+  KimiCodingProvider, KIMI_CODING_MODELS,
+  MetaProvider, META_MODELS,
+  MiniMaxProvider, MINIMAX_MODELS,
+  MiniMaxCnProvider, MINIMAX_CN_MODELS,
+  OpenCodeGoProvider, OPENCODE_GO_MODELS,
+  OpenCodeProvider, OPENCODE_MODELS,
+  TogetherProvider, TOGETHER_MODELS,
+  XaiProvider, XAI_MODELS,
+  XiaomiProvider, XIAOMI_MODELS,
+  MoonshotCnProvider, MOONSHOT_CN_MODELS,
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
   CLOUDFLARE_CHAT_MODELS,
@@ -110,14 +124,41 @@ function baseUrl(value: unknown): string {
   return parsed.toString().replace(/\/$/, '');
 }
 
+// One composition table binds each newly admitted dialect to its owning chat whitelist.
+const NATIVE_DIALECTS = {
+  'ant-ling': { Adapter: AntLingProvider, models: ANT_LING_MODELS },
+  baseten: { Adapter: BasetenProvider, models: BASETEN_MODELS },
+  fireworks: { Adapter: FireworksProvider, models: FIREWORKS_MODELS },
+  huggingface: { Adapter: HuggingFaceProvider, models: HUGGINGFACE_MODELS },
+  'kimi-coding': { Adapter: KimiCodingProvider, models: KIMI_CODING_MODELS },
+  meta: { Adapter: MetaProvider, models: META_MODELS },
+  minimax: { Adapter: MiniMaxProvider, models: MINIMAX_MODELS },
+  'minimax-cn': { Adapter: MiniMaxCnProvider, models: MINIMAX_CN_MODELS },
+  'opencode-go': { Adapter: OpenCodeGoProvider, models: OPENCODE_GO_MODELS },
+  opencode: { Adapter: OpenCodeProvider, models: OPENCODE_MODELS },
+  together: { Adapter: TogetherProvider, models: TOGETHER_MODELS },
+  xai: { Adapter: XaiProvider, models: XAI_MODELS },
+  xiaomi: { Adapter: XiaomiProvider, models: XIAOMI_MODELS },
+  'moonshot-cn': { Adapter: MoonshotCnProvider, models: MOONSHOT_CN_MODELS },
+};
+
+function nativeDialect(value: string | undefined) {
+  return value && Object.hasOwn(NATIVE_DIALECTS, value)
+    ? NATIVE_DIALECTS[value as keyof typeof NATIVE_DIALECTS] : undefined;
+}
+
 function dialect(value: unknown): ProviderDialect {
-  if (!['openai', 'openai-completions', 'openai-responses', 'anthropic', 'google', 'mistral-conversations', 'openrouter', 'cloudflare-workers-ai', 'cerebras', 'deepseek', 'groq', 'zai', 'moonshot', 'nvidia'].includes(String(value))) {
+  if (!['openai', 'openai-completions', 'openai-responses', 'anthropic', 'google', 'mistral-conversations', 'openrouter', 'cloudflare-workers-ai', 'cerebras', 'deepseek', 'groq', 'zai', 'moonshot', 'nvidia', ...Object.keys(NATIVE_DIALECTS)].includes(String(value))) {
     badRequest('Unsupported provider dialect.');
   }
   return value as ProviderDialect;
 }
 
 function validateDialectModel(dialect: ProviderDialect | undefined, id: string): void {
+  const native = nativeDialect(dialect);
+  if (native && !native.models.some(model => model.id === id)) {
+    badRequest('Native chat model is not supported.', 'INVALID_MODEL');
+  }
   if (dialect === 'openai' && !OPENAI_RESPONSE_MODELS.some(model => model.id === id)) {
     badRequest('OpenAI response model is not supported.', 'INVALID_MODEL');
   }
@@ -829,7 +870,9 @@ export class ProviderRegistryService {
       customHeaders: secrets?.headers,
       model: this.state.models.find(model => model.provider === record.id)?.id,
     };
-    const provider = record.dialect === 'openai-completions' ? new OpenAiProvider(config)
+    const Adapter = nativeDialect(record.dialect)?.Adapter;
+    const provider = Adapter ? new Adapter(config)
+      : record.dialect === 'openai-completions' ? new OpenAiProvider(config)
       : record.dialect === 'openai-responses' ? new OpenAiResponsesProvider(config)
         : record.dialect === 'mistral-conversations' ? new MistralProvider(config)
           : record.dialect === 'openrouter' ? new OpenRouterProvider(config)

@@ -302,6 +302,20 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           <option value="zai">Z.ai Coding Chat Completions</option>
           <option value="moonshot">Moonshot Chat Completions</option>
           <option value="nvidia">NVIDIA Chat Completions</option>
+          <option value="ant-ling">Ant Ling Chat Completions</option>
+          <option value="baseten">Baseten Chat Completions</option>
+          <option value="fireworks">Fireworks Messages / Chat Completions</option>
+          <option value="huggingface">Hugging Face Chat Completions</option>
+          <option value="kimi-coding">Kimi Coding Messages (API key)</option>
+          <option value="meta">Meta Responses (API key)</option>
+          <option value="minimax">MiniMax Messages</option>
+          <option value="minimax-cn">MiniMax CN Messages</option>
+          <option value="opencode-go">OpenCode Go Messages / Chat / Responses</option>
+          <option value="opencode">OpenCode Zen Messages / Google / Chat / Responses</option>
+          <option value="together">Together Chat Completions</option>
+          <option value="xai">xAI Responses (API key)</option>
+          <option value="xiaomi">Xiaomi Chat Completions</option>
+          <option value="moonshot-cn">Moonshot CN Chat Completions</option>
           <option value="anthropic">Anthropic Messages</option>
           <option value="google">Google Generative Language</option>
         </select></label>
