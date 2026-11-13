@@ -184,7 +184,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)('retires Codex HTTP credential work at held %s without undoing committed credentials', async stage => {
+it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inference-body'] as const)('retires Codex HTTP credential or inference work at held %s without undoing committed credentials', async stage => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-cancel-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-codex-http-cancel-master', model = 'gpt-6.1-sol', account = 'codex-http-cancel-account', initialRefresh = 'disposable-codex-refresh-original';
   const token = (generation: number) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + Buffer.from('rotation-' + generation).toString('base64url');
@@ -193,7 +193,7 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<Response>(resolve => { release = resolve; });
   let hold = false, refreshes = 0, issuerSignal: AbortSignal | null | undefined, finishBody: (() => void) | undefined, stopping: Promise<void> | undefined;
-  const bodyCancelled = vi.fn(() => stage === 'discovery-shutdown' ? new Promise<void>(() => undefined) : undefined);
+  const bodyCancelled = vi.fn(() => stage === 'discovery-shutdown' || stage === 'inference-body' ? new Promise<void>(() => undefined) : undefined);
   const calls: string[] = [], originalFetch = globalThis.fetch;
   vi.stubEnv('AI_HARNESS_MASTER_KEY', master); vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'codex-http-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'codex-http-admin');
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -222,6 +222,13 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)
       return Response.json({ models: [{ slug: model, visibility: 'list' }] });
     }
     expect(target).toBe(responsesUrl); expect(JSON.parse(String(init?.body))).toMatchObject({ model, stream: true, store: false });
+    if (hold && stage === 'inference-body') {
+      issuerSignal = init?.signal;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('data: ')); finishBody = () => controller.close(); },
+        pull() { reached(); return new Promise<void>(() => undefined); }, cancel: bodyCancelled,
+      }), { headers: { 'content-type': 'text/event-stream' } });
+    }
     return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
   });
   try {
@@ -234,6 +241,24 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)
     expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(refreshes).toBe(0); expect(calls.length).toBeGreaterThan(0); expect(calls.every(url => url === modelsUrl)).toBe(true);
     const initialCalls = calls.length, current = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
     if (current?.credential.type !== 'oauth') throw new Error('Missing fixture credential.');
+    const caller = new AbortController();
+    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers, signal,
+      body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } }) });
+    if (stage === 'inference-body') {
+      const committed = await readFile(file); hold = true;
+      const response = await chat(caller.signal); expect(response.status).toBe(200);
+      const output = response.text().catch((error: unknown) => error);
+      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true)); await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
+      expect(await readFile(file)).toEqual(committed); expect(refreshes).toBe(0); expect(calls.slice(initialCalls)).toEqual([modelsUrl, responsesUrl]);
+      hold = false;
+      const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
+      expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+      expect(calls.slice(initialCalls)).toEqual([modelsUrl, responsesUrl, modelsUrl, responsesUrl]); expect(refreshes).toBe(0); expect(bodyCancelled).toHaveBeenCalledTimes(1);
+      expect(await readFile(file)).toEqual(committed); expect((await stat(file)).mode & 0o777).toBe(0o600);
+      for (const secret of [token(0), initialRefresh]) { expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret); }
+      return;
+    }
     if (stage === 'discovery-shutdown') {
       const committed = await readFile(file); hold = true;
       const pending = fetch(base + '/api/models', { headers }).then(async response => ({ status: response.status, body: await response.json() as unknown }))
@@ -254,9 +279,7 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)
       return;
     }
     await reader.setOAuth('openai-codex', { ...current.credential, expiresAt: Date.now() - 1000 });
-    const expired = await readFile(file), caller = new AbortController(); hold = true;
-    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers, signal,
-      body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } }) });
+    const expired = await readFile(file); hold = true;
     const response = await chat(caller.signal); expect(response.status).toBe(200);
     const output = response.text().catch((error: unknown) => error); await started;
     const boundary = await readFile(file), committed = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
