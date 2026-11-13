@@ -15,6 +15,7 @@ const model = privateMode?.[1] === 'a' ? 'claude-fable-5.1' : privateMode?.[1] =
 const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-terminal-'));
 const cwd = root + '/work', agent = root + '/agent', sessions = root + '/sessions', trace = root + '/transport.jsonl';
 const master = 'disposable-copilot-terminal-master', grant = 'private-terminal-github-grant', token = 'private-terminal-inference';
+const rotatedToken = 'tid=private-terminal-rotation;proxy-ep=proxy.business.githubcopilot.com';
 const reference = JSON.parse(await readFile(process.env.AIH_COPILOT_RESPONSE_FILE ?? new URL('../../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8'));
 const events = Array.isArray(reference) ? reference : reference.rows.find(row => row.model === model && row.case === 'user').responseEvents;
 const continuation = privateMode ? JSON.parse(await readFile(process.env.AIH_COPILOT_CONTINUATION_FILE ?? new URL('../../../../../tests/fixtures/github-copilot-continuation-reference.json', import.meta.url), 'utf8')) : undefined;
@@ -33,10 +34,10 @@ const privateFinal = row?.seed.events.filter(event => row.api === 'anthropic-mes
     if (event.type === 'response.completed') return { ...event, response: { ...event.response, output: event.response.output.filter(item => item.type !== 'function_call') } };
     return event;
   });
-let privateTurns = 0;
+let privateTurns = 0, exchanges = 0;
 let terminal, child, exit, output = '', privacyTail = '', wire, held, hold = true, fixtureError;
 const calls = [];
-const secrets = [token, grant, 'private-terminal-device'];
+const secrets = [token, rotatedToken, grant, 'private-terminal-device'];
 const overlap = Math.max(...secrets.map(secret => secret.length)) - 1;
 const wait = async (predicate, label) => {
   const end = performance.now() + 5000;
@@ -65,8 +66,18 @@ try {
     try {
       let body = ''; for await (const chunk of request) { body += chunk; assert(body.length < 2000000); }
       calls.push({ url: request.headers['x-fixture-original-url'], path: request.url, method: request.method, authorization: request.headers.authorization, apiKey: request.headers['x-api-key'], body });
+      if (request.url === '/copilot_internal/v2/token') {
+        assert.equal(request.headers['x-fixture-original-url'], 'https://api.github.com/copilot_internal/v2/token');
+        assert.equal(request.method, 'GET'); assert.equal(request.headers.authorization, `Bearer ${grant}`); assert.equal(body, '');
+        exchanges++;
+      }
+      const currentToken = privateMode && exchanges > 1 ? rotatedToken : token;
+      const currentEndpoint = privateMode && exchanges > 1 ? 'https://api.business.githubcopilot.com' : 'https://api.individual.githubcopilot.com';
+      if (request.url === '/models' || ['/responses', '/chat/completions', '/v1/messages?beta=true'].includes(request.url)) {
+        assert.equal(request.headers['x-fixture-original-url'], currentEndpoint + request.url);
+        assert.equal(request.headers.authorization, `Bearer ${currentToken}`); assert.equal(request.headers['x-api-key'], undefined);
+      }
       if (['/responses', '/chat/completions', '/v1/messages?beta=true'].includes(request.url)) {
-        assert.equal(request.headers.authorization, `Bearer ${token}`); assert.equal(request.headers['x-api-key'], undefined);
         assert.equal(JSON.parse(body).model, model);
         assert.equal(request.url, !row || row.api === 'openai-responses' ? '/responses' : row.api === 'openai-completions' ? '/chat/completions' : '/v1/messages?beta=true');
         const selected = !row ? events : ++privateTurns === 1 ? payload(row.seed.events, token) : privateTurns === 2 ? payload(privateFinal, token) : events;
@@ -75,7 +86,7 @@ try {
       }
       const value = request.url === '/login/device/code' ? { device_code: 'private-terminal-device', user_code: 'TERMINAL-CODE', verification_uri: 'https://github.com/login/device', expires_in: 60, interval: 0.01 }
         : request.url === '/login/oauth/access_token' ? { access_token: grant }
-        : request.url === '/copilot_internal/v2/token' ? { token, expires_at: Math.floor(Date.now() / 1000) + 3600 }
+        : request.url === '/copilot_internal/v2/token' ? { token: currentToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }
         : request.url === '/models' ? { data: [{ id: model, model_picker_enabled: true }] } : undefined;
       assert(value, 'Unexpected fixture target');
       response.setHeader('content-type', 'application/json');
@@ -90,7 +101,7 @@ try {
   const original = globalThis.fetch; globalThis.fetch = (input, init) => {
     const target = new URL(String(input));
     if (target.hostname === 'localhost' && target.port === '11434') return Promise.resolve(Response.json({data:[]}));
-    if (!['github.com','api.github.com','api.individual.githubcopilot.com'].includes(target.hostname)) throw new Error('Unexpected fixture host');
+    if (!['github.com','api.github.com','api.individual.githubcopilot.com','api.business.githubcopilot.com'].includes(target.hostname)) throw new Error('Unexpected fixture host');
     const headers = new Headers(init?.headers); headers.set('x-fixture-original-url', target.href);
     return original(new URL(target.pathname + target.search, ${JSON.stringify(endpoint)}), {...init, headers}).then(response => {
       appendFileSync(${JSON.stringify(trace)},JSON.stringify({url:target.href,status:response.status,now:Date.now()})+'\\n'); return response;
@@ -167,7 +178,17 @@ try {
         if (row.api === 'openai-responses') assert.equal(bytes.includes('textSignature'), complete);
         assert.equal((await stat(file)).mode & 0o777, 0o600); exports.push(bytes, JSON.stringify(exported)); assert.equal(await readFile(journalFile, 'utf8'), journal);
       }
+      const credentials = reader(); await credentials.load();
+      const current = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+      assert.equal(current?.credential.type, 'oauth'); assert.equal(current.credential.accessToken, token); assert.equal(current.credential.refreshToken, grant);
+      assert.equal(exchanges, 1); assert.equal(calls.length, 6);
+      await credentials.setOAuth('github-copilot', { ...current.credential, expiresAt: 1 });
       const resumed = await run(args(true, 'continue'), input('continue')); assert.equal(resumed.code, 0, JSON.stringify(resumed)); assert.equal(resumed.signal, null);
+      assert.equal(exchanges, 2);
+      const refreshed = reader(); await refreshed.load();
+      const durable = await refreshed.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
+      assert.equal(durable?.credential.type, 'oauth'); assert.equal(durable.credential.accessToken, rotatedToken); assert.equal(durable.credential.refreshToken, grant);
+      assert(durable.credential.expiresAt > Date.now()); assert.deepEqual(durable.credential.subscription, { provider: 'github-copilot', availableModelIds: [model] });
       assert.equal(bodies().length, 3); assert.deepEqual(history(bodies()[2]), expected(true)); assert.equal(await readFile(effects, 'utf8'), 'effect\n');
       const restarted = await readFile(journalFile, 'utf8'), assistants = restarted.trim().split('\n').map(line => JSON.parse(line)).filter(record => record.type === 'message' && record.role === 'assistant');
       assert.equal(assistants.length, 3); assert.deepEqual(assistants.slice(0, 2).map(record => record.blocks), [blocks, finalBlocks]);
@@ -183,7 +204,12 @@ try {
       assert.equal(calls.length, count); assert.equal(privateTurns, 3); assert.equal(await readFile(effects, 'utf8'), 'effect\n');
       const publicOutput = JSON.stringify([login, first, resumed, logout, withdrawn]); assert(!publicOutput.includes('opaque-')); assert(!publicOutput.includes('thinkingSignature')); assert(!publicOutput.includes('textSignature'));
       for (const secret of secrets) assert(!(publicOutput + journal + restarted + encrypted + exports.join('\n')).includes(secret));
-      assert.equal(fixtureError, undefined); assert.equal(calls.length, 7);
+      assert.equal(fixtureError, undefined); assert.equal(calls.length, 9); assert.equal(exchanges, 2);
+      const inferencePath = row.api === 'anthropic-messages' ? '/v1/messages?beta=true' : row.api === 'openai-completions' ? '/chat/completions' : '/responses';
+      assert.deepEqual(calls.map(call => call.url), ['https://github.com/login/device/code', 'https://github.com/login/oauth/access_token',
+        'https://api.github.com/copilot_internal/v2/token', 'https://api.individual.githubcopilot.com/models',
+        ...Array(2).fill('https://api.individual.githubcopilot.com' + inferencePath),
+        'https://api.github.com/copilot_internal/v2/token', 'https://api.business.githubcopilot.com/models', 'https://api.business.githubcopilot.com' + inferencePath]);
     } else {
     const args = ['--approve', '--no-extensions', '--no-context-files', '--no-tools', '--provider', 'github-copilot', '--model', 'gpt-5-mini',
       '--thinking', 'off', '--session-dir', sessions, '--session-id', 'copilot-terminal', ...(mode === 'print' ? ['--print'] : ['--mode', mode]), ...(mode === 'rpc' ? [] : ['probe'])];
