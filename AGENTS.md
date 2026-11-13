@@ -44,6 +44,7 @@ The test: Every changed line should trace directly to the user's request.
 
 ## 4. Keep Test Work Focused
 
+- Automated account tests must use synthetic credentials/accounts and mocked or loopback service transports. Do not add real-account opt-in modes, accept user credentials or personal credential stores in test fixtures, or provide a switch from simulated account flows to live services. Real-account verification belongs to the user manually, outside the automated suite.
 - Before adding tests, identify the existing coverage and state the specific behavior that is not covered.
 - Add only the tests needed to cover that gap; reuse existing scenarios and fixtures where appropriate.
 - Refactor only duplication encountered within the current task's scope. Do not turn a focused change into a general test-suite rewrite or a new test framework.

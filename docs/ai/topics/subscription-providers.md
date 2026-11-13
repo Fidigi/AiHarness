@@ -8,7 +8,13 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 
 [IMPORTANT] Server OAuth now has a native Copilot device-login path as well as existing-credential composition. Web Settings has separate emitted-Server/static-Web EN/FR fixture journeys; interactive CLI now has a separate explicit issuer path and bounded terminal fixtures; full profile/account acceptance remains incomplete. Do not infer live account acceptance from service/HTTP/browser fixtures.
 
-The [subscription acceptance checkpoint](../../audit/pi/MOD-03-subscription-acceptance.md) maps the active objective to current receipts, separates later delivery from historical `remaining` lists, and identifies real-account decisions and non-waived holds. Its later [static review](../../audit/pi/evidence/MOD-03-subscription-current-review.json) distinguishes current source/production shared-module witnesses from older installed/emitted/browser evidence and identifies the smallest Copilot account-owner decision. It grants no new runtime, account authorization or whole-module qualification.
+The [subscription acceptance checkpoint](../../audit/pi/MOD-03-subscription-acceptance.md) maps the active objective to current receipts, separates later delivery from historical `remaining` lists, and identifies real-account decisions and non-waived holds. Its later [static review](../../audit/pi/evidence/MOD-03-subscription-current-review.json) distinguishes current source/production shared-module witnesses from older installed/emitted/browser evidence and records the account boundary at that checkpoint. The later user decision below supersedes its proposed account campaign; historical receipts remain unchanged. It grants no new runtime, account authorization or whole-module qualification.
+
+## Automated Test Policy
+
+The user owns real-account verification manually, outside the automated suite. Copilot/Codex tests must use synthetic accounts/credentials, disposable stores and mocked or verified loopback transports. Do not add a real-account opt-in flag, accept user tokens/personal credential stores in fixtures, or provide a switch that bypasses simulated account flows to contact live subscription services. This also applies to separately qualified installed/production probes. Subscription browser files named `*-live.spec.ts` exercise a real **local Server/browser**, not real vendor accounts.
+
+The reviewed account fixtures already use disposable values and simulated vendor responses; no real-account test mode was found or added. Normal product CLI/Settings login remains available for the user's manual checks. Manual results remain unverified until the user reports them; they are not counted as automated passes and do not require an assistant-operated real-account campaign.
 
 ## Main Entry Points
 
