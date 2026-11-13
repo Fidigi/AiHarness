@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 
-// Keep the compiler off Maglev without altering application Node processes,
-// compiler arguments, diagnostics or sandbox budgets. Never retry a failed run.
+// Compiler crashes also reproduce with Maglev disabled. Keep optimizing JIT
+// tiers off for TypeScript only; application flags, diagnostics and budgets stay
+// unchanged. This is a scoped mitigation, not a diagnosis. Never retry a run.
 export function runTypeScript(args, run = spawnSync) {
-  const result = run(process.execPath, ['--no-maglev', require.resolve('typescript/bin/tsc'), ...args], { stdio: 'inherit' });
+  const result = run(process.execPath, ['--no-maglev', '--no-turbofan', require.resolve('typescript/bin/tsc'), ...args], { stdio: 'inherit' });
   return { status: result.status ?? 1, code: result.status ?? null,
     signal: result.signal ?? null, spawnFailed: !!result.error };
 }

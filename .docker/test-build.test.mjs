@@ -40,7 +40,7 @@ test('emitted Core export and Server configuration module load in Node without T
   assert.equal(typeof server.ConfigurationStore, 'function');
 });
 
-test('all workspace and parity typechecks retain compiler arguments through the no-Maglev launcher', async () => {
+test('all workspace and parity typechecks retain arguments without optimizing compiler JIT', async () => {
   const rootManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   assert.equal(rootManifest.scripts['typecheck:parity'], 'node scripts/run-typescript.mjs --noEmit -p tests/functional-parity/tsconfig.json');
   for (const name of ['core', 'cli', 'server', 'web']) {
@@ -52,7 +52,7 @@ test('all workspace and parity typechecks retain compiler arguments through the 
   assert.deepEqual(runTypeScript(['--noEmit', '-p', 'tests/functional-parity/tsconfig.json'], (command, args, options) => {
     calls++;
     assert.equal(command, process.execPath);
-    assert.deepEqual(args, ['--no-maglev', path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', 'tests/functional-parity/tsconfig.json']);
+    assert.deepEqual(args, ['--no-maglev', '--no-turbofan', path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', 'tests/functional-parity/tsconfig.json']);
     assert.deepEqual(options, { stdio: 'inherit' });
     return { status: 0 };
   }), { status: 0, code: 0, signal: null, spawnFailed: false });
@@ -70,7 +70,7 @@ test('TypeScript launcher preserves compiler failure evidence and never retries'
   }
 });
 
-test('Web build runs compiler, bundler and unchanged budget checks without Maglev', async () => {
+test('Web build disables optimizing compiler JIT without changing bundler or budget-check flags', async () => {
   const manifest = JSON.parse(await readFile(path.join(root, 'packages/web/package.json'), 'utf8'));
   assert.equal(manifest.scripts.build, 'node scripts/build.mjs');
   const calls = [];
@@ -83,7 +83,7 @@ test('Web build runs compiler, bundler and unchanged budget checks without Magle
     assert.equal(call.args[0], '--no-maglev');
     assert.deepEqual(call.options, { stdio: 'inherit' });
   }
-  assert.equal(calls[0].args[1], path.join(root, 'node_modules/typescript/bin/tsc'));
+  assert.deepEqual(calls[0].args, ['--no-maglev', '--no-turbofan', path.join(root, 'node_modules/typescript/bin/tsc')]);
   assert.deepEqual(calls[1].args.slice(1), [path.join(root, 'node_modules/vite/bin/vite.js'), 'build']);
   assert.deepEqual(calls[2].args.slice(1), [path.join(root, 'packages/web/scripts/check-bundle-budget.mjs')]);
 });

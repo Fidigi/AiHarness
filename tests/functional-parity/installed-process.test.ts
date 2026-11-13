@@ -10,9 +10,14 @@ describe('installed child native termination evidence', () => {
   it('flags only the exact TypeScript process without mutating compiler or application argv', () => {
     const compiler = '/resolved/typescript/bin/tsc';
     const args = Object.freeze([compiler, '--noEmit', 'consumer with spaces.ts']);
-    expect(compilerNodeArgs(process.execPath, args, compiler)).toEqual(['--no-maglev', ...args]);
+    expect(compilerNodeArgs(process.execPath, args, compiler)).toEqual(['--no-maglev', '--no-turbofan', ...args]);
     expect(compilerNodeArgs('npm', args, compiler)).toEqual(args);
     expect(compilerNodeArgs(process.execPath, ['consumer.mjs', '--strict'], compiler)).toEqual(['consumer.mjs', '--strict']);
+    expect(compilerNodeArgs(process.execPath, args, compiler, '/consumer/check.tsbuildinfo'))
+      .toEqual(['--no-maglev', '--no-turbofan', ...args, '--incremental', '--tsBuildInfoFile', '/consumer/check.tsbuildinfo']);
+    expect(compilerNodeArgs(process.execPath, [compiler, 'emit.ts'], compiler, '/consumer/check.tsbuildinfo'))
+      .toEqual(['--no-maglev', '--no-turbofan', compiler, 'emit.ts']);
+    expect(compilerNodeArgs(process.execPath, ['app.mjs'], compiler, '/consumer/check.tsbuildinfo')).toEqual(['app.mjs']);
     expect(args).toEqual([compiler, '--noEmit', 'consumer with spaces.ts']);
   });
 

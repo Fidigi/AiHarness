@@ -6,8 +6,12 @@ const byteLimit = 1024 * 1024;
 export interface Result { code: number | null; stdout: string; stderr: string }
 
 /** Scope the build-tool JIT mitigation to the exact resolved TypeScript entry. */
-export function compilerNodeArgs(command: string, args: readonly string[], compiler: string): string[] {
-  return command === process.execPath && args[0] === compiler ? ['--no-maglev', ...args] : [...args];
+export function compilerNodeArgs(command: string, args: readonly string[], compiler: string, buildInfoFile?: string): string[] {
+  if (command !== process.execPath || args[0] !== compiler) return [...args];
+  // Reuse strict declaration checks only within one disposable consumer. TypeScript
+  // invalidates this cache for changed sources, declarations and compiler options.
+  const cache = buildInfoFile && args.includes('--noEmit') ? ['--incremental', '--tsBuildInfoFile', buildInfoFile] : [];
+  return ['--no-maglev', '--no-turbofan', ...args, ...cache];
 }
 
 export function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, input = '', timeoutMs = 20_000): Promise<Result> {

@@ -110,7 +110,7 @@ let inventory: Array<{ name: string; filename: string; files: Array<{ path: stri
 const dependencies = new Map<string, string>();
 
 async function succeed(command: string, args: string[], cwd: string, env: NodeJS.ProcessEnv, timeout = 60_000): Promise<Result> {
-  const actualArgs = compilerNodeArgs(command, args, compiler);
+  const actualArgs = compilerNodeArgs(command, args, compiler, path.join(cwd, '.aih-typecheck.tsbuildinfo'));
   const result = await run(command, actualArgs, cwd, env, '', timeout);
   expect(result.code, `${command} ${actualArgs.join(' ')}\n${result.stdout}\n${result.stderr}`).toBe(0);
   return result;
@@ -272,6 +272,10 @@ beforeAll(async () => {
       expect(await readFile(path.join(installed, file.path))).toEqual(await readFile(path.join(build, 'packages', name, file.path)));
     }
   }
+  // Prime unchanged installed declarations once, without skipping any checks or
+  // moving per-case source assertions out of their existing five-second budgets.
+  await writeFile(path.join(consumer, 'typecheck-warmup.ts'), "import '@ai-harness/core';");
+  await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'typecheck-warmup.ts'], consumer, environment);
   const evidence = process.env.AIH_INSTALLED_EVIDENCE_DIR;
   if (evidence) {
     expect(outside(path.resolve(evidence), checkout)).toBe(true);
@@ -301,6 +305,33 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       { ...environment, AIH_RUN_COMMAND: 'ai-harness', AIH_TEST_MODULES_ROOT: installedModules }, '', 20_000))
       .toEqual({ code: 0, stdout: 'RUN_CONTRACT_OK\n', stderr: '' });
   }, 25_000);
+
+  it('invalidates strict installed typecheck caches for changed roots, declarations and options', async () => {
+    const file = path.join(consumer, 'cache-control.ts');
+    const declaration = path.join(consumer, 'cache-control-value.d.ts');
+    const source = "import '@ai-harness/core'; import { value } from './cache-control-value.js'; const checked: number = value; void checked;";
+    const check = async (expected: number, options: string[] = []) => {
+      const args = compilerNodeArgs(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', ...options, file], compiler, path.join(consumer, '.aih-typecheck.tsbuildinfo'));
+      const result = await run(process.execPath, args, consumer, environment);
+      expect(result.code, result.stdout + result.stderr).toBe(expected);
+      expect(result.stderr).toBe('');
+      if (expected !== 0) expect(result.stdout).toContain('TS2322');
+    };
+    await writeFile(file, source);
+    await writeFile(declaration, 'export declare const value: number;');
+    await check(0);
+    await writeFile(declaration, 'export declare const value: string;');
+    await check(2);
+    await writeFile(declaration, 'export declare const value: number;');
+    await check(0);
+    await writeFile(file, source.replace('= value', '= "wrong"'));
+    await check(2);
+    await writeFile(file, source.replace('= value', '= null'));
+    await check(0, ['--strictNullChecks', 'false']);
+    await check(2);
+    await writeFile(file, source);
+    await check(0);
+  }, 45_000);
 
   it('publishes native bounded recovery, nested/rich results and parallel snapshot declarations', async () => {
     await writeFile(path.join(consumer, 'run-public.ts'), `
@@ -769,7 +800,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       assert.equal(rendered.isError,false);assert.equal(rendered.blocks?.[0]?.type,'image');
       console.log('native CODE public API OK');`;
     await writeFile(path.join(consumer, 'codemode-public.ts'), source);
-    const types = await succeed(process.execPath, [compiler, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'codemode-public.ts'], consumer, environment);
+    const types = await succeed(process.execPath, [compiler, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', '--incremental', '--tsBuildInfoFile', path.join(consumer, '.aih-typecheck.tsbuildinfo'), 'codemode-public.ts'], consumer, environment);
     expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
     expect(await run(process.execPath, ['codemode-public.js'], consumer, environment)).toEqual({ code: 0, stdout: 'native CODE public API OK\n', stderr: '' });
   });
