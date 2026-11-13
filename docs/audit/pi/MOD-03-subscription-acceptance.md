@@ -1,6 +1,6 @@
 # MOD-03 Subscription Acceptance Checkpoint
 
-> **2026-11-13 · PARTIAL · goal remains active.** Reconciliation through `ae6e582`, plus the later separately linked CLI-refresh subset. This document grants no new runtime campaign, real-account acceptance or MOD-03 closure. MOD-01 remains IN PROGRESS; AUDIT-5 remains37/43.
+> **2026-11-13 · PARTIAL · goal remains active.** Reconciliation through `ae6e582`, plus the separately linked CLI-refresh subset and browser-refresh candidate HOLD. This document grants no new runtime campaign, real-account acceptance or MOD-03 closure. MOD-01 remains IN PROGRESS; AUDIT-5 remains37/43.
 
 ## Scope and Evidence Rules
 
@@ -34,7 +34,7 @@ The [subscription contract](../../ai/topics/subscription-providers.md) owns curr
 - **SDK:** Copilot routing/continuation fixtures and Codex normalized transport/PKCE/private continuation acquisitions bind independent reference behavior. Later host campaigns reuse those fixtures, not fresh SDK executions or real service responses.
 - **Core:** Emitted/installed public-Core replay is distinct from running the CLI with native login and private journals.
 - **HTTP:** Copilot refresh/tier/removal is qualified through the source Server composition root. It does not transfer to browser, installed CLI or production refresh acceptance.
-- **Browser:** EN/FR journeys use genuine emitted Server/static Web with synthetic outbound providers. Rich snapshots/view cache may retain authorized opaque data; credentials must be absent and opaque carriers are not displayed. This is not an opaque-free storage certificate.
+- **Browser:** EN/FR journeys use genuine emitted Server/static Web with synthetic outbound providers. The later [browser-refresh candidate](./evidence/MOD-03-copilot-web-refresh.json) has a four-case development pass but its fresh-image browser gate is HOLD (exit139, empty output/no case report); do not promote that new refresh boundary to canonical browser acceptance. Rich snapshots/view cache may retain authorized opaque data; credentials must be absent and opaque carriers are not displayed. This is not an opaque-free storage certificate.
 - **CLI:** Copilot fourteen selected installed journeys (including the later nine private fresh-process refresh paths) and Codex eight selected installed public/private journeys retain separate receipts/inventories. Codex five installed browser-method selectors are a separate campaign. None is a full installed parity pass.
 - **Production:** Copilot nine private A/C/R print/JSON/RPC paths pass on Node26.13.1, UID/GID999, network-none through `/app/packages/cli/dist/index.js`; the later independent CLI-refresh campaign reuses that retained image with the enhanced probe, without a new production build. This is neither an installed PATH-bin nor Web-launcher/distribution certificate; no runtime test dependency or TLS bypass was added.
 
@@ -57,6 +57,7 @@ The [current contract's retained gate history](../../ai/topics/subscription-prov
 - Root **10,447 PASS/2 FAIL/535 files**: installed tool-selection native termination and the OpenRouter C5000ms timeout. Focused later passes do not qualify that root.
 - Wider Settings **64 PASS/1 FAIL**, worker SIGSEGV at `e2e/settings.spec.ts:608`.
 - [Codex CLI fresh rebuild](./evidence/MOD-03-codex-cli.json): Core TypeScript compiler SIGSEGV, outside the three-incident waiver. Later independent builds are not retroactive repairs.
+- [Copilot browser-refresh fresh-image runner](./evidence/MOD-03-copilot-web-refresh.json): exit139, empty output/no case report, no raw signal/known phase/cause or identical replay. Four development passes on a recorded older-image test overlay do not qualify this gate.
 - Thirteen strict diagnostics in unchanged `providers/openai-responses.test.ts`, and `commands/handler.test.ts(28,32)` TS2503 (`jest` namespace). Runtime passes and narrower strict roots do not close those roots.
 
 No wider compiler/provider repair is undertaken here: other MOD-03/MOD-01 work needs an indispensable dependency or explicit scope decision. Historical failures retain their source-bound results and unknown causes; this checkpoint adds no waiver or rerun.
@@ -65,4 +66,4 @@ No wider compiler/provider repair is undertaken here: other MOD-03/MOD-01 work n
 
 **Do not mark the tracked goal complete. Do not close MOD-03 or change AUDIT-5's count.** Native subscription foundations and named local host/race subsets are delivered; real-account acceptance, complete qualification and non-waived holds are not. A future completion audit must map every then-agreed requirement to actual artifacts and resolve remaining uncertainty, rather than infer completion from this matrix or one green campaign.
 
-The original reconciliation (`11331ec`) was documentation only, validated by `make lint-docs` in Docker and `git diff --check`. The later test-only CLI-refresh increment has its own linked build/type, focused, installed and retained-production evidence; the reconciliation itself grants no execution or account qualification.
+The original reconciliation (`11331ec`) was documentation only, validated by `make lint-docs` in Docker and `git diff --check`. The later test-only CLI-refresh increment has its own linked build/type, focused, installed and retained-production evidence; the browser-refresh candidate separately retains its successful build/types/focused/development and failed fresh-image browser gate. The reconciliation itself grants no execution or account qualification.
