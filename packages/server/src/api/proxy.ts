@@ -22,6 +22,7 @@ import {
   CredentialRedactor,
   GeminiProvider,
   GitHubCopilotProvider,
+  OpenAICodexProvider,
   LocalProvider,
   MockProvider,
   normalizeProviderUsage,
@@ -420,6 +421,7 @@ export class AiProxyServer {
   private bedrockProxy?: CoreProviderProxy;
   private mockProxy?: CoreProviderProxy;
   private githubCopilotProxy?: CoreProviderProxy;
+  private openaiCodexProxy?: CoreProviderProxy;
   private readonly customProxies = new Map<string, CoreProviderProxy>();
   private readonly agentProviders = new Map<string, AiProvider>();
   private readonly usage = new Map<string, ProviderUsageMetrics>();
@@ -549,6 +551,18 @@ export class AiProxyServer {
     this.githubCopilotProxy = new CoreProviderProxy(provider);
   }
 
+  setOpenAICodexSubscription(model: string, credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>): void {
+    // Do not reinterpret explicit WebSocket policy or disable unrelated providers.
+    if (this.network?.transport === 'websocket') return;
+    const provider = new OpenAICodexProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'openai-codex', model }, async signal => {
+      const credential = await credentialSource(signal);
+      this.redactor.add(credential?.accessToken); this.redactor.add(credential?.refreshToken);
+      return credential;
+    });
+    this.agentProviders.set('openai-codex', provider);
+    this.openaiCodexProxy = new CoreProviderProxy(provider);
+  }
+
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string): void {
     if (apiKey) this.redactor.add(apiKey);
@@ -670,7 +684,7 @@ export class AiProxyServer {
   setCustomProvider(type: string, provider: AiProvider): void {
     const normalized = type.trim().toLowerCase();
     if (!/^[a-z][a-z0-9_-]{1,63}$/.test(normalized)
-      || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot'].includes(normalized)) {
+      || ['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot', 'openai-codex'].includes(normalized)) {
       throw new Error(`Invalid custom provider id: ${type}`);
     }
     const providerConfig = (provider as unknown as { config: ProviderConfig }).config;
@@ -697,6 +711,7 @@ export class AiProxyServer {
       case 'bedrock': this.bedrockProxy = undefined; break;
       case 'local': this.localProxy = undefined; break;
       case 'github-copilot': this.githubCopilotProxy = undefined; break;
+      case 'openai-codex': this.openaiCodexProxy = undefined; break;
       default: return false;
     }
     return true;
@@ -816,6 +831,7 @@ export class AiProxyServer {
       case 'bedrock': return !!this.bedrockProxy;
       case 'local': return !!this.localProxy;
       case 'github-copilot': return !!this.githubCopilotProxy;
+      case 'openai-codex': return !!this.openaiCodexProxy;
       case 'mock': return !!this.mockProxy;
       default: return this.customProxies.has(type.toLowerCase());
     }
@@ -832,6 +848,7 @@ export class AiProxyServer {
       { type: 'bedrock', configured: !!this.bedrockProxy },
       { type: 'local', configured: !!this.localProxy },
       { type: 'github-copilot', configured: !!this.githubCopilotProxy },
+      { type: 'openai-codex', configured: !!this.openaiCodexProxy },
       ...(this.config.enableMockProvider ? [{ type: 'mock', configured: true }] : []),
       ...[...this.customProxies.keys()].sort().map(type => ({ type, configured: true })),
     ];
@@ -1048,6 +1065,7 @@ export class AiProxyServer {
       case 'bedrock': return this.bedrockProxy ?? null;
       case 'local': return this.localProxy ?? null;
       case 'github-copilot': return this.githubCopilotProxy ?? null;
+      case 'openai-codex': return this.openaiCodexProxy ?? null;
       case 'mock': return this.mockProxy ?? null;
       default: return this.customProxies.get(type.toLowerCase()) ?? null;
     }

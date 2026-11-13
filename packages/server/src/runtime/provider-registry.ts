@@ -44,7 +44,7 @@ import type { AiProxyServer } from '../api/proxy.js';
 import { getPublishedModelMetadata } from './model-catalog.js';
 import { EncryptedCredentialStore } from '../security/credential-store.js';
 
-const BUILTIN_IDS = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot']);
+const BUILTIN_IDS = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot', 'openai-codex']);
 const MAX_CUSTOM_PROVIDERS = 256;
 const MAX_CUSTOM_MODELS = 10_000;
 const MAX_PROVIDER_SECRET_BYTES = 64 * 1024;

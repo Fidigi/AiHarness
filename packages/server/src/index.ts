@@ -74,6 +74,7 @@ import {
 import { getAppUpdateStatus } from './runtime/app-update.js';
 import { ProviderOAuthService } from './runtime/provider-oauth.js';
 import { resolveGitHubCopilotSubscription } from './runtime/github-copilot.js';
+import { resolveOpenAICodexSubscription } from './runtime/openai-codex.js';
 import { providerOperation } from './runtime/provider-administration.js';
 
 export type { ChatOptions } from '@ai-harness/core';
@@ -244,6 +245,9 @@ function initializeCredentials(
     const copilot = await resolveGitHubCopilotSubscription(credentials, runtime.controller.signal);
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
     if (copilot) proxy.setGitHubCopilotSubscription(copilot.model, copilot.credentialSource);
+    const codex = await resolveOpenAICodexSubscription(credentials, runtime.controller.signal);
+    if (runtime.closed) throw new Error('Application runtime is no longer active.');
+    if (codex) proxy.setOpenAICodexSubscription(codex.model, codex.credentialSource);
     let mcpOAuth: McpOAuthCredentialManager | undefined;
     let mcpOAuthFlows: McpOAuthFlowService | undefined;
     if (store) {

@@ -69,7 +69,7 @@ describe('AiProxyServer', () => {
   describe('getProviders()', () => {
     it('should return list of providers with configured status', () => {
       const providers = proxy.getProviders();
-      expect(providers).toHaveLength(8);
+      expect(providers).toHaveLength(9);
       expect(providers[0]).toEqual({ type: 'openai', configured: false });
       expect(providers[1]).toEqual({ type: 'anthropic', configured: false });
       expect(providers[2]).toEqual({ type: 'google', configured: false });
@@ -78,6 +78,7 @@ describe('AiProxyServer', () => {
       expect(providers[5]).toEqual({ type: 'bedrock', configured: false });
       expect(providers[6]).toEqual({ type: 'local', configured: false });
       expect(providers[7]).toEqual({ type: 'github-copilot', configured: false });
+      expect(providers[8]).toEqual({ type: 'openai-codex', configured: false });
     });
 
     it('should reflect configuration status after setting keys', () => {

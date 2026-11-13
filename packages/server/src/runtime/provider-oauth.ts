@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
+import { beginOpenAICodexDeviceLogin, OPENAI_CODEX_MODELS, exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
 import { gitHubCopilotCredentialSource } from './github-copilot.js';
+import { openAICodexCredentialSource } from './openai-codex.js';
 
 const SUPPORTED = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'local']);
 const MAX_OAUTH_RESPONSE_BYTES = 256 * 1024;
@@ -173,7 +174,7 @@ export class ProviderOAuthService {
   }
 
   isSupported(provider: string): boolean {
-    try { return (SUPPORTED.has(provider) || provider === 'github-copilot') && Boolean(config(provider)); } catch { return false; }
+    try { return provider === 'openai-codex' || (SUPPORTED.has(provider) || provider === 'github-copilot') && Boolean(config(provider)); } catch { return false; }
   }
 
   async start(providerValue: string, signal?: AbortSignal): Promise<PublicOAuthFlow> {
@@ -181,28 +182,63 @@ export class ProviderOAuthService {
       throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
     }
     const provider = providerValue.trim().toLowerCase();
-    if (!SUPPORTED.has(provider) && provider !== 'github-copilot') throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
+    if (!SUPPORTED.has(provider) && provider !== 'github-copilot' && provider !== 'openai-codex') throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
     if (this.lifetime.signal.aborted) throw Object.assign(new Error('OAuth service is closed.'), { status: 409 });
-    const settings = config(provider);
-    if (!settings) throw Object.assign(new Error('OAuth device flow is not configured for this provider.'), { status: 409 });
+    const codex = provider === 'openai-codex';
+    const settings = codex ? undefined : config(provider);
+    if (!settings && !codex) throw Object.assign(new Error('OAuth device flow is not configured for this provider.'), { status: 409 });
     const controller = new AbortController();
-    const credentials = settings.subscription ? this.credentials() : undefined;
-    if (settings.subscription && !credentials?.hasPersistentStore()) {
+    const native = codex || settings?.subscription;
+    const credentials = native ? this.credentials() : undefined;
+    if (native && !credentials?.hasPersistentStore()) {
       throw Object.assign(new Error('OAuth credential storage is unavailable.'), { status: 409 });
     }
     // Reserve before the first remote request, including an unpublished device request.
-    if (settings.subscription) this.cancelProvider(provider);
+    if (native) this.cancelProvider(provider);
     this.starting.set(provider, controller);
     const abort = (): void => controller.abort();
     if (signal?.aborted) abort();
     else signal?.addEventListener('abort', abort, { once: true });
     try {
       const publish = credentials ? await credentials.prepareOAuthLogin(provider, controller.signal) : undefined;
-      return await this.startFlow(provider, settings, controller, credentials, publish);
+      if (codex) return await this.startCodex(controller, credentials!, publish!);
+      return await this.startFlow(provider, settings!, controller, credentials, publish);
     } finally {
       signal?.removeEventListener('abort', abort);
       if (this.starting.get(provider) === controller) this.starting.delete(provider);
     }
+  }
+
+  private async startCodex(controller: AbortController, credentials: ProviderCredentialService,
+    publish: NonNullable<OAuthFlow['publish']>): Promise<PublicOAuthFlow> {
+    this.checkCapacity();
+    const signal = AbortSignal.any([controller.signal, this.lifetime.signal]);
+    const device = await beginOpenAICodexDeviceLogin({ signal, fetcher: this.fetcher, redactor: credentials.redactor }).catch(() => {
+      throw Object.assign(new Error('OAuth device authorization failed.'), { status: 502 });
+    });
+    if (signal.aborted) { device.cancel(); throw Object.assign(new Error('OAuth device authorization cancelled.'), { status: 409 }); }
+    const flow: OAuthFlow = {
+      id: crypto.randomUUID(), provider: 'openai-codex', state: 'pending', userCode: device.userCode,
+      verificationUri: device.verificationUri, expiresAt: new Date(device.expiresAt).toISOString(),
+      intervalSeconds: 1, deviceCode: '', controller,
+    };
+    this.flows.set(flow.id, flow);
+    const expiry = setTimeout(() => {
+      if (flow.state === 'pending') { flow.state = 'expired'; controller.abort(); }
+    }, Math.max(1, device.expiresAt - Date.now()));
+    void (async () => {
+      try {
+        const credential = await device.complete();
+        await publish(credential);
+        signal.throwIfAborted();
+        // No await before runtime admission; the resolver borrows the host, not this login.
+        this.proxy.setOpenAICodexSubscription(OPENAI_CODEX_MODELS[0]!.id, openAICodexCredentialSource(credentials, this.lifetime.signal));
+        flow.state = 'connected';
+      } catch {
+        if (flow.state === 'pending') { flow.state = 'failed'; flow.error = 'OAuth token exchange failed.'; }
+      } finally { clearTimeout(expiry); device.cancel(); }
+    })();
+    return this.public(flow);
   }
 
   private request(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
@@ -213,14 +249,7 @@ export class ProviderOAuthService {
 
   private async startFlow(provider: string, settings: OAuthConfig, controller: AbortController,
     credentials?: ProviderCredentialService, publish?: OAuthFlow['publish']): Promise<PublicOAuthFlow> {
-    this.prune();
-    if (this.flows.size >= 100) {
-      for (const [id, flow] of this.flows) {
-        if (flow.state !== 'pending') this.flows.delete(id);
-        if (this.flows.size < 100) break;
-      }
-    }
-    if (this.flows.size >= 100) throw Object.assign(new Error('Too many active OAuth flows.'), { status: 429 });
+    this.checkCapacity();
     let response: Response;
     const requestSignal = AbortSignal.any([controller.signal, this.lifetime.signal, AbortSignal.timeout(this.requestTimeoutMs)]);
     try {
@@ -289,6 +318,17 @@ export class ProviderOAuthService {
     }, expiresIn * 1_000);
     void this.poll(flow, settings).finally(() => clearTimeout(expiry));
     return this.public(flow);
+  }
+
+  private checkCapacity(): void {
+    this.prune();
+    if (this.flows.size >= 100) {
+      for (const [id, flow] of this.flows) {
+        if (flow.state !== 'pending') this.flows.delete(id);
+        if (this.flows.size < 100) break;
+      }
+    }
+    if (this.flows.size >= 100) throw Object.assign(new Error('Too many active OAuth flows.'), { status: 429 });
   }
 
   get(id: string): PublicOAuthFlow | undefined {
