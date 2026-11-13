@@ -135,6 +135,38 @@ it('does not publish old catalogue IDs after scope reset during credential readb
   } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
 });
 
+it.each(['discovery', 'turn'] as const)('retires %s held in initial credential resolution across a scope reset', async mode => {
+  const f = fixture(), scope = createProviderNetworkScope();
+  const provider = new OpenAICodexProvider(Object.assign({ type: 'openai-codex', model: OPENAI_CODEX_MODELS[0].id }, { [PROVIDER_NETWORK_SCOPE]: scope }), f.source);
+  let reached!: () => void, release!: () => void, borrowed: AbortSignal | undefined;
+  const ready = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  f.source.mockImplementationOnce(async (signal?: AbortSignal) => { borrowed = signal; reached(); await held; return original; });
+  const pending = (mode === 'discovery' ? provider.getAvailableModels() : provider.chat([user])).catch((error: unknown) => error);
+  try {
+    await ready; await closeProviderNetworkDispatchers(scope); release();
+    expect(await pending).toBeInstanceOf(Error); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.source).toHaveBeenCalledOnce();
+    if (mode === 'discovery') expect(borrowed?.aborted).toBe(true);
+    expect(await provider.getAvailableModels()).toEqual(OPENAI_CODEX_MODELS.map(model => model.id)); expect(f.fetcher).toHaveBeenCalledOnce();
+  } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
+});
+
+it('retires publication held in a chunk consumer across a scope reset', async () => {
+  const f = fixture(), scope = createProviderNetworkScope(), caller = new AbortController();
+  const provider = new OpenAICodexProvider(Object.assign({ type: 'openai-codex', model: OPENAI_CODEX_MODELS[0].id }, { [PROVIDER_NETWORK_SCOPE]: scope }), f.source);
+  let reached!: () => void, release!: () => void;
+  const ready = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+  const completed = vi.fn(), failed = vi.fn(), chunks: string[] = [];
+  const pending = provider.streamChat([user], async text => { chunks.push(text); reached(); await held; }, completed, failed, { signal: caller.signal });
+  try {
+    await ready; await closeProviderNetworkDispatchers(scope); release(); await pending;
+    expect(completed).not.toHaveBeenCalled(); expect(failed).toHaveBeenCalledOnce();
+    expect(failed.mock.calls[0]![0]).toMatchObject({ message: 'OpenAI Codex request cancelled.' });
+    expect(chunks).toHaveLength(1); expect(caller.signal.aborted).toBe(false);
+    expect((await provider.chat([user])).content).toBe('ok');
+    expect(f.calls.map(call => call.url)).toEqual([OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL, OPENAI_CODEX_MODELS_URL, OPENAI_CODEX_RESPONSES_URL]);
+  } finally { release(); await pending; await closeProviderNetworkDispatchers(scope, { permanent: true }); }
+});
+
 it('rechecks local credential withdrawal after a held account discovery before inference', async () => {
   const f = fixture(); let release!: (value: Response) => void, reached!: () => void;
   const ready = new Promise<void>(resolve => { reached = resolve; });

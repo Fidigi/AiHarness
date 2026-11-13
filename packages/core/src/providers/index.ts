@@ -3646,7 +3646,9 @@ export class OpenAICodexProvider extends AiProvider {
     return ids;
   }
   override async getAvailableModels(): Promise<string[]> {
-    const supplied = await this.credentialSource();
+    const lifetime = providerNetworkScopeSignal(providerNetworkScope(this.config));
+    const supplied = await this.credentialSource(lifetime);
+    lifetime.throwIfAborted();
     if (!supplied) return [];
     return this.accountModels(openAICodexCredential(supplied));
   }
@@ -3658,10 +3660,13 @@ export class OpenAICodexProvider extends AiProvider {
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: OpenAICodexChatOptions): Promise<void> {
-    const active = () => { if (options?.signal?.aborted) throw new Error('OpenAI Codex request cancelled.'); };
+    let lifetime: AbortSignal | undefined;
+    const active = () => { if (options?.signal?.aborted || lifetime?.aborted) throw new Error('OpenAI Codex request cancelled.'); };
     try {
+      lifetime = providerNetworkScopeSignal(providerNetworkScope(this.config));
       active();
       const credential = openAICodexCredential(await this.credentialSource(options?.signal));
+      active();
       const model = openAICodexModel(options?.model ?? this.config.model!);
       if (!(await this.accountModels(credential, options?.signal)).includes(model.id)) throw new Error('OpenAI Codex account model is unavailable.');
       active();
@@ -3679,7 +3684,7 @@ export class OpenAICodexProvider extends AiProvider {
       if (!result || !result.content.trim() && !result.reasoning?.trim() && !result.toolCalls?.length) throw new Error('OpenAI Codex response has no visible output.');
       await onComplete?.({ ...result, provider: 'openai-codex', api: 'openai-codex-responses', model: model.id }); active();
     } catch (error) {
-      const failure = error instanceof ProviderContextOverflowError ? error : new Error(options?.signal?.aborted ? 'OpenAI Codex request cancelled.' : 'OpenAI Codex request failed.');
+      const failure = error instanceof ProviderContextOverflowError ? error : new Error(options?.signal?.aborted || lifetime?.aborted ? 'OpenAI Codex request cancelled.' : 'OpenAI Codex request failed.');
       if (onError) await onError(failure); else throw failure;
     }
   }
