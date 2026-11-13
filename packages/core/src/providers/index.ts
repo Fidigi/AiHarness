@@ -35,6 +35,8 @@ import { HUGGINGFACE_MODELS, huggingfaceProfile, prepareHuggingFaceChat, hugging
 export { HUGGINGFACE_MODELS } from './huggingface.js';
 import { XIAOMI_MODELS, xiaomiProfile, prepareXiaomiChat, xiaomiUsage, xiaomiReasoning, validateXiaomiChat, xiaomiStreamValidator } from './xiaomi.js';
 export { XIAOMI_MODELS } from './xiaomi.js';
+import { TOKEN_PLAN_MODELS, TOKEN_PLAN_BASE_URLS, tokenPlanProfile, prepareTokenPlanChat, tokenPlanReasoning,
+  validateTokenPlanResponse, tokenPlanStreamValidator, tokenPlanUsage, tokenPlanHistory, type TokenPlanId } from './token-plans.js';
 import { BASETEN_MODELS, basetenProfile, prepareBasetenChat, basetenUsage, basetenReasoning, validateBasetenChat, basetenStreamValidator } from './baseten.js';
 export { BASETEN_MODELS } from './baseten.js';
 import { ANT_LING_MODELS, antLingProfile, prepareAntLingChat, antLingUsage, antLingReasoning, validateAntLingChat, antLingStreamValidator } from './ant-ling.js';
@@ -1217,6 +1219,92 @@ function systemOneEndpoint(baseUrl: string, operation: string, label: string): s
     return url.href;
   } catch { throw new Error(`Invalid ${label} endpoint.`); }
 }
+
+const tokenPlanInstances = new WeakMap<AiProvider, TokenPlanId>();
+const nativeTokenPlans = new WeakSet<AiProvider>();
+
+/** Explicit plan construction owns regional endpoints and C policy, never a logical label. */
+export class TokenPlanProvider extends OpenAiProvider {
+  private readonly endpoint: string;
+  constructor(plan: TokenPlanId, config: ProviderConfig) {
+    if (!Object.hasOwn(TOKEN_PLAN_MODELS, plan)) throw new Error('Token plan is not supported.');
+    const model = config.model ?? TOKEN_PLAN_MODELS[plan][0]!.id; tokenPlanProfile(plan, model);
+    const endpoint = systemOneEndpoint(config.baseUrl ?? TOKEN_PLAN_BASE_URLS[plan], 'chat/completions', 'Token plan');
+    super({ ...config, model, baseUrl: endpoint }); this.endpoint = endpoint;
+    tokenPlanInstances.set(this, plan);
+    if ([TokenPlanProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+      XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider].some(Adapter => new.target === Adapter)) nativeTokenPlans.add(this);
+  }
+  private plan(): TokenPlanId { return tokenPlanInstances.get(this)!; }
+  override getModelApi(): string { return 'openai-completions'; }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override setConfiguredModel(model: string): void { tokenPlanProfile(this.plan(), model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return TOKEN_PLAN_MODELS[this.plan()].map(profile => profile.id); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return TOKEN_PLAN_MODELS[this.plan()].map(profile => ({ id: profile.id, name: profile.name, api: profile.api,
+      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
+      ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}),
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = tokenPlanProfile(this.plan(), this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, provider: this.getProviderType(), type: 'classifier',
+      virtual: true, api: profile.api, contextWindow: profile.contextWindow, imageInput: profile.declaredInput.includes('image'),
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) }];
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(): Record<string, string> {
+    try { const headers = new Headers(configuredHeaders(this.config)); headers.set('content-type', 'application/json'); headers.set('authorization', `Bearer ${this.config.apiKey}`); return Object.fromEntries(headers.entries()); }
+    catch { throw new Error('Invalid token-plan request headers.'); }
+  }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    const plan = this.plan(), model = String(body.model), provider = this.config.type;
+    tokenPlanProfile(plan, model);
+    if (nativeTokenPlans.has(this)) {
+      tokenPlanHistory(messages, provider, model);
+      applyCompletionHistory(body, messages, provider, plan.startsWith('xiaomi-'), false);
+    }
+    const prepared = prepareTokenPlanChat(body, plan, options);
+    if (nativeTokenPlans.has(this)) nativeCompletionsOwners.set(prepared, { provider, api: 'openai-completions', model,
+      normalizeReasoningMarker: false, invalidResponse: 'Invalid token-plan response.' });
+    return prepared;
+  }
+  protected override validateChatResponse(value: unknown): void { validateTokenPlanResponse(value); }
+  protected override createStreamValidator(): (value?: unknown) => void { return tokenPlanStreamValidator(); }
+  protected override responseReasoning(value: unknown): string | undefined { return tokenPlanReasoning(value); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return tokenPlanUsage(value, tokenPlanProfile(this.plan(), model)); }
+  private failure(error: unknown, signal?: AbortSignal): Error {
+    if (signal?.aborted) return new Error('Token-plan request aborted.');
+    if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
+    const safe = ['Token-plan chat model is not supported.', 'Invalid token-plan thinking level.', 'Invalid token-plan output limit.',
+      'Invalid token-plan session identity.', 'Token-plan model does not support images.', 'Opaque token-plan replay is not supported.',
+      'Invalid token-plan request headers.', 'Invalid token-plan response.'];
+    return new Error(error instanceof Error && safe.includes(error.message) ? error.message : 'Token-plan request failed.');
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    try { if (!this.validateConfig()) throw new Error('Token-plan credentials are unavailable.'); return await super.chat(messages, options); }
+    catch (error) { throw this.failure(error, options?.signal); }
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const active = () => { if (options?.signal?.aborted) throw new Error('Token-plan request aborted.'); };
+    try {
+      if (!this.validateConfig()) throw new Error('Token-plan credentials are unavailable.'); active();
+      await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
+        response => { active(); return onComplete?.(response); }, error => { throw error; }, options);
+    } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+export class QwenTokenPlanProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('qwen-token-plan', config); } }
+export class QwenTokenPlanCnProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('qwen-token-plan-cn', config); } }
+export class QwenTokenPlanIndividualProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('qwen-token-plan-individual', config); } }
+export class XiaomiTokenPlanAmsProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('xiaomi-token-plan-ams', config); } }
+export class XiaomiTokenPlanCnProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('xiaomi-token-plan-cn', config); } }
+export class XiaomiTokenPlanSgpProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('xiaomi-token-plan-sgp', config); } }
+export class ZaiCodingCnProvider extends TokenPlanProvider { constructor(config: ProviderConfig) { super('zai-coding-cn', config); } }
 
 const nativeXiaomiReplay = new WeakSet<AiProvider>();
 

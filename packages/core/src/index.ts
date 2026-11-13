@@ -43,6 +43,8 @@ export type { XaiProfile } from './providers/xai.js';
 export type { AntLingProfile } from './providers/ant-ling.js';
 export type { HuggingFaceProfile } from './providers/huggingface.js';
 export type { XiaomiProfile } from './providers/xiaomi.js';
+export type { TokenPlanId, TokenPlanProfile } from './providers/token-plans.js';
+export { TOKEN_PLAN_MODELS, TOKEN_PLAN_BASE_URLS } from './providers/token-plans.js';
 export type { FireworksProfile } from './providers/fireworks.js';
 export type { TogetherProfile } from './providers/together.js';
 export type { BasetenProfile } from './providers/baseten.js';
@@ -70,6 +72,14 @@ export {
   OPENROUTER_COMPLETION_MODELS,
   XiaomiProvider,
   XIAOMI_MODELS,
+  TokenPlanProvider,
+  QwenTokenPlanProvider,
+  QwenTokenPlanCnProvider,
+  QwenTokenPlanIndividualProvider,
+  XiaomiTokenPlanAmsProvider,
+  XiaomiTokenPlanCnProvider,
+  XiaomiTokenPlanSgpProvider,
+  ZaiCodingCnProvider,
   HuggingFaceProvider,
   HUGGINGFACE_MODELS,
   FireworksProvider,
