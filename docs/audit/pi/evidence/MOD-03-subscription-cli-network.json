@@ -1,0 +1,736 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-13",
+  "baseCommit": "723be5c61bef4208505bda3828b823f02d524256",
+  "status": "HOLD",
+  "goalComplete": false,
+  "scope": "Bounded CLI requalification after ff16fe8 shared-network late-response ownership and723be5c native Codex owned-reader cancellation. Existing tests only, retained image, no new build/product/test/assertion/deadline/flag/dependency/policy/schema change.",
+  "gap": "Previous corrected source Core/HTTP and emitted public-Core proofs did not qualify current emitted/installed native CLI consumers of changed network/reader dependencies. Reuse established scenarios rather than adding host-by-model-by-feature coverage.",
+  "image": {
+    "name": "ai-harness:codex-catalogue-body",
+    "id": "sha256:b3027e81d5a141a2137d7144fda90e0d9b6174e9e7cc85b3ac09c6788a56cf9c",
+    "newBuild": false,
+    "sourceMatchesBoundedHostHashes": true,
+    "productSourceOverlay": false,
+    "testSourceOverlay": false,
+    "compiledOverlay": false,
+    "dependencyOverlay": false,
+    "validationOnlyCopies": [
+      "types.json"
+    ],
+    "network": "none",
+    "node": "v24.15.0",
+    "scope": "Same retained image as preceding catalogue-body campaign; unrelated dirty compiler-repair snapshot remains context, not clean-commit/whole-context evidence."
+  },
+  "validation": {
+    "strict": {
+      "status": "PASS",
+      "roots": 4,
+      "config": "types.json",
+      "artifact": "emitted.log",
+      "evidence": "set-e sequence ran Vitest only after the explicit strict command succeeded; not all strict roots."
+    },
+    "workspaceParityTypes": "NOT RERUN; preceding catalogue-body receipt remains source-bound",
+    "emittedAndCore": {
+      "status": "HOLD",
+      "passed": 91,
+      "failed": 1,
+      "inventory": 92,
+      "files": 4,
+      "artifact": "emitted.log",
+      "exit": 1,
+      "composition": {
+        "sharedNetwork": {
+          "passed": 13
+        },
+        "nativeCodexCore": {
+          "passed": 41
+        },
+        "copilotEmitted": {
+          "passed": 11,
+          "failed": 0
+        },
+        "codexEmitted": {
+          "passed": 26,
+          "failed": 1,
+          "inventory": 27
+        }
+      }
+    },
+    "installedCopilot": {
+      "status": "PASS",
+      "passed": 14,
+      "filterUnselected": 385,
+      "inventory": 399,
+      "artifact": "copilot-installed.log",
+      "exit": 0,
+      "publicModes": 5,
+      "privateRefreshPaths": 9,
+      "scope": "Genuine outside-checkout local archive installation and PATH executable; one selected owning file, not full parity."
+    },
+    "installedCodex": {
+      "status": "PASS",
+      "passed": 9,
+      "filterUnselected": 390,
+      "inventory": 399,
+      "artifact": "codex-installed.log",
+      "exit": 0,
+      "cliPaths": 8,
+      "publicCoreCases": 1,
+      "publicCoreRequests": 72,
+      "scope": "Eight public/private device-login CLI paths plus one distinct public-Core continuation consumer. No browser-logout selector or after-headers body-cancellation edge through installed CLI."
+    },
+    "documentation": {
+      "status": "PASS",
+      "artifact": "docs.log",
+      "scope": "Separate Docker predictive lint of tracked/nonignored documentation snapshot."
+    }
+  },
+  "incidents": [
+    {
+      "id": "MOD-03-CODEX-EMITTED-BROWSER-LOGOUT-SIGSEGV",
+      "status": "OPEN / NON-WAIVED",
+      "test": "native Codex emitted CLI owns browser-logout login/inference/retirement",
+      "file": "packages/cli/src/cli/codex-process.test.ts",
+      "command": "node /app/packages/cli/src/cli/fixtures/codex-cli-probe.mjs browser-logout",
+      "observedChild": {
+        "code": null,
+        "signal": "SIGSEGV",
+        "killed": false
+      },
+      "outerDockerRunner": {
+        "Status": "exited",
+        "Running": false,
+        "Paused": false,
+        "Restarting": false,
+        "OOMKilled": false,
+        "Dead": false,
+        "Pid": 0,
+        "ExitCode": 1,
+        "Error": "",
+        "StartedAt": "2026-11-13T13:29:04.363719792Z",
+        "FinishedAt": "2026-11-13T13:31:00.984370297Z"
+      },
+      "innerPhase": "UNKNOWN",
+      "nestedChildCreation": "UNKNOWN",
+      "trafficAndEffects": "UNKNOWN",
+      "cause": "UNKNOWN",
+      "disposition": "Retain failed emitted gate. No identical replay, diagnosis, workaround, runtime flag/assertion/deadline/dependency/product change, waiver extension or repair. Installed selections were independently planned and do not execute the failed mode."
+    }
+  ],
+  "limits": [
+    "Do not add emitted91/1 and independent installed14/9 into a single passing denominator. Filter-unselected installed cases are not passes, setup-skipped cases or unreported worker cases. One Codex installed case is public-Core, not a ninth CLI path.",
+    "No fresh pinned SDK acquisition, browser/Chromium/Playwright, HTTP, production/launcher, full parity/root, all-root strict, real account or distribution campaign. CLI browser-* methods emulate local callback flows without an actual browser/vendor account.",
+    "Positive CLI login/refresh/private replay/withdrawal regressions do not prove installed after-headers cancellation, all profiles/media/default/context/overflow/error/compaction/fork/account-switch/private-terminal lifecycle or actual service subscription entitlement/cryptographic verification/refresh/revocation.",
+    "Bounded source/fixture/emitted/dependency hashes/modes are not whole-context/clean-commit/archive/installed dependency closure attestations. Existing harness independently rebuilds Core/CLI, locally packs/installs offline with scripts disabled and verifies installed bytes against its isolated build; archives/consumer closure are not retained by this campaign.",
+    "New probe SIGSEGV is not assigned to the compiler, nested CLI, OAuth stage, network change, PWA, Playwright worker or historical browser139. Docker no-OOM metadata is not a causal explanation. No historical native/ordinary/strict/compiler/browser holds repaired, retried or waived. The exact three accepted incidents are untouched.",
+    "Unrelated eight-file compiler-repair diff and two waiver/repair receipts preserved. Protected pi/qwen-moe untouched; owned containers removed after evidence retention. MOD-03 PARTIAL/MOD-01 IN PROGRESS/audit37/43 and active goal unchanged."
+  ],
+  "identity": {
+    "node": "v24.15.0",
+    "versions": {
+      "node": "24.15.0",
+      "acorn": "8.16.0",
+      "ada": "3.4.4",
+      "amaro": "1.1.8",
+      "ares": "1.34.6",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.3.1",
+      "merve": "1.2.2",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.3",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.68.0",
+      "openssl": "3.5.5",
+      "simdjson": "4.5.0",
+      "simdutf": "6.4.0",
+      "sqlite": "3.51.3",
+      "tz": "2026a",
+      "undici": "7.24.4",
+      "unicode": "17.0",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.17-node.48",
+      "zlib": "1.3.1-e00f703",
+      "zstd": "1.5.7"
+    },
+    "sourceCount": 31,
+    "emittedCount": 15,
+    "dependencyCount": 9,
+    "files": [
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/copilot-interactive-process.test.ts",
+        "bytes": 1037,
+        "sha256": "9f3ce1d493696897e537e5581eee0298d887de66c96f95abc670ddb17dfc1400",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/codex-process.test.ts",
+        "bytes": 1285,
+        "sha256": "68ffbf84adf2aec8c6572568ee2168588c90313f4cb8d7a34fcc4aed3a33f074",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/fixtures/copilot-interactive-probe.mjs",
+        "bytes": 25168,
+        "sha256": "3f85acbae149d46fae60e26d49c9abf968e697a86bd59b29bd514ad868109384",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/fixtures/codex-cli-probe.mjs",
+        "bytes": 28810,
+        "sha256": "38cab4f7033fe0b290d027eae4cb13aa06516f4a4836edccb3af5efc905146f4",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/fixtures/oauth-local-tls.mjs",
+        "bytes": 1588,
+        "sha256": "2bd5544ffd55fc85cab851f68b93484d21e05cea7e6f12b2960256d134a9268d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/cli/fixtures/oauth-local-tls.d.mts",
+        "bytes": 136,
+        "sha256": "ffa572622ac27bc1d725684d05da082e38d5ddab1b67876269c852d10ad33411",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/functional-parity/installed-executable.test.ts",
+        "bytes": 626680,
+        "sha256": "f9bf9f929f4340f0fcfeec934978e184c36434eb049ab21b0e88859eea89600c",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/functional-parity/installed-process.ts",
+        "bytes": 2362,
+        "sha256": "17af25c0de2dc76ff25ede20cffaf6abb6d8d28d2f8f0a25473d440448a52c9d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/functional-parity/harness.ts",
+        "bytes": 13940,
+        "sha256": "0511dc76dd4c845f901aa0a2dfb445cafaaabb11fb58d80445eccf62a1f67b22",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/github-copilot-routing-reference.json",
+        "bytes": 950677,
+        "sha256": "9420a2b0ebfbda454cbd19388ecea214d98c16a38a25aae5082b818e0ce62d95",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/github-copilot-continuation-reference.json",
+        "bytes": 2018684,
+        "sha256": "fc40b8c1360ea84111d03cd6df8e623cadd290b8064576a49c2133486b3cdea7",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/openai-codex-reference.json",
+        "bytes": 79077,
+        "sha256": "c11e6ba837f3cdf1b51ea3b314812134292cd5d233571901129e770a13aba564",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/codex-continuation-reference.json",
+        "bytes": 333177,
+        "sha256": "ffbfa344320a4fa385902bd568ad532039c6d64d31d1da1df37ea32d06bd689c",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "tests/fixtures/codex-replay-probe.mjs",
+        "bytes": 3828,
+        "sha256": "fbe238d5b2ed559d0035722c1cbdfe23e9f9bff5935327a681c4f731d1be77e9",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/index.ts",
+        "bytes": 106806,
+        "sha256": "c174000a68465428b5ab6ad4b6f144b7ea99459d2d0035cd3c3d19f0f049b964",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/providers/provider-runtime.ts",
+        "bytes": 6550,
+        "sha256": "4f39f89abf3337113949e50984a68367064bc035aed6fe09a59b4c089a17390d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/providers/configured-providers.ts",
+        "bytes": 15027,
+        "sha256": "7ef5c354d6dc3fe59a0042443b4b83c47b81b201eff4ccb3ab413d7483715f4d",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/rpc/rpc-server.ts",
+        "bytes": 36944,
+        "sha256": "30f30686ae8e75159cfb47ccd4dc2f70beeff92186f9222e7b563d041d273200",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/security/oauth-device.ts",
+        "bytes": 14142,
+        "sha256": "17aaea74c00c89a6959b391a92048acb4ce98c29bc9ea043b4bc2dc5fadd01f9",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/cli/src/security/codex-login.ts",
+        "bytes": 4539,
+        "sha256": "5df5b605224d94586b5f1ab32ded9290b3fd086514911de2dc675fb7f632c1aa",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/index.ts",
+        "bytes": 16198,
+        "sha256": "ab864a880b123fed9d50094d4bf835211ea21d782439247b670e593b9566a4a7",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/index.ts",
+        "bytes": 422540,
+        "sha256": "87e855e15c6458e1e626cf0d215fcfeb51b59e2f153d3cdad5ca59cd63415bce",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/github-copilot.ts",
+        "bytes": 44699,
+        "sha256": "ce8e50ffb99d613e7fdc12fa7b7a715c9c164f470f1c22997be4cfe8aeb4c384",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/github-copilot-oauth.ts",
+        "bytes": 8095,
+        "sha256": "d39f292698ffdc7f34aa5c4d6f43dd468a3beab284adeb2a41b85a2c93a271fe",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/openai-codex.ts",
+        "bytes": 11631,
+        "sha256": "ac30df4dba265bfc39c22f9f43f500ddf1d84f68cd0d87fcb813f2785428b0b4",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/openai-codex-oauth.ts",
+        "bytes": 14034,
+        "sha256": "384edeff3dd32033e90d090ab253ad01858899ed4f8c7871706bcadcc0876b2f",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/provider-network.ts",
+        "bytes": 23118,
+        "sha256": "31e3eec783c69accf3f2d8c4dae48307c075e7ed09e7ca521aa008119f654796",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/credentials.ts",
+        "bytes": 49290,
+        "sha256": "103b2fb206ac242e0dca1c0f6ce86b80e8b155f95714f00ba0d0b853589f767f",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/security/credential-store.ts",
+        "bytes": 27641,
+        "sha256": "1c981aae59ec826b98a04f33e0a139a88c7829ecab647aa8abd4b4275ed85951",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/provider-network.test.ts",
+        "bytes": 11933,
+        "sha256": "c6c044929314f84245fe2adf1af092d7cd200b3e135fe133d578de06d776dde6",
+        "mode": 420
+      },
+      {
+        "kind": "source",
+        "path": "packages/core/src/providers/openai-codex.test.ts",
+        "bytes": 11472,
+        "sha256": "3172f488185c288cac6605ca1248c2bc575f4e41f860f819cf3a95a7f55dfe2a",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/index.js",
+        "bytes": 117737,
+        "sha256": "3f4961d36fc235e6ba9117f6f91aab99bc02f1dfb66303815079ee709e9c3af3",
+        "mode": 493
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/providers/provider-runtime.js",
+        "bytes": 5652,
+        "sha256": "b9fc34b4d321d9ef67cc9bfa214c2b5a151e0e11c25935a26dd6554e0dc367da",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/providers/configured-providers.js",
+        "bytes": 13883,
+        "sha256": "22464ac6addf9548099813fd03f7543bd69809cb4d01999c33cdfe7ea4f84970",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/rpc/rpc-server.js",
+        "bytes": 37975,
+        "sha256": "7571ae8971b8fe05cada16d168dc695129fa707397e9ed755340405d73e3e58d",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/security/oauth-device.js",
+        "bytes": 14515,
+        "sha256": "2d8c3cc2d4e0d1eec84b149739c6bb68c301701ebe956232ec2401d97a619aa3",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/cli/dist/security/codex-login.js",
+        "bytes": 4615,
+        "sha256": "658c246b93d44eb2a280b2c715087fccdc57120191bbad37b2393e522e2a59fd",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/index.js",
+        "bytes": 8077,
+        "sha256": "6e359338ed2ef12ad859651541798f1621840dddd5ec986e896dcb972a737350",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/index.js",
+        "bytes": 411411,
+        "sha256": "14c5bf89b5dc2caf724d2735c14fdb9ee1ff3979c64db84c164a082dbd56ff3b",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/github-copilot.js",
+        "bytes": 46254,
+        "sha256": "07ed2c64d21f8841970f1f9d9c308896f07feb7e94109e28d06202080fb607da",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/github-copilot-oauth.js",
+        "bytes": 7836,
+        "sha256": "d6ab9a0258d3583608a3e926f375e9ddc54b6719ec2a68f7dda3f6a7111b1eff",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/openai-codex.js",
+        "bytes": 11091,
+        "sha256": "d2f5639b111b8ed094633c929df48390b857f0eed03a0f7eec97c05634c6d215",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/openai-codex-oauth.js",
+        "bytes": 14451,
+        "sha256": "8eb2e16459c232b3384d5607410826f28cf979872c4139344d55b6fb320744e2",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/provider-network.js",
+        "bytes": 20858,
+        "sha256": "148064eddb93b4d287d556bf5b3b615675928d88f072d3c63e933e2974d9a126",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/providers/credentials.js",
+        "bytes": 49750,
+        "sha256": "7f99914eab4101fc6c0a56d3f4824f6e3fc3e3d1dfb4b9a81758065040fee78f",
+        "mode": 420
+      },
+      {
+        "kind": "emitted",
+        "path": "packages/core/dist/security/credential-store.js",
+        "bytes": 28495,
+        "sha256": "5d197d7beb76631b356a834f9f62872813dbdaa68f68ba669c04fe3ad6177aab",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "package.json",
+        "bytes": 2623,
+        "sha256": "0f42e9749053dcc4a7945a5e52c8788c52cc804f2a8cc1fe405a8b33644cb6dc",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "package-lock.json",
+        "bytes": 298847,
+        "sha256": "4831259a0f7d37d4c8ba43947dc1b0b5d93f74b2202b5ffdd759ff8faa3db2b9",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "vitest.config.ts",
+        "bytes": 1739,
+        "sha256": "d8f4609d3e8aadb803a3703d9a7ad030ff5519cedc3e30c6dd89cb77a3abf967",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "tsconfig.json",
+        "bytes": 523,
+        "sha256": "762cf9b9750267a77de2d610a374c637a310be819eaa512b37cfe411acea3a99",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "scripts/run-typescript.mjs",
+        "bytes": 1156,
+        "sha256": "b090d6a6213be0b082e8d79b9578fa7e71112d44c2c71a418c55132b77e1b215",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": ".docker/Dockerfile.test",
+        "bytes": 2358,
+        "sha256": "035180036d576ff9a3834927595267a3ba57d8c18dfcb386be7a6b9776ca5c4e",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "node_modules/typescript/package.json",
+        "bytes": 3620,
+        "sha256": "822ef7ca6452205657b6288b066481ecf508bfbf43455d715cf7d3ec457561e6",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "node_modules/node-pty/package.json",
+        "bytes": 1615,
+        "sha256": "f8b6a14f7022c14f1cd5d109486f5dacd32bffb63a9a63e38eced37dacb47439",
+        "mode": 420
+      },
+      {
+        "kind": "dependency",
+        "path": "node_modules/vitest/package.json",
+        "bytes": 5709,
+        "sha256": "df72ec137c86d8454d129967ed88c640012fa8db7950d58f79cee8a94df437f1",
+        "mode": 420
+      }
+    ],
+    "scope": "Bounded retained-image source/fixture/emitted/toolchain hashes and modes. No new build and no product/source/compiled/dependency overlay. Not whole-context/clean-commit/installed dependency closure or distribution attestation. Unrelated compiler-repair snapshot remains in image and host, excluded from subscription staging. CLI positive lifecycle/refresh regressions do not imply installed after-headers body-cancellation coverage."
+  },
+  "artifacts": [
+    {
+      "name": "emitted.log",
+      "bytes": 6790,
+      "sha256": "e5a89c3a90ff20c8d91bdcf2ef99019a9ecbc3ec2ff7c6957f115c6c3781b9f3",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA7VZzW4bNxC+7yvoMpcgDmBJy/2T1oeihRsHBoKiqNtehBzoXUpmzJ8FSUkBkr5CLz300j5DHqJv4icpyN2VbEm2VhIDCNIu/77hfDPD4WgRJQOUDsJAVByENLQgoOYCMO3fYSWI1t+HAzQIwRBtNgctqG11jxUu7vGM6GHB6FCrwv0WsqJMmj4VhihcGLog/UrJgmg9sDMHRj83sSSfXhgqFXFjKyUXtCRKr576gpilVPedJsmKCEz7Dq2dEAS9CeK9SRzy3iTJOPzy20/QmyS5bbNfUcShN4kzvkgH4SCGpjkP+RBXlXsLAtsa8Yd//nLvx0nem0T8zOHZJxQ7CvSq4U3zFEccUDa2TbzttTIcIMIuPWzAJ+gF+DTeQncK0aYkStk++HIA0W7Cd7CCEthaDlzasUA4NYaUcPn+GuRSaLhVcqmJ6jM5k3MDTM6oGFIxJYqIggwVMVQRToQJ1uJNatyC0Q/ws5K3BKaYMlIO4HMAwGVJLmr1vX66+ms3+zwAKJoxiIs5Y25l26zpTGDWTr65fnfz9t3v61n3lDFSuu6YTzHTpNbWH7XFIP7w79dNuva6xVOiotEGUfCl1WSMOGo22trymsaYQzoe5dm2HUEtru1w1tT2wMu8KDKbM6xeIKRGRdk49wY6nTOmC0WI2I87ykfecCtFxUu2V0MmWRR5g/yo5f5NxuEo8cdoVewFjMb5djA4FrAkuGRUkA42hEJvqJrOupCZpqlPSEMU34uZZf4w98bLRrXhaMfZcnRMqBgu9vOZp8in1fYVmSqi7zrEhMifu7RHR+dAmMb+2G3BDwqIkT/XbfG7BcYUhf6huwXIOPIXOVaMdwiUcZj5O2tb4O4BMx37t7WOgTP7Bj7WNYCmyfaZ7xKjWgDE//u7fvWUczZ5liM8+wY23jWgjkf+Eo+Va0vVwbNjf0lWC7zEtEOu5TG7W2vbzNX+mDJC/pRdKbrAhnSMo0nu8QhpoTvF0STzeHVokbvE0WQ02nF9eO7ue2BxYuMK/uwd2Kk+D49KWpwUq9tSm5pRcQ6rTZ/Dkpq7UuElZoBFCdRo0ISRwqqN0SkxlJPTrlO1GI/ShdMlGR/n+7UkrQ3gxvRPFieNoqN8Y1Mc5w6nS4P8KMe6yOnChLvqR4cKU3hjKkyOyhA2xfHFVH5UON+Uxg9TUXRCkFnFVX8+FXrQjfLGVOTBp5QnplC6LUydaz78+XX702SKtvScIA5XrkwHv9rzBlBbgG7LeM+vYCES5BaCqx+u37e1v+SgmuLjCqy/6mtcy/VWKanc0hdwKTm3iqyrkhcwnGs1ZLLAbHhLxVDIkoAtqw93yj6ln8xcuZp2U861G7klA/5xU7LgUa7vTGGXBo/4TNAQfXDKX5McOPVZ6uCKMqKh/dMA7S7CbtZpUV1Wj6HCWj8dlocczpI37WYie28BaMzkOJgcPYeTR0+BbgxWBrBpgFB8EeUXKGm7f5wrbKgUbTcKB+moNqUzlzdBnr86B6Ow0FOpOKBXdQIVBP8Du9vhDYYaAAA="
+    },
+    {
+      "name": "emitted.exit",
+      "bytes": 2,
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPkAgBT/FFnAgAAAA=="
+    },
+    {
+      "name": "emitted-state.json",
+      "bytes": 224,
+      "sha256": "0f4fc6b6ca13a6457ca575d02940691e777e5695e9354118bb5239550115e033",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA23OvQrCMBhG4d3LeOe05Ke05ttE6yLSUp26BRI1UFpIUiiI9y4u2sHxwDOcJy7JpDmC4BafnAVDN4+jH++gmxmiY2jNHJ39ZudiMiGtRdOcT34YVujgzC9ab0GcoV582k/WgQRDHcIUQAD7LITk7C6BILksMyEyoa5CkdTEi1yVqhK60rIHw9GPPj7+aiWI81xvC1Vxqaser80bF/gnGOAAAAA="
+    },
+    {
+      "name": "copilot-installed.log",
+      "bytes": 2768,
+      "sha256": "2ed2601dce3cbe012a53c262a5215e6173da63011afa721f62e660d6eaa817c0",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA82WzYrbMBSF936FbO5mIIHa0Y/jRLMqTCkUyiymnZVXqqNJ1JFkI8lJB/oW3fbp+iRFij12OoFCKXW9MPKVfe4nHWMf02gwtZeVANsa4DLdc2uEc69RhjMEXjifmPObDjJU4zAM3PKhNZWXteEqbbiV/mkpjfNcKbFNxRdRtZ5/UiILN2feQeqhPhoHhnt5EHBTN1LVHlS9kwa42cJR+v3W8iNX4Pe2bnd78HsBz6IwiCbJrMR6VlKkZ2VeaLi7v4VZmbNQCydCNMxKWujDKkMZha7MkF7ypolXSRKqRP/4/i1e/9mqZiXR89gvjChjJ5nnCnyFbkypppsVuEfZNGLbc+rFMA0Y4Tynoap7hQAK8Avpzft36d39bYow7IRppRGg6oor9QQNrx7F9uKmnVhpgU4tg2wUppEjivct/55TMLdi1ypuF90SC3Jxgf+C5KFVylVWCNPDrNeTwTRWGt9xkM26mIrjs6v77aAI46kwbFP1m8HyzYSmHLgXKU/H9qxQMZk9A9HIqBVl/wHQYNkKscktq84twxhNTzS2DOX59EAjyzCd/BWy55ZRNNnXZyAaW0aKKf8OHdDIMpK/tCyJIeNjSGZvpRIO+uwT4xHRGBru3JA3yCkFwRwvTgLx+XgEkZfP5xcEfhtrYgfK2HmPD55bD9x3PTC9pvia4H76TWt5SF79NCIZK1ycnMdQBYxdvQJvuXEPtdWAr7okk/wEHcoGuNAKAAA="
+    },
+    {
+      "name": "copilot-installed.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPgAgASzUp+AgAAAA=="
+    },
+    {
+      "name": "copilot-installed-state.json",
+      "bytes": 224,
+      "sha256": "52ececb7446e6ba8e02ba759f2589f1c9bd55b9e6ee42104329512b582632061",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA23OuwrCMBiG4d3L+Oa05FB7yCYeFpGW6tQtkF8NlBaSFArivYsI2sHxhWd4HzhHE6cADZpdJAuGdhoGN9ygr6YPxNCYKZD9ZkshGh+Xoq5PR9f3C7Qj84vGWWjOsJ9d3I6WPuH96KEB9l7wkewmQkNymSdCJEJdhNJKaCnSgmcVV4WSHRgObnDh/l8rzUXKZZZXZbEuOzxXL5EtSn/gAAAA"
+    },
+    {
+      "name": "codex-installed.log",
+      "bytes": 2009,
+      "sha256": "023028144beb4d52880a039a26903b9c5bd916c31ec624a53d41b529d75c560a",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA8VVzYrbMBC++xV8mUsggbVjW97E2lMhpVAoe9h2YcEnra0k6uoPSU52Yd+i1z5dn6RItjdNN6VQysYHM5rRfPNJM3ySWoBUjjUUTCeBsGRLjKTWvsvSPM3AUesiebxpx7w3mN6w83UnG8eUJDzRxDD3NGfSOsI5bRP6SJvOkXtOU785dRYSB2ovLTDZUk1lS6WDlWrpI3C1YRKIbGHP3LY1ZE84uK1R3WYLbkvhBRcOuM+GOsJO4q3uoFHSMdkRz8/+AUt395w1sFKGglHKRVFc5yKuUSbiulwIuLm9hrgusff5X1EIiGu0ELvLNEsRDG6ciTnROqyiyHsL8eP7t7D+t6uK60JMQz1vIYx7mBcPPMNgIyQQzsA+MK1pO/IUs0MYljmqcu8UI4DnCfAb0dWnj8nN7XWS5bChsmOSAlcN4fwJNGkeaHuyCz1VtMj6ih42AKNAI4CPJf9r92Fq6KbjxMz6Q+aXJT51xjcis+44t42hVI58KlSdkY82TLqBSlktyzNS+WrVeCmowCcH8a0mRjcjkaxA5+3OjjiaHHUJL885wCOlX7pVVsWZRzgwOnStrFD2ilAU9PCLf5k+ME4tjDIdlLwQOWhi7UEai16wYZrPeoCQHz4P8iofn8j/qwCHAgjj4xKfHTEOiBtK5OgKoatsOYbfdyY8V0N4WaQ4syE2DeoPuJpcgDNE2rUyAvLJBTChlXGQTwb5jX4CUvfCRtkHAAA="
+    },
+    {
+      "name": "codex-installed.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAzPgAgASzUp+AgAAAA=="
+    },
+    {
+      "name": "codex-installed-state.json",
+      "bytes": 224,
+      "sha256": "0d562dcdff729d8ad6699bbb0c614bbde1d3eabde6eebb8ea19b2305d679eb5c",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA23OvQrCMBhG4d3LeOe0NE2btt8m/iwiLdXJLZCogZJCkkJBvHcRQTs4HniG88ApqjgFEMxso9Fg6CfnrLuBrmoIhqFTUzD6m70JUfm4FG17PNhhWKCtUb/orAZlDLvZxs2ozSe8Hz0IYO8FH41eRxDyLJcJ5wkXZy5ICMpk2shKlnlTNRcw7K2z4f5fF8RlyquCN2Vd1hc8Vy8cAvwx4AAAAA=="
+    },
+    {
+      "name": "identity.mjs",
+      "bytes": 3868,
+      "sha256": "5e55766673d39bbfbf39c3cbcf90277a8bf69082a95cb6e09c33ba5ec2d4dc27",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA51XS28bNxC++1ewl1CC9oEEaA8W1EOcFFUbOEXsIAfXMChyVjs2lyTIWVmC4/9ecB962bLsHqRdkt9HDmfmI2exctYTe2AehPoDNSQskKCE3XskiB3skRXeVowbq+C0CLnztsIAgY9PsGdLD4LgTxHKXbj0K0eWj0+kNYFYsLWXMLniTsg7MYeQS4158LJ5SutQW0rREHghCReQOm8lhJARBMoo8OQQVcHyteACl1T72Pn8gjPIqtvXsOOaUuMbOFbUVKbaSqFT0uF/cVRWNXuLuwx5URtJaI3QqRMeaZWjCSS0BpXCEmRNYqZhyyXHaWs3vgQvhTf7oN7iOVJZz9Levd7WhGaeeijAg5GQ3QZrjtKkNYSmFnHdo1zrwAhM25gcA3eRe8v8/cROi9XL8UajYHkg+5y3C1Tgw/ot9bUhrOAoQVpT4Lz2bXzazgMk75pfGsAvwB8ABZB1E8g2vRQsUB6yYo1tvaDtHM0+1Ho4vP1+cLOdV8J2U+Kt+LTZ23HWdvK8Df3aFdbhNkD31t8dZ0gPCgyh0E/C3IM3YVlj00DWPwnja+x55sg85qiOct2f7lAhEaj9411hoC7eTxXTDL4gi6OMZ3VxgLUnjAOo55VxDLwtjdunfjzshPXovjiO4/bU8VZCl7zHaTthfxv81Ws8ycjjlG2JHEIf1sjtVuYqcGAUGIkQNunbXwVdM17Bd33fApv0b7OvuwRD1+ogQXp0FHJfm5RWDtp2d21kyso78Pmn5lFgd0XzpKmbbiqrag0h3/DyPaN2YLGROlq9CGpN3oWsPRAtCJOr63Fh/aDturpDoxInqAzXzBbs6oq39RtP2ud1csU7zfOke4l9a2+ueLLt2evr4Wb2OG+ctZl/+NB2zlYEYSLuBdK6IB3wXDiX81FEDseNoZmrQzl4WBuYNMTT5j/TYOZUJqEUH3797XRTmQ5428WHWe2UIBg0+GGmcA6BBryEJR8mVaxbB60NsRTeXX+YxfF3v75//zgcP560sHWtPOA5VS7HJtNo1YXhr4uv51kgj2aOxWrw0FTGfZG1AB/QmqR7hv2B0Dn7zNaGTtv3foudz9uhrtGPbYLQDm8Hosc0vkyCtA5O+UdbGwWKeSCBBlSKlZhDV7L3hVDerZKTtVqWAg0rRSghMGEUi64JGTu3zMA9m9WoVdNvLHPeqlpS3k0nbeVQg8o3ZjK7AK/FKvKJ3ZdWQ1OiwZJyqUGYVNqqQtoUqmyLLLUNtQdmPYu69zirY13HBMWkb2q8jH03HrQgUKxb38eKTqBnwQgXShuzrhJoAkPD2v1H+0sbKGGwlLqOHmq+b0I9a4UZVwkk5mjmGTv7MmXOBoyfEkxjAXIlNeQeCg+hZB7mHkITVqYsM5YYVk6v2GZPoiDwaQkiHnFsZtUqlcJI0LrZBJPRTVG//DExtdbJh+GI/2v4cHwgGaPxWZf5bcSzAjWBHyBBNfk9/mdRSZPJpBf4z587vVuCfvful2YoiiELJDyFH0jlYPeo4VEnwm2v0Fow4ozx0XqGYXZr0Qwa+/tdxJPAasi0nQ/4xfePF2ffpv9cTr+e35x9md6cf7788fXb3zfTT5/PL6eX088X/UclH+2IY8TX9Qgf7WpjxHcPfD56RhzD8cl/EKZqnRwPAAA="
+    },
+    {
+      "name": "identity.json",
+      "bytes": 13316,
+      "sha256": "008911b97c9a3cda1b4d5b2db858a9229f8ac967259464c8c44156095679368d",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA8WbTW+cOY6A7/0rCjm3y6JISeQcZ/aywGJve1osFhRJxTVdrvLWR7ozg/nvC5U/u/t1Mm7EmUPgmC6/0vNS4rf//sNq9WG39/jwp9WHT5nWUNbpw49T+ikOx81+d/zwp9Xff1itXnzu5cdWqw9q+8NuynkN9YXYdQpxTWt6kt3qYT+lsIY1P0kPcbwXIq3ro7Qf9qft5l6enx9rWz9MIfGzbGPnKWq8zo+i7fbmdLqbUlnjGh7Ft3H4FI/PfPrw7d7P24c9YHuU7vTufvmndXb98+n+Y2kNa3wS2+Hz3Wl/L0/Pi+0+zj3k++Xqi/3u72J3PG7vX09Zl0f5cXPrfz3uLy+T1i9e8fzB+TSmvK7phfz/tptTPDznxY5Of7voKeWqj6Lzzjd24Wnr/EIl593GHvQK7fnJ50/32y7wUvazHjePmPlptU98/+bWdZ0R19Cu5klZ05OC/7bd9AcFr+EqUhotPf32344nf1hr3T78sFr943L8jvvzweIv+/Pu9OFPK4SLMG43p1P4oxTKRepxFzuPnX1+/IFc5GNzr9T/vix0f4hXqw8/bXaXBe9XeNjGavXhTk83U36n9pN+jOO1bTfXx4Ndvtr+brPdn642u1Mc1E6bT3F1d9hbHI/rUxxP69Px+UmPxwQStifh8UZzqZcTOdACnASrVJYWBVuUwhARKQs7c/Oo1aQOKdqttuTeofkwoJSeF7q91xzldJH848dvQurxyz/BlrkssFUeow8m9ZE1jK2WlkvliAyVC7NJQsBB1tmbIg0z0nBUxJEavS/b2PxyOh+mcFmdPda3f12AzQUqL9Di4KLWNYDEqQ6NmiJXJzHRPqRyVGnKtXuRnqV7AVLnypAE+fvRTpXadvNFRmZIS4xs2mneWByRepbkKbfQIOuAqqkWqIOUGGu4WUcdJYZJKkB1fC/GvZ5PN1fbven26rQ9LjNC4SU15u6lEI3hpQzjYtq5wKjcBYnJM0QqFtqiDsg9S025VAcklVzZ/0WIvr5dvJlYFxjH0NJyzVktt27gl2tJnopr4hzIXty1Q6+NW81VjEt2SOqIBPDNGKdFOV6P885Om/1Ot1d3eticPl9vdseTbrfhV/FL2PmkfRuvm5+aa+Wl4zqkDxmSZRBSGmnYiDBBksYBTIaVkKInEu0ZegpmLhKhLDUl+46cTzZ26TZizQt00HTkYskju7U6Ri7hkZONoaNq79XZM3sePJLmQg2dKBGxlmzy7U7qa3Q3eti9xgQotKSyVAAmjTsZUxmSQDVp9tGJiulQ1d4BRi/snIhKmI2aFUZtPedvDfV43z5uTjfnfvXoKw7782mz+3h1iBGH2FmsL7Ha7zClpNoW/T7lpLmn6KO7UiHrDoLMYaEZyIUNqiJrLqpREufOwJEsanYp34nT9rvTZnfWqdivwuYEXJmWLqJR6myANYUyAYAnNK8+OGpGU/csqXOqVFpVEsuASFw7moe296Kdwbduru594tfwmqRFVRpA1K6MbaD5gF4gFDsCMWRAypLNi2fE0kASQJZoLSmgdi312znF38A9ePq3aBARYZFxBnKKRJiT0lDkIml6ysrqBXNCseqVHMHBFXxgC8XsqXavLN/ckv6a8RB3W/38pYAGOS85+9EjT2fXc3gp4ilhaTkbWPcRGUOmCxlFsGBuWhmMRpuQPVoLeT9nv9l5/PJKIlE5LXl1g0YpJa1MtVDmXrRXdep1AFFvoSJUxPMF0xwNHWSkkUi6fMNz+DuYu8P+08bjcHz639XhvDttbmPZn5ey5BpooAyesTQiNpgeRKIkYdLKWFuq1C1h0fA6IokW6WSJRaGhpHeMzJ75bL8bm4/nw71Hvxcua7GkvHTRWoxiWMirG44ooilRJsJOndGodYaeE8QYdImvOwF6I8YGZdA7Qh7uLv+ujrNscliEwiq0ZP4xDUyVqwZHK1DERqdm5uSWR0s9YgzJwHVIzjlaLxU9EXhumN8zyT2GnS+xyn087fFpY8uHEgjolShMQxtZSsaiVYp0FFDJiVitk4WwZekmoemiR8tuZah7gvGOJuSJ7d5IbvcfN7tFNCooC2TFR+k1lZzJhQrXXgZox+zhMt01Dk9cC5AAXILQ2srobVTMBqrvQLY/xNesYwVZsvTauZIypw4ZR7h4SUnIqQ/GkgFm1OWNM6Fkar22FEWwS6lV6RtGIL+HebYer2NRzmUxXuYWXEpAsUqFA6LmaiN5hjKznV6gF4k8oKCjuXoxLWJekaD0lxt8R65fB5XLgFRl6RBacJQ0RhfxChhtuEEe2nrTBsXEoNKglgZYziKtB9kI1uhk71NV+Rrf1cWWLFJykqVCmaOMLLkKj+HWBpJqMfI6CN2psmIP7XmW0qJnJehcNJug5gbj+yjxZay8fPWg3pdmf3v1DJMP8q65lj4MxXIeMycfJSX3Ac40Kpsn5zasM+DIjS8xTOrfR4W/ygReVyBQwkUPxxQeY6D7jIYxZmVMkvZcUD3BrHaKhNNga9ygpdpN3Sxxqz2P78L4FHzt4vTz/vDTK8UGgMXyJgRGWGO0Kmo2cGRnI9cgxtQstRItPEk005Jn2p4YQEYt1KR+F0I7hMfutNHtctRF028tOfGEPY+eU1XLlCO5KVga1YJr5xTcoZQhpQGNlLomT50LFpbRantP9T178Se2q+Npf1iOUnKrtHQHwYRh1hEkjHPtwppoIMZMQ0V5nsosYdorNVXW7tQptxLORcq3q/i97Xy+2nAAQVzyFtUSTSUj0GDKVEZk9QE6kmRv5jmljgFYRgCil8YeqXqbFaf4Pof014b0dURqS/EmQsuDmIGLZWZTqzUVU8jElruVVgYFweCaBoPYQJWibZQyU9q3R2UPfbavBJy+OZ4e4pfFYju0ttj/wkFSwbEOy1hmHUUA2qhDQLWLdEt5gI9eKyZkKKlJREsSYqgDf48j+K1wvpC2LjGWWpYU1mUYUifHDC4xajOTPmaRz3IvCgUiBYDlWWbQXN1rKTRtENbm76qwrySui5pE5qWrlzNVUqvqPqQQJ5Hpxz3haIWwexVOYp08gYgYzlpZtNB5UaW9Pcd7A+ZvUtfFAlGTthSatdJAg6VB5zE7P+oK1aGyW5UCWYa21FBaSHgrBSlRKt4wMMofaAe9AWs5eV1UGhVYopseHM2yz+MGEcbUgaTNcl7vlQ0TtATRQ0rNmMMyJXBpWkFUF27fO9C9TF+X4KgustXClql2mV2PGTVnTj1bg5JmlGlupUFOINC7OraeUTBKzpG1yHgXzU1n8BVLyctF5hpYBJHDcwzIOt1yLVAImvCAmoEpubuXMOEaLNWtS8vasGF5l+v1RPPbDHZRSwAEi6EJWemDpRe3bDpapln2KQY0vEsEjIHSxCp5Z5r53mxS+qw+j4H9O5H9JoddPoi5LCUHqYXnuf0Mg5lAZrY6xMUwMUsdqY3oLYQgSWT2VHPKidPoNb2TB/gq4UMStMTZeLGr7FW7aMqFHQtjTawYkuvAVkLcrVCvDSQsa+XR3BVH1QYAfdYzvxPmr8Kv5VglydJB9TxKRelzvzwTHaqIJll8EONsX5U2UoQn1DTa7DQ3S6UiWZ31mH8B3xeUCERliZKj54BKRSxj7ohMXmpqBIlzHZltSBNu2QhQkMhL6XV0zKkRxdsbsH+M8ne5wuIYS+KylMsCzU5juHfBTp65eSm1j9KxVyi1Fclz8mqklh2tYghiZGnkopDfnib8McaX2eyivZG22ChpQ0SAYvYGEoyZFGmpjoM406iBwzDQZ1RNXZShFU61JEojovH7XsTX89nlQSRarJgVB2neevRWK0LHUpWRhoyauWUG9O46zUzlrrWKJRqB6hVaU32703ieK3yV8rWueM1L8XIalEMaSSroc+6tCRUtUbJxY7aSzTjRyMpmMIJSUe6Ilch69bd3VP8JgjlP9NNrGMJMS5EJMUKefarRHNsc2+hKKNTcoKdeXHA06jmn3MsY7q3IGDxU0Xvub2+AfAnk0+aSUN9nM8t5dVtsdjgPqkkcg1W9c0LFltBFm3rCNEYpIBY+r06y6s5ivTXFy2zf2/sDX6I4HR8AllVRFg9Uq9mG9GkTcm3a2mzJVEiKjaxiU4TUg0FCtUDu2GwEAaiFosq31cPRDpu70/H6cN5dnT7fxf33rwziQVkKJ3qS5FVrBuyR+pxLY2/SpTQe2mLGDdmJbMb0SsBWCmDurQX0P+Juv8Sz9r39FIfrf7t8mcPEl8rNUvl00eMkLMApYfUyJ7VEkZEktyJlKgu7luZswD6sI9ceTWuX1qrNTsDbK/xfgpkT2f/7MOd+/ayd6y/bMax5sQGVc4xmWqnknEotrdfM3FOtxBA2SuI++pzAK8Vny2baiTAqrVT4AyW3f5psfnN1d/r8FS5YTh8H96owZ13nPAgNmDM8kIS4juJqjrmP0SuqaMXAObg17d9s+TbCb3udfsV1b+O+QlVaWjRzo+UwwGZcnamQQxapLZzZKqU0e2vsvUlJXng0sQhWIR+EbXyhDvzDavU/P16G9W1/d/kTgj/vzzsPXx3ipJtd+NXmVj/G6r5k+jjCc/0QO1yf9vut3ehmt7rR400cV7rz1VzkuF795361i59X/bzZ+kW+26/uDns/2+n64XG2v73bbMOvn1/jav8pDlv9PH//tPr5Zr+NyzRU/HK6tm3o7sr2t7eb0/MU5urFL9t2fzwfYrU/rGbcctj08xyhWulpvv3LONV69V+7Q2z1FL56WP8wZ5F0c1gdd3p3vNmfVoe41c3uuNrsVvf8c/83++Ppx1X8YtvzfEPjsL9dHc/9/h7OVY4n/bjZfVyv/vIf/7662x83cyp9td2MsM+2jetDjEMcb1aH+HiI4+Vvc1a+X+32p9Xm9m77efXMpOMUh6ub0BlTrvreP1+Z7iy22wvEyuZrmgfpww//+OH/AYHwoWwENAAA"
+    },
+    {
+      "name": "identity.log",
+      "bytes": 72,
+      "sha256": "3df0bf4cffea943fedb02197cb5ed230f58af404ec4672706d8f21ca3a93ac6f",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwsOdQp2DvIMCPH094t39vGM93MNCfcP8o73dHH1C/EM8XQNVijOLy1KTrU1NlRIzc0sKUlNsTU0VUhJLUjNS0nNS85MLba15AIAQrjiqUgAAAA="
+    },
+    {
+      "name": "host.sha256",
+      "bytes": 3979,
+      "sha256": "ae88faa9a26117eea09c089c8b798caa3602c7bb519e720c8c4573a207205c65",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "host-before.log",
+      "bytes": 1685,
+      "sha256": "3926810d719071f1b20619513c9269bd3d710975d4f8be0b48e3498208946a65",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA52US3KDMAyG9z1FL2DYd91dFz2DIwRR4sgeSabJ7Ts8005I43TBGIv/Q9bDSh6OvkOtIVCtAuMKMVGI5ogNxYNRjy5JBFStDNUq07fXz4+XtA03eC6Xt3S2LINx2+kOq9OhjB/8QqCnqOiz7V2I4IOzoP+kmuo0xzjEq3WbGYwi++CSF7JLTazmQ8DG4Rkhm98F/JWcx+Ca0r+BvRe+lS0n78j2eeeWZEvMRtw5wRYFGbA6aOQCECIbcfaD7wI6JmRPbqrRY/lcy+d8LD9PwV8e9QBxg+e7fZkk9tSg6PrmJLPRCQsQiNxSl2Wq2GS8i0kaH6coPcpdmSLksbhT4zXYE9w/y6qeMhJiR3wrjoJ/pWL5fA2sWPi7VZ4n3BhlCfezrZ7Vl3tZm4DRvqIcSxgQbJCNfNgo/iK/FmpVO7UoG6UtOdXmqH2UtFvoesFmwzDojldrTyM09fk6ZnTerzIFoWRaS2Znl4TTfr2SVRPhiFK/j0tL8zgcv30D/QJng5UGAAA="
+    },
+    {
+      "name": "host-after.log",
+      "bytes": 1685,
+      "sha256": "3926810d719071f1b20619513c9269bd3d710975d4f8be0b48e3498208946a65",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA52US3KDMAyG9z1FL2DYd91dFz2DIwRR4sgeSabJ7Ts8005I43TBGIv/Q9bDSh6OvkOtIVCtAuMKMVGI5ogNxYNRjy5JBFStDNUq07fXz4+XtA03eC6Xt3S2LINx2+kOq9OhjB/8QqCnqOiz7V2I4IOzoP+kmuo0xzjEq3WbGYwi++CSF7JLTazmQ8DG4Rkhm98F/JWcx+Ca0r+BvRe+lS0n78j2eeeWZEvMRtw5wRYFGbA6aOQCECIbcfaD7wI6JmRPbqrRY/lcy+d8LD9PwV8e9QBxg+e7fZkk9tSg6PrmJLPRCQsQiNxSl2Wq2GS8i0kaH6coPcpdmSLksbhT4zXYE9w/y6qeMhJiR3wrjoJ/pWL5fA2sWPi7VZ4n3BhlCfezrZ7Vl3tZm4DRvqIcSxgQbJCNfNgo/iK/FmpVO7UoG6UtOdXmqH2UtFvoesFmwzDojldrTyM09fk6ZnTerzIFoWRaS2Znl4TTfr2SVRPhiFK/j0tL8zgcv30D/QJng5UGAAA="
+    },
+    {
+      "name": "image-id.txt",
+      "bytes": 72,
+      "sha256": "d2def7946ff193e3ec3d3d374c6438028bb41c49be0d89ecb98501f920c67ffe",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXByQ3AMAgAsH+nAcLZbQgQ5d/9pdrfTRJ99wKycWxJZEzCZW3IfDoDBjq2ovHEWJXLXlkQpeaeonWinh+uVkc0SAAAAA=="
+    },
+    {
+      "name": "image-config.json",
+      "bytes": 519,
+      "sha256": "1beaa8dff5e774fed0c8f095a29deee495240211f1c043725954b47b8d8aab1c",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA2WRUW+CMBSF3/cz7nMHk2wvJD5UaQaZA0dRY5aFVOi0sbSkLUvMsv++oA41ezvnuzfn3vZ+Q6ytU6zhEAIgiHTDhLr4heXmpLBzrNpRVwsF4SeTll8x3bn/kBszwMIdBp21XN3mHF2mKj4Qor4gfIc5LuKx31njS10x6duNUOGVH+ylcBQnuxEKEKRZRMolyWmSpePg0Rs9eQ+AYI3zdMAjLwi8IAAE8xler/LkOS7KSZ6tKMlpOWxxW6cvybxc4lkS4YKUcUaLMidviyQnryQt6NiZjgOCaXJSHwimTd2/SrUNIHDcuh5is7XEVqzlNYR9J4KkYdvzAZZadg23EKpOSgQrbfZCbSPRX8VnbQv9XzlzaLVQrg+vdbXn5p4P0LO7fkymJp2Q9V/QjG24PMf+3P0CtJ9S3AcCAAA="
+    },
+    {
+      "name": "base-commit.txt",
+      "bytes": 41,
+      "sha256": "1b572104846b441b997551a78e889b67f199a37b20d6ff8ccd0d83900e70746e",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAwXBQQEAIAgDwL9pcDCkjgj0j+DdgWbz+c4egwSFWVcDkQEdQREG+vrSYgh1KQAAAA=="
+    },
+    {
+      "name": "types.json",
+      "bytes": 398,
+      "sha256": "09b5e85a28ba134999f2ae39b710318dae3a7e6200ce8e1836c83a9631914298",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA42QMU/DQAyFd36G57tkz8QAMxMTynDcua3p1T7ZbolU5b9XSSESA4jJftb7/CxfASdHLgYDdL1bFt7RvvswYQiQ5dSoor40J2GD4QoszydyGFzPGEBF/Il0gSHAezJ81fqlWvLDijwmioekjGZ9FkUY3qClfEx7vA9609wTF5w6NxjnOcCOKtpPY6XVt9Qsjap4JHbUlJ0uGJtKRrPO0XxZE35DC05/mr8PaioXKqi2dZHRP0WP/8SkISeKa+KGjAGIcz2X5Q1jAJw2MT/cADRCOEiOAQAA"
+    },
+    {
+      "name": "commands.json",
+      "bytes": 1760,
+      "sha256": "27e0d46a4cab5c66c154c04f925ff9f1d73faf41064a90e9cf9cf43ddb91c7b3",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA61UTYskNwy9z68QdW5332dOYdhALtnAQghkc3Dbqi7vqCxHkrun2Ox/D3b1x0BnYFlyqg9LT9LT8/v6ADBo4ILDIwy/sZrDVwzVEmcIPM8+RxAMLPEJMht4yHiiBQL5NGOEIhgxkBeMEJM/ZFZLAQr5vB02DT3N/tDRfXKTl4yqj4EjvrrgzRMfKro9x2WNjhxeUIZH+ApDRjuxvLTczBmHDQxFONZgH48o5JfhEUZPihsYDNU+cZWA92eB55II4/1JxII5Yg7L/dnRU4q+EfEx0/LMpR0OthTU7RflDMaw86XstO41SCot1AVK7ty3u8UO8K1Ph3Mywzg8wp9D5ojg3BFFE+c2XP+zQulOal4B+vd2/qLgXOYPczJwBb6naIMsMzRqwDkoPrz4A+ouUNqphP4MXBKxuZQNxQdLR3RFOKDqtiVuTd9LbCt8P5QFe2wRPqaIote3S6vflcQFs0+uV7skDH+9JfMT/l0xhy6xvdcJHAU4JZtA0cDhE6hJCnaVs9YQECNG2OPIgvB76hStwse4hZ8rEYxcxY2JEKRmOHmFgjKyNNVzDrhZi2QGQZMFWCB4RRgTGUrKh4v+s5onwvi8Ut3l/GYt7am7sebQdunJFS/Jlt0173wj/Z7wSpkz+DzwKStk33YGZ3AgPqQMbczWXRR/8gQ2CdfDBDYhXGHhBvt5uGs14uv/3GjKl9tm0PF/rNd/BM2n/8R7/gMCZ0u59mur72CVuqcU4LmtXpjtbvq3irrwqkgYLq5YCO0mn7X4NWALH3yYumDetEhL98R8SzvLF65+u7kTWKMmMmp33rVAn2X0zc5gL3xSFEd84Gowc8Qt/MpXbxYsPgnwCDZ561lVcAu/XKnQ7phwtmUQ3NdEUYGraYoIYcLwwtU2/Y4qEAdPtPTGznS1LE/gJUzpiAo8jpQynm/gamYQk7bdxae2IK0zCuwXQ90lZfIrra1UG2o5E/QTUZ9m3TfGS4mb3uBm3xCItQpC0sv42+Hh28O/n/ShHuAGAAA="
+    },
+    {
+      "name": "waivers.sha256",
+      "bytes": 254,
+      "sha256": "113c8b87d539d0cde082a7bbac67e64fa119958edcd611789409eca371e4bbff",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA5XOwW3DMAxA0XunyAKqKZGWzGNGyCEDUCQFqGhtQ3YyfxBkgp7/4f0KsdXKUTBnAUgGishIBlaLS0Y09ncVJxR0L4lYJM5QIpjy5WKbHpM8rJ/T3id/dvNVfbrdr0G3v73/+ghn9xGG79JHeBw+gqj6fsqq/v1zbOtXlSKtMpbUmAiTE1Y3cJgLJMIWmWmxOcWM1JCbZl8ICkPNyyzW/r3xYV92v7dq/gAAAA=="
+    },
+    {
+      "name": "waivers-verify.log",
+      "bytes": 130,
+      "sha256": "dd5a132ff814451dc82ac206c61689672f9f7bd63cae479b11ec3a0ba67caeed",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA5XMoRGAMAwFUM8ULBDicWgEh2CAXPJFOGh7acv8SDQDvGdZK0s3b1yc8bghKXg/FtJ8F78Q1BxBgSIe1CuCRBWlSVJMZ81pHrd1sH/RB19HSLNaggAAAA=="
+    },
+    {
+      "name": "references.sha256",
+      "bytes": 249,
+      "sha256": "3cfdd69027b09238a2295b803690cd76b614e55c9807782e2c8b3510aba0f3a5",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA43NwW3DMAwF0HunyAKqSUoyrXuuRWaQyK/GRWAFsVOk2/fQBfoWeKZLcSXXYsLGhXK0xDarZ8CMFxWOIq5ORbrCmSNKFGpoqJZOJx+2T/Xp6zHd1wnfq2MzTB+Xc6AYbDhewepRb+PzidCG/7x/7WN7467GLql1RjNirpE6rCpZr6JkhMWRlXnmOS/cSs+lz1UTS3LI/+brcdzDA/2B/RqsbobbX/8LF7WtH/kAAAA="
+    },
+    {
+      "name": "receipt.mjs",
+      "bytes": 6785,
+      "sha256": "a2face2e915ea4dbc89f2f2c718fce5e930dec16ba885bb7b07d8c09088866a2",
+      "encoding": "gzip+base64",
+      "data": "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"
+    },
+    {
+      "name": "verify.mjs",
+      "bytes": 1752,
+      "sha256": "b226ca5ddf7e95769357a097e2520de5c497f8fe56cafebb7e3975b2f0127086",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAA62U30/bQAzH3/tXZC+7RA0pjIEGVSeN0EEHaxHlx8M0oWvOaW5c7m5nByiI/31KUiAVZQNpj/F97K/t2Ja5NY48jgiOvNSZ3GPaCNiuLR0kJxNi3ZaswTvPARdfpYLQQ+Lk3TedUuxYZ3KJgE2XxAEn2OeYLeKJm1kyTXJa6FtpxzOdLJK3Sk5Yt5UYjeRlHLPeZEaAvc9PoX2GGf+wscmCqLCCE/gVEkRCTgHJZxncsOAhhoMEpKXet/FoGFnuEHx+zSU9luezDuW28320u7K6voLFBBMnLUmjVxIlVzTQtXGX0S80moWsoPQTC4Juq25bBL8Lrvy5SFQ2qsCQ7Y8Od1nQXcpMDVexya0CgjDlCuEF8IorKXiZSAS5JALxRYvYOIhsyYtwa+3NnimXCkS49lIBDU+pkbhSIGJjpTI0V22/Bk2lInCnGkFBQiDC9a2tf+faCCPg5nV6Jfhf1BIljzhl+Ao9W0yUTMp+xhwBw62nbgoA219QlDqRAjThj9WfkZkguCsQcSaVCO+ScuJ1oVSIcqq52mbjwd64v3fGwktZ6m1X83H/QjELoaXW4I4yjhCy0+HBcHQ+fFoCzXPAnoZrbwzkB93UOL9+kQS5Z9KHNYm4I5nyhDC4qzX9d5VzlHH0SzgqP4OgW1u5EA1rt45Zb+zThvs7RZqCi8o1r2nBiYdswhE2P5bbtFBe5R4p0FPKwgqvLGFDZ4Evr8T8BNRMfR6a/H3r5YqrFkqalWMEGNw1a3h2Kbi1HdauIltO2VsyX8L/NfMl/PxylVdmSS5BlBsB7zfW1uoA5Vcz1H01DEZBpMzUZ+PTnXF8PDg6GYyGF/Hh4GLYPzkfHR9cHPfj/uDo5OKsfzz4Oujveo8z0WPt+rejvIU289AULoEeaz/rZf0Sm0JTm3nzI7QMnD89kAIsaAE6kYDL8Mf3WeURdFt/AEkr6cLYBgAA"
+    },
+    {
+      "name": "docs.log",
+      "bytes": 124,
+      "sha256": "c166f3b575740e39c43ea69f2c979387bedf5396dd867b30818c403b5359bec1",
+      "encoding": "gzip+base64",
+      "data": "H4sIAAAAAAAAAy3MMQ7CMAxG4b2n+Ee6VFCVE8DKIUxsihXXRkkaro8qsb/v3d6SsjAu8xkPKpnj63ipSQU5Y16WKywSGUw9V5w+RVhT0y7YgmWchnukfRNv1DT8nx22S6karr7iGbszFT2uRdDJlKfhB7C1ICd8AAAA"
+    }
+  ]
+}
