@@ -184,7 +184,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP refresh at held %s without undoing committed credentials', async stage => {
+it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown'] as const)('retires Codex HTTP credential work at held %s without undoing committed credentials', async stage => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-cancel-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-codex-http-cancel-master', model = 'gpt-6.1-sol', account = 'codex-http-cancel-account', initialRefresh = 'disposable-codex-refresh-original';
   const token = (generation: number) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + Buffer.from('rotation-' + generation).toString('base64url');
@@ -192,8 +192,8 @@ it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP r
   const events = JSON.parse(await readFile(new URL('../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents as unknown[];
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; }), held = new Promise<Response>(resolve => { release = resolve; });
-  let hold = false, refreshes = 0, issuerSignal: AbortSignal | null | undefined;
-  const bodyCancelled = vi.fn();
+  let hold = false, refreshes = 0, issuerSignal: AbortSignal | null | undefined, finishBody: (() => void) | undefined, stopping: Promise<void> | undefined;
+  const bodyCancelled = vi.fn(() => stage === 'discovery-shutdown' ? new Promise<void>(() => undefined) : undefined);
   const calls: string[] = [], originalFetch = globalThis.fetch;
   vi.stubEnv('AI_HARNESS_MASTER_KEY', master); vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'codex-http-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'codex-http-admin');
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -212,10 +212,10 @@ it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP r
     if (target === modelsUrl) {
       expect(init?.method).toBe('GET');
       if (hold && stage === 'catalogue') { issuerSignal = init?.signal; reached(); return held; }
-      if (hold && stage === 'catalogue-body') {
+      if (hold && (stage === 'catalogue-body' || stage === 'discovery-shutdown')) {
         issuerSignal = init?.signal;
         return new Response(new ReadableStream<Uint8Array>({
-          start(controller) { controller.enqueue(new TextEncoder().encode('{"models":[')); },
+          start(controller) { controller.enqueue(new TextEncoder().encode('{"models":[')); finishBody = () => controller.close(); },
           pull() { reached(); return new Promise<void>(() => undefined); }, cancel: bodyCancelled,
         }), { headers: { 'content-type': 'application/json' } });
       }
@@ -234,6 +234,25 @@ it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP r
     expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(refreshes).toBe(0); expect(calls.length).toBeGreaterThan(0); expect(calls.every(url => url === modelsUrl)).toBe(true);
     const initialCalls = calls.length, current = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
     if (current?.credential.type !== 'oauth') throw new Error('Missing fixture credential.');
+    if (stage === 'discovery-shutdown') {
+      const committed = await readFile(file); hold = true;
+      const pending = fetch(base + '/api/models', { headers }).then(async response => ({ status: response.status, body: await response.json() as unknown }))
+        .catch((error: unknown) => ({ status: undefined, body: undefined, error }));
+      await started; stopping = stop();
+      await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1)); expect(issuerSignal?.aborted).toBe(true);
+      await stopping; const retired = await pending;
+      expect(retired).toEqual({ status: 503, body: { error: 'Application runtime is no longer active.' } });
+      expect(await readFile(file)).toEqual(committed); expect(refreshes).toBe(0); expect(calls.slice(initialCalls)).toEqual([modelsUrl]);
+      hold = false;
+      const replacement = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
+      const next = await fetch(`http://127.0.0.1:${replacement.port}/api/models`, { headers }); expect(next.status).toBe(200);
+      const restored = await next.json() as ModelCatalog;
+      expect(restored.providers.find(row => row.provider === 'openai-codex')!.models.filter(row => row.available).map(row => row.id)).toEqual([model]);
+      expect(calls.slice(initialCalls).every(url => url === modelsUrl)).toBe(true); expect(refreshes).toBe(0); expect(await readFile(file)).toEqual(committed);
+      expect(bodyCancelled).toHaveBeenCalledTimes(1); expect((await stat(file)).mode & 0o777).toBe(0o600);
+      for (const secret of [token(0), initialRefresh]) expect(JSON.stringify([retired, restored]) + await readFile(file, 'utf8')).not.toContain(secret);
+      return;
+    }
     await reader.setOAuth('openai-codex', { ...current.credential, expiresAt: Date.now() - 1000 });
     const expired = await readFile(file), caller = new AbortController(); hold = true;
     const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers, signal,
@@ -266,6 +285,8 @@ it.each(['token', 'catalogue', 'catalogue-body'] as const)('retires Codex HTTP r
       expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret);
     }
   } finally {
-    release(Response.json({})); await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
+    release(Response.json({}));
+    try { finishBody?.(); } catch { /* Already cancelled streams are closed. */ }
+    await stopping; await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 15000);
