@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { beginOpenAICodexDeviceLogin, getOpenAICodexOAuthConfig, refreshOpenAICodexToken,
+import { beginOpenAICodexDeviceLogin, beginOpenAICodexBrowserLogin, getOpenAICodexOAuthConfig, refreshOpenAICodexToken,
   CredentialRedactor, ProviderCredentialService, EncryptedCredentialStore } from '../index.js';
 import { openAICodexAccountId } from './openai-codex-oauth.js';
 
@@ -155,4 +156,82 @@ it.each(['logout', 'replacement', 'cancel'] as const)('cannot publish a held Cod
   const reader = f.reopen(); await reader.load();
   expect((await reader.resolve('openai-codex', { ...options, now: 0 }))?.credential).toEqual(mutation === 'cancel' ? { version: 1, type: 'oauth', ...stored } : undefined);
   if (mutation === 'replacement') expect((await reader.resolve('openai-codex', { env: {} }))?.credential).toEqual({ version: 1, type: 'api-key', apiKey: 'newer-key' });
+});
+
+function browserRedirect(authorizationUrl: string) {
+  const url = new URL(getOpenAICodexOAuthConfig().browserRedirectUri);
+  url.searchParams.set('code', 'private-browser-code');
+  url.searchParams.set('state', new URL(authorizationUrl).searchParams.get('state')!); return url;
+}
+
+it('uses isolated browser state/S256, a fixed authorization contract and the browser redirect in one token exchange', async () => {
+  const redactor = new CredentialRedactor(), fetcher = vi.fn().mockResolvedValue(json(tokens()));
+  const login = beginOpenAICodexBrowserLogin({ fetcher, redactor }), other = beginOpenAICodexBrowserLogin();
+  const auth = new URL(login.authorizationUrl), otherAuth = new URL(other.authorizationUrl); other.cancel();
+  expect(auth.origin + auth.pathname).toBe('https://auth.openai.com/oauth/authorize');
+  expect(auth.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+  expect(auth.searchParams.get('state')).not.toBe(otherAuth.searchParams.get('state'));
+  expect(auth.searchParams.get('code_challenge')).not.toBe(otherAuth.searchParams.get('code_challenge'));
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(JSON.parse(JSON.stringify(login))).toEqual({ authorizationUrl: login.authorizationUrl, expiresAt: login.expiresAt });
+  expect((await login.complete(browserRedirect(login.authorizationUrl).href)).subscription).toEqual({ provider: 'openai-codex', accountId });
+  const [target, init] = fetcher.mock.calls[0] as [string, RequestInit];
+  const form = init.body as URLSearchParams, verifier = form.get('code_verifier')!;
+  expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+  expect(Object.fromEntries(auth.searchParams)).toEqual({ response_type: 'code', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+    redirect_uri: 'http://localhost:1455/auth/callback', scope: 'openid profile email offline_access',
+    code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state: auth.searchParams.get('state'),
+    id_token_add_organizations: 'true', codex_cli_simplified_flow: 'true', originator: 'ai-harness' });
+  expect(target).toBe('https://auth.openai.com/oauth/token'); expect(init).toMatchObject({ method: 'POST', redirect: 'manual' });
+  expect(Object.fromEntries(form)).toEqual({ grant_type: 'authorization_code', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+    code: 'private-browser-code', code_verifier: verifier, redirect_uri: 'http://localhost:1455/auth/callback' });
+  expect(redactor.redact(['private-browser-code', verifier, jwt(), tokens().refresh_token].join(' '))).toBe(Array(4).fill('[REDACTED]').join(' '));
+  await expect(login.complete(browserRedirect(login.authorizationUrl).href)).rejects.toThrow('already consumed');
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+
+it.each(['origin', 'path', 'userinfo', 'fragment', 'missing-state', 'wrong-state', 'duplicate-state', 'duplicate-code', 'missing-code', 'oversize-code', 'denied'])('rejects browser %s without consuming state or contacting an issuer', async variant => {
+  const fetcher = vi.fn().mockResolvedValue(json(tokens())), login = beginOpenAICodexBrowserLogin({ fetcher });
+  const url = browserRedirect(login.authorizationUrl);
+  if (variant === 'origin') url.hostname = 'remote.test';
+  if (variant === 'path') url.pathname = '/other';
+  if (variant === 'userinfo') url.username = 'injected';
+  if (variant === 'fragment') url.hash = 'code=hidden';
+  if (variant === 'missing-state') url.searchParams.delete('state');
+  if (variant === 'wrong-state') url.searchParams.set('state', 'other-flow');
+  if (variant === 'duplicate-state') url.searchParams.append('state', 'other-flow');
+  if (variant === 'duplicate-code') url.searchParams.append('code', 'other-code');
+  if (variant === 'missing-code') url.searchParams.delete('code');
+  if (variant === 'oversize-code') url.searchParams.set('code', 'x'.repeat(4001));
+  if (variant === 'denied') url.searchParams.set('error', 'private-denial-text');
+  await expect(login.complete(url.href)).rejects.toThrow('Invalid OpenAI Codex OAuth redirect.');
+  expect(fetcher).not.toHaveBeenCalled();
+  expect((await login.complete(browserRedirect(login.authorizationUrl).href)).subscription.accountId).toBe(accountId);
+});
+
+it('cancels a held browser exchange and releases its late response without exposing caller abort reasons', async () => {
+  const caller = new AbortController(), held = deferred<Response>(), reached = deferred<void>();
+  const login = beginOpenAICodexBrowserLogin({ signal: caller.signal, fetcher: vi.fn(() => { reached.resolve(); return held.promise; }) });
+  const pending = login.complete(browserRedirect(login.authorizationUrl).href).catch(error => error);
+  await reached.promise; caller.abort(new Error('private-caller-reason'));
+  expect((await pending).message).toBe('OpenAI Codex authentication cancelled.');
+  const cancelled = vi.fn(); held.resolve(new Response(new ReadableStream({ cancel: cancelled })));
+  await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+});
+
+it('bounds browser login lifetime before exchange and supports explicit cancellation', async () => {
+  vi.useFakeTimers(); const fetcher = vi.fn(), login = beginOpenAICodexBrowserLogin({ fetcher });
+  vi.setSystemTime(login.expiresAt);
+  await expect(login.complete(browserRedirect(login.authorizationUrl).href)).rejects.toThrow('unavailable'); login.cancel();
+  const cancelled = beginOpenAICodexBrowserLogin({ fetcher }); cancelled.cancel();
+  await expect(cancelled.complete(browserRedirect(cancelled.authorizationUrl).href)).rejects.toThrow('authentication cancelled');
+  const caller = new AbortController(); caller.abort(new Error('private-caller-reason'));
+  expect(() => beginOpenAICodexBrowserLogin({ signal: caller.signal, fetcher })).toThrow('OpenAI Codex authentication cancelled.');
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it.each(['private-error', 'missing-account'])('refuses browser %s without exposing issuer credential/error bodies', async variant => {
+  const login = beginOpenAICodexBrowserLogin({ fetcher: vi.fn().mockResolvedValue(variant === 'private-error'
+    ? json({ error: 'private-issuer-error', access_token: 'private-token' }, 400) : json({ ...tokens(), access_token: 'e30.e30.signature' })) });
+  await expect(login.complete(browserRedirect(login.authorizationUrl).href)).rejects.toThrow('OpenAI Codex login failed.');
 });

@@ -1,8 +1,11 @@
+import { createHash, randomBytes } from 'node:crypto';
 import type { CredentialRedactor } from './credentials.js';
 
 const CONFIG = Object.freeze({
   clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
   tokenUrl: 'https://auth.openai.com/oauth/token',
+  authorizationUrl: 'https://auth.openai.com/oauth/authorize',
+  browserRedirectUri: 'http://localhost:1455/auth/callback',
   deviceAuthorizationUrl: 'https://auth.openai.com/api/accounts/deviceauth/usercode',
   deviceTokenUrl: 'https://auth.openai.com/api/accounts/deviceauth/token',
   verificationUri: 'https://auth.openai.com/codex/device',
@@ -31,6 +34,14 @@ export interface OpenAICodexDeviceLogin {
   expiresAt: number;
   /** One-shot completion; the device ID and verifier never cross the public metadata boundary. */
   complete(signal?: AbortSignal): Promise<OpenAICodexOAuthCredential>;
+  cancel(): void;
+}
+
+export interface OpenAICodexBrowserLogin {
+  authorizationUrl: string;
+  expiresAt: number;
+  /** Exact redirected URL with matching state; invalid candidates do not consume the flow. */
+  complete(redirectUrl: string, signal?: AbortSignal): Promise<OpenAICodexOAuthCredential>;
   cancel(): void;
 }
 
@@ -136,6 +147,45 @@ export async function refreshOpenAICodexToken(refreshToken: string, accountId: s
     signal.throwIfAborted();
     return result;
   } catch { throw new Error(signal.aborted ? 'OpenAI Codex authentication cancelled.' : 'OpenAI Codex token refresh failed.'); }
+}
+
+/** Fixed-client browser PKCE. Hosts own loopback/pasted input and guarded persistence. */
+export function beginOpenAICodexBrowserLogin(options: OpenAICodexOAuthOptions = {}): OpenAICodexBrowserLogin {
+  const controller = new AbortController();
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(LOGIN_TIMEOUT_MS), ...(options.signal ? [options.signal] : [])]);
+  if (signal.aborted) throw new Error('OpenAI Codex authentication cancelled.');
+  const verifier = randomBytes(32).toString('base64url'), state = randomBytes(32).toString('base64url');
+  options.redactor?.add(verifier);
+  const expiresAt = Date.now() + LOGIN_TIMEOUT_MS;
+  const url = new URL(CONFIG.authorizationUrl);
+  for (const [key, value] of Object.entries({ response_type: 'code', client_id: CONFIG.clientId,
+    redirect_uri: CONFIG.browserRedirectUri, scope: 'openid profile email offline_access',
+    code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', state,
+    id_token_add_organizations: 'true', codex_cli_simplified_flow: 'true', originator: 'ai-harness' })) url.searchParams.set(key, value);
+  let used = false;
+  return { authorizationUrl: url.href, expiresAt, cancel: () => controller.abort(), complete: async (redirectUrl, caller) => {
+    const lifetime = caller ? AbortSignal.any([signal, caller]) : signal;
+    if (used) throw new Error('OpenAI Codex login already consumed.');
+    if (lifetime.aborted) throw new Error('OpenAI Codex authentication cancelled.');
+    if (Date.now() >= expiresAt) throw new Error('OpenAI Codex login is unavailable.');
+    let code: string;
+    try {
+      if (!text(redirectUrl, 8192)) throw new Error();
+      const redirect = new URL(redirectUrl), expected = new URL(CONFIG.browserRedirectUri);
+      if (redirect.origin !== expected.origin || redirect.pathname !== expected.pathname || redirect.username || redirect.password || redirect.hash
+        || redirect.searchParams.has('error') || redirect.searchParams.getAll('state').length !== 1 || redirect.searchParams.get('state') !== state
+        || redirect.searchParams.getAll('code').length !== 1 || !text(redirect.searchParams.get('code'), 4000)) throw new Error();
+      code = redirect.searchParams.get('code')!;
+    } catch { throw new Error('Invalid OpenAI Codex OAuth redirect.'); }
+    used = true; options.redactor?.add(code);
+    try {
+      const response = await request(CONFIG.tokenUrl, new URLSearchParams({ grant_type: 'authorization_code', client_id: CONFIG.clientId,
+        code, code_verifier: verifier, redirect_uri: CONFIG.browserRedirectUri }), lifetime, options);
+      if (!response.ok) throw new Error();
+      const result = credential(response.body, options); lifetime.throwIfAborted(); return result;
+    } catch { throw new Error(lifetime.aborted ? 'OpenAI Codex authentication cancelled.' : 'OpenAI Codex login failed.'); }
+    finally { controller.abort(); }
+  } };
 }
 
 /** OpenAI's JSON device flow, not RFC device-token polling or a Copilot issuer. No persistence or activation. */

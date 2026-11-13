@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { request as httpRequest, createServer as createHTTPServer } from 'node:http';
 import { spawn as spawnChild } from 'node:child_process';
 import { createServer } from 'node:https';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -8,16 +10,17 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
 import { createLocalTLSFixture } from './oauth-local-tls.mjs';
 const { spawn } = await import(process.env.AIH_TEST_PTY_MODULE ?? 'node-pty');
-const mode = process.argv[2];
-assert(['regular', 'fullscreen', 'print', 'json', 'rpc', 'deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh'].includes(mode));
+const requestedMode = process.argv[2], browser = requestedMode.startsWith('browser-');
+const mode = browser ? requestedMode.slice('browser-'.length) : requestedMode;
+assert(['regular', 'fullscreen', 'print', 'json', 'rpc', 'deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh', 'port', 'wait', 'return'].includes(mode));
 const root = await mkdtemp(os.tmpdir() + '/aih-codex-cli-');
 const cwd = root + '/work', agent = root + '/agent', sessions = root + '/sessions';
 const master = 'disposable-codex-cli-master', refresh = 'private-codex-cli-refresh', account = 'cli-codex-account', model = 'gpt-6.1-sol';
 const token = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.c2ln';
 const events = JSON.parse(await readFile(process.env.AIH_CODEX_RESPONSE_FILE ?? new URL('../../../../../tests/fixtures/openai-codex-reference.json', import.meta.url), 'utf8')).responseEvents;
 const secrets = [token, refresh, 'private-codex-device', 'private-codex-code', 'private-codex-verifier'];
-let wire, terminal, exit, output = '', privacyTail = '', held, hold = false, fixtureError;
-const calls = [], children = new Set();
+let wire, occupied, terminal, exit, output = '', privacyTail = '', held, hold = false, fixtureError, browserAuthorization;
+const calls = [], children = new Set(), deliveredStates = new Set();
 const wait = async (predicate, label) => {
   const end = performance.now() + 5000;
   while (!await predicate()) {
@@ -25,6 +28,27 @@ const wait = async (predicate, label) => {
     await pause(10);
   }
 };
+const authorization = text => [...text.replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '').replace(/\s/gu, '').matchAll(/https:\/\/auth\.openai\.com\/oauth\/authorize\?[^]*?originator=ai-harness/gu)].at(-1)?.[0];
+const loopback = target => new Promise((resolve, reject) => {
+  const request = httpRequest({ host: '127.0.0.1', port: 1455, path: target.pathname + target.search, headers: { Host: 'localhost:1455' } }, response => {
+    let body = ''; response.on('data', chunk => { body += chunk; assert(body.length < 1000); });
+    response.on('end', () => resolve({ status: response.statusCode, body })); response.on('error', reject);
+  });
+  request.on('error', reject); request.end();
+});
+const deliver = async text => {
+  await wait(() => { const candidate = authorization(text()); return candidate && !deliveredStates.has(new URL(candidate).searchParams.get('state')); }, 'fresh PKCE authorization state');
+  browserAuthorization = new URL(authorization(text())); deliveredStates.add(browserAuthorization.searchParams.get('state'));
+  assert.equal(browserAuthorization.searchParams.get('redirect_uri'), 'http://localhost:1455/auth/callback');
+  const target = new URL(browserAuthorization.searchParams.get('redirect_uri'));
+  target.searchParams.set('code', 'private-codex-code'); target.searchParams.set('state', 'wrong-state');
+  const count = calls.length;
+  const invalid = await loopback(target).catch(error => { throw new Error('PKCE invalid-state callback at login ' + deliveredStates.size, { cause: error }); });
+  assert.equal(invalid.status, 400); assert.equal(calls.length, count);
+  target.searchParams.set('state', browserAuthorization.searchParams.get('state'));
+  const done = loopback(target).catch(error => ({ error: error.code })); return { done };
+};
+const released = async () => { assert.equal((await loopback(new URL('http://localhost:1455/auth/callback')).catch(error => ({ error: error.code }))).error, 'ECONNREFUSED'); };
 const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(agent + '/credentials.enc', master) });
 const absent = async () => { const credentials = reader(); await credentials.load(); assert.equal(await credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }), undefined); };
 const shown = () => (mode === 'fullscreen' ? output.slice(Math.max(0, output.lastIndexOf('\x1b[2J\x1b[H'))) : output).replace(/\x1b\[[0-9;?]*[A-Za-z]/gu, '');
@@ -44,6 +68,13 @@ try {
           : url.pathname.endsWith('/deviceauth/token') ? { authorization_code: 'private-codex-code', code_verifier: 'private-codex-verifier' }
           : url.pathname === '/oauth/token' ? { access_token: token, refresh_token: refresh, expires_in: 3600 } : undefined;
         assert(data, 'Unexpected issuer target'); response.setHeader('content-type', 'application/json');
+        if (browser && url.pathname === '/oauth/token' && new URLSearchParams(body).get('grant_type') === 'authorization_code') {
+          const form = new URLSearchParams(body), verifier = form.get('code_verifier');
+          assert.match(verifier, /^[A-Za-z0-9_-]{43}$/u); secrets.push(verifier);
+          assert.equal(createHash('sha256').update(verifier).digest('base64url'), browserAuthorization.searchParams.get('code_challenge'));
+          assert.deepEqual(Object.fromEntries(form), { grant_type: 'authorization_code', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann',
+            code: 'private-codex-code', code_verifier: verifier, redirect_uri: 'http://localhost:1455/auth/callback' });
+        }
         if (url.pathname === '/oauth/token' && hold) { held = response; return; }
         response.end(JSON.stringify(data)); return;
       }
@@ -60,7 +91,15 @@ try {
   });
   await new Promise(resolve => wire.listen(0, '127.0.0.1', resolve));
   const endpoint = `https://127.0.0.1:${wire.address().port}`, preload = root + '/routing.mjs';
-  await writeFile(preload, `const original = globalThis.fetch; globalThis.fetch = (input, init) => {
+  await writeFile(preload, `import { Server } from 'node:http';
+  if (${JSON.stringify(mode === 'return')}) {
+    const close = Server.prototype.close;
+    Server.prototype.close = function (callback) {
+      const owned = this.address()?.port === 1455;
+      return close.call(this, owned && typeof callback === 'function' ? (...args) => { process.emit('SIGTERM'); callback(...args); } : callback);
+    };
+  }
+  const original = globalThis.fetch; globalThis.fetch = (input, init) => {
     const target = new URL(String(input));
     if (target.hostname === 'localhost' && target.port === '11434') return Promise.resolve(Response.json({data:[]}));
     if (!['auth.openai.com','chatgpt.com'].includes(target.hostname)) throw new Error('Unexpected fixture host');
@@ -83,15 +122,36 @@ try {
       current.once('close', (code, signal) => { clearTimeout(timer); children.delete(current); resolve({ code, signal, stdout, stderr }); });
       current.stdin.end(input);
     });
-    return { current, done };
+    return { current, done, stderr: () => stderr };
   };
   const run = (args, input) => launch(args, input).done;
-  const login = ['auth', 'login', 'openai-codex', '--issuer', 'openai-codex'];
+  const login = ['auth', 'login', 'openai-codex', '--issuer', 'openai-codex', ...(browser ? ['--method=browser'] : [])];
+  const runLogin = async () => {
+    const pending = launch(login);
+    if (browser) assert.equal((await (await deliver(pending.stderr)).done).status, 200);
+    const result = await pending.done; if (browser) await released(); return result;
+  };
   const turn = ['--approve', '--no-extensions', '--no-context-files', '--no-tools', '--provider', 'openai-codex', '--model', model,
     '--thinking', 'off', '--session-dir', sessions, '--session-id', 'codex-terminal', ...(mode === 'print' ? ['--print', 'probe'] : ['--mode', mode === 'rpc-refresh' ? 'rpc' : mode, ...(mode === 'rpc' || mode === 'rpc-refresh' ? [] : ['probe'])])];
-  if (['deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh'].includes(mode)) {
+  if (mode === 'return') {
+    assert(browser); const result = await runLogin(); assert.equal(result.code, 130, JSON.stringify(result)); assert.equal(result.signal, null);
+    assert.equal(result.stdout, ''); assert(result.stderr.endsWith('Auth cancelled.\n'));
+    const credentials = reader(); await credentials.load();
+    assert.equal((await credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' })).credential.accessToken, token);
+    assert.equal(calls.length, 1); for (const secret of secrets) assert(!JSON.stringify(result).includes(secret));
+  } else if (mode === 'port') {
+    assert(browser); occupied = createHTTPServer((_request, response) => response.writeHead(418).end('incumbent'));
+    await new Promise(resolve => occupied.listen(1455, '127.0.0.1', resolve));
+    const result = await run(login); assert.equal(result.code, 1, JSON.stringify(result)); assert.equal(result.signal, null);
+    assert.equal(result.stdout, ''); assert.equal(result.stderr, 'Auth operation failed.\n'); await absent(); assert.equal(calls.length, 0);
+    assert.equal((await loopback(new URL('http://localhost:1455/auth/callback'))).status, 418);
+  } else if (mode === 'wait') {
+    assert(browser); const pending = launch(login); await wait(() => authorization(pending.stderr()), 'waiting browser callback');
+    pending.current.kill('SIGTERM'); const result = await pending.done; assert.equal(result.code, 130, JSON.stringify(result)); assert.equal(result.signal, null);
+    await released(); await absent(); assert.equal(calls.length, 0);
+  } else if (['deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh'].includes(mode)) {
     if (mode === 'rpc-refresh') {
-      assert.equal((await run(login)).code, 0);
+      assert.equal((await runLogin()).code, 0);
       const credentials = reader(); await credentials.load();
       const original = (await credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' })).credential;
       await credentials.setOAuth('openai-codex', { ...original, expiresAt: 1 });
@@ -99,6 +159,7 @@ try {
     hold = true;
     const previous = await readFile(agent + '/credentials.enc', 'utf8').catch(() => undefined);
     const pending = launch(mode === 'rpc-refresh' ? turn : [...login, '--timeout', mode === 'deadline' ? '1' : '30']);
+    const delivery = browser && mode !== 'rpc-refresh' ? await deliver(pending.stderr) : undefined;
     await wait(() => held, 'held token exchange');
     if (mode === 'sigint') pending.current.kill('SIGINT');
     else if (mode === 'sigterm' || mode === 'rpc-refresh') pending.current.kill('SIGTERM');
@@ -106,14 +167,17 @@ try {
     else if (mode === 'replace') await reader().setApiKey('openai-codex', 'replacement-key');
     if (mode === 'logout' || mode === 'replace') held.end(JSON.stringify({ access_token: token, refresh_token: refresh, expires_in: 3600 }));
     const result = await pending.done;
+    if (delivery) await delivery.done;
+    if (browser) await released();
     assert.equal(result.signal, null); assert.equal(result.code, mode === 'deadline' ? 124 : mode === 'rpc-refresh' ? 143 : mode === 'sigint' || mode === 'sigterm' ? 130 : 1, JSON.stringify(result));
     if (mode === 'rpc-refresh') assert.equal(await readFile(agent + '/credentials.enc', 'utf8'), previous);
     else await absent();
     if (mode === 'replace') { const credentials = reader(); await credentials.load(); assert.equal((await credentials.resolve('openai-codex', { env: {} })).credential.apiKey, 'replacement-key'); }
     for (const secret of secrets) assert(!JSON.stringify(result).includes(secret));
   } else if (['print', 'json', 'rpc'].includes(mode)) {
-    const authorized = await run(login); assert.equal(authorized.code, 0, JSON.stringify(authorized)); assert.equal(authorized.signal, null);
-    assert(authorized.stderr.includes('https://auth.openai.com/codex/device')); assert(authorized.stderr.includes('CODEX-CODE'));
+    const authorized = await runLogin(); assert.equal(authorized.code, 0, JSON.stringify(authorized)); assert.equal(authorized.signal, null);
+    if (browser) assert(authorization(authorized.stderr));
+    else { assert(authorized.stderr.includes('https://auth.openai.com/codex/device')); assert(authorized.stderr.includes('CODEX-CODE')); }
     if (mode === 'print') {
       const offline = await run(['--list-models', 'openai-codex', '--offline']); assert.equal(offline.code, 0); assert(!offline.stdout.includes(model));
       const listed = await run(['--list-models', 'openai-codex']); assert.equal(listed.code, 0, JSON.stringify(listed)); assert(listed.stdout.includes(model)); assert(!listed.stdout.includes('gpt-5.3-codex-spark'));
@@ -134,26 +198,38 @@ try {
       '--session-dir', sessions, '--session-id', 'codex-terminal', '--name', 'codex-terminal', '--tui-mode', mode, '--theme', 'dark'], { cwd, cols: 120, rows: 40, env });
     terminal.onData(text => { output += text; assert(output.length < 1000000); const complete = privacyTail + text; for (const secret of secrets) assert(!complete.includes(secret)); privacyTail = complete.slice(-(Math.max(...secrets.map(secret => secret.length)) - 1)); });
     terminal.onExit(value => { exit = value; }); await wait(ready, 'startup');
-    hold = true; output = ''; terminal.write('/login openai-codex --issuer openai-codex\r');
+    const interactiveLogin = browser ? '/login openai-codex --method browser --issuer "openai-codex"' : '/login openai-codex --issuer openai-codex';
+    hold = true; output = ''; terminal.write(interactiveLogin + '\r');
+    const cancelledDelivery = browser ? await deliver(() => output) : undefined;
     await wait(() => held, 'held login'); terminal.write('\x1b'); await wait(() => shown().includes('Command failed.') && ready(), 'Escape retires login'); await absent();
+    if (cancelledDelivery) { await cancelledDelivery.done; await released(); }
     if (!held.destroyed) held.end('{}'); held = undefined; hold = false;
-    await command('/login openai-codex --issuer=openai-codex', 'Authentification OAuth réussie');
+    if (browser) {
+      output = ''; terminal.write('/login openai-codex --issuer=openai-codex --method=browser\r');
+      assert.equal((await (await deliver(() => output)).done).status, 200);
+      await wait(() => shown().includes('Authentification OAuth réussie') && ready(), 'browser login'); await released();
+    } else await command('/login openai-codex --issuer=openai-codex', 'Authentification OAuth réussie');
     await command('/model openai-codex/' + model, model); await command('probe', 'ok');
     const journal = await readFile(sessions + '/codex-terminal.jsonl', 'utf8');
     assert(journal.trim().split('\n').map(line => JSON.parse(line)).some(record => record.type === 'message' && record.role === 'assistant' && record.provider === 'openai-codex' && record.api === 'openai-codex-responses' && record.model === model));
     const encrypted = await readFile(agent + '/credentials.enc', 'utf8'); assert.equal((await stat(agent + '/credentials.enc')).mode & 0o777, 0o600);
     await command('/logout openai-codex', 'Identifiants supprimés'); await absent();
-    hold = true; output = ''; terminal.write('/login openai-codex --issuer openai-codex\r'); await wait(() => held, 'held shutdown login'); terminal.kill('SIGTERM');
+    hold = true; output = ''; terminal.write(interactiveLogin + '\r');
+    const shutdownDelivery = browser ? await deliver(() => output) : undefined;
+    await wait(() => held, 'held shutdown login'); terminal.kill('SIGTERM');
     await wait(() => exit !== undefined, 'shutdown'); assert.equal(exit.exitCode, 0, JSON.stringify(exit)); assert(!exit.signal, JSON.stringify(exit)); await absent();
+    if (shutdownDelivery) { await shutdownDelivery.done; await released(); }
     for (const secret of secrets) assert(!(journal + encrypted).includes(secret));
   }
   assert.equal(fixtureError, undefined);
   assert(calls.every(call => /^https:\/\/auth\.openai\.com\/(?:api\/accounts\/deviceauth\/(?:usercode|token)|oauth\/token)$/u.test(call.url)
     || /^https:\/\/chatgpt\.com\/backend-api\/codex\/(?:models\?client_version=0\.167\.2|responses)$/u.test(call.url)));
-  console.log('CODEX_CLI_OK ' + mode);
+  if (browser) assert(calls.filter(call => call.url.startsWith('https://auth.openai.com/')).every(call => call.url === 'https://auth.openai.com/oauth/token'));
+  console.log('CODEX_CLI_OK ' + requestedMode);
 } finally {
   await Promise.all([...children].map(pending => { pending.kill('SIGKILL'); return new Promise(resolve => pending.once('close', resolve)); }));
   if (terminal && !exit) { terminal.kill('SIGKILL'); await wait(() => exit !== undefined, 'cleanup'); }
+  if (occupied) { occupied.closeAllConnections(); await new Promise(resolve => occupied.close(resolve)); }
   if (wire) { wire.closeAllConnections(); await new Promise(resolve => wire.close(resolve)); }
   await rm(root, { recursive: true, force: true });
 }

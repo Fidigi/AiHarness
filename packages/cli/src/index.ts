@@ -1543,7 +1543,7 @@ async function main(): Promise<void> {
         } else {
           if (trimmed === '/help') terminal.showHelp();
           else if (resourceCommand === 'navigate' || resourceCommand === 'fork' || resourceCommand === 'clone' || resourceCommand === 'mcp'
-            || resourceCommand === 'login' && /(?:^|\s)--issuer(?:=|\s+)(?:github-copilot|openai-codex)(?:\s|$)/u.test(trimmed)) {
+            || resourceCommand === 'login') {
             const controller = new AbortController();
             const commandContext = commandHandler.getContext();
             activeAbortController = controller;

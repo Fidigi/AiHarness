@@ -3,7 +3,8 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 const probe = fileURLToPath(new URL('./fixtures/codex-cli-probe.mjs', import.meta.url));
-it.each(['regular', 'fullscreen', 'print', 'json', 'rpc', 'deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh'])(
+it.each(['regular', 'fullscreen', 'print', 'json', 'rpc', 'deadline', 'sigint', 'sigterm', 'logout', 'replace', 'rpc-refresh',
+  'browser-regular', 'browser-fullscreen', 'browser-print', 'browser-json', 'browser-rpc', 'browser-deadline', 'browser-sigint', 'browser-sigterm', 'browser-logout', 'browser-replace', 'browser-port', 'browser-wait', 'browser-return'])(
   'native Codex emitted CLI owns %s login/inference/retirement', async mode => {
     const result = await promisify(execFile)(process.execPath, [probe, mode], { timeout: 25000, maxBuffer: 1024 * 1024,
       env: { PATH: process.env.PATH, HOME: process.env.HOME } }).catch((error: unknown) => {

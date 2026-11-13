@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { EncryptedCredentialStore, JsonlSessionStore, MockProvider, ProviderCredentialService, SessionManager } from '@ai-harness/core';
 import { CommandHandler } from './handler.js';
 import type { TerminalUI } from '../tui/terminal-ui.js';
+import * as codexLogin from '../security/codex-login.js';
 
 const roots: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -102,6 +103,35 @@ it('saves explicit login but retains other providers when Codex cannot use the h
 it('requires encrypted storage before contacting the Codex issuer', async () => {
   const f = await fixture(false, false);
   await f.handler.execute('/login openai-codex --issuer openai-codex');
+  expect(f.messages.at(-1)).toContain('stockage chiffré'); expect(f.transport).not.toHaveBeenCalled();
+});
+
+it.each(['--method browser', '--issuer github-copilot --method browser', '--issuer openai-codex --method other',
+  '--issuer openai-codex --method browser --method device'])('refuses ambiguous browser arguments: %s', async args => {
+  const f = await fixture();
+  await f.handler.execute('/login openai-codex ' + args);
+  expect(f.messages).toHaveLength(1); expect(f.messages[0]).toContain('Usage: /login');
+  expect(f.transport).not.toHaveBeenCalled(); expect(f.credentials.list()).toEqual([]);
+});
+
+it('does not mount a retired CLI owner after a browser helper returns with credentials already committed', async () => {
+  const f = await fixture();
+  vi.spyOn(codexLogin, 'loginOpenAICodexBrowser').mockImplementationOnce(async (credentials, label, _instructions, signal) => {
+    const publish = await credentials.prepareOAuthLogin(label, signal);
+    await publish({ accessToken: token, refreshToken: refresh, expiresAt: Date.now() + 3600_000,
+      subscription: { provider: 'openai-codex', accountId: 'cli-account' } });
+    f.host.abort();
+  });
+  await f.handler.execute('/login openai-codex --issuer=openai-codex --method=browser');
+  expect(f.errors).toEqual(['Command failed.']); expect(f.messages).toEqual([]);
+  expect(f.handler.getContext().providers.has('openai-codex')).toBe(false); expect(f.handler.getContext().provider).toBe(f.mock);
+  const reader = f.reopen(); await reader.load();
+  expect((await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }))?.credential).toMatchObject({ accessToken: token, refreshToken: refresh });
+});
+
+it('requires encrypted storage before opening a browser callback listener', async () => {
+  const f = await fixture(false, false);
+  await f.handler.execute('/login openai-codex --issuer=openai-codex --method=browser');
   expect(f.messages.at(-1)).toContain('stockage chiffré'); expect(f.transport).not.toHaveBeenCalled();
 });
 

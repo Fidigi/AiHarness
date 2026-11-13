@@ -62,7 +62,7 @@ import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
 import { createConfiguredProviders } from '../providers/configured-providers.js';
 import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
-import { loginOpenAICodex } from '../security/codex-login.js';
+import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
 
@@ -711,13 +711,20 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'login',
-    description: 'Authentifier un provider avec un flux OAuth device',
-    usage: '/login <provider> [--issuer github-copilot|openai-codex]',
+    description: 'Authentifier un provider avec un flux OAuth explicite',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex] [--method device|browser]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
-      const issuer = args.length === 3 && args[1] === '--issuer' ? args[2]
-        : args.length === 2 && args[1]?.startsWith('--issuer=') ? args[1].slice('--issuer='.length) : undefined;
-      if (!providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex]');
+      let issuer: string | undefined, method: string | undefined, valid = true;
+      for (let i = 1; i < args.length; i++) {
+        const raw = args[i]!, equal = raw.indexOf('='), key = equal < 0 ? raw : raw.slice(0, equal);
+        const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
+        if (key === '--issuer' && issuer === undefined && value) issuer = value;
+        else if (key === '--method' && method === undefined && (value === 'device' || value === 'browser')) method = value;
+        else valid = false;
+      }
+      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex'
+        || method !== undefined && issuer !== 'openai-codex') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex] [--method device|browser]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
@@ -729,9 +736,13 @@ const commands: CommandEntry[] = [
         const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
         const timer = setTimeout(() => controller.abort(), 300_000);
         try {
-          await loginOpenAICodex(credentialService, providerName, (uri, code) => {
+          if (method === 'browser') await loginOpenAICodexBrowser(credentialService, providerName, uri => {
+            ctx.terminal.writeOutput(`Ouvrez ${uri} pour autoriser AiHarness.`);
+          }, signal);
+          else await loginOpenAICodex(credentialService, providerName, (uri, code) => {
             ctx.terminal.writeOutput(`Ouvrez ${uri} et saisissez le code ${code}.`);
           }, signal);
+          signal.throwIfAborted();
           if (providerName === 'openai-codex') {
             const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, openaiCodex: {
               model: OPENAI_CODEX_MODELS[0]!.id,
