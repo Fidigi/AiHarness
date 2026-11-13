@@ -4,6 +4,8 @@
 
 ## Scope and Evidence Rules
 
+**Later global MOD-03 review:** the [current eight-axis matrix](./MOD-01-tracking.md#mod-03-current-closure-review) records the `8ff9033` Anthropic reserve correction and the outstanding explicit media-ownership decision. It does not reopen delivered subscription features or make manual accounts, compression, every profile/host combination or old global failures automatic MOD-03 prerequisites. The functional subscription audit below remains historical evidence for its agreed scope, not a global closure certificate; MOD-03 is still PARTIAL.
+
 This checkpoint retains the earlier Copilot-then-Codex evidence and maps the user's later functional objective: Codex constrained tools first, explicit WebSocket second, then only other confirmed subscription gaps. Copilot manual-account/global qualification does not block those implementations; that sequencing decision does not accept failed gates.
 
 The [subscription contract](../../ai/topics/subscription-providers.md) owns current behavior. Receipts below retain their original source, overlays, failures and campaign boundaries. Their historical `remaining`/`limits` arrays describe those checkpoints: later delivery is recorded here, not rewritten into earlier evidence. In particular, Server/Settings OAuth, interactive CLI, private host continuation and Codex Server/Settings PKCE are no longer unimplemented work.
