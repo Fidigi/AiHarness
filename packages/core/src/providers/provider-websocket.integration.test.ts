@@ -1,15 +1,21 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { WebSocket as UndiciWebSocket } from 'undici';
 import { createServer } from 'node:http';
 import { createConnection } from 'node:net';
 import type { Duplex } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   acquireProviderWebSocket,
   closeProviderNetworkDispatchers,
+  createProviderNetworkScope,
+  PROVIDER_NETWORK_SCOPE,
+  type ProviderWebSocket,
 } from './provider-network.js';
 import {
   OpenAiResponsesProvider,
   OpenAiMixedProvider,
+  OpenAICodexProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
 } from './index.js';
@@ -63,6 +69,65 @@ function message(id: string, role: Message['role'], content: string): Message {
 afterEach(async () => {
   resetOpenAiResponsesTransportStats();
   await closeProviderNetworkDispatchers();
+});
+
+describe('Codex real WebSocket transport', () => {
+  it('keeps private tool/final deltas on the account socket and discards them on scope reset', async () => {
+    const replay = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) as {
+      events: Array<Record<string, unknown>>; finalEvents: Array<Record<string, unknown>>;
+    };
+    const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-websocket-reference.json', import.meta.url), 'utf8')) as {
+      rows: Array<{ mode: string; sessionId: string; tools: NonNullable<import('./openai-codex.js').OpenAICodexChatOptions['tools']>; frames: Array<Record<string, unknown>> }>;
+    };
+    const row = reference.rows.find(row => row.mode === 'function')!, scope = createProviderNetworkScope();
+    const accountId = 'fixture-codex-account', accessToken = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: accountId } })).toString('base64url') + '.fixture';
+    const requests: Array<Record<string, unknown>> = [], upgrades: Array<{ account: string | string[] | undefined; bearer: string | undefined; beta: string | string[] | undefined }> = [];
+    const sockets = new Set<Duplex>(), server = createServer((_request, response) => { response.writeHead(500).end(); });
+    server.on('upgrade', (request, socket) => {
+      upgrades.push({ account: request.headers['chatgpt-account-id'], bearer: request.headers.authorization, beta: request.headers['openai-beta'] });
+      sockets.add(socket); socket.once('close', () => sockets.delete(socket));
+      const accept = createHash('sha1').update(`${String(request.headers['sec-websocket-key'])}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+      socket.write(['HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${accept}`, '\r\n'].join('\r\n'));
+      let pending = Buffer.alloc(0);
+      socket.on('data', chunk => {
+        pending = Buffer.concat([pending, chunk]);
+        while (true) {
+          const frame = decodeClientFrame(pending); if (!frame) break; pending = pending.subarray(frame.bytes);
+          if (frame.opcode === 0x8) { socket.write(Buffer.from([0x88, 0])); socket.end(); continue; }
+          requests.push(JSON.parse(frame.payload) as Record<string, unknown>);
+          for (const event of requests.length === 1 || requests.length === 4 ? replay.events : replay.finalEvents) socket.write(serverFrame(event));
+        }
+      });
+    });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address(); if (!address || typeof address === 'string') throw new Error('Test server did not bind.');
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async url => {
+      expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.167.2');
+      return Response.json({ models: [{ slug: 'gpt-6.1-sol', visibility: 'list' }] });
+    });
+    const provider = new OpenAICodexProvider({ type: 'openai-codex', model: 'gpt-6.1-sol', transport: 'websocket-cached', [PROVIDER_NETWORK_SCOPE]: scope,
+      requestTimeoutMs: 5000, websocketConnectTimeoutMs: 2000, webSocketFactory: (url: string, init: { headers: Record<string, string> }) => {
+        expect(url).toBe('wss://chatgpt.com/backend-api/codex/responses');
+        // Only this fixed loopback peer is used; production endpoint admission is unchanged.
+        return new UndiciWebSocket(`ws://127.0.0.1:${address.port}/codex/responses`, init as ConstructorParameters<typeof UndiciWebSocket>[1]) as unknown as ProviderWebSocket;
+      } }, async () => ({ version: 1, type: 'oauth', accessToken, refreshToken: 'disposable-ws-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'openai-codex', accountId } }));
+    const user = message('user', 'user', 'probe'), options = { tools: row.tools, sessionId: row.sessionId };
+    const assistant = (response: import('./index.js').ChatResponse): Message => ({ ...response, id: 'assistant', role: 'assistant', timestamp: new Date(2) });
+    try {
+      const first = await provider.chat([user], options);
+      const history: Message[] = [user, assistant(first), { id: 'result', role: 'tool', name: 'echo', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(3) }];
+      const final = await provider.chat(history, options);
+      await provider.chat([...history, assistant(final), message('next', 'user', 'continue')], options);
+      expect(requests).toEqual(row.frames); expect(upgrades).toHaveLength(1); expect(sockets.size).toBe(1);
+      await closeProviderNetworkDispatchers(scope); await waitForCondition(() => sockets.size === 0);
+      await provider.chat([user], options); expect(upgrades).toHaveLength(2); expect(requests[3]).toEqual(row.frames[0]);
+      expect(upgrades).toEqual(Array(2).fill({ account: accountId, bearer: 'Bearer ' + accessToken, beta: 'responses_websockets=2026-02-06' }));
+      expect(fetcher).toHaveBeenCalledTimes(4);
+    } finally {
+      fetcher.mockRestore(); await closeProviderNetworkDispatchers(scope, { permanent: true });
+      for (const socket of sockets) socket.destroy(); await new Promise<void>(resolve => server.close(() => resolve()));
+    }
+  });
 });
 
 describe('OpenAI Responses real WebSocket transport', () => {

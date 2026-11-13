@@ -552,8 +552,6 @@ export class AiProxyServer {
   }
 
   setOpenAICodexSubscription(model: string, credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>): void {
-    // Do not reinterpret explicit WebSocket policy or disable unrelated providers.
-    if (this.network?.transport === 'websocket') return;
     const provider = new OpenAICodexProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'openai-codex', model }, async signal => {
       const credential = await credentialSource(signal);
       this.redactor.add(credential?.accessToken); this.redactor.add(credential?.refreshToken);

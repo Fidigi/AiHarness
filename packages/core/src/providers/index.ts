@@ -2760,7 +2760,7 @@ const azureResponsesOwnerNames = new WeakMap<ProviderConfig, string>();
 type ResponsesContinuation = {
   request: ResponsesRequest;
   responseId: string;
-  assistantInput: Record<string, unknown>;
+  responseInput: ResponsesInput;
 };
 
 type ResponsesToolFragment = { id: string; name: string; arguments: string; grammarInputProperty?: string };
@@ -3197,7 +3197,7 @@ function cachedResponsesBody(
   continuation: ResponsesContinuation | undefined,
 ): ResponsesRequest {
   if (!continuation || responseRequestComparable(body) !== responseRequestComparable(continuation.request)) return body;
-  const baseline = [...continuation.request.input, continuation.assistantInput];
+  const baseline = [...continuation.request.input, ...continuation.responseInput];
   if (body.input.length < baseline.length
     || JSON.stringify(body.input.slice(0, baseline.length)) !== JSON.stringify(baseline)) return body;
   return {
@@ -3294,7 +3294,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       if (options?.sessionId) rememberResponsesIdentity(options.sessionId, identity);
       const stats = options?.sessionId ? responsesTransportStats(options.sessionId) : undefined;
       let response: ChatResponse | undefined;
-      if (transport !== 'sse' && !activeResponsesFallback(identity)) {
+      if (transport !== 'sse' && (!this.allowsSseFallback() || !activeResponsesFallback(identity))) {
         try {
           response = await this.streamWebSocket(body, onChunk, options, identity, stats);
           responsesFallback.delete(identity);
@@ -3303,7 +3303,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           const reason = error instanceof ResponsesWebSocketFailure ? error.reason : error;
           const connectionLimit = reason instanceof ResponsesProtocolError
             && reason.code === 'websocket_connection_limit_reached';
-          if (options?.signal?.aborted
+          if (!this.allowsSseFallback() || options?.signal?.aborted
             || (reason instanceof ResponsesProtocolError && reason.providerFailure && !connectionLimit)) throw reason;
           const started = error instanceof ResponsesWebSocketFailure && error.started;
           if (started) throw reason;
@@ -3338,6 +3338,12 @@ export class OpenAiResponsesProvider extends AiProvider {
   protected acceptsJsonResponse(): boolean { return false; }
 
   protected responseTransport(): ProviderConfig['transport'] { return this.config.transport ?? 'auto'; }
+
+  protected allowsSseFallback(): boolean { return true; }
+
+  protected responseContinuationInput(response: ChatResponse, _body: ResponsesRequest, _options?: ChatOptions): ResponsesInput | undefined {
+    return response.toolCalls?.length ? undefined : [{ role: 'assistant', content: response.content }];
+  }
 
   protected responseUrl(): string { return `${this.baseUrl}/responses`; }
 
@@ -3405,7 +3411,8 @@ export class OpenAiResponsesProvider extends AiProvider {
     const cache = (this.config.transport === 'websocket-cached' || this.config.transport === 'auto')
       && Boolean(options?.sessionId);
     const timeout = network.requestTimeoutMs > 0 ? AbortSignal.timeout(network.requestTimeoutMs) : undefined;
-    const signal = options?.signal && timeout ? AbortSignal.any([options.signal, timeout]) : options?.signal ?? timeout;
+    const scopeSignal = providerNetworkScopeSignal(providerNetworkScope(this.config));
+    const signal = AbortSignal.any([scopeSignal, ...(options?.signal ? [options.signal] : []), ...(timeout ? [timeout] : [])]);
     const stableTransportError = (error: unknown): unknown => (
       timeout?.aborted && !options?.signal?.aborted
         ? new ProviderNetworkError('request-timeout', 'The provider request timed out.')
@@ -3457,14 +3464,10 @@ export class OpenAiResponsesProvider extends AiProvider {
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
         const response = finalizeResponses(state);
         if (entry) {
-          const cachedBytes = Buffer.byteLength(JSON.stringify(fullBody)) + Buffer.byteLength(response.content);
-          entry.continuation = state.responseId && !response.toolCalls?.length
-            && cachedBytes <= RESPONSES_MAX_CACHED_CONTEXT_BYTES
-            ? {
-                request: fullBody,
-                responseId: state.responseId,
-                assistantInput: { role: 'assistant', content: response.content },
-              }
+          const responseInput = this.responseContinuationInput(response, fullBody, options);
+          const cachedBytes = Buffer.byteLength(JSON.stringify(fullBody)) + Buffer.byteLength(JSON.stringify(responseInput ?? []));
+          entry.continuation = state.responseId && responseInput && cachedBytes <= RESPONSES_MAX_CACHED_CONTEXT_BYTES
+            ? { request: fullBody, responseId: state.responseId, responseInput }
             : undefined;
           keep = true;
         }
@@ -3620,7 +3623,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     return url.toString();
   }
 
-  private transportIdentity(sessionId?: string, owner?: ResponsesReplayOwner): string {
+  protected transportIdentity(sessionId?: string, owner?: ResponsesReplayOwner): string {
     const session = typeof sessionId === 'string' ? sessionId : 'ephemeral';
     return createHash('sha256')
       .update(`${session}\0${this.baseUrl}\0${String(this.config.apiKey ?? '')}\0${JSON.stringify(
@@ -3632,13 +3635,26 @@ export class OpenAiResponsesProvider extends AiProvider {
 
 const nativeCodexResponses = new WeakSet<AiProvider>();
 class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly credential: ProviderOAuthCredential) { super(config); }
+  constructor(config: ProviderConfig, private readonly credential: ReturnType<typeof openAICodexCredential>, private readonly generation: string) { super(config); }
   override getModelApi(): string { return 'openai-codex-responses'; }
-  protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
+  protected override responseTransport(): ProviderConfig['transport'] {
+    return ['websocket', 'websocket-cached'].includes(this.config.transport ?? '') ? this.config.transport : 'sse';
+  }
+  protected override allowsSseFallback(): boolean { return false; }
+  protected override transportIdentity(sessionId?: string, owner?: ResponsesReplayOwner): string {
+    return createHash('sha256').update(`${super.transportIdentity(sessionId, owner)}\0${this.generation}\0${this.credential.subscription?.accountId}\0${this.credential.accessToken}`).digest('hex');
+  }
+  protected override responseContinuationInput(response: ChatResponse, body: ResponsesRequest, options?: OpenAICodexChatOptions): ResponsesInput | undefined {
+    if (!nativeCodexResponses.has(this)) return super.responseContinuationInput(response, body, options);
+    return this.requestBody([{ ...response, provider: 'openai-codex', api: 'openai-codex-responses', model: body.model,
+      id: randomUUID(), role: 'assistant', timestamp: new Date() }], { ...options, model: body.model }).input;
+  }
   protected override responseUrl(): string { return OPENAI_CODEX_RESPONSES_URL; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
-  protected override headers(_websocket: boolean, sessionId?: string): Record<string, string> {
-    return { ...super.headers(false, sessionId), ...openAICodexHeaders(this.credential) };
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = { ...super.headers(websocket, sessionId ?? (websocket ? randomUUID() : undefined)), ...openAICodexHeaders(this.credential) };
+    if (websocket) headers['OpenAI-Beta'] = RESPONSES_WEBSOCKET_BETA;
+    return headers;
   }
   protected override requestBody(messages: Message[], options?: OpenAICodexChatOptions): ResponsesRequest {
     const body = openAICodexBody(openAICodexModel(options?.model ?? this.config.model!), toolImageMessages(messages), options, nativeCodexResponses.has(this));
@@ -3655,11 +3671,14 @@ class OpenAICodexResponsesDelegate extends OpenAiResponsesProvider {
 
 /** Dedicated subscription facade. Shared SSE parsing grants no API-key auth or private R replay authority. */
 export class OpenAICodexProvider extends AiProvider {
+  private transportGeneration = randomUUID();
+  private transportCredential?: string;
   constructor(config: ProviderConfig, private readonly credentialSource: (signal?: AbortSignal) => Promise<ProviderOAuthCredential | undefined>) {
     if (typeof credentialSource !== 'function' || typeof config.model !== 'string') throw new Error('OpenAI Codex subscription and model are required.');
-    if (config.transport && !['auto', 'sse'].includes(config.transport)) throw new Error('OpenAI Codex WebSocket transport is not qualified.');
+    if (config.transport && !['auto', 'sse', 'websocket', 'websocket-cached'].includes(config.transport)) throw new Error('Invalid OpenAI Codex transport.');
     openAICodexModel(config.model);
-    super({ ...config, type: 'openai-codex', apiKey: undefined, baseUrl: undefined, headers: undefined, transport: 'sse' });
+    super({ ...config, type: 'openai-codex', apiKey: undefined, baseUrl: undefined, headers: undefined,
+      transport: config.transport === 'websocket' || config.transport === 'websocket-cached' ? config.transport : 'sse' });
     if (new.target === OpenAICodexProvider) nativeCodexResponses.add(this);
   }
   override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
@@ -3709,7 +3728,9 @@ export class OpenAICodexProvider extends AiProvider {
       if (!(await this.accountModels(credential, options?.signal)).includes(model.id)) throw new Error('OpenAI Codex account model is unavailable.');
       active();
       for (const message of messages) for (const image of messageImages(message)) if (!parseDataImage(image.url)) throw new Error('Invalid OpenAI Codex image input.');
-      const delegate = new OpenAICodexResponsesDelegate({ ...this.config, model: model.id, baseUrl: 'https://chatgpt.com/backend-api/codex' }, credential);
+      const credentialIdentity = createHash('sha256').update(`${credential.subscription.accountId}\0${credential.accessToken}`).digest('hex');
+      if (credentialIdentity !== this.transportCredential) { this.transportCredential = credentialIdentity; this.transportGeneration = randomUUID(); }
+      const delegate = new OpenAICodexResponsesDelegate({ ...this.config, model: model.id, baseUrl: 'https://chatgpt.com/backend-api/codex' }, credential, this.transportGeneration);
       nativeSubscriptionStreamConsumers.add(delegate);
       if (nativeCodexResponses.has(this)) nativeCodexResponses.add(delegate);
       let result: ChatResponse | undefined;
@@ -3723,6 +3744,8 @@ export class OpenAICodexProvider extends AiProvider {
       if (!result || !result.content.trim() && !result.reasoning?.trim() && !result.toolCalls?.length) throw new Error('OpenAI Codex response has no visible output.');
       await onComplete?.({ ...result, provider: 'openai-codex', api: 'openai-codex-responses', model: model.id }); active();
     } catch (error) {
+      // Failed/withdrawn publication cannot revive this facade's old cached continuation.
+      this.transportCredential = undefined; this.transportGeneration = randomUUID();
       const failure = error instanceof ProviderContextOverflowError ? error : new Error(options?.signal?.aborted || lifetime?.aborted ? 'OpenAI Codex request cancelled.' : 'OpenAI Codex request failed.');
       if (onError) await onError(failure); else throw failure;
     }

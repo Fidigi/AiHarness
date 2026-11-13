@@ -2,8 +2,55 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path';
 import os from 'node:os';
 import { expect, it, vi } from 'vitest';
-import { EncryptedCredentialStore, ProviderCredentialService, type ModelCatalog, type Session } from '@ai-harness/core';
+import { EncryptedCredentialStore, ProviderCredentialService, type ModelCatalog, type Session, type ProviderConfig, type ProviderWebSocket } from '@ai-harness/core';
 import { start, stop } from '../index.js';
+import { AiProxyServer } from './proxy.js';
+
+it('routes actual HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-ws-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
+  const master = 'disposable-http-ws-master', accountId = 'fixture-codex-account', model = 'gpt-6.1-sol';
+  const accessToken = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: accountId } })).toString('base64url') + '.fixture';
+  const events = JSON.parse(await readFile(new URL('../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')).finalEvents as Array<Record<string, unknown>>;
+  const sent: Array<Record<string, unknown>> = [], sockets: Array<Socket> = [], originalFetch = globalThis.fetch;
+  class Socket extends EventTarget {
+    readyState = 0;
+    constructor() { super(); queueMicrotask(() => { this.readyState = 1; this.dispatchEvent(new Event('open')); }); }
+    send(data: string) { sent.push(JSON.parse(data) as Record<string, unknown>); queueMicrotask(() => {
+      for (const event of events) this.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(event) }));
+    }); }
+    close() { this.readyState = 3; this.dispatchEvent(new Event('close')); }
+  }
+  vi.stubEnv('AI_HARNESS_MASTER_KEY', master); vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'disposable-http-ws-admin');
+  vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'disposable-http-ws-admin');
+  const vendor = vi.fn(async (url: unknown, init?: RequestInit) => {
+    expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.167.2');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer ' + accessToken);
+    return Response.json({ models: [{ slug: model, visibility: 'list' }] });
+  });
+  vi.spyOn(globalThis, 'fetch').mockImplementation((url, init) => new URL(String(url)).hostname === '127.0.0.1' ? originalFetch(url, init) : vendor(url, init));
+  try {
+    await mkdir(cwd); await mkdir(dataDir); await writeFile(path.join(dataDir, 'settings.json'), JSON.stringify({ transport: 'websocket-cached' }));
+    const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(dataDir, 'credentials.enc'), master) }); await credentials.load();
+    await credentials.setOAuth('openai-codex', { accessToken, refreshToken: 'disposable-http-ws-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'openai-codex', accountId } });
+    const proxy = new AiProxyServer({ enableMockProvider: true }), server = await start({ proxy, port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
+    const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer disposable-http-ws-admin', 'content-type': 'application/json' };
+    expect((await fetch(base + '/api/models', { headers })).status).toBe(200);
+    const provider = proxy.getAgentProvider('openai-codex'); expect(provider).toBeDefined();
+    // Fixture-only transport injection after native credential composition; no account or endpoint override.
+    Object.assign((provider as unknown as { config: ProviderConfig }).config, { webSocketFactory: (url: string, init: { headers: Record<string, string> }) => {
+      expect(url).toBe('wss://chatgpt.com/backend-api/codex/responses');
+      expect(init.headers).toMatchObject({ Authorization: 'Bearer ' + accessToken, 'chatgpt-account-id': accountId, 'OpenAI-Beta': 'responses_websockets=2026-02-06' });
+      const socket = new Socket(); sockets.push(socket); return socket as unknown as ProviderWebSocket;
+    } });
+    const chat = () => fetch(base + '/api/chat', { method: 'POST', headers, body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model, sessionId: 'http-websocket' } }) });
+    const text = await (await chat()).text(); expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+    expect(sent).toHaveLength(1); expect(sent[0]).toMatchObject({ type: 'response.create', model, store: false }); expect(sockets).toHaveLength(1);
+    expect((await fetch(base + '/api/provider-registry/auth/openai-codex', { method: 'DELETE', headers })).status).toBe(200);
+    const calls = vendor.mock.calls.length, denied = await (await chat()).text(); expect(denied).not.toContain('event: message_end');
+    expect(sent).toHaveLength(1); expect(vendor).toHaveBeenCalledTimes(calls);
+    await stop(); expect(sockets[0].readyState).toBe(3);
+  } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
+});
 
 it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');

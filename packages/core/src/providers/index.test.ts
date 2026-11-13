@@ -3,11 +3,13 @@
 // ============================================================
 
 import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   OpenAiProvider,
   type AiProvider,
   OpenAiResponsesProvider,
   OpenAiMixedProvider,
+  OpenAICodexProvider,
   getOpenAiResponsesTransportStats,
   resetOpenAiResponsesTransportStats,
   AnthropicProvider,
@@ -19,7 +21,8 @@ import {
   normalizeProviderUsage,
   ProviderFactory,
 } from './index';
-import { closeProviderNetworkDispatchers, type ProviderWebSocket } from './provider-network.js';
+import { closeProviderNetworkDispatchers, createProviderNetworkScope, PROVIDER_NETWORK_SCOPE, type ProviderWebSocket } from './provider-network.js';
+import type { ProviderOAuthCredential } from './credentials.js';
 import type { Message, ProviderConfig } from '../types';
 
 // ===================================================================
@@ -88,6 +91,129 @@ class ScriptedProviderWebSocket implements ProviderWebSocket {
     for (const listener of this.listeners.get(type) ?? []) listener(event);
   }
 }
+
+describe('Codex explicit WebSocket transport', () => {
+  const replay = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) as {
+    events: Array<Record<string, unknown>>; finalEvents: Array<Record<string, unknown>>; tools: NonNullable<ChatOptionsForCodex['tools']>;
+  };
+  type ChatOptionsForCodex = import('./openai-codex.js').OpenAICodexChatOptions;
+  const grammar = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-constrained-reference.json', import.meta.url), 'utf8')) as { events: Array<Record<string, unknown>> };
+  const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-websocket-reference.json', import.meta.url), 'utf8')) as {
+    rows: Array<{ mode: string; model: string; sessionId: string; tools: NonNullable<ChatOptionsForCodex['tools']>; frames: Array<Record<string, unknown>> }>;
+  };
+  function credential(account = 'fixture-codex-account', suffix = 'original'): ProviderOAuthCredential {
+    return { version: 1, type: 'oauth', accessToken: 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + suffix,
+      refreshToken: 'disposable-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'openai-codex', accountId: account } };
+  }
+  function fixture(scripts = [replay.events, replay.finalEvents, replay.finalEvents], transport: ProviderConfig['transport'] = 'websocket-cached') {
+    let current: ProviderOAuthCredential | undefined = credential();
+    const sockets: ScriptedProviderWebSocket[] = [], scope = createProviderNetworkScope();
+    const factory = vi.fn((_url: string, _options: { headers: Record<string, string> }) => {
+      const socket = new ScriptedProviderWebSocket(scripts); sockets.push(socket); return socket;
+    });
+    const fetcher = vi.fn(async (url: unknown) => {
+      expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.167.2');
+      return Response.json({ models: [{ slug: 'gpt-6.1-sol', visibility: 'list' }, { slug: 'gpt-5.5', visibility: 'list' }] });
+    });
+    global.fetch = fetcher;
+    const config = { type: 'openai-codex', model: 'gpt-6.1-sol', transport, webSocketFactory: factory, requestTimeoutMs: 2000,
+      [PROVIDER_NETWORK_SCOPE]: scope };
+    const provider = new OpenAICodexProvider(config, async () => current);
+    return { provider, config, factory, sockets, fetcher, scope, replace: (value: ProviderOAuthCredential | undefined) => { current = value; } };
+  }
+  const assistant = (response: import('./index.js').ChatResponse): Message => ({ ...response, id: 'assistant', role: 'assistant', timestamp: new Date(2) });
+
+  it.each(reference.rows)('binds the independently captured $mode private/tool/final cached chain', async row => {
+    const f = fixture([row.mode === 'function' ? replay.events : grammar.events, replay.finalEvents, replay.finalEvents]);
+    const user = { ...createMessage('user', 'probe'), timestamp: new Date(1) }, options = { sessionId: row.sessionId, tools: row.tools };
+    const first = await f.provider.chat([user], options);
+    const history: Message[] = [user, assistant(first), { id: 'result', role: 'tool', name: 'echo', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(3) }];
+    const final = await f.provider.chat(history, options);
+    await f.provider.chat([...history, assistant(final), createMessage('user', 'continue')], options);
+    expect(f.sockets).toHaveLength(1); expect(f.sockets[0].sent).toEqual(row.frames);
+    expect(f.factory.mock.calls[0][0]).toBe('wss://chatgpt.com/backend-api/codex/responses');
+    expect(f.factory.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer ' + credential().accessToken,
+      'chatgpt-account-id': 'fixture-codex-account', 'OpenAI-Beta': 'responses_websockets=2026-02-06', 'session-id': row.sessionId });
+    expect(f.fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('isolates account, rotating token, session, model, facade and reset generations', async () => {
+    const f = fixture([replay.finalEvents, replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'shared-session' };
+    await f.provider.chat([user], options); await f.provider.chat([user], options);
+    expect(f.sockets).toHaveLength(1); expect(f.sockets[0].sent).toHaveLength(2);
+    f.replace(credential('fixture-codex-account', 'rotated')); await f.provider.chat([user], options);
+    f.replace(credential('other-account')); await f.provider.chat([user], options);
+    f.replace(undefined); await expect(f.provider.chat([user], options)).rejects.toThrow('OpenAI Codex request failed.');
+    expect(f.sockets).toHaveLength(3);
+    f.replace(credential()); await f.provider.chat([user], options);
+    await new OpenAICodexProvider(f.config, async () => credential()).chat([user], options);
+    await f.provider.chat([user], { sessionId: 'different-session' });
+    await f.provider.chat([user], { ...options, model: 'gpt-5.5' });
+    expect(f.sockets).toHaveLength(7);
+    await closeProviderNetworkDispatchers(f.scope); expect(f.sockets.every(socket => socket.readyState === 3)).toBe(true);
+    await f.provider.chat([user], options); expect(f.sockets).toHaveLength(8);
+    for (const socket of f.sockets) expect(socket.sent[0].previous_response_id).toBeUndefined();
+    expect(f.factory.mock.calls.map(([, init]) => init.headers['chatgpt-account-id'])).toEqual([
+      'fixture-codex-account', 'fixture-codex-account', 'other-account', ...Array(5).fill('fixture-codex-account')]);
+    expect(f.factory.mock.calls[1][1].headers.Authorization).toBe('Bearer ' + credential('fixture-codex-account', 'rotated').accessToken);
+  });
+
+  it('does not revive a withdrawn continuation when the same token is later supplied again', async () => {
+    const f = fixture([replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'withdrawn' };
+    const first = await f.provider.chat([user], options);
+    f.replace(undefined); await expect(f.provider.chat([user], options)).rejects.toThrow('OpenAI Codex request failed.');
+    f.replace(credential()); await f.provider.chat([user, assistant(first), createMessage('user', 'continue')], options);
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+  });
+
+  it('keeps concurrent account turns on separate sockets even when the old consumer settles late', async () => {
+    const f = fixture([replay.finalEvents, replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'concurrent-account' };
+    let entered!: () => void, release!: () => void;
+    const ready = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const first = f.provider.streamChat([user], async () => { entered(); await held; }, undefined, error => { throw error; }, options);
+    try {
+      await ready; f.replace(credential('other-account'));
+      const current = await f.provider.chat([user], options);
+      release(); await first;
+      await f.provider.chat([user, assistant(current), createMessage('user', 'continue')], options);
+      expect(f.sockets).toHaveLength(2); expect(f.sockets[0].sent).toHaveLength(1); expect(f.sockets[1].sent).toHaveLength(2);
+      expect(f.sockets[1].sent[1].previous_response_id).toBe('resp_final');
+      expect(f.factory.mock.calls.map(([, init]) => init.headers['chatgpt-account-id'])).toEqual(['fixture-codex-account', 'other-account']);
+    } finally { release(); await first; }
+  });
+
+  it.each(['caller', 'scope'] as const)('retires a waiting socket on %s cancellation and allows only fresh continuation', async kind => {
+    const f = fixture([[]]), caller = new AbortController(), complete = vi.fn(), failure = vi.fn();
+    const pending = f.provider.streamChat([createMessage('user', 'probe')], () => {}, complete, failure, { signal: caller.signal, sessionId: 'cancelled' });
+    await vi.waitFor(() => expect(f.sockets[0]?.sent).toHaveLength(1));
+    if (kind === 'caller') caller.abort(); else await closeProviderNetworkDispatchers(f.scope);
+    await pending; expect(complete).not.toHaveBeenCalled(); expect(failure).toHaveBeenCalledOnce(); expect(f.sockets[0].readyState).toBe(3);
+    f.factory.mockImplementationOnce(() => { const socket = new ScriptedProviderWebSocket([replay.finalEvents]); f.sockets.push(socket); return socket; });
+    await f.provider.chat([createMessage('user', 'next')], { sessionId: 'cancelled' });
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a missing delta once as full input on a fresh socket without SSE fallback', async () => {
+    const f = fixture([replay.events, [{ type: 'error', error: { code: 'previous_response_not_found' } }]]);
+    const user = createMessage('user', 'probe'), options = { sessionId: 'lost-continuation', tools: replay.tools };
+    const first = await f.provider.chat([user], options);
+    f.factory.mockImplementationOnce(() => { const socket = new ScriptedProviderWebSocket([replay.finalEvents]); f.sockets.push(socket); return socket; });
+    await f.provider.chat([user, assistant(first), { id: 'result', role: 'tool', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(3) }], options);
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[0].sent[1].previous_response_id).toBe('resp_native');
+    expect(f.sockets[0].readyState).toBe(3); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+    expect(JSON.stringify(f.sockets[1].sent[0])).toContain('opaque-empty'); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps explicit uncached sockets ephemeral and never silently falls back to SSE', async () => {
+    const f = fixture([replay.finalEvents], 'websocket'), user = createMessage('user', 'probe');
+    await f.provider.chat([user], { sessionId: 'ephemeral' }); await f.provider.chat([user], { sessionId: 'ephemeral' });
+    expect(f.sockets).toHaveLength(2); expect(f.sockets.every(socket => socket.readyState === 3)).toBe(true);
+    f.factory.mockImplementation(() => { const socket = new ScriptedProviderWebSocket(['error']); f.sockets.push(socket); return socket; });
+    for (let attempt = 0; attempt < 2; attempt++) await expect(f.provider.chat([user], { sessionId: 'ephemeral' })).rejects.toThrow('OpenAI Codex request failed.');
+    expect(f.sockets).toHaveLength(4); expect(f.fetcher).toHaveBeenCalledTimes(4);
+  });
+});
 
 describe('OpenAiResponsesProvider transport', () => {
   it('keeps native encrypted WebSocket replay full and separates physical owner/model cache identities', async () => {

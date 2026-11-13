@@ -1,0 +1,31 @@
+{
+  "status": "DELIVERED_BOUNDED_SUBSET",
+  "baseCommit": "754bbaf",
+  "scope": "Explicit native Codex websocket and websocket-cached; auto remains SSE. Account/token/session/model/facade/scope-generation isolation, private function/grammar continuation, cancellation and bounded full-context recovery.",
+  "implementation": ["packages/core/src/providers/index.ts", "packages/server/src/api/proxy.ts"],
+  "reference": {
+    "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "package": "@earendil-works/pi-ai@1.2.0",
+    "capture": "tests/fixtures/codex-websocket-reference-capture.mjs",
+    "fixture": "tests/fixtures/codex-websocket-reference.json",
+    "fixtureSha256": "0ea3590d2066af4fb0dc9218e4bba3c5a06a634194f2ba720f4a767ccd1ba580",
+    "requests": 6,
+    "connections": 2,
+    "boundary": "Fresh Docker SDK execution with fixed mocked WebSocket, synthetic account and no fetch fallback. One private/function chain and one grammar chain, three frames each. Four source-map hashes checked against prior acquisition. Core deliberately keeps auto on SSE and fails explicit WebSocket without silent SSE fallback."
+  },
+  "validation": {
+    "image": "ai-harness:codex-websocket-http",
+    "imageId": "sha256:2fe0c8efdd5b046b0d82fc3c37e90f6ddf0590243cf9046997e06beeb65371a6",
+    "build": "make build-test IMAGE_TEST=ai-harness:codex-websocket-http: PASS",
+    "types": "npm run typecheck (workspace/parity) and six explicit owning roots: PASS. Roots: openai-codex, openai-codex-replay, provider-websocket.integration, configured-providers, provider-oauth-codex, openai-codex-http.",
+    "tests": "724 PASS / ten files / network-none / no product or test-source overlay",
+    "files": {"index.test.ts": 89, "openai-codex.test.ts": 73, "openai-codex-replay.test.ts": 20, "openai-responses.test.ts": 376, "provider-network.test.ts": 13, "provider-websocket.integration.test.ts": 7, "github-copilot-transport.test.ts": 100, "configured-providers.test.ts": 11, "provider-oauth-codex.test.ts": 28, "openai-codex-http.test.ts": 7},
+    "core": "Two complete three-frame SDK comparisons; account/token/session/model/facade/reset isolation; withdrawal followed by same-token resupply; concurrent accounts with late old consumer; caller/scope cancellation and fresh recovery; missing previous response retries once with full private input on a fresh socket; explicit ephemeral mode and no SSE fallback.",
+    "realSocket": "Existing RFC6455 loopback helpers: four native requests, two actual connections; private function/tool/final deltas then scope reset/full request. Factory asserts fixed production WSS target before fixture-only loopback redirection; synthetic Bearer/account/beta reach handshake.",
+    "host": "CLI construction/no credential borrowing is owning-unit evidence, not emitted CLI. Separate actual authenticated source-HTTP chat reads native settings, composes canonical encrypted credentials, sends one fixed-target mocked WebSocket frame and refuses further traffic after Disconnect; stop closes the socket. Existing six SSE HTTP/private/refresh/cancellation cases pass separately in the same file. No new browser boundary.",
+    "red": "Old constrained-tools image plus only new index test/fixture: seven expected constructor-refusal failures; 80 filter-unselected, not executed passes.",
+    "retainedIntermediate": ["Initial SDK capture completed all six protocol calls and wrote its artifact but held cached-session timers; runner timed out. Qualification helper now calls the SDK's existing closeOpenAICodexWebSocketSessions for its disposable sessions; corrected separate acquisition exits0.", "Initial source-overlay development:199 cases/four files PASS; real-socket development:seven cases PASS.", "First build fails new delegate credential-union TS2339. Constructor parameter narrowed to the already validated Codex credential type.", "First broad explicit test-root check fails sixteen pre-existing index.test.ts diagnostics plus two new implicit-any integration parameters. New parameters annotated. Independent old/current index-only roots each retain exactly sixteen identical diagnostics after line/column normalization; no old assertion or unrelated code repaired. Six other roots pass; whole index strict-root acceptance remains HOLD.", "Earlier final723/ten-file pass predates the added actual HTTP WebSocket scenario. Its one-case development pass is separate from final724."],
+    "logs": "/tmp/codex-websocket/{reference-initial,reference-clean,red,dev,wire,build,typed,index-baseline,index-current,http,http-final}.log"
+  },
+  "limits": ["Synthetic accounts/credentials, mocked or verified loopback transports only. No live-account test mode or personal store inputs.", "No emitted/installed/production CLI WebSocket, browser, vendor entitlement or full profile/lifecycle qualification follows from these Core/API checks.", "Existing bounded socket TTL/pool/cache limits remain. Rich continuation now counts the entire projected response array against the existing512KiB bound; incompatible transcript/options use full context. Old idle credential-generation sockets are isolated and expire or close with their owning scope, not remotely revoked.", "Generic API-key OpenAI/Azure retain their existing fallback/plaintext-continuation policy; Copilot gets no CX identity or private cache authority.", "No global suite, protected pi/qwen-moe container operation, dependency/runtime-flag/deadline change, historical-incident reopening or waiver extension. MOD-03 remains PARTIAL."]
+}

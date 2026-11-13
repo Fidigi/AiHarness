@@ -262,8 +262,7 @@ it('does not finish before the asynchronous completion callback settles', async 
   await entered; expect(finished).toBe(false); release(); await pending; expect(finished).toBe(true);
 });
 
-it('does not grant generic OpenAI private replay and refuses unsupported explicit WebSocket transport', async () => {
-  expect(() => new OpenAICodexProvider({ type: 'openai', model: OPENAI_CODEX_MODELS[0].id, transport: 'websocket' }, async () => original)).toThrow('WebSocket');
+it('does not grant generic OpenAI private replay', async () => {
   const f = fixture();
   await f.provider.chat([{ ...user, role: 'assistant', provider: 'openai', api: 'openai-responses', model: OPENAI_CODEX_MODELS[0].id,
     blocks: [{ type: 'reasoning', text: 'visible', thinkingSignature: 'private-ciphertext' }] }, user]);

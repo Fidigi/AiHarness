@@ -212,12 +212,12 @@ it.each(['logout', 'replacement', 'cancel', 'close', 'new-login', 'expiry', 'cal
   expect(f.mount).not.toHaveBeenCalled(); expect(f.flatten).not.toHaveBeenCalled();
 });
 
-it('does not compose native Codex from an ordinary key or reinterpret explicit WebSocket policy', async () => {
+it('refuses ordinary Codex keys and composes the explicit WebSocket policy independently', async () => {
   const credentials = new ProviderCredentialService(), host = new AbortController();
   await credentials.setApiKey('openai-codex', 'not-subscription', false);
   expect(await resolveOpenAICodexSubscription(credentials, host.signal)).toBeUndefined();
   const proxy = new AiProxyServer({ enableMockProvider: true, network: { transport: 'websocket', httpIdleTimeoutMs: 12,
     websocketConnectTimeoutMs: 34, requestTimeoutMs: 56, maxRetries: 0, maxRetryDelayMs: 78 } });
   proxy.setOpenAICodexSubscription('gpt-6.1-sol', async () => undefined);
-  expect(proxy.isConfigured('openai-codex')).toBe(false); expect(proxy.isConfigured('mock')).toBe(true);
+  expect(proxy.isConfigured('openai-codex')).toBe(true); expect(proxy.isConfigured('mock')).toBe(true);
 });

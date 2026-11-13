@@ -1,0 +1,311 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "hashes": {
+    "api/openai-codex-responses": "41a0095ce395f6ddf50ce3adbe7d03960bf183fb0f2f94412c88923adaa013b0",
+    "api/openai-responses-shared": "09100e0bfe8fa4ad212312956930f4a9e70cd29ca823d2e1f1c97f87b4541afe",
+    "api/transform-messages": "6d82d11a49213a4193e0d074f36d7af76e8a911b003104c0aa2c22569b2fe669",
+    "api/constrained-sampling": "f795db4afbbdf2918b346a7f260841ca477c29b26bcdb1084e039697a715a22a"
+  },
+  "scope": "Fresh synthetic cached WebSocket SDK execution: one function/private chain and one grammar chain. No real socket/vendor/account/host certificate.",
+  "connections": 2,
+  "requests": 6,
+  "rows": [
+    {
+      "mode": "function",
+      "model": "gpt-6.1-sol",
+      "sessionId": "fixture-ws-function",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      ],
+      "frames": [
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-function",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                }
+              },
+              "strict": null
+            }
+          ]
+        },
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "type": "function_call_output",
+              "call_id": "call_native",
+              "output": "result"
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-function",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                }
+              },
+              "strict": null
+            }
+          ],
+          "previous_response_id": "resp_native"
+        },
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "continue"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-function",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                }
+              },
+              "strict": null
+            }
+          ],
+          "previous_response_id": "resp_final"
+        }
+      ]
+    },
+    {
+      "mode": "grammar",
+      "model": "gpt-6.1-sol",
+      "sessionId": "fixture-ws-grammar",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "constrainedSampling": {
+            "type": "grammar",
+            "variants": {
+              "openai_lark": "start: /[a-z]+/",
+              "openai_regex": "[a-z]+"
+            }
+          }
+        }
+      ],
+      "frames": [
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-grammar",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "custom",
+              "name": "echo",
+              "description": "Echo",
+              "format": {
+                "type": "grammar",
+                "syntax": "lark",
+                "definition": "start: /[a-z]+/"
+              }
+            }
+          ]
+        },
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "type": "custom_tool_call_output",
+              "call_id": "call_native",
+              "output": "result"
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-grammar",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "custom",
+              "name": "echo",
+              "description": "Echo",
+              "format": {
+                "type": "grammar",
+                "syntax": "lark",
+                "definition": "start: /[a-z]+/"
+              }
+            }
+          ],
+          "previous_response_id": "resp_grammar"
+        },
+        {
+          "type": "response.create",
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "You are a helpful assistant.",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "continue"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "prompt_cache_key": "fixture-ws-grammar",
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "custom",
+              "name": "echo",
+              "description": "Echo",
+              "format": {
+                "type": "grammar",
+                "syntax": "lark",
+                "definition": "start: /[a-z]+/"
+              }
+            }
+          ],
+          "previous_response_id": "resp_final"
+        }
+      ]
+    }
+  ]
+}
