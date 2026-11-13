@@ -19,7 +19,8 @@ export const CLI_CREDENTIAL_PROVIDERS = [
   'openai', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia',
   'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
   'huggingface', 'xiaomi', 'meta', 'xai', 'fireworks', 'opencode', 'opencode-go', 'openrouter',
-  'cloudflare-workers-ai', 'azure', 'vertex', 'bedrock', 'local',
+  'cloudflare-workers-ai', 'qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual',
+  'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {

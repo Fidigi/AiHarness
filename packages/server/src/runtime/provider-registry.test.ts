@@ -4,7 +4,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, MoonshotProvider, NvidiaProvider, EncryptedCredentialStore,
   AntLingProvider, BasetenProvider, FireworksProvider, HuggingFaceProvider, KimiCodingProvider, MetaProvider,
-  MiniMaxProvider, MiniMaxCnProvider, OpenCodeGoProvider, OpenCodeProvider, TogetherProvider, XaiProvider, XiaomiProvider, MoonshotCnProvider } from '@ai-harness/core';
+  MiniMaxProvider, MiniMaxCnProvider, OpenCodeGoProvider, OpenCodeProvider, TogetherProvider, XaiProvider, XiaomiProvider, MoonshotCnProvider,
+  QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ProviderRegistryService } from './provider-registry.js';
 
@@ -33,6 +35,9 @@ describe('ProviderRegistryService', () => {
     ['minimax', MiniMaxProvider, 3], ['minimax-cn', MiniMaxCnProvider, 3], ['opencode-go', OpenCodeGoProvider, 31],
     ['opencode', OpenCodeProvider, 83], ['together', TogetherProvider, 17], ['xai', XaiProvider, 4],
     ['xiaomi', XiaomiProvider, 6], ['moonshot-cn', MoonshotCnProvider, 4],
+    ['qwen-token-plan', QwenTokenPlanProvider, 20], ['qwen-token-plan-cn', QwenTokenPlanCnProvider, 20],
+    ['qwen-token-plan-individual', QwenTokenPlanIndividualProvider, 9], ['xiaomi-token-plan-ams', XiaomiTokenPlanAmsProvider, 4],
+    ['xiaomi-token-plan-cn', XiaomiTokenPlanCnProvider, 4], ['xiaomi-token-plan-sgp', XiaomiTokenPlanSgpProvider, 4], ['zai-coding-cn', ZaiCodingCnProvider, 4],
   ] as const)('composes %s through encrypted native registry lifecycle without discovery or borrowed model admission', async (dialect, Adapter, count) => {
     const { root, proxy, service } = await fixture();
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected discovery'));

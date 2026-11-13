@@ -147,7 +147,9 @@ export interface ModelPricing {
 
 export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-responses' | 'anthropic' | 'google' | 'mistral-conversations' | 'openrouter' | 'cloudflare-workers-ai' | 'cerebras' | 'deepseek' | 'groq' | 'zai' | 'moonshot' | 'nvidia'
   | 'ant-ling' | 'baseten' | 'fireworks' | 'huggingface' | 'kimi-coding' | 'meta' | 'minimax' | 'minimax-cn'
-  | 'opencode-go' | 'opencode' | 'together' | 'xai' | 'xiaomi' | 'moonshot-cn';
+  | 'opencode-go' | 'opencode' | 'together' | 'xai' | 'xiaomi' | 'moonshot-cn'
+  | 'qwen-token-plan' | 'qwen-token-plan-cn' | 'qwen-token-plan-individual'
+  | 'xiaomi-token-plan-ams' | 'xiaomi-token-plan-cn' | 'xiaomi-token-plan-sgp' | 'zai-coding-cn';
 
 /** Public metadata for an operator-managed provider. Header values and credentials never cross the API. */
 export interface CustomProviderDefinition {

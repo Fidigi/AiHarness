@@ -183,7 +183,14 @@ describe('CLI provider runtime', () => {
     ['opencode', 'OPENCODE_API_KEY', 'AI_HARNESS_OPENCODE_API_KEY'],
     ['opencode-go', 'OPENCODE_GO_API_KEY', 'AI_HARNESS_OPENCODE_GO_API_KEY'],
     ['openrouter', 'OPENROUTER_API_KEY', 'AI_HARNESS_OPENROUTER_API_KEY'],
-    ['cloudflare-workers-ai', 'CLOUDFLARE_WORKERS_AI_API_KEY', 'AI_HARNESS_CLOUDFLARE_WORKERS_AI_API_KEY']] as const)(
+    ['cloudflare-workers-ai', 'CLOUDFLARE_WORKERS_AI_API_KEY', 'AI_HARNESS_CLOUDFLARE_WORKERS_AI_API_KEY'],
+    ['qwen-token-plan', 'QWEN_TOKEN_PLAN_API_KEY', 'AI_HARNESS_QWEN_TOKEN_PLAN_API_KEY'],
+    ['qwen-token-plan-cn', 'QWEN_TOKEN_PLAN_CN_API_KEY', 'AI_HARNESS_QWEN_TOKEN_PLAN_CN_API_KEY'],
+    ['qwen-token-plan-individual', 'QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY', 'AI_HARNESS_QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY'],
+    ['xiaomi-token-plan-ams', 'XIAOMI_TOKEN_PLAN_AMS_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_AMS_API_KEY'],
+    ['xiaomi-token-plan-cn', 'XIAOMI_TOKEN_PLAN_CN_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_CN_API_KEY'],
+    ['xiaomi-token-plan-sgp', 'XIAOMI_TOKEN_PLAN_SGP_API_KEY', 'AI_HARNESS_XIAOMI_TOKEN_PLAN_SGP_API_KEY'],
+    ['zai-coding-cn', 'ZAI_CODING_CN_API_KEY', 'AI_HARNESS_ZAI_CODING_CN_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
     roots.push(agentDir);

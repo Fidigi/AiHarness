@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-13",
+  "baseline": "2554061",
+  "task": "MOD-01.01e native hosts; scoped03a/03b/05a/05b/06 evidence",
+  "status": "Delivered native CLI and explicit custom Server/Settings plan composition; MOD-01 remains IN PROGRESS",
+  "behavior": "The seven already implemented plan adapters now participate in the existing native CLI credential/network/settings/offline path and Server encrypted registry/Settings custom dialect path. No Core plan protocol/replay/default policy change or new factory reservation. Each plan retains its own catalogue, endpoint and credentials rather than selecting policy from a shared model name.",
+  "contract": {
+    "CLI": "AI_HARNESS_<ID>_API_KEY before <ID>_API_KEY; <ID>_MODEL and <ID>_BASE_URL, uppercase/dashes-to-underscores. Existing command/store/fresh-source/offline rules apply. Native Qwen Individual deliberately uses its independent QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY source, not Pi's shared-global environment alias: no key/region/entitlement borrowing. Explicit --api-key remains available and ephemeral.",
+    "ServerSettings": "Seven explicit dialect choices, operator-managed base URL/key and owning model whitelists; private encrypted persistence/key rotation/restart, static import and honest Connection Test409. Individual Qwen admits only nine IDs, other two Qwen twenty each, Xiaomi four per region, Z.ai four. New static dialects refuse discovery through the existing positive helper whitelist.",
+    "limits": "No real regional vendor/TLS/account verification, inferred OAuth or new opaque-signature grant. Declared image resize limits remain unimplemented media preparation under04b; prices retain the preceding three-known/62-unknown split."
+  },
+  "validation": {
+    "red": "Previous native SDK image plus three changed host test roots:22 expected native-composition/credential-isolation/registry failures,108 filter-unselected/130 inventory across3 files, exit1. No unselected credit.",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-plan-hosts — exit0; complete Core/CLI/Server/Web product build and workspace/parity typechecks pass.",
+    "image": "sha256:46027e1b84c0abd750d75a0ccd1fc2d3298cbb3cfa0f526f17ce9e704ab540c7",
+    "strict": "Temporary Docker noEmit project extending root tsconfig with the six changed owning test roots — exit0.",
+    "focused": "Configured-providers/provider-runtime/token-plan-process/registry/native-dialects-http/provider-endpoints:180 PASS/6 files, exit0, no skipped cases/worker errors.",
+    "CLIProcesses": "Three new actual no-extension offline processes: Qwen Individual print, Xiaomi CN JSON, Z.ai CN RPC. Exact loopback endpoints/Bearers, raw omitted output, native effort/off representations, pure structured outputs, physical journal provenance/usage and secret exclusion pass. Existing mode mechanics and all seven constructor/environment-command-store/ephemeral-key/isolation paths are reused rather than a region×model×mode product.",
+    "HTTP": "Existing four-family actual authenticated HTTP fixture adds one Qwen, one Xiaomi and one Z.ai plan, preserving its prior twelve requests and all assertions.21 requests total across initial keys, rotation and fresh Server restart. New plan-specific enable_thinking/effort, Xiaomi store/thinking and Z.ai clear_thinking/tool_stream/cap fields are asserted; passive import/409/unknown-model refusals make no upstream requests.",
+    "Settings": "Seven literal selector options added to the unchanged validated form. Product build and manual source-to-registry-value verification apply. No new browser execution claimed for these options; earlier actual Settings→Zen proof retains its own source and14-option scope. No new distinct event/form/storage mechanism requires a repeated browser campaign.",
+    "logs": ["/tmp/mod01-plan-hosts/red.log", "/tmp/mod01-plan-hosts/build-typecheck.log", "/tmp/mod01-plan-hosts/focused.log"],
+    "safety": "Docker-only tests/typechecks; runtime network-none, synthetic credentials/disposable stores/mock or loopback services. No personal-store/live-account mode/protected-container operation/new SDK acquisition/global/installed/production campaign, weaker assertion/deadline/flag or new qualification framework.",
+    "sourceBinding": "Core plan implementation and its seven pinned JSON fixtures are unchanged from2554061; this increment changes host composition, additive dialect types/options and focused host tests. Raw logs remain local, not an exhaustive input/dependency archive."
+  },
+  "remaining": "Specialized TypeSafe/cross-provider operation admission, Radius/gateways, missing OAuth/federation/cloud chains, effective-profile review and model-owned image preparation remain mandatory. MOD-03 stays DONE; manual accounts and wider QUA qualification remain separate. Historical failures including native139 and the exact three accepted incidents remain unchanged."
+}

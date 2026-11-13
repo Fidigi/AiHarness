@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
+import { BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -73,6 +74,9 @@ describe('configured CLI providers', () => {
     ['moonshotai', MoonshotProvider], ['moonshotai-cn', MoonshotCnProvider],
     ['ant-ling', AntLingProvider], ['baseten', BasetenProvider], ['together', TogetherProvider],
     ['huggingface', HuggingFaceProvider], ['xiaomi', XiaomiProvider], ['meta', MetaProvider], ['xai', XaiProvider],
+    ['qwen-token-plan', QwenTokenPlanProvider], ['qwen-token-plan-cn', QwenTokenPlanCnProvider],
+    ['qwen-token-plan-individual', QwenTokenPlanIndividualProvider], ['xiaomi-token-plan-ams', XiaomiTokenPlanAmsProvider],
+    ['xiaomi-token-plan-cn', XiaomiTokenPlanCnProvider], ['xiaomi-token-plan-sgp', XiaomiTokenPlanSgpProvider], ['zai-coding-cn', ZaiCodingCnProvider],
   ] as const)('admits supplied-key %s through the existing native CLI mechanism', async (name, Adapter) => {
     const prefix = name.toUpperCase().replace(/-/g, '_');
     expect(createConfiguredProviders({}).has(name)).toBe(false);
@@ -119,6 +123,15 @@ describe('configured CLI providers', () => {
     const model = providers.get('cloudflare-workers-ai')!.getConfiguredModel()!;
     const selected = await resolveStartupProvider(createConfiguredProviders({}), { provider: 'cloudflare-workers-ai', model, apiKey: 'explicit' }, env);
     expect((selected.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'explicit', accountId: 'synthetic-account' });
+  });
+
+  it('does not borrow plan credentials or import the full Qwen catalogue into the Individual plan', () => {
+    const providers = createConfiguredProviders({ QWEN_TOKEN_PLAN_API_KEY: 'synthetic-global' });
+    expect(providers.get('qwen-token-plan')).toBeInstanceOf(QwenTokenPlanProvider);
+    for (const id of ['qwen-token-plan-cn', 'qwen-token-plan-individual', 'xiaomi-token-plan-cn', 'zai-coding-cn']) expect(providers.has(id)).toBe(false);
+    const individual = createConfiguredProviders({ QWEN_TOKEN_PLAN_INDIVIDUAL_API_KEY: 'synthetic-individual' }).get('qwen-token-plan-individual')!;
+    expect(individual.getPublishedModels?.()).toHaveLength(9);
+    expect(() => individual.setConfiguredModel('deepseek-v3.2')).toThrow('Token-plan chat model is not supported.');
   });
 
   it('uses credential type, not label or token shape, for Kimi auth and overrides OAuth with explicit keys', async () => {

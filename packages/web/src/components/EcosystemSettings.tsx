@@ -316,6 +316,13 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           <option value="xai">xAI Responses (API key)</option>
           <option value="xiaomi">Xiaomi Chat Completions</option>
           <option value="moonshot-cn">Moonshot CN Chat Completions</option>
+          <option value="qwen-token-plan">Qwen Token Plan</option>
+          <option value="qwen-token-plan-cn">Qwen Token Plan CN</option>
+          <option value="qwen-token-plan-individual">Qwen Token Plan Individual</option>
+          <option value="xiaomi-token-plan-ams">Xiaomi Token Plan AMS</option>
+          <option value="xiaomi-token-plan-cn">Xiaomi Token Plan CN</option>
+          <option value="xiaomi-token-plan-sgp">Xiaomi Token Plan SGP</option>
+          <option value="zai-coding-cn">Z.ai Coding CN</option>
           <option value="anthropic">Anthropic Messages</option>
           <option value="google">Google Generative Language</option>
         </select></label>

@@ -41,6 +41,9 @@ import {
   XaiProvider, XAI_MODELS,
   XiaomiProvider, XIAOMI_MODELS,
   MoonshotCnProvider, MOONSHOT_CN_MODELS,
+  QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider,
+  TOKEN_PLAN_MODELS,
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
   CLOUDFLARE_CHAT_MODELS,
@@ -140,6 +143,13 @@ const NATIVE_DIALECTS = {
   xai: { Adapter: XaiProvider, models: XAI_MODELS },
   xiaomi: { Adapter: XiaomiProvider, models: XIAOMI_MODELS },
   'moonshot-cn': { Adapter: MoonshotCnProvider, models: MOONSHOT_CN_MODELS },
+  'qwen-token-plan': { Adapter: QwenTokenPlanProvider, models: TOKEN_PLAN_MODELS['qwen-token-plan'] },
+  'qwen-token-plan-cn': { Adapter: QwenTokenPlanCnProvider, models: TOKEN_PLAN_MODELS['qwen-token-plan-cn'] },
+  'qwen-token-plan-individual': { Adapter: QwenTokenPlanIndividualProvider, models: TOKEN_PLAN_MODELS['qwen-token-plan-individual'] },
+  'xiaomi-token-plan-ams': { Adapter: XiaomiTokenPlanAmsProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-ams'] },
+  'xiaomi-token-plan-cn': { Adapter: XiaomiTokenPlanCnProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-cn'] },
+  'xiaomi-token-plan-sgp': { Adapter: XiaomiTokenPlanSgpProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-sgp'] },
+  'zai-coding-cn': { Adapter: ZaiCodingCnProvider, models: TOKEN_PLAN_MODELS['zai-coding-cn'] },
 };
 
 function nativeDialect(value: string | undefined) {

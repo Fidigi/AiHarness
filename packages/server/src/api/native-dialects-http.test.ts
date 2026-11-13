@@ -13,6 +13,9 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
     { dialect: 'opencode', model: 'gemini-3.1-pro', api: 'g', count: 83 },
     { dialect: 'huggingface', model: 'Qwen/Qwen3.8-2.4T-A95B', api: 'c', count: 78 },
     { dialect: 'meta', model: 'muse-spark-1.3', api: 'r', count: 6 },
+    { dialect: 'qwen-token-plan', model: 'qwen3.8-flash', api: 'c', count: 20 },
+    { dialect: 'xiaomi-token-plan-cn', model: 'mimo-v2.5', api: 'c', count: 4 },
+    { dialect: 'zai-coding-cn', model: 'glm-5.3', api: 'c', count: 4 },
   ];
   const calls: Array<{ model: string; key: string | undefined; url: string | undefined }> = [];
   let fixtureError: unknown;
@@ -23,6 +26,9 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       const body = JSON.parse(text), google = request.url?.includes(':streamGenerateContent');
       const model = google ? decodeURIComponent(request.url!.split('/models/')[1]!.split(':streamGenerateContent')[0]!) : body.model;
       const profile = profiles.find(row => row.model === model)!; expect(profile).toBeDefined();
+      if (profile.dialect === 'qwen-token-plan') expect(body).toMatchObject({ enable_thinking: true, reasoning_effort: 'low', max_completion_tokens: 64 });
+      if (profile.dialect === 'xiaomi-token-plan-cn') expect(body).toMatchObject({ thinking: { type: 'disabled' }, store: false, max_completion_tokens: 64 });
+      if (profile.dialect === 'zai-coding-cn') expect(body).toMatchObject({ thinking: { type: 'enabled', clear_thinking: false }, reasoning_effort: 'low', tool_stream: true, max_tokens: 64 });
       const header = profile.api === 'a' ? request.headers['x-api-key'] : profile.api === 'g' ? request.headers['x-goog-api-key'] : request.headers.authorization;
       expect(typeof header).toBe('string');
       calls.push({ model, key: String(header).replace(/^Bearer /, ''), url: request.url });
@@ -72,7 +78,7 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       }
       await stop();
     }
-    expect(calls).toHaveLength(12); expect(fixtureError).toBeUndefined();
+    expect(calls).toHaveLength(21); expect(fixtureError).toBeUndefined();
     expect(calls.some(call => call.url?.endsWith('/v1/messages'))).toBe(true);
     expect(calls.some(call => call.url?.includes(':streamGenerateContent?alt=sse'))).toBe(true);
     expect(calls.some(call => call.url?.endsWith('/chat/completions'))).toBe(true);

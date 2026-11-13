@@ -29,6 +29,8 @@ import {
   OpenCodeGoProvider,
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
+  QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider,
   GitHubCopilotProvider,
   OpenAICodexProvider,
   providerCredentialEnvironmentKeys,
@@ -110,6 +112,10 @@ const NATIVE_PROVIDERS = {
   xiaomi: XiaomiProvider, meta: MetaProvider, xai: XaiProvider,
   fireworks: FireworksProvider, opencode: OpenCodeProvider, 'opencode-go': OpenCodeGoProvider,
   openrouter: OpenRouterProvider, 'cloudflare-workers-ai': CloudflareWorkersAiMixedProvider,
+  'qwen-token-plan': QwenTokenPlanProvider, 'qwen-token-plan-cn': QwenTokenPlanCnProvider,
+  'qwen-token-plan-individual': QwenTokenPlanIndividualProvider,
+  'xiaomi-token-plan-ams': XiaomiTokenPlanAmsProvider, 'xiaomi-token-plan-cn': XiaomiTokenPlanCnProvider,
+  'xiaomi-token-plan-sgp': XiaomiTokenPlanSgpProvider, 'zai-coding-cn': ZaiCodingCnProvider,
 };
 
 function createProvider(config: ProviderConfig): AiProvider {
