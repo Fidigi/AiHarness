@@ -87,11 +87,11 @@ async function fixture() {
   } catch (error) { await close(); throw error; }
 }
 
-for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale}: device login, private CX restart/replay, cancellation and logout`, async ({ page }) => {
+for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale}: device/PKCE login, private CX restart/replay, cancellation and logout`, async ({ page }) => {
   const f = await fixture();
   const copy = locale === 'fr'
-    ? { connect: 'Connecter', reconnect: 'Reconnecter', disconnect: 'Déconnecter', cancel: 'Annuler', connected: 'Fournisseur connecté.', select: 'Sélectionner le Provider IA', model: 'Sélectionner le modèle', newChat: 'Nouvelle conversation', compose: 'Zone de rédaction', send: 'Envoyer' }
-    : { connect: 'Connect', reconnect: 'Reconnect', disconnect: 'Disconnect', cancel: 'Cancel', connected: 'Provider connected.', select: 'Select the AI Provider', model: 'Select the model', newChat: 'New chat', compose: 'Message composer', send: 'Send' };
+    ? { browser: 'Connexion par navigateur (PKCE)', paste: 'Coller l’adresse complète de retour OAuth', pasteSubmit: 'Envoyer l’adresse de retour', pasteCancel: 'Annuler la connexion', connect: 'Connecter', reconnect: 'Reconnecter', disconnect: 'Déconnecter', cancel: 'Annuler', connected: 'Fournisseur connecté.', select: 'Sélectionner le Provider IA', model: 'Sélectionner le modèle', newChat: 'Nouvelle conversation', compose: 'Zone de rédaction', send: 'Envoyer' }
+    : { browser: 'Browser sign-in (PKCE)', paste: 'Paste the full OAuth callback address', pasteSubmit: 'Submit callback', pasteCancel: 'Cancel sign-in', connect: 'Connect', reconnect: 'Reconnect', disconnect: 'Disconnect', cancel: 'Cancel', connected: 'Provider connected.', select: 'Select the AI Provider', model: 'Select the model', newChat: 'New chat', compose: 'Message composer', send: 'Send' };
   try {
     expect((await page.request.post(f.base + '/api/auth/login', { headers: { Origin: f.base }, data: { token: 'codex-browser-admin' } })).status()).toBe(200);
     await reserveReadBudget(page.request, f.base);
@@ -127,6 +127,33 @@ for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale
       expect(encrypted + visible + storage).not.toContain(secret);
     }
     await page.reload(); await expect(card.getByRole('button', { name: copy.reconnect, exact: true })).toBeVisible();
+    const startBrowser = async () => {
+      await card.getByRole('button', { name: copy.browser, exact: true }).click();
+      const url = new URL((await panel.locator('a').getAttribute('href'))!);
+      expect(url.origin + url.pathname).toBe('https://auth.openai.com/oauth/authorize');
+      expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:1455/auth/callback');
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+      return 'http://localhost:1455/auth/callback?code=PRIVATE_WEB_PKCE_CODE&state=' + url.searchParams.get('state');
+    };
+    const pasteBrowser = async (value: string) => {
+      await panel.getByLabel(copy.paste, { exact: true }).fill(value);
+      await panel.getByRole('button', { name: copy.pasteSubmit, exact: true }).click();
+    };
+    const returned = await startBrowser(), beforeInvalid = f.calls.length;
+    const refused = page.waitForResponse(response => response.url().endsWith('/redirect') && response.request().method() === 'POST');
+    await pasteBrowser(returned.replace('state=', 'state=wrong')); expect((await refused).status()).toBe(400);
+    await expect(panel.getByLabel(copy.paste, { exact: true })).toHaveValue(''); expect(f.calls).toHaveLength(beforeInvalid);
+    const pkceToken = f.hold('token'); await pasteBrowser(returned); const pkceSignal = await pkceToken.reached;
+    const pkceCancelled = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().includes('/auth/oauth/'));
+    await panel.getByRole('button', { name: copy.pasteCancel, exact: true }).click(); expect((await pkceCancelled).status()).toBe(200);
+    await expect.poll(() => pkceSignal.aborted).toBe(true); pkceToken.release(); await expect(panel).toHaveCount(0);
+    // Retiring an unpublished reconnect must not revoke the already committed device login.
+    const previous = f.reader(); await previous.load(); expect((await previous.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }))?.credential).toMatchObject({ accessToken: f.token });
+    const valid = await startBrowser(); await pasteBrowser(valid); await expect(panel).toContainText(copy.connected);
+    await expect(panel.locator('strong')).toHaveText('PKCE');
+    expect(await page.getByLabel(copy.select, { exact: true }).inputValue()).toBe(selected);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('PRIVATE_WEB_PKCE_CODE');
+    await expect(page.locator('body')).not.toContainText('PRIVATE_WEB_PKCE_CODE');
     expect((await page.request.post(f.base + '/api/workspaces/trust', { data: { cwd: f.cwd, confirm: true } })).status()).toBe(200);
     expect((await page.request.post(f.base + '/api/plugins/reload', { data: { cwd: f.cwd } })).status()).toBe(200);
     expect(mutations.some(path => path.includes('/models/enabled') || path.includes('/configuration/'))).toBe(false);
@@ -192,6 +219,17 @@ for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale
     await expect(panel).toHaveCount(0); await expect(card.getByRole('button', { name: copy.connect, exact: true })).toBeVisible();
     const withdrawn = f.reader(); await withdrawn.load(); expect(await withdrawn.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' })).toBeUndefined();
     expect(mutations.some(path => path.includes('/models/enabled') || path.includes('/configuration/'))).toBe(false);
+    await page.unroute('**/api/provider-registry/auth/oauth/*');
+    const callbackCommitted = deferred<void>(), callbackReleased = deferred<void>();
+    await page.route('**/api/provider-registry/auth/oauth/*/redirect', async route => {
+      const response = await route.fetch(); expect((await response.json()).state).toBe('connected'); callbackCommitted.resolve(); await callbackReleased.promise;
+      if (!route.request().failure()) await route.fulfill({ response });
+    });
+    await pasteBrowser(await startBrowser()); await callbackCommitted.promise;
+    const lateLogout = page.waitForResponse(response => response.request().method() === 'DELETE' && response.url().endsWith('/auth/openai-codex'));
+    await card.getByRole('button', { name: copy.disconnect, exact: true }).click(); expect((await lateLogout).status()).toBe(200); callbackReleased.resolve();
+    await expect(panel).toHaveCount(0); await expect(card.getByRole('button', { name: copy.connect, exact: true })).toBeVisible();
+    const afterCallback = f.reader(); await afterCallback.load(); expect(await afterCallback.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' })).toBeUndefined();
     const count = f.calls.length;
     const denied = await page.request.post(f.base + '/api/agent/runs', { data: { sessionId: first.session.id, cwd: f.cwd, provider: 'openai-codex', model: f.model, input: 'withdrawn', maxRetries: 0, autoCompaction: false } });
     expect(denied.status()).toBe(500); expect(await denied.json()).toEqual({ error: 'Internal server error' });

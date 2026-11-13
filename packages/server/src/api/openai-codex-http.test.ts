@@ -70,12 +70,33 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private tool/fin
           expect((await fetch(base + '/api/provider-registry/auth/openai-codex/oauth', { method: 'POST', headers: { ...headers, ...denied } })).status).toBe(403);
         }
         expect(calls).toEqual([]);
+        expect((await post('/api/provider-registry/auth/openai-codex/oauth', { method: 'unknown' })).status).toBe(400);
+        const browserResponse = await post('/api/provider-registry/auth/openai-codex/oauth', { method: 'browser', redirectUri: 'https://unrelated.example/callback' });
+        expect(browserResponse.status).toBe(201); expect(browserResponse.headers.get('cache-control')).toBe('no-store');
+        const browser = await browserResponse.json() as { id: string; authorizationUrl: string };
+        const authorization = new URL(browser.authorizationUrl); expect(authorization.searchParams.get('redirect_uri')).toBe('http://localhost:1455/auth/callback');
+        const redirectRoute = '/api/provider-registry/auth/oauth/' + browser.id + '/redirect';
+        for (const denied of [{ authorization: 'Bearer codex-http-user' }, { origin: 'https://unrelated.example' }]) {
+          expect((await fetch(base + redirectRoute, { method: 'POST', headers: { ...headers, ...denied }, body: JSON.stringify({ redirectUrl: 'bare-code' }) })).status).toBe(403);
+        }
+        expect((await post(redirectRoute, { redirectUrl: 'bare-code' })).status).toBe(400);
+        expect((await post(redirectRoute, { redirectUrl: 'bare-code', tokenUrl: 'https://unrelated.example/token' })).status).toBe(400);
+        expect(await fetch(base + '/api/provider-registry/auth/oauth/' + browser.id, { headers }).then(response => response.json())).toMatchObject({ state: 'pending' });
+        expect(calls).toEqual([]);
         const response = await post('/api/provider-registry/auth/openai-codex/oauth', {}); expect(response.status).toBe(201); expect(response.headers.get('cache-control')).toBe('no-store');
         const flow = await response.json() as { id: string; state: string; userCode: string; verificationUri: string };
         expect(flow).toMatchObject({ state: 'pending', userCode: 'HTTP-CODE', verificationUri: 'https://auth.openai.com/codex/device' });
         expect(JSON.stringify(flow)).not.toContain('private-http-device');
         await vi.waitFor(async () => expect(await fetch(base + '/api/provider-registry/auth/oauth/' + flow.id, { headers }).then(response => response.json())).toMatchObject({ state: 'connected' }));
         expect(calls).toHaveLength(3); // Login is not catalogue discovery or inference.
+        expect(await fetch(base + '/api/provider-registry/auth/oauth/' + browser.id, { headers }).then(response => response.json())).toMatchObject({ state: 'cancelled' });
+        expect((await post(redirectRoute, { redirectUrl: 'bare-code' })).status).toBe(409);
+        const replacement = await post('/api/provider-registry/auth/openai-codex/oauth', { method: 'browser' }).then(response => response.json()) as { id: string; authorizationUrl: string };
+        const returned = 'http://localhost:1455/auth/callback?code=private-http-browser-code&state=' + new URL(replacement.authorizationUrl).searchParams.get('state');
+        const completed = await post('/api/provider-registry/auth/oauth/' + replacement.id + '/redirect', { redirectUrl: returned });
+        expect(completed.status).toBe(200); expect(completed.headers.get('cache-control')).toBe('no-store');
+        expect(await completed.json()).toMatchObject({ state: 'connected' }); expect(calls).toHaveLength(4);
+        expect(Object.fromEntries(new URLSearchParams(calls[3]!.body))).toMatchObject({ grant_type: 'authorization_code', code: 'private-http-browser-code', redirect_uri: 'http://localhost:1455/auth/callback' });
       }
       const catalog = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
       if (restart) expect(refreshes).toBe(1);

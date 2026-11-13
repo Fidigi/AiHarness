@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -67,7 +68,7 @@ it('uses fixed Codex device/account authority, encrypted guarded publication and
   }
 });
 
-it('does not mount after shutdown wins the durable-publication return boundary', async () => {
+it.each(['device', 'browser'] as const)('does not mount after shutdown wins the %s durable-publication return boundary', async method => {
   const f = await fixture(), committed = deferred<void>();
   const prepare = f.credentials.prepareOAuthLogin.bind(f.credentials);
   vi.spyOn(f.credentials, 'prepareOAuthLogin').mockImplementationOnce(async (...args) => {
@@ -76,7 +77,9 @@ it('does not mount after shutdown wins the durable-publication return boundary',
       const result = await publish(credential); f.service.close(); committed.resolve(); return result;
     };
   });
-  await f.service.start('openai-codex'); await committed.promise;
+  const flow = await f.service.start('openai-codex', undefined, method);
+  const completion = method === 'browser' ? f.service.redirect(flow.id, browserRedirect(flow)).catch(() => undefined) : Promise.resolve();
+  await committed.promise; await completion;
   // Drain the completion continuation before asserting absence of proxy admission.
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(f.mount).not.toHaveBeenCalled();
@@ -85,9 +88,9 @@ it('does not mount after shutdown wins the durable-publication return boundary',
   expect((await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }))?.credential).toMatchObject({ accessToken: token });
 });
 
-it('requires durable encryption before contacting OpenAI', async () => {
+it.each(['device', 'browser'] as const)('requires durable encryption before exposing %s login', async method => {
   const fetcher = vi.fn(), service = new ProviderOAuthService(new AiProxyServer(), () => new ProviderCredentialService(), fetcher); services.push(service);
-  await expect(service.start('openai-codex')).rejects.toMatchObject({ status: 409 }); expect(fetcher).not.toHaveBeenCalled();
+  await expect(service.start('openai-codex', undefined, method)).rejects.toMatchObject({ status: 409 }); expect(fetcher).not.toHaveBeenCalled();
 });
 
 it.each(['logout', 'replacement', 'cancel', 'close', 'new-login', 'expiry'] as const)('cannot publish a held Codex token after %s', async mutation => {
@@ -133,6 +136,80 @@ it.each(['host', 'caller'] as const)('retires passive Codex refresh through the 
   expect((await pending).error).toMatchObject({ name: 'AbortError' }); f.held.resolve(tokens());
   expect((await f.credentials.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 }))?.credential).toEqual({ version: 1, type: 'oauth', ...original });
   expect(f.calls).toHaveLength(1);
+});
+
+it.each(['caller', 'close', 'new-login'] as const)('does not expose browser metadata after %s retires a reserved start', async owner => {
+  const f = await fixture(), caller = new AbortController(), ready = deferred<void>(), released = deferred<void>();
+  const prepare = f.credentials.prepareOAuthLogin.bind(f.credentials);
+  vi.spyOn(f.credentials, 'prepareOAuthLogin').mockImplementationOnce(async (...args) => {
+    const publish = await prepare(...args); ready.resolve(); await released.promise; return publish;
+  });
+  const pending = f.service.start('openai-codex', caller.signal, 'browser').catch(error => error);
+  await ready.promise;
+  if (owner === 'caller') caller.abort();
+  if (owner === 'close') f.service.close();
+  if (owner === 'new-login') { const next = await f.service.start('openai-codex', undefined, 'browser'); f.service.cancel(next.id); }
+  released.resolve(); expect(await pending).toMatchObject({ name: 'AbortError' });
+  expect(f.calls).toEqual([]); expect(f.mount).not.toHaveBeenCalled();
+});
+
+function browserRedirect(flow: { authorizationUrl?: string }): string {
+  return 'http://localhost:1455/auth/callback?code=private-server-browser-code&state=' + new URL(flow.authorizationUrl!).searchParams.get('state');
+}
+
+it('uses fixed Codex browser authority, retryable invalid redirects and exactly one guarded S256 exchange', async () => {
+  const f = await fixture();
+  await expect(f.service.start('github-copilot', undefined, 'browser')).rejects.toMatchObject({ status: 400 });
+  const flow = await f.service.start('openai-codex', undefined, 'browser');
+  expect(f.calls).toEqual([]);
+  expect(flow).toMatchObject({ provider: 'openai-codex', state: 'pending', authorizationUrl: expect.any(String) });
+  expect(flow).not.toHaveProperty('userCode'); expect(flow).not.toHaveProperty('verificationUri');
+  const authorization = new URL(flow.authorizationUrl!);
+  expect(authorization.origin + authorization.pathname).toBe('https://auth.openai.com/oauth/authorize');
+  expect(authorization.searchParams.get('redirect_uri')).toBe('http://localhost:1455/auth/callback');
+  expect(authorization.searchParams.get('code_challenge_method')).toBe('S256');
+  for (const value of ['bare-code', browserRedirect(flow).replace('state=', 'state=wrong'), browserRedirect(flow).replace('localhost:1455', 'unrelated.test')]) {
+    await expect(f.service.redirect(flow.id, value)).rejects.toMatchObject({ status: 400, message: 'Invalid OAuth redirect.' });
+    expect(f.service.get(flow.id)?.state).toBe('pending'); expect(f.calls).toEqual([]);
+  }
+  expect(await f.service.redirect(flow.id, browserRedirect(flow))).toMatchObject({ state: 'connected' });
+  await expect(f.service.redirect(flow.id, browserRedirect(flow))).rejects.toMatchObject({ status: 409 });
+  expect(f.calls).toHaveLength(1);
+  const form = Object.fromEntries(new URLSearchParams(f.calls[0]!.body));
+  expect(form).toEqual({ grant_type: 'authorization_code', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', code: 'private-server-browser-code',
+    code_verifier: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u), redirect_uri: 'http://localhost:1455/auth/callback' });
+  expect(createHash('sha256').update(form.code_verifier!).digest('base64url')).toBe(authorization.searchParams.get('code_challenge'));
+  expect(f.calls[0]).toMatchObject({ url: 'https://auth.openai.com/oauth/token', method: 'POST', authorization: null });
+  expect(f.mount).toHaveBeenCalledOnce(); expect(f.flatten).not.toHaveBeenCalled();
+  const reader = f.reopen(); await reader.load();
+  expect((await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }))?.credential).toMatchObject({ accessToken: token, refreshToken: refresh });
+  for (const secret of [token, refresh, form.code!, form.code_verifier!]) {
+    expect(JSON.stringify([flow, f.service.get(flow.id)]) + await readFile(f.file, 'utf8')).not.toContain(secret);
+  }
+});
+
+it.each(['logout', 'replacement', 'cancel', 'close', 'new-login', 'expiry', 'caller'] as const)('cannot publish a held browser token after %s', async mutation => {
+  const f = await fixture('token'), caller = new AbortController();
+  if (mutation === 'expiry') vi.useFakeTimers();
+  const flow = await f.service.start('openai-codex', undefined, 'browser');
+  const pending = f.service.redirect(flow.id, browserRedirect(flow), caller.signal).catch(error => error as Error & { status: number });
+  await f.reached.promise;
+  await expect(f.service.redirect(flow.id, browserRedirect(flow))).rejects.toMatchObject({ status: 409 });
+  expect(f.calls).toHaveLength(1);
+  if (mutation === 'logout') await f.reopen().delete('openai-codex');
+  if (mutation === 'replacement') await f.reopen().setApiKey('openai-codex', 'newer-local-key');
+  if (mutation === 'cancel') f.service.cancel(flow.id);
+  if (mutation === 'caller') caller.abort();
+  if (mutation === 'close') f.service.close();
+  if (mutation === 'new-login') { const next = await f.service.start('openai-codex', undefined, 'browser'); f.service.cancel(next.id); }
+  if (mutation === 'expiry') { await vi.advanceTimersByTimeAsync(15 * 60_000); vi.useRealTimers(); }
+  if (mutation !== 'logout' && mutation !== 'replacement') expect(await pending).toMatchObject({ status: 409 });
+  f.held.resolve(tokens()); expect(await pending).toMatchObject({ status: mutation === 'logout' || mutation === 'replacement' ? 502 : 409 });
+  const reader = f.reopen(); await reader.load();
+  expect(await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' })).toBeUndefined();
+  expect((await reader.resolve('openai-codex', { env: {} }))?.credential).toEqual(mutation === 'replacement'
+    ? { version: 1, type: 'api-key', apiKey: 'newer-local-key' } : undefined);
+  expect(f.mount).not.toHaveBeenCalled(); expect(f.flatten).not.toHaveBeenCalled();
 });
 
 it('does not compose native Codex from an ordinary key or reinterpret explicit WebSocket policy', async () => {

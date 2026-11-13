@@ -1,5 +1,7 @@
 const messages = {
   en: {
+    browser: 'Browser sign-in (PKCE)',
+    browserHelp: 'After authorization, copy the full localhost:1455 return address from the browser and submit it here, even if that page cannot connect. This server does not open a callback listener.',
     paste: 'Paste the full OAuth callback address', placeholder: 'http://127.0.0.1:…/oauth/callback?…',
     submit: 'Submit callback', cancel: 'Cancel sign-in', open: 'Open authorization page',
     failed: 'The operation failed. Refresh before retrying.',
@@ -17,6 +19,8 @@ const messages = {
     uncertain: 'The result is uncertain. Reload provider and configuration state before another operation.',
   },
   fr: {
+    browser: 'Connexion par navigateur (PKCE)',
+    browserHelp: 'Après autorisation, copiez l’adresse complète de retour localhost:1455 du navigateur et envoyez-la ici, même si cette page ne peut pas se connecter. Ce serveur n’ouvre pas de point d’écoute de retour.',
     paste: 'Coller l’adresse complète de retour OAuth', placeholder: 'http://127.0.0.1:…/oauth/callback?…',
     submit: 'Envoyer l’adresse de retour', cancel: 'Annuler la connexion', open: 'Ouvrir la page d’autorisation',
     failed: 'L’opération a échoué. Actualisez avant de réessayer.',

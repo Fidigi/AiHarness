@@ -100,8 +100,24 @@ export function createProviderRegistryRouter(
 
   router.post('/auth/:id/oauth', requireCapability('credentials'), async (request, response, next) => {
     const lifetime = requestLifetime(request, response);
-    try { response.status(201).json(await oauth.start(identifier(request.params.id, 'provider id'), lifetime.signal)); }
+    try {
+      const method: unknown = request.body?.method ?? 'device';
+      if (method !== 'device' && method !== 'browser') throw Object.assign(new Error('Invalid OAuth method.'), { status: 400 });
+      const flow = await oauth.start(identifier(request.params.id, 'provider id'), lifetime.signal, method);
+      if (lifetime.signal.aborted) { oauth.cancel(flow.id); lifetime.signal.throwIfAborted(); }
+      response.status(201).json(flow);
+    }
     catch (error) { next(error); }
+    finally { lifetime.dispose(); }
+  });
+
+  router.post('/auth/oauth/:flowId/redirect', requireCapability('credentials'), async (request, response, next) => {
+    const lifetime = requestLifetime(request, response);
+    try {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)
+        || Object.keys(request.body).some(key => key !== 'redirectUrl')) throw Object.assign(new Error('Invalid OAuth redirect.'), { status: 400 });
+      response.json(await oauth.redirect(request.params.flowId, request.body.redirectUrl, lifetime.signal));
+    } catch (error) { next(error); }
     finally { lifetime.dispose(); }
   });
 

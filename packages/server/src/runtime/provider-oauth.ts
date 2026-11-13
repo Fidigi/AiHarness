@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { beginOpenAICodexDeviceLogin, OPENAI_CODEX_MODELS, exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
+import { beginOpenAICodexBrowserLogin, type OpenAICodexBrowserLogin, beginOpenAICodexDeviceLogin, OPENAI_CODEX_MODELS, exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
 import { gitHubCopilotCredentialSource } from './github-copilot.js';
 import { openAICodexCredentialSource } from './openai-codex.js';
@@ -25,6 +25,9 @@ interface OAuthFlow {
   userCode: string;
   verificationUri: string;
   verificationUriComplete?: string;
+  authorizationUrl?: string;
+  browser?: OpenAICodexBrowserLogin;
+  completing?: boolean;
   expiresAt: string;
   intervalSeconds: number;
   deviceCode: string;
@@ -41,6 +44,7 @@ export interface PublicOAuthFlow {
   userCode?: string;
   verificationUri?: string;
   verificationUriComplete?: string;
+  authorizationUrl?: string;
   expiresAt: string;
   error?: string;
 }
@@ -177,7 +181,7 @@ export class ProviderOAuthService {
     try { return provider === 'openai-codex' || (SUPPORTED.has(provider) || provider === 'github-copilot') && Boolean(config(provider)); } catch { return false; }
   }
 
-  async start(providerValue: string, signal?: AbortSignal): Promise<PublicOAuthFlow> {
+  async start(providerValue: string, signal?: AbortSignal, method: 'device' | 'browser' = 'device'): Promise<PublicOAuthFlow> {
     if (typeof providerValue !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerValue)) {
       throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
     }
@@ -185,6 +189,9 @@ export class ProviderOAuthService {
     if (!SUPPORTED.has(provider) && provider !== 'github-copilot' && provider !== 'openai-codex') throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
     if (this.lifetime.signal.aborted) throw Object.assign(new Error('OAuth service is closed.'), { status: 409 });
     const codex = provider === 'openai-codex';
+    if (method !== 'device' && method !== 'browser' || method === 'browser' && !codex) {
+      throw Object.assign(new Error('OAuth method is unavailable for this provider.'), { status: 400 });
+    }
     const settings = codex ? undefined : config(provider);
     if (!settings && !codex) throw Object.assign(new Error('OAuth device flow is not configured for this provider.'), { status: 409 });
     const controller = new AbortController();
@@ -201,6 +208,7 @@ export class ProviderOAuthService {
     else signal?.addEventListener('abort', abort, { once: true });
     try {
       const publish = credentials ? await credentials.prepareOAuthLogin(provider, controller.signal) : undefined;
+      if (codex && method === 'browser') return this.startCodexBrowser(controller, credentials!, publish!);
       if (codex) return await this.startCodex(controller, credentials!, publish!);
       return await this.startFlow(provider, settings!, controller, credentials, publish);
     } finally {
@@ -239,6 +247,54 @@ export class ProviderOAuthService {
       } finally { clearTimeout(expiry); device.cancel(); }
     })();
     return this.public(flow);
+  }
+
+  private startCodexBrowser(controller: AbortController, credentials: ProviderCredentialService,
+    publish: NonNullable<OAuthFlow['publish']>): PublicOAuthFlow {
+    this.checkCapacity();
+    const signal = AbortSignal.any([controller.signal, this.lifetime.signal]);
+    signal.throwIfAborted();
+    const browser = beginOpenAICodexBrowserLogin({ signal, fetcher: this.fetcher, redactor: credentials.redactor });
+    const flow: OAuthFlow = { id: crypto.randomUUID(), provider: 'openai-codex', state: 'pending', userCode: '', verificationUri: '',
+      authorizationUrl: browser.authorizationUrl, browser, expiresAt: new Date(browser.expiresAt).toISOString(),
+      intervalSeconds: 1, deviceCode: '', controller, credentials, publish };
+    this.flows.set(flow.id, flow);
+    const expiry = setTimeout(() => { if (flow.state === 'pending') { flow.state = 'expired'; controller.abort(); } }, Math.max(1, browser.expiresAt - Date.now()));
+    expiry.unref();
+    signal.addEventListener('abort', () => { clearTimeout(expiry); browser.cancel(); flow.browser = undefined; flow.authorizationUrl = undefined; }, { once: true });
+    return this.public(flow);
+  }
+
+  /** Full pasted redirect only; no listener, dynamic client or endpoint authority from the caller. */
+  async redirect(id: string, value: unknown, caller?: AbortSignal): Promise<PublicOAuthFlow> {
+    this.prune();
+    const flow = this.flows.get(id);
+    if (!flow?.browser || flow.state !== 'pending' || flow.completing) throw Object.assign(new Error('OAuth browser flow is unavailable.'), { status: 409 });
+    const browser = flow.browser;
+    if (Date.now() >= Date.parse(flow.expiresAt)) {
+      flow.state = 'expired'; flow.controller.abort(); throw Object.assign(new Error('OAuth browser flow is unavailable.'), { status: 409 });
+    }
+    if (typeof value !== 'string' || Buffer.byteLength(value) > 8192) throw Object.assign(new Error('Invalid OAuth redirect.'), { status: 400 });
+    const abort = () => { this.cancel(id); };
+    if (caller?.aborted) abort(); else caller?.addEventListener('abort', abort, { once: true });
+    flow.completing = true;
+    try {
+      const credential = await browser.complete(value, flow.controller.signal);
+      await flow.publish!(credential);
+      flow.controller.signal.throwIfAborted();
+      this.proxy.setOpenAICodexSubscription(OPENAI_CODEX_MODELS[0]!.id, openAICodexCredentialSource(flow.credentials!, this.lifetime.signal));
+      flow.state = 'connected';
+      return this.public(flow);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid OpenAI Codex OAuth redirect.' && flow.state === 'pending') {
+        throw Object.assign(new Error('Invalid OAuth redirect.'), { status: 400 });
+      }
+      if (flow.state === 'pending') { flow.state = 'failed'; flow.error = 'OAuth token exchange failed.'; }
+      throw Object.assign(new Error('OAuth browser completion failed.'), { status: flow.controller.signal.aborted ? 409 : 502 });
+    } finally {
+      caller?.removeEventListener('abort', abort); flow.completing = false;
+      if (flow.state !== 'pending') { flow.controller.abort(); flow.browser = undefined; }
+    }
   }
 
   private request(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
@@ -476,7 +532,7 @@ export class ProviderOAuthService {
     return {
       id: flow.id, provider: flow.provider, state: flow.state, expiresAt: flow.expiresAt,
       ...(flow.state === 'pending' ? {
-        userCode: flow.userCode, verificationUri: flow.verificationUri,
+        ...(flow.authorizationUrl ? { authorizationUrl: flow.authorizationUrl } : { userCode: flow.userCode, verificationUri: flow.verificationUri }),
         ...(flow.verificationUriComplete ? { verificationUriComplete: flow.verificationUriComplete } : {}),
       } : {}),
       ...(flow.error ? { error: flow.error } : {}),

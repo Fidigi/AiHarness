@@ -2070,12 +2070,20 @@ export interface ProviderOAuthFlow {
   userCode?: string;
   verificationUri?: string;
   verificationUriComplete?: string;
+  authorizationUrl?: string;
   expiresAt: string;
   error?: string;
 }
 
-export function startProviderOAuth(type: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
-  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST', signal });
+export function startProviderOAuth(type: string, signal?: AbortSignal, method: 'device' | 'browser' = 'device'): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST', signal,
+    ...(method === 'browser' ? { body: JSON.stringify({ method }) } : {}) });
+}
+
+export function submitProviderOAuthRedirect(flowId: string, redirectUrl: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}/redirect`, {
+    method: 'POST', signal, body: JSON.stringify({ redirectUrl }),
+  });
 }
 
 export function getProviderOAuth(flowId: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {

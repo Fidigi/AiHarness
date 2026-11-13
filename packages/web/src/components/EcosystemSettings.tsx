@@ -9,6 +9,7 @@ import type {
 import { useI18n } from '../hooks/useI18n';
 import { ProviderRenamePanel } from './ProviderRenamePanel';
 import { CacheNoticeSettings } from './CacheNoticeSettings';
+import { OAuthPastePanel } from './OAuthPastePanel';
 import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import { reasoningSettingsMessage } from './reasoning-settings-messages';
@@ -36,6 +37,7 @@ import {
   saveCustomModel,
   saveCustomProvider,
   startProviderOAuth,
+  submitProviderOAuthRedirect,
   testCustomModel,
   testProviderConnection,
   updateConfigurationScope,
@@ -67,7 +69,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
   const [oauthStarting, setOauthStarting] = useState(false);
-  const oauthOperation = useRef<{ provider: string; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
+  const oauthOperation = useRef<{ provider: string; method: 'device' | 'browser'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
   const retireOAuth = () => {
     const previous = oauthOperation.current;
     oauthOperation.current = undefined;
@@ -173,12 +175,12 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     }, 2_000);
     return () => { active = false; window.clearTimeout(timer); };
   }, [oauthFlow]);
-  const login = async (provider: string) => {
+  const login = async (provider: string, method: 'device' | 'browser' = 'device') => {
     retireOAuth();
-    const operation = { provider, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
+    const operation = { provider, method, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
     oauthOperation.current = operation;
     setOauthFlow(undefined); setOauthStarting(true);
-    const result = await startProviderOAuth(provider, operation.controller.signal);
+    const result = await startProviderOAuth(provider, operation.controller.signal, method);
     if (!mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) {
       if (result.data?.state === 'pending') void cancelProviderOAuth(result.data.id);
       return;
@@ -186,6 +188,17 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     setOauthStarting(false);
     if (!result.success || !result.data) error(result.error);
     else { operation.flow = result.data; setOauthFlow(result.data); }
+  };
+  const completeOAuth = async (value: string) => {
+    const operation = oauthOperation.current;
+    if (!operation?.flow?.authorizationUrl || operation.flow.state !== 'pending') return;
+    const result = await submitProviderOAuthRedirect(operation.flow.id, value, operation.controller.signal);
+    if (!mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) return;
+    if (!result.success || !result.data) error(result.error);
+    else {
+      operation.flow = result.data; setOauthFlow(result.data);
+      await reconcile().catch(() => { if (mounted.current && oauthOperation.current === operation) error(); });
+    }
   };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -223,6 +236,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           {status.method === 'oauth' && <button type="button" disabled={oauthStarting} onClick={() => {
             void login(status.type);
           }}>{status.connected ? t('settings.reconnect') : t('settings.connect')}</button>}
+          {status.type === 'openai-codex' && <button type="button" disabled={oauthStarting} onClick={() => { void login(status.type, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
           <button type="button" disabled={!status.connected} onClick={async () => {
             const result = await testProviderConnection(status.type);
             if (result.success) {
@@ -245,15 +259,22 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
       </article>)}
     </div>
     {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status">
-      <strong>{t('settings.oauth.title')}</strong>
+      {oauthOperation.current?.method === 'browser' ? <strong>PKCE</strong> :
+      <strong>{t('settings.oauth.title')}</strong>}
       {oauthStarting && <button type="button" onClick={() => {
         retireOAuth(); setOauthStarting(false);
       }}>{t('common.cancel')}</button>}
       {oauthFlow && <>
       {oauthFlow.state === 'pending' ? <>
+        {oauthFlow.authorizationUrl ? <>
+          <p className="settings-help">{providerSettingsMessage(locale, 'browserHelp')}</p>
+          <OAuthPastePanel active operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl}
+            onPaste={completeOAuth} onCancel={() => { retireOAuth(); setOauthFlow(undefined); }} />
+        </> : <>
         <p>{t('settings.oauth.code')}: <code>{oauthFlow.userCode}</code></p>
         <a href={oauthFlow.verificationUriComplete || oauthFlow.verificationUri} target="_blank" rel="noopener noreferrer">{t('settings.oauth.open')}</a>
         <button type="button" onClick={() => { retireOAuth(); setOauthFlow(undefined); }}>{t('common.cancel')}</button>
+        </>}
       </> : <p>{oauthFlow.state === 'connected' ? t('settings.oauth.connected') : oauthFlow.error || oauthFlow.state}</p>}
       </>}
     </aside>}
