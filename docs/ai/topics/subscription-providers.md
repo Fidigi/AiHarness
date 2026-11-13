@@ -8,6 +8,8 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 
 [IMPORTANT] Server OAuth now has a native Copilot device-login path as well as existing-credential composition. Web Settings has separate emitted-Server/static-Web EN/FR fixture journeys; interactive CLI now has a separate explicit issuer path and bounded terminal fixtures; full profile/account acceptance remains incomplete. Do not infer live account acceptance from service/HTTP/browser fixtures.
 
+The [subscription acceptance checkpoint](../../audit/pi/MOD-03-subscription-acceptance.md) maps the active objective to current receipts, separates later delivery from historical `remaining` lists, and identifies real-account decisions and non-waived holds. It grants no new runtime or whole-module qualification.
+
 ## Main Entry Points
 
 | File | Responsibility |

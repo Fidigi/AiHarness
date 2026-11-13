@@ -620,6 +620,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
 | `docs/audit/documentation/AUDIT-1` | English | Agents + humans | Versioned | Current documentation audit; plain path intentionally omits `.md` |
 | `docs/audit/pi/AUDIT-5` | English | Agents + humans | Versioned | Sole active Pi 1.2.0 / Pi Web 0.12.2 comparison: 43 stable criteria, compatibility decisions, source/coverage register and prioritized work packages; static baseline, not runtime certification |
+| [Subscription acceptance checkpoint](../audit/pi/MOD-03-subscription-acceptance.md) | English | Agents + humans | Versioned | Active Copilot/Codex objective-to-evidence map, historical receipt limits, real-account decisions and independent qualification holds; no completion claim |
 | `docs/users/{fr,en}/` | French/English | End users/operators | Versioned | User guides, operator runbooks, container guidance and language indexes |
 | `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture decisions, extension, session SDK, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |
