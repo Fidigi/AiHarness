@@ -272,15 +272,22 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel', 'refresh-catalogue-body-cancel'] as const)('retires held HTTP credential work on %s without a late encrypted publication', async mutation => {
+it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel', 'refresh-catalogue-body-cancel', 'inference-body-cancel'] as const)('retires held HTTP credential or inference work on %s without a late encrypted publication', async mutation => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-http-retire-'));
   const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-copilot-retirement-master';
   const refreshStage = mutation === 'refresh-exchange-cancel' ? 'exchange' : mutation === 'refresh-catalogue-cancel' ? 'catalogue'
     : mutation === 'refresh-catalogue-body-cancel' ? 'catalogue-body' : undefined;
   const originalToken = 'disposable-http-refresh-original', rotatedToken = 'tid=disposable-http-refresh-rotated;proxy-ep=proxy.business.githubcopilot.com';
+  const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
+    rows: Array<{ model: string; case: string; responseEvents: unknown[] }>;
+  };
+  const inferenceResponse = () => new Response(reference.rows.find(row => row.model === 'gpt-5-mini' && row.case === 'user')!.responseEvents
+    .map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
   const refreshCalls: string[] = [];
   let holdRefresh = false;
+  const inferenceBody = mutation === 'inference-body-cancel', inferenceCalls: string[] = [];
+  let finishInference: (() => void) | undefined;
   let reached!: () => void, release!: (response: Response) => void;
   const started = new Promise<void>(resolve => { reached = resolve; });
   const held = new Promise<Response>(resolve => { release = resolve; });
@@ -291,6 +298,18 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
   vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'copilot-user'); vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'copilot-admin');
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const target = String(url);
+    if (inferenceBody && /(?:^|\.)(?:github\.com|githubcopilot\.com)$/u.test(new URL(target).hostname)) {
+      inferenceCalls.push(target); expect(target).toBe('https://api.individual.githubcopilot.com/responses'); expect(init?.method).toBe('POST');
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer ' + originalToken); expect(new Headers(init?.headers).get('x-api-key')).toBeNull();
+      if (holdRefresh) {
+        issuerSignal = init?.signal;
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new TextEncoder().encode('data: ')); finishInference = () => controller.close(); },
+          pull() { reached(); return new Promise<void>(() => undefined); }, cancel: bodyCancelled,
+        }), { headers: { 'content-type': 'text/event-stream' } });
+      }
+      return inferenceResponse();
+    }
     if (refreshStage && new URL(target).hostname === 'github.com') throw new Error('Unexpected device login during refresh.');
     if (refreshStage && ['api.github.com', 'api.business.githubcopilot.com'].includes(new URL(target).hostname)) {
       refreshCalls.push(target);
@@ -314,11 +333,7 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
         return Response.json({ data: [{ id: 'gpt-5-mini', model_picker_enabled: true }] });
       }
       expect(target).toBe('https://api.business.githubcopilot.com/responses');
-      const reference = JSON.parse(await readFile(new URL('../../../../tests/fixtures/github-copilot-routing-reference.json', import.meta.url), 'utf8')) as {
-        rows: Array<{ model: string; case: string; responseEvents: unknown[] }>;
-      };
-      const events = reference.rows.find(row => row.model === 'gpt-5-mini' && row.case === 'user')!.responseEvents;
-      return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+      return inferenceResponse();
     }
     if (target === 'https://github.com/login/device/code') {
       if (mutation === 'request-cancel') { issuerSignal = init?.signal; reached(); return held; }
@@ -332,11 +347,29 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
   try {
     await mkdir(cwd); await mkdir(dataDir);
     const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(dataDir, 'credentials.enc'), master) });
-    if (refreshStage) await credentials.setOAuth('github-copilot', { accessToken: originalToken, refreshToken: 'disposable-held-grant',
+    if (refreshStage || inferenceBody) await credentials.setOAuth('github-copilot', { accessToken: originalToken, refreshToken: 'disposable-held-grant',
       expiresAt: Date.now() + 3_600_000, subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } });
     const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
     const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer copilot-admin' };
     const caller = new AbortController();
+    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, signal,
+      body: JSON.stringify({ provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini' } }) });
+    if (inferenceBody) {
+      expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(inferenceCalls).toEqual([]);
+      const file = path.join(dataDir, 'credentials.enc'), committed = await readFile(file); holdRefresh = true;
+      const response = await chat(caller.signal); expect(response.status).toBe(200);
+      const output = response.text().catch((error: unknown) => error);
+      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true)); await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
+      expect(await readFile(file)).toEqual(committed); expect(inferenceCalls).toEqual(['https://api.individual.githubcopilot.com/responses']);
+      holdRefresh = false;
+      const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
+      expect(text).toContain('event: message_end'); expect(text).toContain('ok'); expect(text).not.toContain('event: error');
+      expect(inferenceCalls).toEqual(Array(2).fill('https://api.individual.githubcopilot.com/responses')); expect(bodyCancelled).toHaveBeenCalledTimes(1);
+      expect(await readFile(file)).toEqual(committed); expect((await stat(file)).mode & 0o777).toBe(0o600);
+      for (const secret of [originalToken, 'disposable-held-grant']) { expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret); }
+      return;
+    }
     if (refreshStage) {
       expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(refreshCalls).toEqual([]);
       const current = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });
@@ -344,8 +377,6 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
       await credentials.setOAuth('github-copilot', { ...current.credential, expiresAt: 1 });
       const file = path.join(dataDir, 'credentials.enc'), expired = await readFile(file);
       holdRefresh = true;
-      const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, signal,
-        body: JSON.stringify({ provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini' } }) });
       const response = await chat(caller.signal); expect(response.status).toBe(200);
       const output = response.text().catch((error: unknown) => error);
       await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
@@ -402,6 +433,7 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
     expect(await reader.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot' })).toBeUndefined();
   } finally {
     release(Response.json({ data: [] }));
+    try { finishInference?.(); } catch { /* Already cancelled streams are closed. */ }
     await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true });
   }
 }, 15000);
