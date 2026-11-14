@@ -3,6 +3,7 @@ import type { ChatOptions, ChatResponse } from './index.js';
 import { OPENROUTER_COMPLETION_MODELS, type OpenRouterCompletionProfile } from './openrouter-completions-metadata.js';
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-metadata.js';
 import { openRouterUsage } from './openrouter-usage.js';
+import { openRouterUserPricing, type OpenRouterUserModel } from './openrouter-user-models.js';
 
 const profiles = new Map(OPENROUTER_COMPLETION_MODELS.map(profile => [profile.id, profile]));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -13,7 +14,7 @@ export function openRouterCompletionProfile(model: string): OpenRouterCompletion
 }
 
 /** Prepare only the owned OpenAI envelope; operator IDs never select compatibility policy. */
-export function prepareOpenRouterCompletion(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false): Record<string, unknown> {
+export function prepareOpenRouterCompletion(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = [], nativeReplay = false, personal?: OpenRouterUserModel): Record<string, unknown> {
   const profile = openRouterCompletionProfile(String(body.model));
   const requested = options?.thinking ?? 'off';
   if (!PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error('Invalid OpenRouter thinking level.');
@@ -50,11 +51,13 @@ export function prepareOpenRouterCompletion(body: Record<string, unknown>, optio
       if (Array.isArray(body.tools)) { const tool = body.tools.at(-1); if (record(tool)) tool.cache_control = { type: 'ephemeral' }; }
     }
   }
-  if (options?.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens)) {
+  const maximum = personal?.maxOutputTokens ?? profile.maxOutputTokens;
+  if (options?.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > maximum)) {
     throw new Error('Invalid OpenRouter output limit.');
   }
   if (nativeReplay) {
     body.store = false;
+    if (personal?.maxOutputTokens !== undefined && options?.maxTokens === undefined) body.max_tokens = maximum;
     if (body.max_tokens !== undefined) body.max_completion_tokens = body.max_tokens;
     delete body.max_tokens;
     if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = false;
@@ -87,10 +90,10 @@ export function openRouterCompletionReasoning(value: unknown, nativeReplay = fal
   return typeof text === 'string' ? text : undefined;
 }
 
-export function openRouterCompletionUsage(value: unknown, model: string): ChatResponse['usage'] {
+export function openRouterCompletionUsage(value: unknown, model: string, personal?: OpenRouterUserModel): ChatResponse['usage'] {
   const profile = openRouterCompletionProfile(model);
-  let pricing: Readonly<Required<ModelPricing>> | undefined = profile.pricing;
-  if (pricing && record(value) && typeof value.prompt_tokens === 'number') {
+  let pricing: Readonly<Required<ModelPricing>> | undefined = personal?.prices ? openRouterUserPricing(personal.prices, record(value) ? value.prompt_tokens : undefined) : profile.pricing;
+  if (!personal?.prices && pricing && record(value) && typeof value.prompt_tokens === 'number') {
     let threshold = -1;
     for (const tier of profile.declaredPricing.tiers ?? []) {
       if (value.prompt_tokens > tier.inputTokensAbove && tier.inputTokensAbove > threshold) { pricing = tier; threshold = tier.inputTokensAbove; }

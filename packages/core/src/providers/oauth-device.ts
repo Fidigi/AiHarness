@@ -52,10 +52,10 @@ function safeEndpoint(value: string): string {
   return endpoint.toString();
 }
 
-async function boundedJson(response: Response, signal: AbortSignal): Promise<Record<string, unknown>> {
+async function boundedJson(response: Response, signal: AbortSignal, maximumBytes = MAX_OAUTH_RESPONSE_BYTES): Promise<Record<string, unknown>> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
-    || Number(contentLength) > MAX_OAUTH_RESPONSE_BYTES)) {
+    || Number(contentLength) > maximumBytes)) {
     void response.body?.cancel('oauth-response-limit').catch(() => undefined);
     throw new Error('La réponse OAuth est invalide.');
   }
@@ -77,7 +77,7 @@ async function boundedJson(response: Response, signal: AbortSignal): Promise<Rec
       if (item === abortedResult) throw new Error('invalid');
       if (item.done) { completed = true; break; }
       bytes += item.value.byteLength;
-      if (bytes > MAX_OAUTH_RESPONSE_BYTES) throw new Error('invalid');
+      if (bytes > maximumBytes) throw new Error('invalid');
       chunks.push(item.value);
     }
     const combined = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)));
@@ -286,4 +286,4 @@ export class OAuthDeviceClient {
 }
 
 // Shared bounded transport/reader, not a source of issuer or endpoint authority.
-export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson };
+export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson, boundedJson as readProviderJson };

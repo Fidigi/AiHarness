@@ -4,6 +4,7 @@ import { OPENROUTER_MESSAGE_MODELS, type OpenRouterMessageProfile } from './open
 import { PUBLISHED_THINKING_LEVELS, clampPublishedThinkingLevel } from './model-metadata.js';
 import { resolveThinkingBudget } from './thinking-budgets.js';
 import { applyAnthropicManagedHistory } from './anthropic-thinking.js';
+import { openRouterUserPricing, type OpenRouterUserModel } from './openrouter-user-models.js';
 
 const profiles = new Map(OPENROUTER_MESSAGE_MODELS.map(profile => [profile.id, profile]));
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -23,11 +24,11 @@ export function openRouterMessagesEndpoint(baseUrl: string): string {
   } catch { throw new Error('Invalid OpenRouter messages endpoint.'); }
 }
 
-export function prepareOpenRouterMessage(body: Record<string, unknown>, options?: ChatOptions, native?: { messages: readonly Message[]; owner: string }): Record<string, unknown> {
+export function prepareOpenRouterMessage(body: Record<string, unknown>, options?: ChatOptions, native?: { messages: readonly Message[]; owner: string }, personal?: OpenRouterUserModel): Record<string, unknown> {
   const profile = openRouterMessageProfile(String(body.model));
   if (options?.thinking !== undefined && !PUBLISHED_THINKING_LEVELS.includes(options.thinking)) throw new Error('Invalid OpenRouter thinking level.');
-  const maximum = options?.maxTokens ?? profile.maxOutputTokens;
-  if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > profile.maxOutputTokens) throw new Error('Invalid OpenRouter output limit.');
+  const cap = personal?.maxOutputTokens ?? profile.maxOutputTokens, maximum = options?.maxTokens ?? cap;
+  if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > cap) throw new Error('Invalid OpenRouter output limit.');
   body.max_tokens = maximum; delete body.thinking; delete body.output_config;
   const control = options?.cacheRetention === 'none' ? undefined
     : { type: 'ephemeral', ...(options?.cacheRetention === 'long' ? { ttl: '1h' } : {}) };
@@ -108,7 +109,7 @@ export function openRouterMessageText(content: unknown): string {
   return Array.isArray(content) ? content.flatMap(block => record(block) && block.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('') : '';
 }
 
-export function openRouterMessageUsage(value: unknown, model: string): ChatResponse['usage'] {
+export function openRouterMessageUsage(value: unknown, model: string, personal?: OpenRouterUserModel): ChatResponse['usage'] {
   if (!record(value)) return undefined;
   const token = (value: unknown): number | undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
   const input = token(value.input_tokens), output = token(value.output_tokens);
@@ -119,13 +120,13 @@ export function openRouterMessageUsage(value: unknown, model: string): ChatRespo
   if (input === undefined || output === undefined || read === undefined || write === undefined || long === undefined || long > write
     || !Number.isSafeInteger(input + read + write + output)) return undefined;
   const profile = openRouterMessageProfile(model);
-  let pricing: Readonly<Required<ModelPricing>> = profile.pricing, threshold = -1;
-  for (const tier of profile.declaredPricing.tiers ?? []) {
+  let pricing: Readonly<Required<ModelPricing>> | undefined = personal?.prices ? openRouterUserPricing(personal.prices, input + read + write) : profile.pricing, threshold = -1;
+  if (!personal?.prices) for (const tier of profile.declaredPricing.tiers ?? []) {
     if (input + read + write > tier.inputTokensAbove && tier.inputTokensAbove > threshold) { pricing = tier; threshold = tier.inputTokensAbove; }
   }
   return { promptTokens: input, completionTokens: output, totalTokens: input + read + write + output,
     ...(value.cache_read_input_tokens === undefined ? {} : { cacheReadTokens: read }),
     ...(value.cache_creation_input_tokens === undefined ? {} : { cacheWriteTokens: write }),
-    costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + read * pricing.cacheReadPerMillion
-      + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1_000_000 };
+    ...(pricing ? { costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + read * pricing.cacheReadPerMillion
+      + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1_000_000 } : {}) };
 }

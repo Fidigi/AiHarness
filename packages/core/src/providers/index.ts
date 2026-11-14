@@ -27,6 +27,7 @@ import { cloudflareAiBase, cloudflareChatEndpoint, cloudflareChatProfile, cloudf
 import { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
 export { OPENROUTER_COMPLETION_MODELS } from './openrouter-completions-metadata.js';
 import { openRouterCompletionProfile, prepareOpenRouterCompletion, openRouterCompletionReasoning, openRouterCompletionUsage, validateOpenRouterCompletion, openRouterCompletionStreamValidator } from './openrouter-completions.js';
+import { bindOpenRouterUserModel, openRouterUserModel, readOpenRouterUserModels, type OpenRouterUserModel } from './openrouter-user-models.js';
 import { FIREWORKS_MODELS, fireworksProfile, fireworksBase, fireworksHeaders, prepareFireworksMessage, prepareFireworksChat, prepareFireworksOutputBudget, fireworksUsage, mergeFireworksUsage, fireworksReasoning, validateFireworksMessage, validateFireworksChat, fireworksMessageText, fireworksStreamValidator, fireworksFailure } from './fireworks.js';
 export { FIREWORKS_MODELS } from './fireworks.js';
 import { TOGETHER_MODELS, togetherProfile, prepareTogetherChat, togetherUsage, togetherReasoning, validateTogetherChat, togetherStreamValidator } from './together.js';
@@ -2208,12 +2209,12 @@ export class OpenRouterCompletionsProvider extends OpenAiProvider {
     if (!nativeOpenRouterCompletions.has(this)) return prepareOpenRouterCompletion(body, options, messages);
     const profile = openRouterCompletionProfile(String(body.model)), owner = { provider: this.config.type, api: profile.api, model: profile.id, normalizeReasoningMarker: false, invalidResponse: 'Invalid OpenRouter chat response.' };
     applyCompletionHistory(body, messages, owner.provider, profile.compat?.requiresReasoningContentOnAssistantMessages === true, false);
-    const prepared = prepareOpenRouterCompletion(body, options, messages, true); nativeCompletionsOwners.set(prepared, owner); return prepared;
+    const prepared = prepareOpenRouterCompletion(body, options, messages, true, openRouterUserModel(this, String(body.model))); nativeCompletionsOwners.set(prepared, owner); return prepared;
   }
   protected override validateChatResponse(value: unknown): void { validateOpenRouterCompletion(value, nativeOpenRouterCompletions.has(this)); }
   protected override createStreamValidator(): (value?: unknown) => void { return openRouterCompletionStreamValidator(nativeOpenRouterCompletions.has(this)); }
   protected override responseReasoning(value: unknown): string | undefined { return openRouterCompletionReasoning(value, nativeOpenRouterCompletions.has(this)); }
-  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterCompletionUsage(value, model); }
+  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterCompletionUsage(value, model, openRouterUserModel(this, model)); }
   private nativeFailure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('OpenRouter request aborted.');
     if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
@@ -6546,7 +6547,7 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
     return converted;
   }
   protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
-    return prepareOpenRouterMessage(body, options, nativeOpenRouterReplay.has(this) ? { messages, owner: this.config.type } : undefined);
+    return prepareOpenRouterMessage(body, options, nativeOpenRouterReplay.has(this) ? { messages, owner: this.config.type } : undefined, openRouterUserModel(this, String(body.model)));
   }
   protected override messageThinkingLevel(body: Record<string, unknown>): ChatResponse['providerThinkingLevel'] {
     if (!nativeOpenRouterReplay.has(this) || !openRouterMessageProfile(String(body.model)).compat?.supportsMidConvoEffort) return undefined;
@@ -6556,7 +6557,7 @@ export class OpenRouterMessagesProvider extends AnthropicProvider {
   protected override validateMessageResponse(value: unknown, native = false): void { validateOpenRouterMessage(value, native); }
   protected override messageText(content: unknown): string { return openRouterMessageText(content); }
   protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenRouterMessageUsage(previous, value, start); }
-  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterMessageUsage(value, model); }
+  protected override messageUsage(value: unknown, model: string): ChatResponse['usage'] { return openRouterMessageUsage(value, model, openRouterUserModel(this, model)); }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('OpenRouter API key is required.');
     const result = await super.chat(messages, options);
@@ -6668,24 +6669,64 @@ export class CloudflareWorkersAiMixedProvider extends AiProvider {
 
 /** Explicit API-key-only composition; the operation owns overlapping C/I identities. */
 export class OpenRouterProvider extends AiProvider {
+  private userCatalogue?: { scope: string; models: ReadonlyMap<string, OpenRouterUserModel> };
+  private userCatalogueGeneration = 0;
+  private userCataloguePublishedGeneration = 0;
+  private explicitModel: boolean;
   constructor(config: ProviderConfig) {
     const model = config.model ?? 'openai/gpt-4o';
     openRouterConversationApi(model);
-    super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') });
+    super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') }); this.explicitModel = config.model !== undefined;
     if (new.target === OpenRouterProvider) { nativeOpenRouterReplay.add(this); nativeOpenRouterCompletions.add(this); }
   }
-  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
-  override canDiscoverModels(): boolean { return false; }
-  override async getAvailableModels(): Promise<string[]> { return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].map(profile => profile.id); }
-  override getPublishedModels(): readonly PublishedModelMetadata[] {
-    return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].map(profile => ({ id: profile.id, api: profile.api, name: profile.name,
-      ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
-      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true },
-      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens,
-      ...(profile.pricing ? { pricing: { inputPerMillion: profile.pricing.inputPerMillion, outputPerMillion: profile.pricing.outputPerMillion,
-        cacheReadPerMillion: profile.pricing.cacheReadPerMillion, cacheWritePerMillion: profile.pricing.cacheWritePerMillion } } : {}) }));
+  private userCatalogueContext() {
+    const headers = new Headers(configuredHeaders(this.config)); headers.set('authorization', `Bearer ${String(this.config.apiKey)}`); headers.set('accept', 'application/json'); headers.delete('content-type');
+    return { headers, scope: JSON.stringify([this.config.type, this.config.baseUrl, [...headers].sort(([a], [b]) => a.localeCompare(b))]) };
   }
-  override setConfiguredModel(model: string): void { openRouterConversationApi(model); super.setConfiguredModel(model); }
+  private currentUserModels(): ReadonlyMap<string, OpenRouterUserModel> | undefined {
+    if (!this.userCatalogue) return undefined;
+    try { if (this.userCatalogue.scope === this.userCatalogueContext().scope) return this.userCatalogue.models; } catch { /* Changed/invalid scope cannot borrow old account metadata. */ }
+    return new Map();
+  }
+  /** Explicit foreground refresh only. Passive/offline getters never perform network or credential I/O. */
+  async refreshUserModels(options: { signal?: AbortSignal; allowNetwork?: boolean } = {}): Promise<string[]> {
+    if (options.allowNetwork === false) return this.getAvailableModels();
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), AbortSignal.timeout(15_000), ...(options.signal ? [options.signal] : [])]);
+    try {
+      signal.throwIfAborted(); if (!this.validateConfig()) throw new Error(); const context = this.userCatalogueContext(), generation = ++this.userCatalogueGeneration;
+      const response = await this.request(`${String(this.config.baseUrl).replace(/\/+$/u, '')}/models/user`, { signal, headers: context.headers, redirect: 'manual' }, [401, 403, 404]);
+      const fallback = [401, 403, 404].includes(response.status);
+      if (fallback || !response.ok) void response.body?.cancel('openrouter-user-models-refused').catch(() => undefined);
+      if (!fallback && !response.ok) throw new Error(); const models = fallback ? undefined : await readOpenRouterUserModels(response, signal);
+      signal.throwIfAborted(); if (generation < this.userCataloguePublishedGeneration || context.scope !== this.userCatalogueContext().scope) throw new Error();
+      this.userCatalogue = models ? { scope: context.scope, models } : undefined; this.userCataloguePublishedGeneration = generation; return this.getAvailableModels();
+    } catch { throw new Error(signal.aborted ? 'OpenRouter user catalogue request aborted.' : 'OpenRouter user catalogue is unavailable.'); }
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return this.userCatalogue !== undefined; }
+  override isModelDiscoveryAuthoritative(): boolean { return this.userCatalogue !== undefined; }
+  override getCachedAvailableModelIds(): readonly string[] | undefined { return this.userCatalogue ? this.getPublishedModels().map(profile => profile.id) : undefined; }
+  override async getAvailableModels(): Promise<string[]> { return this.getPublishedModels().map(profile => profile.id); }
+  override getConfiguredModel(): string | undefined {
+    const configured = super.getConfiguredModel(), current = this.currentUserModels();
+    if (!current || configured && current.has(configured)) return configured;
+    return this.explicitModel ? undefined : this.getPublishedModels()[0]?.id;
+  }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    const current = this.currentUserModels();
+    return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].filter(profile => !current || current.has(profile.id)).map(profile => {
+      const personal = current?.get(profile.id), pricing = personal?.prices ? personal.prices.known ? personal.prices.rates : undefined : profile.pricing;
+      return { id: profile.id, api: profile.api, name: profile.name,
+        ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
+        capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true },
+        contextWindow: personal?.contextWindow ?? profile.contextWindow, maxOutputTokens: personal?.maxOutputTokens ?? profile.maxOutputTokens,
+        ...(pricing ? { pricing: { ...pricing } } : {}) };
+    });
+  }
+  override setConfiguredModel(model: string): void {
+    openRouterConversationApi(model); const current = this.currentUserModels(); if (current && !current.has(model)) throw new Error('OpenRouter chat model is not available.');
+    this.explicitModel = true; super.setConfiguredModel(model);
+  }
   override getModelApi(model = this.getConfiguredModel()!): string | undefined {
     if (OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)) return 'anthropic-messages';
     if (OPENROUTER_COMPLETION_MODELS.some(profile => profile.id === model)) return 'openai-completions';
@@ -6694,15 +6735,18 @@ export class OpenRouterProvider extends AiProvider {
     return undefined;
   }
   private conversation(model: string): AiProvider {
+    const current = this.currentUserModels(); if (current && !current.has(model)) throw new Error('OpenRouter chat model is not available.');
     const config = { ...this.config, model };
     const provider = openRouterConversationApi(model) === 'anthropic-messages' ? new OpenRouterMessagesProvider(config) : new OpenRouterCompletionsProvider(config);
+    const personal = current?.get(model); if (personal) bindOpenRouterUserModel(provider, personal);
     if (!nativeOpenRouterReplay.has(this)) nativeOpenRouterReplay.delete(provider);
     if (!nativeOpenRouterCompletions.has(this)) nativeOpenRouterCompletions.delete(provider);
     return provider;
   }
   override getSpecializedModels(): SpecializedModel[] {
-    const native = { ...this.config, model: undefined };
-    return [...this.conversation(this.getConfiguredModel()!).getSpecializedModels(),
+    const native = { ...this.config, model: undefined }, model = this.getConfiguredModel(), profile = model ? this.getPublishedModels().find(profile => profile.id === model) : undefined;
+    return [...(profile ? [{ id: `${profile.id}:classifier`, type: 'classifier' as const, provider: this.getProviderType(), model: profile.id, virtual: true,
+      name: profile.name, api: profile.api, contextWindow: profile.contextWindow, ...(profile.capabilities.imageInput ? { imageInput: true } : {}), ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) }] : []),
       ...new OpenRouterClassifiersProvider(native).getSpecializedModels(), ...new OpenRouterImagesProvider(native).getSpecializedModels()];
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
