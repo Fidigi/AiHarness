@@ -23,6 +23,7 @@ import {
   McpOAuthCredentialManager,
   McpOAuthFlowService,
   ProviderCredentialService,
+  resolveVertexAdcEnvironment,
   serializeSession,
   serializeSessionForExport,
   SessionBranchCancelledError,
@@ -242,6 +243,10 @@ function initializeCredentials(
             identityTokenFile: credentialEnvironment.ANTHROPIC_IDENTITY_TOKEN_FILE, ...(credentialEnvironment.ANTHROPIC_SERVICE_ACCOUNT_ID ? { serviceAccountId: credentialEnvironment.ANTHROPIC_SERVICE_ACCOUNT_ID } : {}),
             ...(credentialEnvironment.ANTHROPIC_WORKSPACE_ID ? { workspaceId: credentialEnvironment.ANTHROPIC_WORKSPACE_ID } : {}), signal: runtime.controller.signal },
           credentialEnvironment.ANTHROPIC_BASE_URL, credentialEnvironment.ANTHROPIC_MODEL);
+        }
+        if (type === 'vertex' && !proxy.isConfigured(type) && !credentials.list().some(item => item.provider === type) && !credentialEnvironment[credentialCommandVariable(type)]) {
+          const config = await resolveVertexAdcEnvironment(credentialEnvironment, runtime.controller.signal);
+          if (config && !proxy.isConfigured(type)) proxy.setVertexAdc({ ...config, vertexAdc: { ...config.vertexAdc!, signal: runtime.controller.signal } });
         }
         continue;
       }

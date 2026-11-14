@@ -1,0 +1,84 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "51855ca",
+  "scope": "Trusted Server standard two-file Vertex ADC source, real HTTP/policy/lifetime/passive metadata using existing SDK and CLI admission helper; no new browser interaction/full ADC chain",
+  "implementation": "Server resolves ordinary keys/commands/encrypted sources first, then only unconfigured Vertex without stored marker/command can call shared file/project/location admission helper. Post-await configured-proxy check prevents late fallback over an existing provider. Exact native Vertex source captures project/location/base/model/quota/signal/redactor; trusted setter copies only the owned fields, no HTTP file config admitted. Private replacement controller aborts old ADC only after successful key/source construction, and trusted remove aborts it; application parent/scope retires source at shutdown. Readonly environment method/reconnect false/disconnect409 source metadata names GOOGLE_APPLICATION_CREDENTIALS or project admission variable for the standard default path, never reveals actual file path. Existing key Cloud/Bearer/raw stored behavior, G codec/replay/prices/discovery/static Test409 and WIF policy stay unchanged. No grant/new store/profile parser/login/UI selector or token flattening.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true only, synthetic temporary HOME/ADC/account/key/store/RSA material, loopback authenticated HTTP plus mocked fixed token/G services. No real/personal credential store/login/SDK acquisition/test live switch/protected-container/local generated edits.",
+    "image": "ai-harness:mod01-vertex-adc-server-owned",
+    "imageId": "sha256:3a5bef9e11142156c3f730bb211d87e833ef162661aa9e630ad354b25dea65dc",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-vertex-adc-server-owned; four workspace builds and workspace/parity types PASS",
+    "buildLog": "/tmp/mod01-vertex-adc-server/build-owned-r2.log",
+    "strict": {
+      "passed": true,
+      "roots": 4,
+      "config": "/tmp/mod01-vertex-adc-server/strict.json",
+      "log": "/tmp/mod01-vertex-adc-server/owned.log"
+    },
+    "runtime": {
+      "passed": 49,
+      "new": 10,
+      "failed": 0,
+      "files": [
+        "packages/server/src/api/vertex-adc-http.test.ts",
+        "packages/server/src/api/vertex-auth-http.test.ts",
+        "packages/server/src/api/anthropic-wif-http.test.ts",
+        "packages/server/src/api/proxy.test.ts"
+      ],
+      "log": "/tmp/mod01-vertex-adc-server/owned.log",
+      "meaning": "Ten new HTTP/lifetime/admission cases plus unchanged Cloud/Bearer/stored3, WIF6 and proxy30. Two main standard ADC paths, three retirement mechanisms and five priority/admission exceptions; not provider/model/host matrix or SDK/MOD-03 redelivery."
+    },
+    "actualHttp": {
+      "includedInRuntime": true,
+      "file": "packages/server/src/api/vertex-adc-http.test.ts",
+      "meaning": "Explicit authorized-user and default-path synthetic RSA verified assertions each: passive auth/models/Test409/Disconnect409 zero vendor I/O, HTTP config file without key400, selected token→G→cached signed G, shutdown then rotated file/new runtime-owned source→token→signed G. Six assistants main total60 physical tokens once, per-row10/native Vertex model/API, private source/access echo expurgation from journal/public status/state, journal0600 and no encrypted credential store/token publication.10 successful vendor requests in main paths (four token/six G). Three held token bodies each cancel once despite hostile never-settling cancel on HTTP key replacement, shutdown and trusted remove; old consumer refuses without later inference. Replacement key control plus stored-key/command/preconfigured controls add four G requests outside main billing.17 vendor attempts total (seven token including held/ten G), no account acceptance."
+    },
+    "counterfactual": {
+      "failed": 5,
+      "passed": 5,
+      "image": "ai-harness:mod01-vertex-adc-cli-owned",
+      "log": "/tmp/mod01-vertex-adc-server/red.log",
+      "meaning": "Two positive source-status paths fail, three retirement paths lack native provider. Five existing authority/incomplete negatives already pass; unreached later assertions not extra REDs, tests-only tar injection."
+    },
+    "retainedFailures": [
+      {
+        "log": "/tmp/mod01-vertex-adc-server/build-owned.log",
+        "exit": 2,
+        "meaning": "Initial Pick<VertexProviderConfig, project/location/...> makes the index-signature-derived properties required; TS2345 at startup call. Trusted setter now accepts VertexProviderConfig while explicitly projecting owned fields rather than spreading arbitrary input. No runtime policy relaxation."
+      },
+      {
+        "log": "/tmp/mod01-vertex-adc-server/focused.log",
+        "exit": 125,
+        "meaning": "No candidate image after failed first build; Docker launch only, no test credit."
+      }
+    ],
+    "earlierPasses": "Focused-r2 ten PASS; final owned49 only count. No later candidate gate failures. Earlier Vertex-key runtime134 remains OPEN/nonaccepted, not diagnosed/repaired by this source.",
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 3,
+      "imageWitness": "/tmp/mod01-vertex-adc-server/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-vertex-adc-server/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-vertex-adc-server/runtime-witness.diff",
+      "meaning": "Three changed production inputs image-identical, not global/dependency/account certificate. Source-built tests, strict config only injected."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-vertex-adc-server/docs.log"
+    },
+    "limits": "Standard authorized-user/service-account files and pinned file/project/location admission only. Other ADC types/universes/chains still explicitly unsupported and await source reconciliation, no metadata-only machine fallback. Existing G continuation scope provider/API/model is unchanged, not vendor/account identity. Trusted direct setter/source and raw API key mode are distinct; no arbitrary file from DTO. Same readonly Settings metadata contract reused, no new browser claim. No AWS/default/tool/media/04b/full chain/installed/production/platform/MOD-03/historical repair/acceptance expansion."
+  },
+  "sourceSha256": {
+    "packages/server/src/index.ts": "378a5b47eb64c0cac3e190886ffcc33c82823463c7898d855acf757adbce5181",
+    "packages/server/src/api/proxy.ts": "7302c6f82ec69f2a6b8aac34a8fe9bdc15ee941b6cca05ea660cc07c4949efb0",
+    "packages/server/src/api/provider-registry-routes.ts": "0082446b3b835f4c8463da3c0fc8d36c23d993238934757bbb1daa52741b8538",
+    "packages/server/src/api/vertex-adc-http.test.ts": "59b2776d8a4f5e0a032cc6a15a2a7995843ec9e9b26909ac4c5f6d59fa81e510"
+  },
+  "remaining": [
+    "Reconcile genuinely required other ADC file/chain types and nondefault-universe constraints against pinned provider/client, without claiming broad Google SDK chain parity",
+    "AWS trusted profile/ECS/web-identity/region/endpoint composition; explicit stored Cloud-key host contract assessment",
+    "Effective defaults/tool/media/MOD-01.04b/OpenRouter Server catalogue/freshness and final requirement-to-proof audit"
+  ],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

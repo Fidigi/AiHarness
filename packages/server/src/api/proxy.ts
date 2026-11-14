@@ -46,6 +46,7 @@ import type {
   ProviderConfig,
   ProviderOAuthCredential,
   ProviderNetworkScope,
+  VertexProviderConfig,
 } from '@ai-harness/core';
 
 /** Configuration for the proxy server */
@@ -421,6 +422,7 @@ export class AiProxyServer {
   private googleProxy?: CoreProviderProxy;
   private azureProxy?: CoreProviderProxy;
   private vertexProxy?: CoreProviderProxy;
+  private vertexWorkload?: AbortController;
   private bedrockProxy?: CoreProviderProxy;
   private mockProxy?: CoreProviderProxy;
   private githubCopilotProxy?: CoreProviderProxy;
@@ -572,6 +574,19 @@ export class AiProxyServer {
 
   hasAnthropicFederation(): boolean { return !!this.anthropicWorkload; }
 
+  /** Trusted startup fallback only; file authority never comes from an HTTP configuration DTO. */
+  setVertexAdc(config: VertexProviderConfig): void {
+    if (!config.vertexAdc) throw new Error('Invalid Vertex ADC configuration.');
+    const controller = new AbortController(), lifetime = config.vertexAdc.signal;
+    const provider = new VertexGeminiProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'vertex',
+      project: config.project, location: config.location, baseUrl: config.baseUrl, model: config.model,
+      vertexAdc: { ...config.vertexAdc, signal: lifetime ? AbortSignal.any([lifetime, controller.signal]) : controller.signal, redactor: this.redactor } });
+    this.vertexWorkload?.abort(); this.vertexWorkload = controller;
+    this.vertexProxy = new CoreProviderProxy(provider); this.agentProviders.set('vertex', provider);
+  }
+
+  hasVertexAdc(): boolean { return !!this.vertexWorkload; }
+
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key', vertexAuthMode: 'api-key' | 'bearer' = 'bearer'): void {
     if (apiKey) this.redactor.add(apiKey);
@@ -609,6 +624,7 @@ export class AiProxyServer {
       provider = new VertexGeminiProvider({
         ...network, type: ProviderType.VERTEX, apiKey, baseUrl, model: model || 'gemini-2.0-flash', vertexAuthMode,
       });
+      this.vertexWorkload?.abort(); this.vertexWorkload = undefined;
       this.vertexProxy = new CoreProviderProxy(provider);
     } else if (type === 'bedrock') {
       const config: ProviderConfig = {
@@ -717,7 +733,7 @@ export class AiProxyServer {
       case 'anthropic': this.anthropicWorkload?.abort(); this.anthropicWorkload = undefined; this.anthropicProxy = undefined; break;
       case 'google': this.googleProxy = undefined; break;
       case 'azure': this.azureProxy = undefined; break;
-      case 'vertex': this.vertexProxy = undefined; break;
+      case 'vertex': this.vertexWorkload?.abort(); this.vertexWorkload = undefined; this.vertexProxy = undefined; break;
       case 'bedrock': this.bedrockProxy = undefined; break;
       case 'local': this.localProxy = undefined; break;
       case 'github-copilot': this.githubCopilotProxy = undefined; break;
