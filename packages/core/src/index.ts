@@ -141,6 +141,7 @@ export {
   MetaOAuthProvider,
   META_MODELS,
   XaiProvider,
+  XaiOAuthProvider,
   XAI_MODELS,
   ZAI_MODELS,
   MOONSHOT_MODELS,

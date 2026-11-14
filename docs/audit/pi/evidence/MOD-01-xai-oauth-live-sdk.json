@@ -1,0 +1,74 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "a9aee49",
+  "scope": "Live native xAI/Grok SDK credential source and grant-scoped R continuation; actual CLI/Server/Settings login/mount not yet delivered",
+  "implementation": "Public XaiOAuthProvider(config,credentialSource) ignores supplied key, captures normalized endpoint/frozen headers/config scalars and privately preflights four-profile model/thinking/output plus cloned tools/history before any source/I/O. Source validates version/type/native marker/expiry/token fields and uses only fresh accessToken through exact XaiProvider→ReviewedXaiResponsesProvider, unchanged R/SSE/JSON reply/thinking/cache/tools/prices/usage. Per-operation independent caller/network-scope/deadline includes hostile source/body/callbacks; native stream consumer propagated to actual delegate for bounded cancellation. Both cancellation promises observed immediately for synchronous abort+throw. Post-I/O native grant recheck suppresses withdrawal/new login completion, preserves physical usage. Separate ai-harness:xai-oauth:v1 envelope over gateway structural scope exact constructor/provider/API/model/normalized base/frozen headers/local grant; same-grant refresh/token rotation and fresh-instance signed0600 reload stable. New login/foreign/derived/raw scope uses public projection. Raw xAI and common R preparation strip reserved native tag before vendor IDs/signatures; caller history unchanged. No factory registration or label/metadata/prefix promotion.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true, synthetic credentials/temp encrypted stores/mock or loopback only. No account/store/live mode/protected-container operation/SDK acquisition/local generated edits.",
+    "image": "ai-harness:mod01-xai-live-owned",
+    "imageId": "sha256:1ec005108eeb5e249c7f8371e38e7bb03d7db2820b38ce1fb24b4b5f739713b6",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-xai-live-owned; four builds/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-xai-live/build-owned-r2.log",
+    "strict": {
+      "passed": true,
+      "roots": 3,
+      "config": "/tmp/mod01-xai-live/strict.json",
+      "log": "/tmp/mod01-xai-live/owned.log"
+    },
+    "runtime": {
+      "passed": 32,
+      "failed": 0,
+      "new": 8,
+      "log": "/tmp/mod01-xai-live/owned.log",
+      "files": [
+        "packages/core/src/providers/xai-oauth-provider.test.ts",
+        "packages/core/src/providers/xai-oauth.test.ts",
+        "packages/core/src/providers/meta-oauth-provider.test.ts",
+        "packages/core/src/providers/xai.test.ts"
+      ],
+      "meaning": "24 across new live8/issuer8/unchanged Meta live8, plus eight filtered raw xAI controls/eight unselected; no duplicate run credit. New cases actual encrypted native refresh→R/signed0600 reload/second refresh/same grant/new-login refusal; seven recipient constructor/provider/model/base/header/derived/raw/generic scope variants; private profile/MetadataLiar before source; unavailable/expired/generic/foreign and no supplied-key fallback/offline lookup policy; hostile source/caller/scope/callback independent recovery; held body cancellation once/no complete/no extra resolution; post-I/O withdrawal retains10 tokens/$0.000015 once; synchronous source/getter abort+throw observed without unhandled. Eight raw controls are exact mutable-field admission four JSON/SSE facade variants, generic/native distinction, preflight refusal, physical capture/withdrawal and only grok-4.3 private dual-facade/JSON/SSE continuation. No four-profile campaign/MOD-03 redelivery."
+    },
+    "compiledPublicSdk": {
+      "passed": true,
+      "script": "/tmp/mod01-xai-live/emitted-probe.mjs",
+      "log": "/tmp/mod01-xai-live/owned.log",
+      "meaning": "Actual compiled root live constructor/source, ignored supplied key, captured access header, same-grant key rotation/fresh instance private R replay, raw XaiProvider public-only projection/no reserved prefix, withdrawn stream no completion/physical10 tokens/$0.000015 error usage. No host/installed/account certificate."
+    },
+    "counterfactual": {
+      "failed": 2,
+      "unselected": 6,
+      "image": "ai-harness:mod01-xai-issuer-owned",
+      "log": "/tmp/mod01-xai-live/red.log",
+      "meaning": "Initial two entry-point cases on issuer-only image expose missing live constructor. Later assertions unreached are not additional REDs; test-only overlay."
+    },
+    "retainedFailures": [],
+    "earlierPasses": "focused.log8 on first source image; then copied test title/metadata wording corrected and refresh-secret negative assertion strengthened before final source build. Final owned32+compiled1 only credit, production inputs unchanged after first build; no further failed candidate gates.",
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 3,
+      "imageWitness": "/tmp/mod01-xai-live/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-xai-live/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-xai-live/runtime-witness.diff",
+      "meaning": "Three changed production inputs match final owned image. Final tests source-built; strict/probe injected only. No dependency/whole-image certification."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-xai-live/docs.log"
+    },
+    "limits": "Local structural replay grant is not vendor signature authenticity/remote subject/entitlement/JS sandbox. Existing four-profile native policy unchanged, effective default/tool/media exceptions and04b separate. Issuer plus live SDK is not native CLI/Server/Settings usability. No SDK acquisition/model×host/installed/browser/production/global/account/MOD-03/historical repair/acceptance expansion."
+  },
+  "sourceSha256": {
+    "packages/core/src/index.ts": "10e0a5b3a73cad24ae612e877e5480933d6eea3699dad74c1203f678eb02f680",
+    "packages/core/src/providers/index.ts": "be124d3243a0a2834dbd2286033d14d858b6c1bffc998e1962a7037662f90db4",
+    "packages/core/src/providers/xai-oauth-replay.ts": "b0d20ac0acd971dca22411d21bbc5ba3804cc4f0210ebfff0ffaee8ec51fb187",
+    "packages/core/src/providers/xai-oauth-provider.test.ts": "112285b38f04262364459c7d9afe801733fef766bd73d9703a7fc0dfe640e0b9"
+  },
+  "remaining": [
+    "Actual native xAI/Grok CLI Device publisher/canonical live source with existing source/key/command/factory/invocation priorities, then custom Server/Settings ownership",
+    "Cloud credential chains/effective default/tool/media/MOD-01.04b",
+    "OpenRouter Server operator/static-catalogue/freshness boundary and final requirement-to-proof audit"
+  ],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}
