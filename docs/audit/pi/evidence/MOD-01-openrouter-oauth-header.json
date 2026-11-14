@@ -1,0 +1,28 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "0fcdddd",
+  "scope": "OpenRouter issuer result must be representable by actual HTTP authentication headers before publication",
+  "requirement": "A bounded/valid UTF-8 key is not necessarily usable in fetch Headers. Server composition review exposed this gap before native host publication was added.",
+  "implementation": "Core beginOpenRouterLogin now constructs actual Bearer Headers after existing response/key bounds and before returning the permanent API key. Failure stays inside the fixed value-free exchange error/redaction/lifetime path; no key is returned for publication. No header normalization, issuer/store/replay/host authority or new dependency is introduced.",
+  "proof": "Existing malformed/oversized/denied response case adds synthetic U+2603 key, keeping its rejection assertion and case count. Prior image resolves it incorrectly (one RED); corrected source rejects it while existing native key/publication/CLI flows remain useful.",
+  "qualification": {
+    "environment": "Docker --network none, CI=true, synthetic/mocked or verified-loopback-TLS transports and disposable0600 encrypted stores only; no live/account/personal store/protected-container operation",
+    "image": "ai-harness:mod01-openrouter-header",
+    "imageId": "sha256:efcd8b0a8ed7cc952c97080fcb5a542172077678316175822df2bbcad1c28d10",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-openrouter-header PASS (four builds/workspace-parity types)",
+    "buildLog": "/tmp/mod01-openrouter-header/build.log",
+    "strict": { "passed": true, "roots": 4, "config": "/tmp/mod01-openrouter-header/strict.json" },
+    "targeted": { "passed": 47, "failed": 0, "files": ["packages/core/src/providers/openrouter-oauth.test.ts", "packages/core/src/providers/credentials.test.ts", "packages/cli/src/commands/radius-login.test.ts", "packages/cli/src/cli/openrouter-oauth-process.test.ts"], "log": "/tmp/mod01-openrouter-header/final.log", "meaning": "Existing cases, including the strengthened key-response vector and actual print/JSON/RPC PKCE/encrypted restart/logout; no additional distinct case credited." },
+    "compiledSdk": { "passed": true, "requests": 1, "program": "/tmp/mod01-openrouter-oauth/emitted-probe.mjs", "log": "/tmp/mod01-openrouter-header/final.log" },
+    "counterfactual": { "failed": 1, "filterUnselected": 6, "image": "ai-harness:mod01-openrouter-cli-owned", "log": "/tmp/mod01-openrouter-header/red.log", "meaning": "Unrepresentable synthetic key incorrectly resolves instead of rejecting. No assertion/deadline/flag weakening." },
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-openrouter-header/docs.log" },
+    "limits": "Focused header-admission correction only, not complete token syntax/vendor authentication/account filtering/Server-Settings composition/media/global/installed/production qualification. No SDK acquisition or historical incident repair; earlier receipts remain source-bound."
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/openrouter-oauth.ts": "c0385ae446f8df983035cec60e2ca566bcedf3bbf915713926b9150c94640e1a",
+    "packages/core/src/providers/openrouter-oauth.test.ts": "d91cda1b3f634b82868927f3763d6cf65f22b126d2ff9b31af2a4564218b3e1d"
+  },
+  "remaining": ["OpenRouter native Server/Settings callback/key-login ownership and remaining approved scope", "Other issuers/federation/cloud/policies/MOD-01.04b and final closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; exactly three historical acceptances unchanged; active goal."
+}

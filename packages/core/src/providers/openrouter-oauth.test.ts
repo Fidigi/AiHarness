@@ -41,7 +41,7 @@ it('does not consume the pending flow on malformed or duplicate callback input',
 it('rejects oversized/malformed/denied key responses without reflecting provider secrets', async () => {
   const redactor = new CredentialRedactor(), fetcher = vi.fn<typeof fetch>(async () => Response.json({ key, error_description: 'private-provider-error' }, { status: 400 })), flow = oauth.beginOpenRouterLogin(callback, { fetcher, redactor });
   await expect(flow.complete(callback + '?code=private-code')).rejects.toThrow('OpenRouter'); expect(redactor.redact(key)).not.toContain(key);
-  for (const body of [{}, { key: 'bad\nkey' }, { key: 'x'.repeat(65537) }]) await expect(oauth.beginOpenRouterLogin(callback, { fetcher: async () => Response.json(body) }).complete(callback + '?code=private-code')).rejects.toThrow('OpenRouter');
+  for (const body of [{}, { key: 'bad\nkey' }, { key: 'synthetic-\u2603' }, { key: 'x'.repeat(65537) }]) await expect(oauth.beginOpenRouterLogin(callback, { fetcher: async () => Response.json(body) }).complete(callback + '?code=private-code')).rejects.toThrow('OpenRouter');
 });
 it('retires owned and late OpenRouter exchange bodies without waiting for hostile cancellation', async () => {
   for (const stage of ['body', 'late'] as const) {

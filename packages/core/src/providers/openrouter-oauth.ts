@@ -45,7 +45,8 @@ export function beginOpenRouterLogin(callbackUrl: string, options: OpenRouterOAu
       const response = await fetchOAuthResponse(TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { accept: 'application/json', 'content-type': 'application/json' },
         body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }) }, signal, fetcher);
       const body = await readOAuthJson(response, signal); redactor.add(typeof body.key === 'string' ? body.key : undefined);
-      if (!response.ok || !text(body.key, 64 * 1024)) throw new Error(); signal.throwIfAborted(); return { apiKey: body.key };
+      if (!response.ok || !text(body.key, 64 * 1024)) throw new Error();
+      new Headers({ authorization: `Bearer ${body.key}` }); signal.throwIfAborted(); return { apiKey: body.key };
     } catch { throw new Error(signal.aborted ? 'OpenRouter login cancelled.' : 'OpenRouter key exchange failed.'); }
     finally { controller.abort(); }
   } };
