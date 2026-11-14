@@ -66,6 +66,8 @@ import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeB
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
 export { KIMI_CODING_MODELS } from './kimi-coding.js';
+import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthCredential, type KimiCodingOAuthCredentialSource } from './kimi-coding-oauth.js';
+import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
 export { META_MODELS } from './meta.js';
 import { XAI_MODELS, xaiProfile, xaiBase, prepareXaiResponse, xaiUsage } from './xai.js';
@@ -5152,6 +5154,7 @@ const nativeOpenRouterReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeGoReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeReplay = new WeakSet<AiProvider>();
 const nativeAiGatewayProviders = new WeakSet<AiProvider>();
+const nativeKimiOAuthProviders = new WeakSet<AiProvider>();
 const nativeAiGatewayDelegates = new WeakMap<AiProvider, AiGatewayProfile>();
 
 export class AnthropicProvider extends AiProvider {
@@ -6232,6 +6235,7 @@ export class KimiCodingProvider extends AnthropicProvider {
   protected override applyMessageThinking(_body: Record<string, unknown>, _options?: ChatOptions): void {}
   protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions): Record<string, unknown> { return prepareKimiCodingMessage(body, options, this.ownsReplay); }
   protected override permitsEmptyMessageSignature(model: string): boolean { return kimiCodingProfile(model).allowEmptySignature; }
+  protected override nativeMessageHistory(messages: Message[], model: string): Message[] { return super.nativeMessageHistory(withoutKimiOAuthReplay(messages), model); }
   protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
     const prepared = native ? toolImageMessages(messages) : messages;
     const converted = super.buildAnthropicMessages(prepared, native, model), original = (native ? prepared : toolImageMessages(messages)).filter(message => message.role !== 'system');
@@ -6283,6 +6287,75 @@ export class KimiCodingProvider extends AnthropicProvider {
       await super.streamChat(messages, async (text, event) => { active(); await onChunk(text, event); active(); },
         response => { active(); return onComplete?.(response && !this.ownsReplay ? { ...response, model, provider, api: 'anthropic-messages' } : response); }, error => { throw error; }, options);
     } catch (error) { const failure = this.failure(error, options?.signal); if (onError) onError(failure); else throw failure; }
+  }
+}
+
+export interface KimiCodingOAuthProviderConfig extends ProviderConfig { oauthHost?: string }
+/** Native issuer-owned facade; the existing Kimi adapter retains API-key/legacy explicit-Bearer behavior. */
+export class KimiCodingOAuthProvider extends KimiCodingProvider {
+  private readonly oauthHost: string;
+  private readonly oauthHeaders: Readonly<Record<string, string>>;
+  constructor(config: KimiCodingOAuthProviderConfig, private readonly credentialSource: KimiCodingOAuthCredentialSource) {
+    if (typeof credentialSource !== 'function') throw new Error('Kimi Coding OAuth source is required.');
+    super({ ...config, apiKey: undefined, kimiAuthMode: 'oauth' });
+    this.oauthHost = getKimiCodingOAuthConfig(config.oauthHost).tokenUrl.slice(0, -'/api/oauth/token'.length);
+    const headers = new Headers(super.messageHeaders()); headers.delete('authorization'); headers.delete('x-api-key');
+    this.oauthHeaders = Object.freeze(Object.fromEntries(headers)); this.config.customHeaders = this.oauthHeaders;
+    if (new.target === KimiCodingOAuthProvider) nativeKimiOAuthProviders.add(this);
+  }
+  override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
+  private async currentCredential(signal: AbortSignal, allowRefresh = true): Promise<KimiCodingOAuthCredential> {
+    let abort!: () => void;
+    const cancelled = new Promise<never>((_resolve, reject) => { abort = () => reject(new Error('Kimi Coding OAuth request cancelled.')); });
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      signal.throwIfAborted(); const value = structuredClone(await Promise.race([this.credentialSource(signal, allowRefresh), cancelled])); signal.throwIfAborted();
+      if (!value || value.version !== 1 || value.type !== 'oauth' || !validKimiCodingOAuthIdentity(value.subscription) || value.subscription.oauthHost !== this.oauthHost
+        || typeof value.accessToken !== 'string' || !value.accessToken || typeof value.refreshToken !== 'string' || !value.refreshToken
+        || !Number.isSafeInteger(value.expiresAt) || value.expiresAt! <= Date.now()) throw new Error('Kimi Coding OAuth credential is unavailable.');
+      for (const token of [value.accessToken, value.refreshToken]) if (Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0020\u007f-\u009f]/u.test(token) || Buffer.from(token, 'utf8').toString('utf8') !== token) throw new Error('Kimi Coding OAuth credential is unavailable.');
+      return { accessToken: value.accessToken, refreshToken: value.refreshToken, expiresAt: value.expiresAt!, subscription: { ...value.subscription } };
+    } finally { signal.removeEventListener('abort', abort); }
+  }
+  override async getAvailableModels(options: { signal?: AbortSignal; allowNetwork?: boolean } = {}): Promise<string[]> {
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : [])]);
+    try { await this.currentCredential(signal, options.allowNetwork !== false); return KIMI_CODING_MODELS.map(profile => profile.id); }
+    catch { if (signal.aborted) throw new Error('Kimi Coding OAuth discovery cancelled.'); return []; }
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> { return this.runOAuth(messages, options); }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    try { await this.runOAuth(messages, options, onChunk, onComplete); }
+    catch (error) { if (onError) await onError(error as Error); else throw error; }
+  }
+  private async runOAuth(messages: Message[], options?: ChatOptions, onChunk?: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void): Promise<ChatResponse> {
+    const network = providerNetworkSettings(this.config), config = { ...this.config }, provider = this.getProviderType(), model = options?.model || this.getConfiguredModel()!, endpoint = this.getMessagesUrl();
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options?.signal ? [options.signal] : []), ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    let abort!: () => void, response: ChatResponse | undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => { abort = () => reject(new Error('Kimi Coding OAuth request cancelled.')); });
+    signal.addEventListener('abort', abort, { once: true }); const active = () => signal.throwIfAborted();
+    try {
+      active(); const profile = kimiCodingProfile(model), owned = { ...options, model, signal }; prepareKimiCodingOutputBudget(owned, model);
+      for (const message of messages) for (const image of messageImages(message)) if (!profile.declaredInput.includes('image') || !parseDataImage(image.url)) throw new Error('Invalid Kimi Coding image input.');
+      const credential = await Promise.race([this.currentCredential(signal), cancelled]); active();
+      const scope = nativeKimiOAuthProviders.has(this) ? gatewayReplayScope(provider, 'anthropic-messages', model, endpoint,
+        JSON.stringify(['kimi-native-grant-v1', credential.subscription.oauthHost, credential.subscription.grantId]), this.oauthHeaders) : undefined;
+      const history = kimiOAuthHistory(messages, scope), delegate = new KimiCodingProvider({ ...config, type: provider, model, baseUrl: endpoint, apiKey: credential.accessToken, kimiAuthMode: 'oauth', customHeaders: this.oauthHeaders });
+      nativeSubscriptionStreamConsumers.add(delegate);
+      if (onChunk) await Promise.race([delegate.streamChat(history, async (text, event) => {
+        active(); const visible = event?.type === 'tool_call' ? { type: 'tool_call' as const, data: sealKimiOAuthCall(event.data as ToolCall, scope) }
+          : event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text }
+            : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        await Promise.race([Promise.resolve(onChunk(text, visible)), cancelled]); active();
+      }, value => { response = value; }, error => { throw error; }, owned), cancelled]);
+      else response = await Promise.race([delegate.chat(history, owned), cancelled]);
+      active(); if (!response) throw new Error('Kimi Coding OAuth response is incomplete.');
+      const current = await Promise.race([this.currentCredential(signal), cancelled]); active();
+      if (current.subscription.grantId !== credential.subscription.grantId) throw new Error('Kimi Coding OAuth credential changed.');
+      const result = sealKimiOAuthResponse({ ...response, provider, api: 'anthropic-messages', model }, scope);
+      await Promise.race([Promise.resolve(onComplete?.(result)), cancelled]); active(); return result;
+    } catch (error) {
+      throw error instanceof ProviderContextOverflowError ? error : new SpecializedModelError(signal.aborted ? 'Kimi Coding OAuth request cancelled.' : 'Kimi Coding OAuth request failed.', error instanceof SpecializedModelError ? error.usage : normalizeProviderUsage(response?.usage));
+    } finally { signal.removeEventListener('abort', abort); }
   }
 }
 

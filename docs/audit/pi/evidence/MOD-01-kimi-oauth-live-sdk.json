@@ -1,0 +1,52 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "a6b6355",
+  "scope": "Native Kimi live inference SDK and grant-owned private continuation over the existing A adapter; native host login/composition remains mandatory",
+  "issuerSdk": "docs/audit/pi/evidence/MOD-01-kimi-oauth-sdk.json",
+  "requirements": [
+    {
+      "requirement": "Usable live native credentials for real Kimi JSON/SSE rather than a retained token snapshot",
+      "implementation": "New public KimiCodingOAuthProvider/Config and KimiCodingOAuthCredentialSource retain the explicit native resolver. Frozen issuer/normalized effective headers and captured endpoint/provider/model fence the operation. The facade discards supplied API keys, resolves only valid fresh matching native Kimi credentials before transport and revalidates the local grant after I/O. It creates a per-operation existing KimiCodingProvider with actual Bearer, so simultaneous turns do not mutate a shared key. The four original profiles/prices/output/thinking/tools/JSON-SSE codecs remain unchanged. Model/output/image validation precedes credential resolution; empty model override retains the old configured-model fallback.",
+      "proof": "Two new JSON/SSE journeys use actual native request bodies/headers and the existing pinned continuation fixture. Fresh token/same-grant restart/replay retains exact vendor signatures without the harness envelope on wire; caller histories remain identical. Wrong/expired/generic/foreign-realm credentials cannot fall through to a supplied key or make inference requests. Invalid model/output/remote-image requests do not call the resolver. Compiled public SDK executes native capture/rotation/replay and post-I/O withdrawal with three mocked requests."
+    },
+    {
+      "requirement": "Private native grant continuation without key/realm/model/endpoint/header/derived borrowing",
+      "implementation": "Reuse the existing gateway scoped-envelope codec with a Kimi-native grant tag and reserved ai-harness:kimi-oauth:v1 signature prefix, not a new replay/session framework. Scope includes exact facade membership, local issuer/grant, requested model/API/provider, endpoint and effective headers; same-grant token rotation is stable. Native envelopes alone unwrap before the existing A codec. The old API-key/explicit-Bearer Kimi path strips only newly introduced prefixed native envelopes to its public foreign projection, never forwarding the wrapper as a raw vendor signature. Existing raw private Kimi behavior stays unchanged. This is structural SDK ownership, not vendor signature authentication or a sandbox against arbitrary in-process JS.",
+      "proof": "Both facades capture, append0600 v2 session data, reload and reconstruct a new native SDK instance after token rotation. Changed grant/header/endpoint/model/derived receivers and the legacy API-key lane receive no opaque fields; original history is unchanged. Existing19 owning Kimi cases retain raw/private/profile behavior, and21 gateway cases retain the shared codec/policy controls. No MOD-03 protocol/profile redelivery or new SDK acquisition follows."
+    },
+    {
+      "requirement": "Caller/scope retirement and failed-publication accounting",
+      "implementation": "Resolver waits, delegate I/O and awaited chunk/completion callbacks use caller/scope/request-timeout cancellation. The delegate borrows existing owned-response lifetime via its exact native consumer marker. Scope replacement cannot publish a delayed old resolver; the next generation is reusable. Fixed native errors preserve observed response usage through SpecializedModelError when live authority is withdrawn after I/O. Private tool events are sealed, and raw start/end/done payloads cannot expose private signatures.",
+      "proof": "One uncooperative source is retired before any transport by network-scope reset, then a fresh request recovers. One owned inference body is caller-cancelled exactly once without waiting for hostile cancellation or invoking completion. Post-I/O source withdrawal refuses completion, retains observed14-token usage and permits a new request. Initial cancellation tests expose an unobserved outer cancellation promise; it is now observed from the first resolver wait, without weakened tests/flags."
+    }
+  ],
+  "qualification": {
+    "environment": "Docker only; --network none; CI=true; synthetic native credentials/disposable stores/mocked or loopback service transports; no personal credentials, real-account mode or protected-container operation",
+    "image": "ai-harness:mod01-kimi-live-owned",
+    "imageId": "sha256:574ad63dd7fa1caa995df9a509f3a3f3921d4de03c2ea9e8cf452378b9350379",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-kimi-live-owned; Core/CLI/Server/Web and workspace/parity types PASS",
+    "buildLog": "/tmp/mod01-kimi-live/build-owned.log",
+    "strict": { "passed": true, "roots": 5, "config": "/tmp/mod01-kimi-live/strict.json", "log": "/tmp/mod01-kimi-live/delivered.log" },
+    "focused": { "passed": 83, "failed": 0, "files": 5, "selection": ["packages/core/src/providers/kimi-coding-oauth-provider.test.ts", "packages/core/src/providers/kimi-coding.test.ts", "packages/core/src/providers/kimi-coding-oauth.test.ts", "packages/core/src/providers/credentials.test.ts", "packages/core/src/providers/ai-gateways.test.ts"], "log": "/tmp/mod01-kimi-live/delivered.log", "meaning": "Eight new native-live SDK cases plus retained original Kimi/issuer/credentials/gateway controls on the fresh product image." },
+    "affectedHostRegression": { "passed": 10, "failed": 0, "files": 2, "selection": ["packages/cli/src/cli/kimi-coding-process.test.ts", "packages/server/src/api/native-dialects-http.test.ts"], "log": "/tmp/mod01-kimi-live/host-regression.log", "meaning": "Existing API-key/legacy explicit-Bearer CLI and generic native dialect HTTP behavior, not new native subscription host authority." },
+    "emittedSdk": { "passed": true, "requests": 3, "withdrawnObservedTokens": 7, "program": "/tmp/mod01-kimi-live/emitted-probe.mjs", "log": "/tmp/mod01-kimi-live/emitted.log", "meaning": "Actual public compiled Core facade/rotation/private replay/usage refusal; mocked backend, not installed/production/account or native-host qualification." },
+    "distinctFinalTargetedTests": 93,
+    "counterfactual": { "failed": 2, "filterUnselected": 3, "image": "ai-harness:mod01-kimi-issuer-retry", "log": "/tmp/mod01-kimi-live/red.log", "meaning": "Native live facade absent; both JSON/SSE constructor-path assertions fail." },
+    "retainedFailures": [
+      { "log": "/tmp/mod01-kimi-live/owned.log", "passed": 82, "failedTests": 0, "unhandledErrors": 1, "exit": 1, "meaning": "Both new source/body cuts assert correctly but scope cancellation rejects the outer cancellation promise before it is observed. This failed gate is not83-pass green. Product now observes cancellation from the initial credential wait; original cancellation assertions are unchanged." }
+    ],
+    "earlierPasses": "focused.log80 precedes the two retirement cases and pre-resolution-input assertion. Final93 is83 Core plus10 distinct old-host controls, not a sum of overlapping selections.",
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-kimi-live/docs.log", "erratum": "Preceding issuer receipt's existing client-control count corrected8→13 using its original final.log; its123 total is unchanged. No test/evidence result is relabelled." },
+    "limits": "No native CLI/Server/Settings issuer binding or new browser/installed/production/real-account/global/media preparation qualification. Static Kimi declarations are not an account-entitlement catalogue. Local grant UUID is not a verified remote subject. Prior failures and exactly three historical acceptances remain unchanged; no assertion/deadline/flag weakening or MOD-03 redelivery."
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/index.ts": "042cc3ea4cecb473ca820b0e099d0e207311563104e5f17d639dff0d46550cf3",
+    "packages/core/src/providers/kimi-coding-replay.ts": "c20a09e18a8bdcfede322c5ce8bf3130999b558925bcff5398b47535b2dc5a98",
+    "packages/core/src/providers/kimi-coding-oauth-provider.test.ts": "943fe1182cbd1e9084017fe03cd2a232128fa3683557a52de228875c242b39c4",
+    "packages/core/src/providers/kimi-coding-oauth.ts": "424719bf0b21eddae1f102ac69749a5423383274818dd82af07bb2ec4dd3e811",
+    "packages/core/src/index.ts": "c137c1f4d9048645bb7d28fb9974cf69fab080dda846dbcabb7613f8416eb9fe"
+  },
+  "remaining": ["Native Kimi CLI/Server/Settings issuer/login/live composition", "Other required issuers/federation/cloud chains, effective policies and MOD-01.04b media preparation", "Final MOD-01 requirement-to-implementation-to-proof closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

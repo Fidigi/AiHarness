@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { CredentialRedactor, type ProviderOAuthRefreshConfig } from './credentials.js';
+import { CredentialRedactor, type ProviderOAuthRefreshConfig, type ProviderOAuthCredential } from './credentials.js';
 import { OAuthDeviceClient } from './oauth-device.js';
 
 export const KIMI_CODING_OAUTH_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098';
@@ -28,6 +28,7 @@ export function getKimiCodingOAuthConfig(oauthHost = 'https://auth.kimi.com'): K
 
 export interface KimiCodingOAuthIdentity { provider: 'kimi-coding'; oauthHost: string; grantId: string }
 export interface KimiCodingOAuthCredential { accessToken: string; refreshToken: string; expiresAt: number; subscription: KimiCodingOAuthIdentity }
+export type KimiCodingOAuthCredentialSource = (signal?: AbortSignal, allowRefresh?: boolean) => Promise<ProviderOAuthCredential | undefined>;
 export interface KimiCodingOAuthOptions { oauthHost?: string; signal?: AbortSignal; fetcher?: typeof fetch; redactor?: CredentialRedactor }
 export interface KimiCodingDeviceLogin { userCode: string; verificationUri: string; expiresAt: number; complete(signal?: AbortSignal): Promise<KimiCodingOAuthCredential>; cancel(): void }
 function issuerHost(value?: string): string { return getKimiCodingOAuthConfig(value).tokenUrl.slice(0, -'/api/oauth/token'.length); }

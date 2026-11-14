@@ -34,8 +34,9 @@ export type { MiniMaxProfile } from './providers/minimax.js';
 export type { OpenCodeGoProfile } from './providers/opencode-go.js';
 export type { OpenCodeProfile } from './providers/opencode.js';
 export type { KimiCodingProfile } from './providers/kimi-coding.js';
+export type { KimiCodingOAuthProviderConfig } from './providers/index.js';
 export { getKimiCodingOAuthConfig, beginKimiCodingDeviceLogin } from './providers/kimi-coding-oauth.js';
-export type { KimiCodingOAuthConfig, KimiCodingOAuthIdentity, KimiCodingOAuthCredential, KimiCodingOAuthOptions, KimiCodingDeviceLogin } from './providers/kimi-coding-oauth.js';
+export type { KimiCodingOAuthConfig, KimiCodingOAuthIdentity, KimiCodingOAuthCredential, KimiCodingOAuthOptions, KimiCodingDeviceLogin, KimiCodingOAuthCredentialSource } from './providers/kimi-coding-oauth.js';
 export { OAuthDeviceClient } from './providers/oauth-device.js';
 export type { OAuthDeviceConfig, OAuthDevicePrompt, OAuthDeviceCredential } from './providers/oauth-device.js';
 export { getGitHubCopilotOAuthConfig, getGitHubCopilotBaseUrl, exchangeGitHubCopilotToken } from './providers/github-copilot-oauth.js';
@@ -124,6 +125,7 @@ export {
   OPENCODE_MODELS,
   OPENCODE_CLASSIFIER_MODELS,
   KimiCodingProvider,
+  KimiCodingOAuthProvider,
   KIMI_CODING_MODELS,
   MetaProvider,
   META_MODELS,
