@@ -65,6 +65,7 @@ import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } fro
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
 import { loginKimiCoding } from '../security/kimi-login.js';
+import { loginAnthropic } from '../security/anthropic-login.js';
 import { loginOpenRouter } from '../security/openrouter-login.js';
 import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
@@ -718,7 +719,7 @@ const commands: CommandEntry[] = [
   {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth explicite',
-    usage: '/login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding|openrouter] [--method device|browser]',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding|openrouter|anthropic] [--method device|browser]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
       let issuer: string | undefined, method: string | undefined, valid = true;
@@ -729,8 +730,8 @@ const commands: CommandEntry[] = [
         else if (key === '--method' && method === undefined && (value === 'device' || value === 'browser')) method = value;
         else valid = false;
       }
-      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'radius' && issuer !== 'kimi-coding' && issuer !== 'openrouter'
-        || method !== undefined && issuer !== 'openai-codex' && issuer !== 'radius' && !(issuer === 'openrouter' && method === 'browser')) return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding|openrouter] [--method device|browser]');
+      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'radius' && issuer !== 'kimi-coding' && issuer !== 'openrouter' && issuer !== 'anthropic'
+        || method !== undefined && issuer !== 'openai-codex' && issuer !== 'radius' && !((issuer === 'openrouter' || issuer === 'anthropic') && method === 'browser')) return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding|openrouter|anthropic] [--method device|browser]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
@@ -753,20 +754,20 @@ const commands: CommandEntry[] = [
           return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
         } finally { clearTimeout(timer); controller.abort(); }
       }
-      if (issuer === 'radius' || issuer === 'kimi-coding') {
+      if (issuer === 'radius' || issuer === 'kimi-coding' || issuer === 'anthropic') {
         const controller = new AbortController();
         const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
         const timer = setTimeout(() => controller.abort(), 300_000);
         try {
           const instructions = (uri: string, code?: string) => ctx.terminal.writeOutput(code === undefined ? `Ouvrez ${uri} pour autoriser AiHarness.` : `Ouvrez ${uri} et saisissez le code ${code}.`);
-          const realm = issuer === 'radius' ? process.env.RADIUS_GATEWAY : process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST;
+          const realm = issuer === 'radius' ? process.env.RADIUS_GATEWAY : issuer === 'kimi-coding' ? process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST : undefined;
           const credential = issuer === 'radius' ? await loginRadius(credentialService, providerName, method === 'browser' ? 'browser' : 'device', instructions, signal, realm)
-            : await loginKimiCoding(credentialService, providerName, instructions, signal, realm);
+            : issuer === 'kimi-coding' ? await loginKimiCoding(credentialService, providerName, instructions, signal, realm) : await loginAnthropic(credentialService, providerName, 'browser', instructions, signal);
           signal.throwIfAborted();
           if (providerName === issuer && !process.env[`AI_HARNESS_${issuer.toUpperCase().replace(/-/g, '_')}_API_KEY_COMMAND`] && !ctx.agentSettings?.().providerApiKeyCommands?.[issuer]) {
             const oauth = { credential, credentialSource: cliSubscriptionCredentialSource(credentialService, issuer, ctx.providerLifetime, !ctx.offline, realm) };
             const provider = createConfiguredProviders(process.env, { network: ctx.providerNetwork, radiusCatalogueDirectory: ctx.radiusCatalogueDirectory,
-              ...(issuer === 'radius' ? { radiusOAuth: oauth } : { kimiOAuth: oauth }),
+              ...(issuer === 'radius' ? { radiusOAuth: oauth } : issuer === 'kimi-coding' ? { kimiOAuth: oauth } : { anthropicOAuth: oauth }),
             }).get(issuer);
             if (provider) ctx.providers.set(providerName, provider);
           }

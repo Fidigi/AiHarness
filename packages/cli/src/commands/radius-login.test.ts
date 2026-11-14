@@ -7,6 +7,7 @@ import { CommandHandler } from './handler.js';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import * as radiusLogin from '../security/radius-login.js';
 import * as kimiLogin from '../security/kimi-login.js';
+import * as anthropicLogin from '../security/anthropic-login.js';
 import * as openrouterLogin from '../security/openrouter-login.js';
 
 const roots: string[] = [], gateway = 'https://synthetic-command-radius.test';
@@ -27,6 +28,29 @@ async function fixture(persistent = true, hold = false, issuer: 'radius' | 'kimi
   });
   return { handler, credentials, messages, errors, host, caller, mock, fetch, file, reached, release: () => release(tokens()) };
 }
+async function anthropicFixture(hold = false) {
+  const realFetch = globalThis.fetch, f = await fixture(); for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'AI_HARNESS_ANTHROPIC_API_KEY_COMMAND']) vi.stubEnv(name, undefined); vi.stubEnv('ANTHROPIC_BASE_URL', 'https://synthetic-interactive-anthropic.test');
+  let entered!: () => void, cancellation = 0, callback: Promise<unknown> | undefined; const ready = new Promise<void>(resolve => { entered = resolve; }), writes = f.handler.getContext().terminal.writeOutput;
+  f.handler.getContext().terminal.writeOutput = message => { writes(message); const value = message.match(/https:\/\/claude\.ai\/oauth\/authorize\?\S+/u)?.[0]; if (!value) return; const authorization = new URL(value), target = new URL(authorization.searchParams.get('redirect_uri')!); target.searchParams.set('code', 'synthetic-private-claude-code'); target.searchParams.set('state', authorization.searchParams.get('state')!); callback = realFetch(target).then(response => response.text(), error => error); };
+  f.fetch.mockImplementation(async url => { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); entered(); return hold ? new Response(new ReadableStream({ start(stream) { stream.enqueue(new TextEncoder().encode('{')); }, cancel() { cancellation++; return new Promise(() => undefined); } })) : Response.json({ access_token: 'synthetic-claude-access', refresh_token: 'synthetic-claude-refresh', expires_in: 3600 }); });
+  return { ...f, ready, callback: () => callback, cancellations: () => cancellation };
+}
+it.each(['anthropic', 'team-claude'])('mounts canonical-only %s native Anthropic browser state without selection/key flattening', async label => {
+  const f = await anthropicFixture(); await f.handler.execute(`/login ${label} --issuer=anthropic --method=browser`); await f.callback(); expect(f.errors).toEqual([]); expect(f.messages.at(-1)).toContain('Authentification OAuth réussie'); expect(f.handler.getContext().provider).toBe(f.mock); expect(f.handler.getContext().providers.has('anthropic')).toBe(label === 'anthropic'); expect(f.fetch).toHaveBeenCalledOnce(); expect(await f.credentials.resolve(label, { env: {} })).toBeUndefined(); expect((await f.credentials.resolve(label, { env: {}, subscriptionProvider: 'anthropic' }))?.credential).toMatchObject({ subscription: { provider: 'anthropic' } }); for (const secret of ['synthetic-private-claude-code', 'synthetic-claude-access', 'synthetic-claude-refresh']) expect(f.messages.join('\n') + await readFile(f.file, 'utf8')).not.toContain(secret);
+});
+it.each(['environment', 'command'] as const)('retains Anthropic %s key priority after native interactive login', async source => {
+  const f = await anthropicFixture(); if (source === 'environment') vi.stubEnv('ANTHROPIC_API_KEY', 'synthetic-priority-claude-key'); else vi.stubEnv('AI_HARNESS_ANTHROPIC_API_KEY_COMMAND', 'synthetic-command-must-not-run'); await f.handler.execute('/login anthropic --issuer anthropic'); await f.callback(); expect(f.errors).toEqual([]); if (source === 'command') { expect(f.handler.getContext().providers.has('anthropic')).toBe(false); return; }
+  f.fetch.mockImplementation(async (url, init) => { expect(String(url)).toBe('https://synthetic-interactive-anthropic.test/v1/messages'); expect(new Headers(init?.headers).get('x-api-key')).toBe('synthetic-priority-claude-key'); expect(new Headers(init?.headers).get('authorization')).toBeNull(); return Response.json({ model: 'claude-sonnet-4-6', stop_reason: 'end_turn', content: [{ type: 'text', text: 'priority-kept' }], usage: { input_tokens: 1, output_tokens: 1 } }); }); expect((await f.handler.getContext().providers.get('anthropic')!.chat([{ id: 'u', role: 'user', timestamp: new Date(), content: 'synthetic' }])).content).toBe('priority-kept');
+});
+it('does not mount retired Anthropic login after its native grant is committed', async () => {
+  const f = await fixture(); vi.spyOn(anthropicLogin, 'loginAnthropic').mockImplementationOnce(async (credentials, label, _method, _instructions, signal) => { const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'synthetic-committed-claude', refreshToken: 'synthetic-committed-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'anthropic', grantId: '12345678-1234-4234-8234-123456789abc' } }; const publish = await credentials.prepareOAuthLogin(label, signal); await publish(credential); f.host.abort(); return credential; }); await f.handler.execute('/login anthropic --issuer anthropic'); expect(f.errors).toEqual(['Command failed.']); expect(f.handler.getContext().providers.has('anthropic')).toBe(false); expect((await f.credentials.resolve('anthropic', { env: {}, subscriptionProvider: 'anthropic' }))?.credential.type).toBe('oauth'); expect(f.fetch).not.toHaveBeenCalled();
+});
+it('retires the interactive Anthropic listener/held token body with the caller without late publication', async () => {
+  const f = await anthropicFixture(true), pending = f.handler.execute('/login anthropic --issuer anthropic'); await f.ready; f.caller.abort(); await pending; await f.callback(); expect(f.errors).toEqual(['Command failed.']); expect(f.cancellations()).toBe(1); expect(f.handler.getContext().providers.has('anthropic')).toBe(false); expect(await f.credentials.resolve('anthropic', { env: {}, subscriptionProvider: 'anthropic' })).toBeUndefined();
+});
+it('does not borrow interactive TUI input for Anthropic copy-code or device methods', async () => {
+  const f = await fixture(); for (const method of ['copy-code', 'device']) await f.handler.execute('/login anthropic --issuer anthropic --method ' + method); expect(f.messages.every(message => message.includes('Usage:'))).toBe(true); expect(f.fetch).not.toHaveBeenCalled(); expect(f.credentials.list()).toEqual([]);
+});
 async function openrouterFixture(hold = false) {
   const realFetch = globalThis.fetch, f = await fixture(); for (const name of ['OPENROUTER_API_KEY', 'AI_HARNESS_OPENROUTER_API_KEY', 'AI_HARNESS_OPENROUTER_API_KEY_COMMAND']) vi.stubEnv(name, undefined);
   let entered!: () => void, cancellation = 0, callback: Promise<unknown> | undefined; const ready = new Promise<void>(resolve => { entered = resolve; });

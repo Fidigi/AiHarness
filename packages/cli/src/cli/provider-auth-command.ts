@@ -9,13 +9,14 @@ import { terminalText } from '../tui/terminal-text.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
 import { loginKimiCoding } from '../security/kimi-login.js';
+import { loginAnthropic } from '../security/anthropic-login.js';
 import { loginOpenRouter, readOpenRouterRedirect } from '../security/openrouter-login.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
-  login <provider> [--timeout <1..300>] [--issuer kimi-coding|github-copilot|openai-codex|radius|openrouter]
+  login <provider> [--timeout <1..300>] [--issuer kimi-coding|github-copilot|openai-codex|radius|openrouter|anthropic]
                                      Explicit OAuth login; provider is the storage label
-        [--method device|browser]     Codex/Radius default device; OpenRouter browser only
+        [--method device|browser|copy-code] Codex/Radius default device; OpenRouter browser only
   logout <provider>                  Delete local stored credentials; no remote revocation
   -h, --help                         Show help without startup
 Login/logout require AI_HARNESS_MASTER_KEY and the independent encrypted credential store.
@@ -27,6 +28,8 @@ Device endpoints: AI_HARNESS_OAUTH_<PROVIDER>_{DEVICE_URL,TOKEN_URL,CLIENT_ID,SC
 Codex/Radius browser PKCE uses 127.0.0.1 ports1455/1456 respectively; no automatic opener.
 --issuer openrouter uses fixed OpenRouter PKCE/ephemeral loopback and returns a permanent API key.
 Standalone OpenRouter also accepts a full callback on hidden stdin (no history); EOF keeps browser callback available.
+--issuer anthropic defaults to browser on preferred loopback53692 (free-port fallback if occupied).
+Anthropic --method copy-code uses hidden stdin for the displayed code/optional #state; no opener.
 Login does not select a provider/model or change account model policies.
 Authorization instructions go to stderr; tokens and device codes are never printed.
 Exits: 0 success/help, 2 usage, 1 operation failure, 124 deadline, 130 cancellation.
@@ -45,7 +48,7 @@ export async function loadTopLevelCredentialService(cwd: string, redactor: Crede
 
 class AuthUsageError extends Error {}
 
-function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter'; method?: 'device' | 'browser'; json: boolean; timeout: number; help: boolean } {
+function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter' | 'anthropic'; method?: 'device' | 'browser' | 'copy-code'; json: boolean; timeout: number; help: boolean } {
   if (args.length > 16 || args.some(arg => Buffer.byteLength(arg) > 4096 || /[\x00-\x1f\x7f-\x9f]/u.test(arg))) throw new AuthUsageError();
   const action = args[0] ?? 'help';
   if (['help', '-h', '--help'].includes(action)) {
@@ -54,8 +57,8 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
   }
   if (!['list', 'login', 'logout'].includes(action)) throw new AuthUsageError();
   let provider: string | undefined;
-  let issuer: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter' | undefined;
-  let method: 'device' | 'browser' | undefined;
+  let issuer: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter' | 'anthropic' | undefined;
+  let method: 'device' | 'browser' | 'copy-code' | undefined;
   let json = false, timeout = 300, help = false;
   const seen = new Set<string>();
   for (let i = 1; i < args.length; i++) {
@@ -77,11 +80,11 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
         timeout = Number(value);
       } else if (key === '--method' && action === 'login') {
         const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
-        if (value !== 'device' && value !== 'browser') throw new AuthUsageError();
+        if (value !== 'device' && value !== 'browser' && value !== 'copy-code') throw new AuthUsageError();
         method = value;
       } else if (key === '--issuer' && action === 'login') {
         const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
-        if (value !== 'kimi-coding' && value !== 'github-copilot' && value !== 'openai-codex' && value !== 'radius' && value !== 'openrouter') throw new AuthUsageError();
+        if (value !== 'kimi-coding' && value !== 'github-copilot' && value !== 'openai-codex' && value !== 'radius' && value !== 'openrouter' && value !== 'anthropic') throw new AuthUsageError();
         issuer = value;
       } else throw new AuthUsageError();
     } else {
@@ -90,7 +93,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
     }
   }
   if (!help && action !== 'list' && !provider) throw new AuthUsageError();
-  if (method && issuer !== 'openai-codex' && issuer !== 'radius' && !(issuer === 'openrouter' && method === 'browser')) throw new AuthUsageError();
+  if (method && !((issuer === 'openai-codex' || issuer === 'radius') && (method === 'device' || method === 'browser') || issuer === 'openrouter' && method === 'browser' || issuer === 'anthropic' && (method === 'browser' || method === 'copy-code'))) throw new AuthUsageError();
   return { action, provider, issuer, method, json, timeout, help };
 }
 
@@ -129,11 +132,18 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       process.stdout.write('Stored provider credentials removed (environment/command credentials are unchanged).\n');
       return 0;
     }
-    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius' || parsed.issuer === 'kimi-coding' || parsed.issuer === 'openrouter') {
+    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius' || parsed.issuer === 'kimi-coding' || parsed.issuer === 'openrouter' || parsed.issuer === 'anthropic') {
       process.on('SIGINT', cancel);
       process.on('SIGTERM', cancel);
       timer = setTimeout(expire, parsed.timeout * 1000);
-      if (parsed.issuer === 'openrouter') await loginOpenRouter(service, parsed.provider!, uri => {
+      if (parsed.issuer === 'anthropic') await loginAnthropic(service, parsed.provider!, parsed.method === 'copy-code' ? 'copy-code' : 'browser', uri => {
+        process.stderr.write(`Authorize at ${uri}\n`);
+      }, controller.signal, signal => {
+        const input = readOpenRouterRedirect(signal, cancel);
+        process.stderr.write('Paste the Anthropic code (hidden input; optional #state).\n');
+        return input;
+      });
+      else if (parsed.issuer === 'openrouter') await loginOpenRouter(service, parsed.provider!, uri => {
         process.stderr.write(`Authorize at ${uri}\n`);
       }, controller.signal, signal => {
         const input = readOpenRouterRedirect(signal, cancel);
@@ -143,7 +153,7 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       else if (parsed.issuer === 'kimi-coding') await loginKimiCoding(service, parsed.provider!, (uri, code) => {
         process.stderr.write(`Authorize at ${uri}\nUser code: ${code}\n`);
       }, controller.signal, process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST);
-      else if (parsed.issuer === 'radius') await loginRadius(service, parsed.provider!, parsed.method ?? 'device', (uri, code) => {
+      else if (parsed.issuer === 'radius') await loginRadius(service, parsed.provider!, parsed.method === 'browser' ? 'browser' : 'device', (uri, code) => {
         process.stderr.write(`Authorize at ${uri}\n${code === undefined ? '' : `User code: ${code}\n`}`);
       }, controller.signal, process.env.RADIUS_GATEWAY);
       else if (parsed.method === 'browser') await loginOpenAICodexBrowser(service, parsed.provider!, uri => {

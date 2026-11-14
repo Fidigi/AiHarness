@@ -155,6 +155,9 @@ describe('actual top-level provider auth CLI', () => {
       ['login', 'team-code', '--method=browser'], ['login', 'team-code', '--issuer=github-copilot', '--method=browser'],
       ['login', 'team-code', '--issuer=openai-codex', '--method=other'], ['login', 'team-code', '--issuer=openai-codex', '--method=browser', '--method=device'],
       ['login', 'team-router', '--issuer=openrouter', '--method=device'],
+      ['login', 'team-claude', '--issuer=anthropic', '--method=device'],
+      ['login', 'team-code', '--issuer=openai-codex', '--method=copy-code'],
+      ['login', 'team-radius', '--issuer=radius', '--method=copy-code'],
       ['list', '--issuer=kimi-coding'], ['logout', 'openai', '--json'], ['list', '--extension', 'evil.mjs'], ['help', '--bad']]) {
       const result = await invoke(['auth', ...args]);
       expect(result).toMatchObject({ code: 2, signal: null, stdout: '' });

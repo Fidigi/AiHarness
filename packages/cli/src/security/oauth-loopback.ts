@@ -18,8 +18,13 @@ export async function completeOpenRouterLoopback<T>(createFlow: (callbackUrl: st
   const nonce = randomUUID();
   return runLoopback(createFlow, port => `http://127.0.0.1:${port}/oauth/callback/${nonce}`, 0, 'OpenRouter', false, instructions, signal, publish);
 }
+/** Anthropic owns its preferred loopback port, with a free-port fallback only for a bind conflict. */
+export async function completeAnthropicLoopback<T>(createFlow: (callbackUrl: string) => BrowserLogin<T>,
+  instructions: (url: string) => void, signal: AbortSignal, publish: (credential: T) => Promise<unknown>): Promise<T> {
+  return runLoopback(createFlow, port => `http://localhost:${port}/callback`, 53692, 'Anthropic', true, instructions, signal, publish, undefined, 0);
+}
 async function runLoopback<T>(createFlow: (callbackUrl: string) => BrowserLogin<T>, callbackUrl: (port: number) => string, port: number, provider: string, stateRequired: boolean,
-  instructions: (url: string) => void, signal: AbortSignal, publish: (credential: T) => Promise<unknown>, flow?: BrowserLogin<T>): Promise<T> {
+  instructions: (url: string) => void, signal: AbortSignal, publish: (credential: T) => Promise<unknown>, flow?: BrowserLogin<T>, fallbackPort?: number): Promise<T> {
   let redirect: URL | undefined, state: string | null = null;
   let resolve!: (value: T) => void, reject!: (error: Error) => void;
   const callback = new Promise<T>((done, fail) => { resolve = done; reject = fail; }); void callback.catch(() => undefined);
@@ -50,7 +55,9 @@ async function runLoopback<T>(createFlow: (callbackUrl: string) => BrowserLogin<
   signal.addEventListener('abort', abort, { once: true });
   try {
     signal.throwIfAborted();
-    await Promise.race([new Promise<void>((done, fail) => { server.once('error', fail); server.listen({ host: '127.0.0.1', port, signal }, done); }), callback]);
+    const listen = (requestedPort: number) => Promise.race([new Promise<void>((done, fail) => { server.once('error', fail); server.listen({ host: '127.0.0.1', port: requestedPort, signal }, done); }), callback]);
+    try { await listen(port); }
+    catch (error) { if (fallbackPort === undefined || signal.aborted || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error; await listen(fallbackPort); }
     signal.throwIfAborted(); const address = server.address(); if (!address || typeof address === 'string') throw new Error('Invalid OAuth listener.');
     redirect = new URL(callbackUrl(address.port)); flow ??= createFlow(redirect.href); state = new URL(flow.authorizationUrl).searchParams.get('state');
     signal.throwIfAborted(); instructions(flow.authorizationUrl);
