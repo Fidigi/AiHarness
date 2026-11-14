@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
+import { KIMI_CODING_OAUTH_CLIENT_ID, getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthIdentity } from './kimi-coding-oauth.js';
 import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
 import { openAICodexAccountId, refreshOpenAICodexToken } from './openai-codex-oauth.js';
 import { refreshRadiusToken, validRadiusOAuthIdentity, getRadiusOAuthConfig, type RadiusOAuthIdentity } from './radius-oauth.js';
@@ -55,7 +55,7 @@ export interface ProviderOAuthCredential {
   } | {
     provider: 'openai-codex';
     accountId: string;
-  } | RadiusOAuthIdentity;
+  } | RadiusOAuthIdentity | KimiCodingOAuthIdentity;
 }
 
 export type ProviderCredential = ProviderApiKeyCredential | ProviderOAuthCredential;
@@ -85,9 +85,11 @@ export interface ProviderOAuthRefreshConfig {
 export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
-  subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius';
+  subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding';
   /** An explicit Radius gateway must match the stored issuer before any refresh I/O. */
   radiusGateway?: string;
+  /** An explicit Kimi issuer must match the persisted realm before refresh I/O. */
+  kimiOAuthHost?: string;
   cwd?: string;
   signal?: AbortSignal;
   commandTimeoutMs?: number;
@@ -194,6 +196,10 @@ function validateCredential(value: unknown): ProviderCredential {
         if (accountId !== subscription.accountId) invalid();
         credential.subscription = { provider: 'openai-codex', accountId };
       } catch { invalid(); }
+    } else if (subscription?.provider === 'kimi-coding') {
+      if (!validKimiCodingOAuthIdentity(subscription) || !credential.refreshToken || /\s/u.test(credential.refreshToken)
+        || /\s/u.test(credential.accessToken) || credential.expiresAt === undefined) invalid();
+      credential.subscription = { provider: 'kimi-coding', oauthHost: subscription.oauthHost, grantId: subscription.grantId };
     } else if (subscription?.provider === 'radius') {
       if (!validRadiusOAuthIdentity(subscription) || !credential.refreshToken || /\s/u.test(credential.refreshToken)
         || /\s/u.test(credential.accessToken) || credential.expiresAt === undefined) invalid();
@@ -1010,6 +1016,8 @@ export class ProviderCredentialService {
     if (subscriptionProvider !== options.subscriptionProvider) return undefined;
     if (credential.type === 'oauth' && credential.subscription?.provider === 'radius' && options.radiusGateway !== undefined
       && getRadiusOAuthConfig(options.radiusGateway).gateway !== credential.subscription.gateway) return undefined;
+    if (credential.type === 'oauth' && credential.subscription?.provider === 'kimi-coding' && options.kimiOAuthHost !== undefined
+      && getKimiCodingOAuthConfig(options.kimiOAuthHost).tokenUrl !== getKimiCodingOAuthConfig(credential.subscription.oauthHost).tokenUrl) return undefined;
     const now = options.now ?? Date.now();
     if (credential.type !== 'oauth' || credential.expiresAt === undefined || credential.expiresAt > now + 60_000) {
       return { credential: structuredClone(credential), descriptor: descriptor(provider, credential, source) };
@@ -1084,37 +1092,52 @@ export class ProviderCredentialService {
         throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
       }
     }
-    const config = safeOAuthConfig(rawConfig!);
+    const config = safeOAuthConfig(current.subscription?.provider === 'kimi-coding' ? getKimiCodingOAuthConfig(current.subscription.oauthHost) : rawConfig!);
     this.redactor.add(config.clientSecret);
-    let response: Response;
-    try {
-      response = await abortable((options.fetcher ?? fetch)(config.tokenUrl, {
-        method: 'POST',
-        redirect: 'manual',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: current.refreshToken!,
-          client_id: config.clientId,
-          ...(config.clientSecret ? { client_secret: config.clientSecret } : {}),
-        }),
-        signal,
-      }), signal);
-    } catch (error) {
-      if (options.signal?.aborted) throw error;
-      throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
-    }
-    let body: Record<string, unknown>;
-    try {
-      body = await boundedJson(response, signal);
-    } catch (error) {
-      if (options.signal?.aborted) throw options.signal.reason ?? error;
-      if (error instanceof ProviderCredentialError) throw error;
-      throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
-    }
-    if (config.responseProfile === 'kimi-coding') {
-      this.redactor.add(typeof body.access_token === 'string' ? body.access_token : undefined);
-      this.redactor.add(typeof body.refresh_token === 'string' ? body.refresh_token : undefined);
+    const nativeKimi = current.subscription?.provider === 'kimi-coding';
+    let response!: Response, body!: Record<string, unknown>;
+    for (let attempt = 0; attempt < (nativeKimi ? 4 : 1); attempt++) {
+      if (attempt > 0) {
+        let timer!: ReturnType<typeof setTimeout>;
+        try { await abortable(new Promise<void>(resolve => { timer = setTimeout(resolve, 1000 * 2 ** (attempt - 1)); }), signal, () => clearTimeout(timer)); }
+        catch (error) { if (options.signal?.aborted) throw error; throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.'); }
+      }
+      try {
+        if (nativeKimi) signal.throwIfAborted();
+        const pending = (options.fetcher ?? fetch)(config.tokenUrl, {
+          method: 'POST',
+          redirect: 'manual',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: current.refreshToken!,
+            client_id: config.clientId,
+            ...(config.clientSecret ? { client_secret: config.clientSecret } : {}),
+          }),
+          signal,
+        });
+        let owned: Response | undefined, abandoned = false;
+        const abandon = () => { if (owned && !abandoned) { abandoned = true; void owned.body?.cancel('kimi-refresh-abandoned').catch(() => undefined); } };
+        const tracked = nativeKimi ? pending.then(value => { owned = value; if (signal.aborted) abandon(); return value; }) : pending;
+        response = await abortable(tracked, signal, nativeKimi ? abandon : undefined);
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        if (nativeKimi && !signal.aborted && attempt < 3) continue;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+      try {
+        body = await boundedJson(response, signal);
+      } catch (error) {
+        if (options.signal?.aborted) throw options.signal.reason ?? error;
+        if (error instanceof ProviderCredentialError) throw error;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+      if (config.responseProfile === 'kimi-coding') {
+        this.redactor.add(typeof body.access_token === 'string' ? body.access_token : undefined);
+        this.redactor.add(typeof body.refresh_token === 'string' ? body.refresh_token : undefined);
+      }
+      if (nativeKimi && attempt < 3 && (response.status === 429 || response.status >= 500) && body.error !== 'invalid_grant') continue;
+      break;
     }
     if (!response.ok || typeof body.access_token !== 'string' || !body.access_token) {
       throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
@@ -1136,6 +1159,7 @@ export class ProviderCredentialService {
         ? body.refresh_token : current.refreshToken,
       ...(expiresIn === undefined ? {} : { expiresAt: (options.now ?? Date.now()) + Math.floor(expiresIn * 1_000) }),
       ...(typeof body.token_type === 'string' ? { tokenType: body.token_type } : current.tokenType ? { tokenType: current.tokenType } : {}),
+      ...(current.subscription?.provider === 'kimi-coding' ? { subscription: current.subscription } : {}),
     });
     if (refreshed.type !== 'oauth') {
       throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');

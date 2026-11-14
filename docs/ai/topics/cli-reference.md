@@ -44,7 +44,7 @@ packages/cli/src/index.ts
 | `packages/cli/src/cli/model-list.ts` | Configured-provider `--list-models` metadata table and fuzzy filtering |
 | `packages/cli/src/cli/package-command.ts` | Strict top-level package parsing, scopes, filters and Core service adapter |
 | `packages/cli/src/cli/{provider-auth-command,export-command}.ts` | Strict standalone credential metadata/device login/local logout and trusted explicit session export before agent startup |
-| `packages/cli/src/security/oauth-device.ts`, `packages/core/src/providers/kimi-coding-oauth.ts` | Bounded device grant and explicit frozen Kimi public-client configuration, independent of the credential storage label |
+| `packages/cli/src/security/oauth-device.ts`, `packages/core/src/providers/{oauth-device,kimi-coding-oauth}.ts` | CLI environment/re-export adapter over the Core bounded device client; legacy explicit Kimi client selection stays independent of storage label. Opt-in native issuer SDK is separate from current CLI binding |
 | `packages/cli/src/cli/{mcp-command,mcp-oauth-command}.ts` | Thin top-level configuration/hidden/per-tool exposure and explicit OAuth login/logout adapters over Core MCP contracts |
 | `packages/core/src/mcp/{session-host,oauth-provider-factory,oauth,oauth-flow}.ts` | Persistent per-session stdio/HTTP connections, passive encrypted OAuth use/refresh, detached explicit OAuth flows, and direct tool declarations/invocation shared by CLI, RPC and Web |
 | `packages/cli/src/providers/configured-providers.ts` | Shared interactive/print/JSON/RPC provider environment and startup model resolution |
