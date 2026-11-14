@@ -74,6 +74,7 @@ import { anthropicOAuthHistory, sealAnthropicOAuthCall, sealAnthropicOAuthRespon
 import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthCredential, type KimiCodingOAuthCredentialSource } from './kimi-coding-oauth.js';
 import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
+import { vertexApiKeyBase } from './vertex-config.js';
 import { validXaiOAuthIdentity, type XaiOAuthCredential, type XaiOAuthCredentialSource } from './xai-oauth.js';
 import { xaiOAuthHistory, sealXaiOAuthCall, sealXaiOAuthResponse, withoutXaiOAuthReplay } from './xai-oauth-replay.js';
 import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
@@ -4956,17 +4957,21 @@ export class GeminiProvider extends AiProvider {
   }
 }
 
-/** Google Vertex AI variant using an OAuth access token. */
+/** Google Vertex AI with existing Bearer transport or explicit Cloud API-key mode. */
 export class VertexGeminiProvider extends GeminiProvider {
   override getModelApi(): string { return 'google-vertex'; }
 
   constructor(config: ProviderConfig) {
-    const project = String(config.project || process.env.GOOGLE_CLOUD_PROJECT || '');
+    if (config.vertexAuthMode !== undefined && !['api-key', 'bearer'].includes(config.vertexAuthMode)) throw new Error('Invalid Vertex authentication mode.');
+    const project = String(config.project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '');
     const location = String(config.location || process.env.GOOGLE_CLOUD_LOCATION || 'us-central1');
-    const baseUrl = config.baseUrl
+    const baseUrl = config.vertexAuthMode === 'api-key' ? vertexApiKeyBase(config.baseUrl) : config.baseUrl
       || `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google`;
     super({ ...config, type: ProviderType.VERTEX, baseUrl });
   }
+
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return (this.getPublishedModels() ?? []).map(model => model.id); }
 
   protected endpoint(method: 'generateContent' | 'streamGenerateContent', requestedModel?: string): string {
     const model = String(requestedModel || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
@@ -4975,6 +4980,11 @@ export class VertexGeminiProvider extends GeminiProvider {
   }
 
   protected requestHeaders(model?: string): Record<string, string> {
+    if (this.config.vertexAuthMode === 'api-key') {
+      const headers = new Headers(configuredHeaders(this.config));
+      headers.delete('authorization'); headers.set('Content-Type', 'application/json'); headers.set('x-goog-api-key', String(this.config.apiKey));
+      return Object.fromEntries(headers);
+    }
     return this.nativeRequestHeaders(model) ?? {
       ...configuredHeaders(this.config),
       'Content-Type': 'application/json',

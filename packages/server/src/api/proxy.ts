@@ -33,6 +33,7 @@ import {
   streamProviderTurn,
   readBoundedResourceText,
   VertexGeminiProvider,
+  vertexEnvironmentConfig,
 } from '@ai-harness/core';
 import type {
   AgentProviderNetworkSettings,
@@ -496,14 +497,9 @@ export class AiProxyServer {
       this.azureProxy = new CoreProviderProxy(provider);
       this.agentProviders.set('azure', provider);
     }
-    if (process.env.GOOGLE_VERTEX_ACCESS_TOKEN && process.env.GOOGLE_CLOUD_PROJECT) {
-      const provider = new VertexGeminiProvider({
-        ...network,
-        type: ProviderType.VERTEX,
-        apiKey: process.env.GOOGLE_VERTEX_ACCESS_TOKEN,
-        project: process.env.GOOGLE_CLOUD_PROJECT,
-        location: process.env.GOOGLE_CLOUD_LOCATION,
-      });
+    const vertex = vertexEnvironmentConfig(process.env);
+    if (vertex) {
+      const provider = new VertexGeminiProvider({ ...network, ...vertex });
       this.vertexProxy = new CoreProviderProxy(provider);
       this.agentProviders.set('vertex', provider);
     }
@@ -577,7 +573,7 @@ export class AiProxyServer {
   hasAnthropicFederation(): boolean { return !!this.anthropicWorkload; }
 
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
-  setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key'): void {
+  setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key', vertexAuthMode: 'api-key' | 'bearer' = 'bearer'): void {
     if (apiKey) this.redactor.add(apiKey);
     const bedrockCredential = type === 'bedrock' ? bedrockCredentialConfig(apiKey) : undefined;
     if (type === 'bedrock' && !bedrockCredential) throw new Error('Invalid provider credential.');
@@ -611,7 +607,7 @@ export class AiProxyServer {
       this.azureProxy = new CoreProviderProxy(provider);
     } else if (type === 'vertex') {
       provider = new VertexGeminiProvider({
-        ...network, type: ProviderType.VERTEX, apiKey, baseUrl, model: model || 'gemini-2.0-flash',
+        ...network, type: ProviderType.VERTEX, apiKey, baseUrl, model: model || 'gemini-2.0-flash', vertexAuthMode,
       });
       this.vertexProxy = new CoreProviderProxy(provider);
     } else if (type === 'bedrock') {

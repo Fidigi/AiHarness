@@ -12,7 +12,7 @@ const BUILTIN_ENVIRONMENT: Record<string, string[]> = {
   anthropic: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN'],
   google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   azure: ['AZURE_OPENAI_API_KEY'],
-  vertex: ['GOOGLE_VERTEX_ACCESS_TOKEN'],
+  vertex: ['GOOGLE_VERTEX_ACCESS_TOKEN', 'GOOGLE_CLOUD_API_KEY'],
   bedrock: ['AWS_ACCESS_KEY_ID'],
   local: ['LOCAL_BASE_URL', 'LLAMA_BASE_URL'],
   mock: [],
@@ -48,16 +48,17 @@ export function createProviderRegistryRouter(
         .map(provider => {
           const workload = provider.type === 'anthropic' && proxy.hasAnthropicFederation();
           const environmentVariable = BUILTIN_ENVIRONMENT[provider.type]?.find(name => Boolean(process.env[name])) ?? (workload ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
+          const cloudKey = provider.type === 'vertex' && environmentVariable === 'GOOGLE_CLOUD_API_KEY';
           return {
             type: provider.type,
             name: provider.type,
             configured: provider.configured,
             connected: provider.configured,
-            method: workload ? 'environment' : provider.type === 'mock' || provider.type === 'local' && !environmentVariable
+            method: workload || cloudKey ? 'environment' : provider.type === 'mock' || provider.type === 'local' && !environmentVariable
               ? 'none' : provider.type === 'vertex' && environmentVariable === 'GOOGLE_VERTEX_ACCESS_TOKEN'
                 || provider.type === 'github-copilot' || provider.type === 'openai-codex' || oauth.isSupported(provider.type) ? 'oauth' : environmentVariable ? 'environment' : 'api-key',
             ...(environmentVariable ? { environmentVariable } : {}),
-            reconnectSupported: provider.type !== 'mock' && !workload,
+            reconnectSupported: provider.type !== 'mock' && !workload && !cloudKey,
             disconnectSupported: provider.type !== 'mock' && !environmentVariable,
             ...(proxy.getUsage(provider.type) ? { usage: proxy.getUsage(provider.type) } : {}),
           };

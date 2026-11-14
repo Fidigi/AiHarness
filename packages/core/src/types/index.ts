@@ -115,6 +115,8 @@ export interface ProviderConfig {
   apiKey?: string;
   /** Explicit Kimi Coding credential transport; absent keeps API-key authentication. */
   kimiAuthMode?: 'api-key' | 'oauth';
+  /** Vertex Cloud API key is explicit; absence preserves the existing Bearer transport. */
+  vertexAuthMode?: 'api-key' | 'bearer';
   model?: string;
   baseUrl?: string;
   /** Explicit Azure protocol or native per-model v1 dispatch; absence preserves legacy endpoints and recognizes /openai/v1. */

@@ -1,0 +1,139 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "a6879f6",
+  "scope": "Explicit Vertex Cloud API-key SDK/trusted environment CLI/Server composition plus honest passive inventory; preserve legacy Bearer, ADC/AWS remain separate",
+  "reference": {
+    "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "provider": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/providers/google-vertex.ts",
+    "api": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/google-vertex.ts",
+    "installedReadOnlySdk": {
+      "name": "@google/genai",
+      "version": "2.21.0",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@google/genai/dist/node/index.mjs",
+      "sha256": "a5775355f9271057cd1e089dd2bce71c5996a88d49da9cd0ed6f183e5905cdb8"
+    },
+    "meaning": "Existing installed exact pinned2.21.0 read only for NodeAuth x-goog-api-key, Express/global base, collection resource scope and version detection. No acquisition/install/dependency/new SDK reference capture or SDK runtime qualification."
+  },
+  "implementation": "ProviderConfig.vertexAuthMode api-key|bearer is explicit; absent remains existing Bearer and never guesses from key prefix. API-key default global v1/publishers/google requires no project/location/ADC. Custom collection roots preserve encoded prefix, add v1 when absent and publishers/google; already-shaped resource bases are accepted idempotently for existing Core configuration/ephemeral reconstruction (explicit local compatibility, not raw SDK collection-root equivalence). Key headers remove Authorization/use x-goog-api-key; existing Bearer resource bases/codec/native13 policy unchanged. Vertex canDiscoverModels=false/getAvailableModels returns passive declarations, no inherited Gemini credential-bearing query or account access claim. Shared public vertexEnvironmentConfig captures old Bearer alias priority, ignores empty alias, Cloud API-key env or explicit old credential; GCLOUD_PROJECT fallback/custom base/model retained. CLI factory/insertion/network/invocation modes and Server constructor/startup/setter preserve provenance and configured model/base; ordinary stored tokens stay Bearer, no migration/key-mode store/UI selector added. Server alias/lock metadata recognizes Cloud key as read-only noninteractive environment; Test409, no new Web component/browser claim.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true runtime/strict; synthetic temporary HOME/agent/encrypted stores/JSONL and mocks/loopback only. No real account/personal credential store/live switch/protected-container operation/dependency or local generated edit.",
+    "image": "ai-harness:mod01-vertex-key-owned",
+    "imageId": "sha256:ddd9ea6c371123f6f029ba00af5f3a03e36ef76f2fcf008125bd33d3f8787485",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-vertex-key-owned; four builds/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-vertex-key/build-owned-r5.log",
+    "strict": {
+      "passed": true,
+      "roots": 5,
+      "config": "/tmp/mod01-vertex-key/strict.json",
+      "log": "/tmp/mod01-vertex-key/final.log"
+    },
+    "runtime": {
+      "passed": 68,
+      "failed": 0,
+      "new": 13,
+      "log": "/tmp/mod01-vertex-key/final.log",
+      "files": [
+        "packages/core/src/providers/vertex-auth.test.ts",
+        "packages/cli/src/providers/vertex-auth.test.ts",
+        "packages/cli/src/cli/vertex-auth-process.test.ts",
+        "packages/server/src/api/vertex-auth-http.test.ts",
+        "packages/cli/src/providers/configured-providers.test.ts",
+        "packages/core/src/providers/google-profiles.test.ts"
+      ],
+      "meaning": "63 across five new/source-composition roots plus five filtered old Vertex controls/246 unselected. New Core5 mode/global/no project/SSE+JSON/base64 typed replay, legacy Bearer vs custom key base, versioned/resource-root idempotence/unsafe URL refusal, explicit provenance/empty alias/no ADC/invalid mode; CLI resolver2 env/old stored/factory/network/invocation; emitted process3 below; actual HTTP3 below. Existing CLI configured-provider50 and Vertex5 declaration/private identity/physical model-usage/signature/buffered withdrawal controls reused, old owning Google/Vertex file runtime-only. No thirteen-model×host/MOD-03 campaign."
+    },
+    "actualCli": {
+      "cases": 3,
+      "includedInRuntime": true,
+      "file": "packages/cli/src/cli/vertex-auth-process.test.ts",
+      "meaning": "Actual emitted print/JSON/RPC Cloud-key env with no project, zero-wire listing, native G SSE at encoded versioned publisher collection path/x-goog-api-key/no Bearer or key query, signed new-process journal restart. Six successful vendor loopback requests across modes/two committed10-token responses per mode, secret absent public output/journal/private signature absent public output. No CLI ADC or explicit encrypted Cloud-key auth-kind migration claim."
+    },
+    "actualHttp": {
+      "cases": 3,
+      "includedInRuntime": true,
+      "file": "packages/server/src/api/vertex-auth-http.test.ts",
+      "meaning": "Real builtin agent HTTP for Cloud env key/no project, old Bearer env precedence despite lower-priority Cloud key, encrypted old stored Bearer. Same opaque text does not select mode. Configured proxy prefix/model survive startup hydration, correct key-vs-Bearer header, passive auth and Test409 no vendor wire, env disconnect409; Cloud pointer method environment/noninteractive. Three successful synthetic vendor SSE requests/three committed10-token assistants, public metadata/journal secret-free. No new Settings interaction required; existing read-only metadata fields reused."
+    },
+    "compiledPublicSdk": {
+      "passed": true,
+      "script": "/tmp/mod01-vertex-key/emitted-probe.mjs",
+      "log": "/tmp/mod01-vertex-key/final.log",
+      "meaning": "Compiled root public helper/config mode/exact provider, empty legacy alias fallback/global collection/static metadata with zero discovery, versioned and already-shaped proxy roots idempotent across three direct G requests. Not installed/global/account certificate."
+    },
+    "counterfactual": {
+      "failed": 11,
+      "passed": 1,
+      "image": "ai-harness:mod01-xai-server-owned",
+      "log": "/tmp/mod01-vertex-key/red.log",
+      "meaning": "Old source lacks explicit auth mode/env helper/hints and passive discovery; missing-entry/URL/header/metadata/model failures are bounded. Later assertions unreached are not extra REDs."
+    },
+    "additionalReds": [
+      {
+        "failed": 1,
+        "unselected": 3,
+        "log": "/tmp/mod01-vertex-key/empty-alias-red.log",
+        "meaning": "Environment helper initially used nullish fallback for empty legacy alias, suppressing Cloud key; now treats empty env alias as absent while explicit credential semantics stay unchanged."
+      },
+      {
+        "failed": 1,
+        "unselected": 3,
+        "log": "/tmp/mod01-vertex-key/proxy-path-red.log",
+        "meaning": "Stronger pinned collection-root oracle exposes initial API-key custom-base pre-model interpretation. Native API-key normalization now adds version/publisher path; legacy Bearer base unchanged."
+      }
+    ],
+    "retainedFailures": [
+      {
+        "passed": 7,
+        "failed": 5,
+        "log": "/tmp/mod01-vertex-key/focused.log",
+        "meaning": "Invalid synthetic plain thought signatures fail native TYPE_BYTES base64 retention in two Core cases and cause fixture500/retry/three instead of two calls in three CLI cases. Fixtures now use valid base64; no product replay/assertion/deadline/retry change."
+      },
+      {
+        "exit": 2,
+        "log": "/tmp/mod01-vertex-key/focused-r2.log",
+        "meaning": "Strict fixture used unsupported top-level AgentSettings.requestTimeoutMs; corrected to existing retry.provider.timeoutMs and explicit network assertion, no product timeout relaxation."
+      },
+      {
+        "exit": 134,
+        "log": "/tmp/mod01-vertex-key/owned-r3.log",
+        "meaning": "After successful strict stage, Vitest prints RUN then Aborted (core dumped), no test results/inner phase/PID/cause. OPEN/nonaccepted; no flag/timeout change or diagnosis. Later final source qualification adds normalizer guards/compiled probe and does not repair or erase this gate."
+      }
+    ],
+    "earlierPasses": "focused-r3.log12 after fixture corrections; owned.log67 before empty-alias fix; owned-r2.log67 after empty-alias fix/before collection normalization; final.log68+compiled1 only final credit, no double counting. Requested provider-registry-routes.test.ts produced no cases in earlier selection and has no credit; actual new HTTP cases own that boundary.",
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 8,
+      "imageWitness": "/tmp/mod01-vertex-key/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-vertex-key/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-vertex-key/runtime-witness.diff",
+      "meaning": "Eight changed production inputs match final owned image; final tests source-built, strict/probe only injected. Earlier test-only overlays/source versions explicit, no whole-image/dependency attestation."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-vertex-key/docs.log"
+    },
+    "limits": "Trusted environment Cloud key and explicit SDK flag only, not new encrypted stored Cloud-key mode/interactive auth migration. Existing stored/command/legacy invocation credentials remain old Bearer unless a configured explicit mode is carried. No ADC/file/metadata chain, AWS chain/region/default/tool/media/04b/full-profile/account/entitlement/invoice/new browser/installed/production/global/MOD-03/historical repair/acceptance extension. Native abort remains nonaccepted regardless final PASS."
+  },
+  "sourceSha256": {
+    "packages/core/src/types/index.ts": "2b67ca08574f65253aae3998bcdb8926f19f8e7b65100196aa561b13a73f1c46",
+    "packages/core/src/index.ts": "ff02ec165ace071bd7a3645eba67d9808be43c748c3b106981113581ed5a93ce",
+    "packages/core/src/providers/index.ts": "1c8678367215475b04e1f5ea8a05d2cbf81581f51b9621fb040ca25169915995",
+    "packages/core/src/providers/vertex-config.ts": "23d7990c9dd17de2717cd6d7f42f2362ab133091aaa155c65728386ceb1cc161",
+    "packages/cli/src/providers/configured-providers.ts": "fa5cb1426f9b21483f90b4429a0e7e9a9d818d0990baa85ecb3d07ffc45f3680",
+    "packages/server/src/index.ts": "0e598b7af3c030456a709f29eff482151281c2ea33a922d6a16283f03ed118e6",
+    "packages/server/src/api/proxy.ts": "087ab9064114b907d1993ee9207f943c7b76eb072493df2e1c8e1ecb973be8b6",
+    "packages/server/src/api/provider-registry-routes.ts": "b4346a930264fac00b0fad1b963b2c8b33f0ae7ae0f9fe9f3e9a9e4363d814a2",
+    "packages/core/src/providers/vertex-auth.test.ts": "6ac8f26c04ec3610e8b7fb39331b681a11551a890daf02c753ba2b9ee79b61e3",
+    "packages/cli/src/providers/vertex-auth.test.ts": "b35c73d546529501f0c63099dbfaaf5969ef51fc4ab1952e71f7d77a2fa51d4b",
+    "packages/cli/src/cli/vertex-auth-process.test.ts": "0ec809cf256a818bae09de5e33b3edb4aebec6b9b0e9c685e8b4e9c068094ced",
+    "packages/server/src/api/vertex-auth-http.test.ts": "2754742cc8c681115ff09ad9f890f3146cafc0f99f5666fa5339e62c111d5cff"
+  },
+  "remaining": [
+    "File-backed Vertex ADC/service-account authority and actual trusted host composition; assess any stored Cloud-key mode requirement without reinterpreting legacy tokens",
+    "AWS live credential-chain/profile/ECS/web identity and region/endpoint policy",
+    "Effective default/tool/media/MOD-01.04b plus OpenRouter Server catalogue/freshness boundary and final requirement-to-proof audit"
+  ],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

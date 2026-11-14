@@ -1,5 +1,6 @@
 import {
   azureEnvironmentConfig,
+  vertexEnvironmentConfig,
   bedrockCredentialConfig,
   buildProviderModelCatalog,
   collectProviderModelCatalog,
@@ -224,7 +225,7 @@ export function createConfiguredProviders(
   const cerebrasKey = configuredCredential('cerebras', providerCredentialEnvironmentKeys('cerebras').map(name => env[name]).find(Boolean), options.credentials);
   const mistralKey = configuredCredential('mistral-conversations', providerCredentialEnvironmentKeys('mistral-conversations').map(name => env[name]).find(Boolean), options.credentials);
   const azureKey = configuredCredential('azure', env.AZURE_OPENAI_API_KEY, options.credentials);
-  const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN, options.credentials);
+  const vertexKey = configuredCredential('vertex', env.GOOGLE_VERTEX_ACCESS_TOKEN || env.GOOGLE_CLOUD_API_KEY, options.credentials);
   const localKey = configuredCredential('local', env.LOCAL_API_KEY || env.LLAMA_API_KEY, options.credentials);
   const bedrockKey = configuredCredential('bedrock', env.AWS_BEARER_TOKEN_BEDROCK, options.credentials);
   const bedrockCredential = bedrockKey !== undefined
@@ -290,16 +291,8 @@ export function createConfiguredProviders(
   }
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
-  attempt(providers, 'vertex', vertexKey && env.GOOGLE_CLOUD_PROJECT
-    ? {
-        ...network,
-        type: 'vertex',
-        apiKey: vertexKey,
-        project: env.GOOGLE_CLOUD_PROJECT,
-        location: env.GOOGLE_CLOUD_LOCATION,
-        model: env.VERTEX_MODEL || 'gemini-2.0-flash',
-      }
-    : undefined);
+  const vertex = vertexEnvironmentConfig(env, vertexKey);
+  attempt(providers, 'vertex', vertex ? { ...network, ...vertex } : undefined);
   attempt(providers, 'bedrock', bedrockCredential
     ? { ...network, ...bedrockCredential, type: 'bedrock', region: env.AWS_REGION, model: env.BEDROCK_MODEL }
     : undefined);

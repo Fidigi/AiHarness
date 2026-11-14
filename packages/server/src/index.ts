@@ -251,6 +251,9 @@ function initializeCredentials(
         const mode = resolved.credential.type === 'oauth' || resolved.descriptor.source === 'environment'
           && !credentialEnvironment.ANTHROPIC_API_KEY && !!(credentialEnvironment.ANTHROPIC_AUTH_TOKEN || credentialEnvironment.ANTHROPIC_OAUTH_TOKEN) ? 'oauth' : 'api-key';
         proxy.setApiKey(type, value, credentialEnvironment.ANTHROPIC_BASE_URL, credentialEnvironment.ANTHROPIC_MODEL, mode);
+      } else if (type === 'vertex') {
+        const mode = resolved.descriptor.source === 'environment' && !credentialEnvironment.GOOGLE_VERTEX_ACCESS_TOKEN && credentialEnvironment.GOOGLE_CLOUD_API_KEY ? 'api-key' : 'bearer';
+        proxy.setApiKey(type, value, credentialEnvironment.VERTEX_BASE_URL, credentialEnvironment.VERTEX_MODEL, 'api-key', mode);
       } else proxy.setApiKey(type, type === 'bedrock' && resolved.descriptor.source === 'environment'
         ? JSON.stringify({ bearerToken: value }) : value);
     }
