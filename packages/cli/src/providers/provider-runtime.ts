@@ -18,6 +18,7 @@ import {
   type KimiCodingOAuthCredentialSource,
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
+  type MetaOAuthCredentialSource,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -44,6 +45,11 @@ export interface CliAnthropicOAuth {
   credentialSource: AnthropicOAuthCredentialSource;
 }
 
+export interface CliMetaOAuth {
+  credential: ProviderOAuthCredential;
+  credentialSource: MetaOAuthCredentialSource;
+}
+
 export interface CliKimiOAuth {
   credential: ProviderOAuthCredential;
   credentialSource: KimiCodingOAuthCredentialSource;
@@ -59,6 +65,7 @@ export interface CliProviderRuntime {
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
+  metaOAuth?: CliMetaOAuth;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -95,7 +102,7 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic',
+  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic' | 'meta',
   lifetime?: AbortSignal,
   allowRefresh = true,
   issuerRealm?: string,
@@ -197,7 +204,12 @@ export async function createCliProviderRuntime(
   const storedAnthropic = present.has('anthropic') && !values.has('anthropic') && !commandEnv[commandVariable('anthropic')] ? credentials.readStoredCredential('anthropic') : undefined;
   const anthropic = storedAnthropic?.type === 'oauth' && storedAnthropic.subscription?.provider === 'anthropic'
     && (!offline || storedAnthropic.expiresAt! > Date.now() + 60_000) ? storedAnthropic : undefined;
+  const metaSource = cliSubscriptionCredentialSource(credentials, 'meta', lifetime, !offline);
+  const storedMeta = present.has('meta') && !values.has('meta') && !commandEnv[commandVariable('meta')] ? credentials.readStoredCredential('meta') : undefined;
+  const meta = storedMeta?.type === 'oauth' && storedMeta.subscription?.provider === 'meta'
+    && (!offline || storedMeta.expiresAt! > Date.now() + 60_000) ? storedMeta : undefined;
   return {
+    ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),
     ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),
     ...(anthropicAuthMode ? { anthropicAuthMode } : {}),
     ...(!offline && !values.has('anthropic') && !present.has('anthropic') && !commandEnv[commandVariable('anthropic')]

@@ -7,6 +7,7 @@ import { CommandHandler } from './handler.js';
 import type { TerminalUI } from '../tui/terminal-ui.js';
 import * as radiusLogin from '../security/radius-login.js';
 import * as kimiLogin from '../security/kimi-login.js';
+import * as metaLogin from '../security/meta-login.js';
 import * as anthropicLogin from '../security/anthropic-login.js';
 import * as openrouterLogin from '../security/openrouter-login.js';
 
@@ -28,6 +29,27 @@ async function fixture(persistent = true, hold = false, issuer: 'radius' | 'kimi
   });
   return { handler, credentials, messages, errors, host, caller, mock, fetch, file, reached, release: () => release(tokens()) };
 }
+async function metaFixture(hold = false) {
+  const f = await fixture(); for (const name of ['META_API_KEY', 'AI_HARNESS_META_API_KEY', 'AI_HARNESS_META_API_KEY_COMMAND']) vi.stubEnv(name, undefined); vi.stubEnv('META_BASE_URL', 'https://synthetic-interactive-meta.test/v1'); vi.stubEnv('META_MODEL', 'muse-spark-1.1'); let entered!: () => void, cancel = 0; const ready = new Promise<void>(resolve => { entered = resolve; });
+  f.fetch.mockImplementation(async url => {
+    if (String(url) === 'https://auth.meta.com/oidc/device/authorization/') return Response.json({ device_code: 'private-meta-device', user_code: 'VISIBLE-META', verification_uri_complete: 'https://auth.meta.com/verify?code=VISIBLE-META', expires_in: 600, interval: 1 });
+    if (String(url) === 'https://auth.meta.com/oidc/device/token/') return Response.json({ access_token: 'private-meta-identity' });
+    expect(String(url)).toBe('https://api.meta.ai/muse-code/key'); entered(); return hold ? new Response(new ReadableStream({ cancel() { cancel++; return new Promise(() => {}); } })) : Response.json({ api_key: 'private-meta-api-key' });
+  }); return { ...f, ready, cancellations: () => cancel };
+}
+it.each(['meta', 'team-meta'])('mounts canonical-only %s native Meta Device state without selection or identity/key flattening', async label => {
+  const f = await metaFixture(); await f.handler.execute(`/login ${label} --issuer meta --method device`); expect(f.errors).toEqual([]); expect(f.messages[0]).toBe('Ouvrez https://auth.meta.com/verify?code=VISIBLE-META et saisissez le code VISIBLE-META.'); expect(f.handler.getContext().provider).toBe(f.mock); expect(f.handler.getContext().providers.has('meta')).toBe(label === 'meta'); expect(f.fetch).toHaveBeenCalledTimes(3); expect(await f.credentials.resolve(label, { env: {} })).toBeUndefined(); expect((await f.credentials.resolve(label, { env: {}, subscriptionProvider: 'meta' }))?.credential).toMatchObject({ accessToken: 'private-meta-api-key', refreshToken: 'private-meta-identity', subscription: { provider: 'meta' } }); for (const secret of ['private-meta-device', 'private-meta-identity', 'private-meta-api-key']) expect(f.messages.join('\n') + await readFile(f.file, 'utf8')).not.toContain(secret);
+});
+it.each(['environment', 'command'] as const)('retains Meta %s key priority after explicit native interactive login', async source => {
+  const f = await metaFixture(); if (source === 'environment') vi.stubEnv('META_API_KEY', 'priority-meta-key'); else vi.stubEnv('AI_HARNESS_META_API_KEY_COMMAND', 'must-not-run'); await f.handler.execute('/login meta --issuer meta'); expect(f.errors).toEqual([]); if (source === 'command') { expect(f.handler.getContext().providers.has('meta')).toBe(false); return; }
+  f.fetch.mockImplementation(async (_url, init) => { expect(new Headers(init?.headers).get('authorization')).toBe('Bearer priority-meta-key'); return new Response('data: ' + JSON.stringify({ type: 'response.completed', response: { id: 'r', status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'priority kept' }] }], usage: { input_tokens: 1, output_tokens: 1 } } }) + '\n\n', { headers: { 'content-type': 'text/event-stream' } }); }); expect((await f.handler.getContext().providers.get('meta')!.chat([{ id: 'u', role: 'user', timestamp: new Date(), content: 'Probe' }])).content).toBe('priority kept');
+});
+it('does not mount retired Meta ownership after encrypted commit or erase the committed native credential', async () => {
+  const f = await fixture(); vi.spyOn(metaLogin, 'loginMeta').mockImplementationOnce(async (credentials, label, _instructions, signal) => { const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'committed-meta-key', refreshToken: 'committed-meta-identity', expiresAt: Date.now() + 86400000, subscription: { provider: 'meta', grantId: '12345678-1234-4234-8234-123456789abc' } }; const publish = await credentials.prepareOAuthLogin(label, signal); await publish(credential); f.host.abort(); return credential; }); await f.handler.execute('/login meta --issuer meta'); expect(f.errors).toEqual(['Command failed.']); expect(f.handler.getContext().providers.has('meta')).toBe(false); expect((await f.credentials.resolve('meta', { env: {}, subscriptionProvider: 'meta' }))?.credential.type).toBe('oauth'); expect(f.fetch).not.toHaveBeenCalled();
+});
+it('cancels held Meta mint with the interactive caller without late publication and rejects browser before I/O', async () => {
+  const f = await metaFixture(true); await f.handler.execute('/login meta --issuer meta --method browser'); expect(f.fetch).not.toHaveBeenCalled(); const pending = f.handler.execute('/login meta --issuer meta'); await f.ready; f.caller.abort(); await pending; expect(f.cancellations()).toBe(1); expect(f.handler.getContext().providers.has('meta')).toBe(false); expect(await f.credentials.resolve('meta', { env: {}, subscriptionProvider: 'meta' })).toBeUndefined();
+});
 async function anthropicFixture(hold = false) {
   const realFetch = globalThis.fetch, f = await fixture(); for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'AI_HARNESS_ANTHROPIC_API_KEY_COMMAND']) vi.stubEnv(name, undefined); vi.stubEnv('ANTHROPIC_BASE_URL', 'https://synthetic-interactive-anthropic.test');
   let entered!: () => void, cancellation = 0, callback: Promise<unknown> | undefined; const ready = new Promise<void>(resolve => { entered = resolve; }), writes = f.handler.getContext().terminal.writeOutput;

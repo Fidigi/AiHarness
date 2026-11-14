@@ -337,6 +337,7 @@ async function main(): Promise<void> {
         radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
         radiusOAuth: providerRuntime.radiusOAuth,
         kimiOAuth: providerRuntime.kimiOAuth,
+        metaOAuth: providerRuntime.metaOAuth,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -854,6 +855,7 @@ async function main(): Promise<void> {
       radiusCatalogueDirectory: refreshedRuntime.radiusCatalogueDirectory,
       radiusOAuth: refreshedRuntime.radiusOAuth,
       kimiOAuth: refreshedRuntime.kimiOAuth,
+      metaOAuth: refreshedRuntime.metaOAuth,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -1013,6 +1015,7 @@ async function main(): Promise<void> {
     radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
     radiusOAuth: providerRuntime.radiusOAuth,
     kimiOAuth: providerRuntime.kimiOAuth,
+    metaOAuth: providerRuntime.metaOAuth,
     network: providerRuntime.network,
   });
 

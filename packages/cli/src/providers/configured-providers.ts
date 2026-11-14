@@ -9,7 +9,7 @@ import {
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
   OpenAiMixedProvider,
-  AnthropicProvider, AnthropicOAuthProvider,
+  AnthropicProvider, AnthropicOAuthProvider, MetaOAuthProvider,
   DeepSeekProvider,
   GroqProvider,
   ZaiProvider,
@@ -162,6 +162,7 @@ export interface CreateConfiguredProvidersOptions {
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
+  metaOAuth?: CliProviderRuntime['metaOAuth'];
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -255,6 +256,12 @@ export function createConfiguredProviders(
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
     if (name === 'anthropic') continue; // Preserve existing built-in insertion/default-selection order above.
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
+    if (name === 'meta' && !key && options.metaOAuth) {
+      const config = { ...network, ...nativeEnvironmentHints(name, env), type: name };
+      try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new MetaOAuthProvider(config, options.metaOAuth.credentialSource)); }
+      catch { /* A retired Meta source does not disable unrelated providers. */ }
+      continue;
+    }
     if (name === 'kimi-coding' && !key && options.kimiOAuth) {
       const config = { ...network, ...nativeEnvironmentHints(name, env), type: name,
         oauthHost: env.KIMI_CODE_OAUTH_HOST || env.KIMI_OAUTH_HOST || (options.kimiOAuth.credential.subscription?.provider === 'kimi-coding' ? options.kimiOAuth.credential.subscription.oauthHost : undefined) };

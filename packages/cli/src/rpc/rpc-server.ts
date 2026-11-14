@@ -497,6 +497,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       radiusOAuth: providerRuntime.radiusOAuth,
       kimiOAuth: providerRuntime.kimiOAuth,
+      metaOAuth: providerRuntime.metaOAuth,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });
