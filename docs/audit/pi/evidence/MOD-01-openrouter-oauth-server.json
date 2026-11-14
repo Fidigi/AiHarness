@@ -1,0 +1,59 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "1e17b9c",
+  "scope": "Native custom OpenRouter Server/Settings PKCE/full-paste/permanent-key ownership using existing encrypted publication and lifecycle",
+  "requirements": [
+    {
+      "requirement": "Record-owned fixed OpenRouter browser issuer with honest permanent-key storage and runtime admission",
+      "implementation": "Existing prepareNativeOAuth/customRadiusOAuthContext/startRadius spellings now also select openrouter only from the explicit custom record dialect. Fixed realm is independent of inference base/headers. Browser method is explicitly requested; device/default-device refuses400 before issuer traffic. Core generates PKCE; Server supplies a UUID callback path at http://127.0.0.1:1457/oauth/callback/<uuid> for full-URL paste, never a Server listener or opener. Existing capability/request lifetime/provider-operation/rename guards own start/redirect/publication. Context reserves prepareApiKeyLogin on the stable custom slot, preflights exact native mixed constructor, publishes encrypted api-key and returns synchronous owner-guarded admit. No fake expiry/refresh/native-subscription identity. Credentialless OpenRouter is not mounted/reported connected; stored method is api-key, not proof of vendor identity/access.",
+      "proof": "Two baseline composition REDs; five registry cases cover credentialless admission, permanent key/reload, pending rename/disconnect/late admission and three newer-key mutation/rollback boundaries. Four additions to shared native service cases cover real Core fixed authorize/key exchange/full-paste/no-state retry, device refusal, held-key disconnect and committed-key retired helper without erasure/admission."
+    },
+    {
+      "requirement": "Metadata/header updates and rollback do not overwrite another permanent-key owner",
+      "implementation": "OpenRouter metadata-only changes omit the credential slot from existing encrypted update and rehydrate the current resolved key. Explicit replacements still rotate; OpenRouter rollback uses existing document-revision/CAS guards and refuses uncertain newer-owner recovery instead of writing stale key snapshots. Existing Radius/Kimi token preservation and source/header/fingerprint guards remain intact. Native composite cancellation now also aborts its flow controller, so browser completion revalidation/status sees context retirement and shutdown.",
+      "proof": "Three old-image owner REDs independently reproduce newer-key overwrite on metadata/header commit, rollback and replacement rollback (setup uses the already delivered Core guarded API-key publisher, not missing native context). Corrected cases preserve the injected newer owner and actual subsequent C auth. Initial100 PASS/2 FAIL catches real composite-vs-flow-controller cancellation producing502 rather than409; one controller-abort link restores unchanged409 assertions and guards admission."
+    },
+    {
+      "requirement": "Actually usable HTTP and Settings composition, not just exported SDK/factory",
+      "implementation": "Settings offers Browser PKCE for explicit custom OpenRouter, reuses passive full-callback panel and canonical post-admission/disconnect reconciliation. Native A/C/I/T and pricing are reused unchanged; static Import and Test409 remain honest. Model catalogue invalidation occurs only after guarded admit.",
+      "proof": "Real authenticated HTTP: capability403; no traffic before browser completion; malformed callback400/retry; fixed POST JSON/no tenant or auth header to issuer; stored api-key/no refresh; C→codemode→C then encrypted restart/third C,30 tokens/one tool/exact$0.00004 per assistant; metadata preserve; pending rename409; held-key disconnect cancels body exactly once without waiting for hostile cancellation, completion409/no late credential/mount/run; public/journal/store privacy. Chromium Settings: create keyless custom record→PKCE URL/full paste/S256→connected→static Import→global model selection→actual C reply→reload/full Settings navigation→disconnect; no real vendor website/account. Unchanged Radius browser scenario also passes on shared controller/markup."
+    }
+  ],
+  "qualification": {
+    "environment": "Docker --network none, CI=true; synthetic credentials/disposable stores/mocked or loopback services; fixed vendor endpoint mapped solely by test transport with no live-account fallback; no personal credential store or protected-container operation",
+    "image": "ai-harness:mod01-openrouter-server-owned",
+    "imageId": "sha256:3de9039ac197db899e24be95b1d669d4f1ba2019eb64a43001e466e78799beef",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-openrouter-server-owned; four builds/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-openrouter-server/build-owned.log",
+    "strict": { "passed": true, "roots": 11, "config": "/tmp/mod01-openrouter-server/strict.json", "log": "/tmp/mod01-openrouter-server/owned.log", "meaning": "Changed native tests/routes/Web/E2E plus directly consumed owner/credential roots. JSX/DOM/DOM.Iterable/vite-client environments match Web requirements; strict flags are not lowered. Known lifecycle strict fixture is not selected/repaired; runtime remains covered." },
+    "targeted": { "passed": 103, "failed": 0, "files": 8, "selection": ["packages/server/src/runtime/provider-openrouter-oauth.test.ts", "packages/server/src/runtime/provider-oauth-radius.test.ts", "packages/server/src/runtime/provider-radius-oauth.test.ts", "packages/server/src/runtime/provider-kimi-oauth.test.ts", "packages/server/src/runtime/provider-registry.test.ts", "packages/core/src/providers/credentials.test.ts", "packages/core/src/providers/openrouter-oauth.test.ts", "packages/server/src/api/openrouter-oauth-http.test.ts"], "log": "/tmp/mod01-openrouter-server/owned.log" },
+    "regression": { "passed": 63, "files": 3, "actualSelection": ["packages/server/src/runtime/provider-oauth-codex.test.ts", "packages/server/src/runtime/provider-oauth-copilot.test.ts", "packages/server/src/api/provider-lifecycle-routes.test.ts"], "log": "/tmp/mod01-openrouter-server/regression.log", "meaning": "Native device/browser owner and runtime-only lifecycle controls retain separate evidence. Command additionally names absent packages/server/src/api/provider-registry-routes.test.ts; Vitest matches only these three files, no fourth-file/route-suite credit." },
+    "distinctFinalRuntimeCases": 166,
+    "browser": { "passed": 2, "failed": 0, "retries": 0, "project": "chromium", "selection": ["e2e/openrouter-oauth-live.spec.ts", "e2e/radius-oauth-live.spec.ts"], "command": "node .docker/run-e2e.mjs <two specs> --project=chromium --reporter=line --output=/app/test-results/openrouter-native", "log": "/tmp/mod01-openrouter-server/browser.log", "artifacts": "/tmp/mod01-openrouter-server/browser-results/", "meaning": "Official focused runner rebuilds from same owned source, uses --no-maglev/workers1/retries0. Own isolated container removed after artifact copy. One new OpenRouter/one unchanged Radius case; no new Kimi/browser or whole-UI cross-product." },
+    "runtimeBinding": { "passed": true, "inputs": 8, "imageWitness": "/tmp/mod01-openrouter-server/runtime-witness-image.txt", "worktreeWitness": "/tmp/mod01-openrouter-server/runtime-witness-worktree.txt", "diff": "/tmp/mod01-openrouter-server/runtime-witness.diff", "meaning": "Four production Server/Web inputs and four consumed Core inputs match owned image. No final source/test overlay or whole-image/dependency attestation." },
+    "counterfactuals": [
+      { "failed": 2, "filterUnselected": 2, "image": "ai-harness:mod01-openrouter-header", "log": "/tmp/mod01-openrouter-server/red.log", "meaning": "Earlier four-case snapshot: false credentialless connected state and missing native OpenRouter owner preparation." },
+      { "failed": 3, "filterUnselected": 2, "image": "ai-harness:mod01-openrouter-header", "log": "/tmp/mod01-openrouter-server/key-owner-red.log", "meaning": "Latest five-case snapshot; current key overwritten during metadata/header commit/rollback and replacement rollback fails to refuse newer owner." }
+    ],
+    "retainedFailures": [
+      { "log": "/tmp/mod01-openrouter-server/focused.log", "meaning": "Strict setup lacks JSX/DOM compiler environment for Web root (TS6142/TS17004/TS2304 etc.); no Vitest reached." },
+      { "log": "/tmp/mod01-openrouter-server/focused-r2.log", "meaning": "After JSX/DOM environment setup, ImportMeta.env requires vite/client. Correct environment added without lowering strictness; no Vitest reached." },
+      { "passed": 100, "failed": 2, "log": "/tmp/mod01-openrouter-server/focused-r3.log", "meaning": "Real shared native-browser lifetime bug: context/shutdown composite retires while flow.controller remains live, so late browser completion returns502 rather than expected409. Abort is now propagated to the flow controller; assertions/deadlines unchanged. Initial image also predates a comment-only key-preservation explanation; final owned build includes final source." }
+    ],
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-openrouter-server/docs.log" },
+    "limits": "No real account/vendor authentication/entitlement, /models/user filter, CLI manual paste fallback, new A/C/I/T/profile or model-owned04b image preparation, installed/production/global qualification or SDK acquisition. Existing generic configured Device and Radius/Kimi/Codex/Copilot paths are not promoted by label or administrative snapshots. Earlier receipts/unknown139 failures/old Codex WebSocket oracle/known strict lifecycle fixture remain historical OPEN evidence, not repaired by these passes; no MOD-03 redelivery or acceptance extension."
+  },
+  "sourceSha256": {
+    "packages/server/src/runtime/provider-registry.ts": "ab93181c7b8c97311ac903c85b1171329467273bc01dc8767cf1c70051ea74d4",
+    "packages/server/src/runtime/provider-oauth.ts": "9b3efce56ebc3fe4828e8f046ce6893717f08fee5d134662cbd5e4721aef48dc",
+    "packages/server/src/api/provider-registry-routes.ts": "d550d7b9f17432384c209b6d685251bebd948a5a74098d9b2f5cda58dd53740f",
+    "packages/web/src/components/EcosystemSettings.tsx": "0a08901ae1fd098c08cfab7dc4ffcde1e923e6d9d0c3b39ca361b2940b4f8b1f",
+    "packages/server/src/runtime/provider-openrouter-oauth.test.ts": "63615003978ea8f055328e92dbcff4611f8dcaeb808159732eda9a062f6eb105",
+    "packages/server/src/runtime/provider-oauth-radius.test.ts": "57ba9bf217bc9cba9ef44a4f118d83d6bdd3e1f15fa765f21d76a80ef16e992a",
+    "packages/server/src/api/openrouter-oauth-http.test.ts": "cc59667f4a2b9cde94a43c8e53ed773040676f84c76e78c6f453dbb233967740",
+    "e2e/openrouter-oauth-live.spec.ts": "08075790ba074137667ee56f1b67b25e600fef9d7019a35df731db5552ddeea5"
+  },
+  "remaining": ["Reconcile remaining OpenRouter account-filter/manual-fallback scope", "Anthropic subscription/federation, other required issuers/cloud chains/effective policies and MOD-01.04b", "Final MOD-01 requirement-to-implementation-to-proof closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; exactly three historical acceptances unchanged; active goal."
+}

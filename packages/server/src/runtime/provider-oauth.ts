@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { beginOpenAICodexBrowserLogin, type OpenAICodexBrowserLogin, beginOpenAICodexDeviceLogin, OPENAI_CODEX_MODELS, exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
-import { beginRadiusBrowserLogin, beginRadiusDeviceLogin, beginKimiCodingDeviceLogin, type RadiusBrowserLogin, type RadiusOAuthCredential } from '@ai-harness/core';
+import { beginRadiusBrowserLogin, beginRadiusDeviceLogin, beginKimiCodingDeviceLogin, beginOpenRouterLogin, type RadiusBrowserLogin, type OpenRouterLogin } from '@ai-harness/core';
 import type { ProviderRegistryService } from './provider-registry.js';
 import type { AiProxyServer } from '../api/proxy.js';
 type RadiusContext = Awaited<ReturnType<ProviderRegistryService['prepareNativeOAuth']>>;
@@ -38,7 +38,7 @@ interface OAuthFlow {
   verificationUri: string;
   verificationUriComplete?: string;
   authorizationUrl?: string;
-  browser?: OpenAICodexBrowserLogin | RadiusBrowserLogin;
+  browser?: OpenAICodexBrowserLogin | RadiusBrowserLogin | OpenRouterLogin;
   radiusPublish?: RadiusContext['publish'];
   completing?: boolean;
   expiresAt: string;
@@ -242,17 +242,17 @@ export class ProviderOAuthService {
     if (caller?.aborted) abort(); else caller?.addEventListener('abort', abort, { once: true });
     try {
       const context = await this.radius(provider, signal); signal = AbortSignal.any([signal, context.signal]); signal.throwIfAborted();
-      if (context.issuer === 'kimi-coding' && method !== 'device') throw Object.assign(new Error('OAuth method is unavailable for this provider.'), { status: 400 });
+      if (context.issuer === 'kimi-coding' && method !== 'device' || context.issuer === 'openrouter' && method !== 'browser') throw Object.assign(new Error('OAuth method is unavailable for this provider.'), { status: 400 });
       const options = { signal, fetcher: this.fetcher, redactor: context.redactor };
       const device = method === 'device' ? context.issuer === 'kimi-coding' ? await beginKimiCodingDeviceLogin({ ...options, oauthHost: context.realm }) : await beginRadiusDeviceLogin({ ...options, gateway: context.realm }) : undefined;
-      const browser = method === 'browser' ? await beginRadiusBrowserLogin({ ...options, gateway: context.realm }) : undefined;
+      const browser = method === 'browser' ? context.issuer === 'openrouter' ? beginOpenRouterLogin(`http://127.0.0.1:1457/oauth/callback/${crypto.randomUUID()}`, options) : await beginRadiusBrowserLogin({ ...options, gateway: context.realm }) : undefined;
       const login = (device ?? browser)!; signal.throwIfAborted(); this.checkCapacity();
       const flow: OAuthFlow = { id: crypto.randomUUID(), provider, state: 'pending', userCode: device?.userCode ?? '', verificationUri: device?.verificationUri ?? '',
         ...(browser ? { authorizationUrl: browser.authorizationUrl, browser } : {}), radiusPublish: context.publish,
         expiresAt: new Date(login.expiresAt).toISOString(), intervalSeconds: 1, deviceCode: '', controller };
       this.flows.set(flow.id, flow); registered = true;
       const expiry = setTimeout(() => { if (flow.state === 'pending') { flow.state = 'expired'; controller.abort(); } }, Math.max(1, login.expiresAt - Date.now())); expiry.unref();
-      signal.addEventListener('abort', () => { if (flow.state === 'pending') flow.state = 'cancelled'; clearTimeout(expiry); login.cancel(); flow.browser = undefined; flow.authorizationUrl = undefined; }, { once: true });
+      signal.addEventListener('abort', () => { controller.abort(); if (flow.state === 'pending') flow.state = 'cancelled'; clearTimeout(expiry); login.cancel(); flow.browser = undefined; flow.authorizationUrl = undefined; }, { once: true });
       if (device) void (async () => {
         try {
           const credential = await device.complete(), admit = await context.publish(credential); signal.throwIfAborted();
@@ -328,16 +328,16 @@ export class ProviderOAuthService {
     try {
       const credential = await browser.complete(value, flow.controller.signal);
       if (flow.radiusPublish) {
-        const admit = await flow.radiusPublish(credential as RadiusOAuthCredential); flow.controller.signal.throwIfAborted();
+        const admit = await flow.radiusPublish(credential as Parameters<RadiusContext['publish']>[0]); flow.controller.signal.throwIfAborted();
         admit(); flow.state = 'connected'; return this.public(flow);
       }
-      await flow.publish!(credential);
+      await flow.publish!(credential as Parameters<NonNullable<OAuthFlow['publish']>>[0]);
       flow.controller.signal.throwIfAborted();
       this.proxy.setOpenAICodexSubscription(OPENAI_CODEX_MODELS[0]!.id, openAICodexCredentialSource(flow.credentials!, this.lifetime.signal));
       flow.state = 'connected';
       return this.public(flow);
     } catch (error) {
-      if (error instanceof Error && ['Invalid OpenAI Codex OAuth redirect.', 'Invalid Radius OAuth redirect.'].includes(error.message) && flow.state === 'pending') {
+      if (error instanceof Error && ['Invalid OpenAI Codex OAuth redirect.', 'Invalid Radius OAuth redirect.', 'Invalid OpenRouter OAuth redirect.'].includes(error.message) && flow.state === 'pending') {
         throw Object.assign(new Error('Invalid OAuth redirect.'), { status: 400 });
       }
       if (flow.state === 'pending') { flow.state = 'failed'; flow.error = 'OAuth token exchange failed.'; }

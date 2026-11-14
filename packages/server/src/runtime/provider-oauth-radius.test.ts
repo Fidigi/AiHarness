@@ -11,13 +11,14 @@ const tokens = () => Response.json({ access_token: 'private-radius-access', refr
 const device = () => Response.json({ device_code: 'private-radius-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', expires_in: 600, interval: 1 });
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' = 'radius') {
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' = 'radius') {
   vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
   const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
   await registry.upsertProvider({ id, name: 'Radius', baseUrl: issuer === 'radius' ? gateway : 'https://inference.kimi.test/coding', dialect: issuer });
   const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
+    if (issuer === 'openrouter') { expect(String(url)).toBe('https://openrouter.ai/api/v1/auth/keys'); reached.resolve(undefined); return hold ? held.promise : Response.json({ key: 'synthetic-openrouter-permanent-key' }); }
     if (String(url).endsWith('/device')) return device();
     if (String(url).endsWith('/device_authorization')) return Response.json({ device_code: 'private-kimi-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', verification_uri_complete: gateway + '/verify?code=VISIBLE-CODE', expires_in: 600, interval: 0.001 });
     if (String(url).endsWith('/v1/oauth')) return Response.json({ authorizationEndpoint: 'https://synthetic-navigation.test/authorize' });
@@ -30,6 +31,28 @@ async function fixture(hold = false, closeOnPublish = false, persistent = true, 
   const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
   return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
 }
+it('owns native OpenRouter full-paste PKCE without state and stores a permanent API key in the custom slot', async () => {
+  const f = await fixture(false, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), authorization = new URL(flow.authorizationUrl!);
+  expect(authorization.origin + authorization.pathname).toBe('https://openrouter.ai/auth'); expect(authorization.searchParams.has('state')).toBe(false); expect(f.fetcher).not.toHaveBeenCalled();
+  const callback = authorization.searchParams.get('callback_url')!; await expect(f.service.redirect(flow.id, callback + '-wrong?code=synthetic-code')).rejects.toMatchObject({ status: 400 }); expect(f.service.get(flow.id)?.state).toBe('pending');
+  expect(await f.service.redirect(flow.id, callback + '?code=synthetic-code')).toMatchObject({ provider: id, state: 'connected' }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.fetcher).toHaveBeenCalledOnce();
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {} }))?.credential).toEqual({ version: 1, type: 'api-key', apiKey: 'synthetic-openrouter-permanent-key' }); expect(reader.list()).toMatchObject([{ refreshable: false }]);
+  expect(JSON.stringify(f.service.get(flow.id))).not.toContain('synthetic-code'); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('synthetic-openrouter-permanent-key'); expect(f.proxy.isConfigured(id)).toBe(true);
+});
+it('refuses OpenRouter device method before issuer traffic and releases its pending owner', async () => {
+  const f = await fixture(false, false, true, 'openrouter'); await expect(f.service.start(id)).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('retires a held OpenRouter key response on disconnect without late publication or admission', async () => {
+  const f = await fixture(true, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), callback = new URL(flow.authorizationUrl!).searchParams.get('callback_url')!;
+  const pending = f.service.redirect(flow.id, callback + '?code=synthetic-code').catch(error => error); await f.reached.promise; await f.registry.disconnect(id); expect(await pending).toMatchObject({ status: 409 });
+  const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled();
+  const reader = f.reader(); await reader.load(); expect(await reader.resolve(id, { env: {} })).toBeUndefined();
+});
+it('does not mount or erase a committed OpenRouter key returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), callback = new URL(flow.authorizationUrl!).searchParams.get('callback_url')!;
+  await expect(f.service.redirect(flow.id, callback + '?code=synthetic-code')).rejects.toMatchObject({ status: 409 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled();
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {} }))?.credential).toMatchObject({ type: 'api-key', apiKey: 'synthetic-openrouter-permanent-key' });
+});
 it('uses native Kimi device login in the same custom slot without borrowing the inference endpoint as issuer', async () => {
   const f = await fixture(false, false, true, 'kimi-coding'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', provider: id, userCode: 'VISIBLE-CODE' });
   await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected')); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(4); expect(f.invalidate).toHaveBeenCalledWith(id);
