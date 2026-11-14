@@ -491,6 +491,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       githubCopilot: providerRuntime.githubCopilot,
       openaiCodex: providerRuntime.openaiCodex,
       kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
+      anthropicAuthMode: providerRuntime.anthropicAuthMode,
+      anthropicOAuth: providerRuntime.anthropicOAuth,
       radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       radiusOAuth: providerRuntime.radiusOAuth,
       kimiOAuth: providerRuntime.kimiOAuth,

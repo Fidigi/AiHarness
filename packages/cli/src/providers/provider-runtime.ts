@@ -16,6 +16,7 @@ import {
   type ProviderOAuthCredential,
   type RadiusOAuthCredentialSource,
   type KimiCodingOAuthCredentialSource,
+  type AnthropicOAuthCredentialSource,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -37,6 +38,11 @@ export interface CliRadiusOAuth {
   credentialSource: RadiusOAuthCredentialSource;
 }
 
+export interface CliAnthropicOAuth {
+  credential: ProviderOAuthCredential;
+  credentialSource: AnthropicOAuthCredentialSource;
+}
+
 export interface CliKimiOAuth {
   credential: ProviderOAuthCredential;
   credentialSource: KimiCodingOAuthCredentialSource;
@@ -46,6 +52,8 @@ export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
+  anthropicAuthMode?: 'api-key' | 'oauth';
+  anthropicOAuth?: CliAnthropicOAuth;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -85,7 +93,7 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding',
+  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic',
   lifetime?: AbortSignal,
   allowRefresh = true,
   issuerRealm?: string,
@@ -137,6 +145,7 @@ export async function createCliProviderRuntime(
   }
   const values = new Map<string, string>();
   let kimiCodingAuthMode: CliProviderRuntime['kimiCodingAuthMode'];
+  let anthropicAuthMode: CliProviderRuntime['anthropicAuthMode'];
   const present = new Set(credentials.list().map(item => item.provider));
   const providers = new Set<string>([
     ...CLI_CREDENTIAL_PROVIDERS,
@@ -165,6 +174,9 @@ export async function createCliProviderRuntime(
     }
     values.set(provider, value);
     if (provider === 'kimi-coding') kimiCodingAuthMode = resolved.credential.type;
+    if (provider === 'anthropic') anthropicAuthMode = resolved.credential.type === 'oauth'
+      || resolved.descriptor.source === 'environment' && !commandEnv.ANTHROPIC_API_KEY
+      && !!(commandEnv.ANTHROPIC_AUTH_TOKEN || commandEnv.ANTHROPIC_OAUTH_TOKEN) ? 'oauth' : 'api-key';
   }
   const credentialSource = cliGitHubCopilotCredentialSource(credentials, lifetime, !offline);
   const subscription = await credentialSource();
@@ -179,7 +191,13 @@ export async function createCliProviderRuntime(
   const kimi = storedKimi?.type === 'oauth' && storedKimi.subscription?.provider === 'kimi-coding'
     && (!kimiHost || getKimiCodingOAuthConfig(kimiHost).tokenUrl === getKimiCodingOAuthConfig(storedKimi.subscription.oauthHost).tokenUrl)
     && (!offline || storedKimi.expiresAt! > Date.now() + 60_000) ? storedKimi : undefined;
+  const anthropicSource = cliSubscriptionCredentialSource(credentials, 'anthropic', lifetime, !offline);
+  const storedAnthropic = present.has('anthropic') && !values.has('anthropic') && !commandEnv[commandVariable('anthropic')] ? credentials.readStoredCredential('anthropic') : undefined;
+  const anthropic = storedAnthropic?.type === 'oauth' && storedAnthropic.subscription?.provider === 'anthropic'
+    && (!offline || storedAnthropic.expiresAt! > Date.now() + 60_000) ? storedAnthropic : undefined;
   return {
+    ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),
+    ...(anthropicAuthMode ? { anthropicAuthMode } : {}),
     ...(kimi ? { kimiOAuth: { credential: kimi, credentialSource: kimiSource } } : {}),
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),

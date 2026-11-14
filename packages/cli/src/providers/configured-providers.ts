@@ -9,6 +9,7 @@ import {
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
   OpenAiMixedProvider,
+  AnthropicProvider, AnthropicOAuthProvider,
   DeepSeekProvider,
   GroqProvider,
   ZaiProvider,
@@ -53,7 +54,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth, CliAnthropicOAuth } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -112,6 +113,7 @@ export interface ResolvedStartupProvider {
 
 // CLI composition only: explicit extension factories keep precedence and names remain unreserved.
 const NATIVE_PROVIDERS = {
+  anthropic: AnthropicProvider,
   deepseek: DeepSeekProvider, groq: GroqProvider, zai: ZaiProvider, nvidia: NvidiaProvider,
   minimax: MiniMaxProvider, 'minimax-cn': MiniMaxCnProvider, 'kimi-coding': KimiCodingProvider,
   moonshotai: MoonshotProvider, 'moonshotai-cn': MoonshotCnProvider, 'ant-ling': AntLingProvider,
@@ -154,6 +156,8 @@ export interface CreateConfiguredProvidersOptions {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
+  anthropicAuthMode?: 'api-key' | 'oauth';
+  anthropicOAuth?: CliAnthropicOAuth;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -212,7 +216,7 @@ export function createConfiguredProviders(
     catch { /* Unsupported subscription configuration must not disable other providers. */ }
   }
   const openAiKey = configuredCredential('openai', env.OPENAI_API_KEY, options.credentials);
-  const anthropicKey = configuredCredential('anthropic', env.ANTHROPIC_API_KEY, options.credentials);
+  const anthropicKey = configuredCredential('anthropic', providerCredentialEnvironmentKeys('anthropic').map(name => env[name]).find(Boolean), options.credentials);
   const googleKey = configuredCredential('google', env.GEMINI_API_KEY || env.GOOGLE_API_KEY, options.credentials);
   const cerebrasKey = configuredCredential('cerebras', providerCredentialEnvironmentKeys('cerebras').map(name => env[name]).find(Boolean), options.credentials);
   const mistralKey = configuredCredential('mistral-conversations', providerCredentialEnvironmentKeys('mistral-conversations').map(name => env[name]).find(Boolean), options.credentials);
@@ -230,9 +234,14 @@ export function createConfiguredProviders(
   attempt(providers, 'openai', openAiKey
     ? { ...network, type: 'openai', apiKey: openAiKey, model: env.OPENAI_MODEL }
     : undefined);
-  attempt(providers, 'anthropic', anthropicKey
-    ? { ...network, type: 'anthropic', apiKey: anthropicKey, model: env.ANTHROPIC_MODEL }
-    : undefined);
+  const anthropicConfig = { ...network, ...nativeEnvironmentHints('anthropic', env), type: 'anthropic' };
+  if (anthropicKey) attempt(providers, 'anthropic', { ...anthropicConfig, apiKey: anthropicKey,
+    anthropicAuthMode: env.ANTHROPIC_API_KEY ? 'api-key' : env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_OAUTH_TOKEN ? 'oauth' : options.anthropicAuthMode ?? 'api-key' });
+  else if (options.anthropicOAuth) {
+    // Anthropic is an existing reserved Core built-in, not a newly reserved extension name.
+    try { providers.set('anthropic', new AnthropicOAuthProvider(anthropicConfig, options.anthropicOAuth.credentialSource)); }
+    catch { /* A retired native source must not disable unrelated providers. */ }
+  }
   attempt(providers, 'google', googleKey
     ? { ...network, type: 'google', apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
     : undefined);
@@ -243,6 +252,7 @@ export function createConfiguredProviders(
     ? { ...network, type: 'mistral-conversations', apiKey: mistralKey, model: env.MISTRAL_MODEL, baseUrl: env.MISTRAL_BASE_URL }
     : undefined);
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
+    if (name === 'anthropic') continue; // Preserve existing built-in insertion/default-selection order above.
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
     if (name === 'kimi-coding' && !key && options.kimiOAuth) {
       const config = { ...network, ...nativeEnvironmentHints(name, env), type: name,
@@ -334,11 +344,11 @@ export async function resolveStartupProvider(
     const matched = resolveModelScope([`${scopedKeyName}/*`], names.map(provider => ({ provider, id: '_scope_' }))).models;
     const unique = [...new Set(matched.map(item => item.model.provider))]; scopedKeyName = unique.length === 1 ? unique[0] : undefined;
   }
-  if (selection.apiKey && selection.models?.length && scopedKeyName && (['radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'openrouter'].includes(scopedKeyName) || providers.get(scopedKeyName) instanceof OpenRouterProvider)) {
+  if (selection.apiKey && selection.models?.length && scopedKeyName && (['anthropic', 'radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'openrouter'].includes(scopedKeyName) || providers.get(scopedKeyName) instanceof OpenRouterProvider)) {
     const previous = providers.get(scopedKeyName);
     scopedKeyProvider = createProvider({ ...(previous ? providerConfig(previous) : {
       ...networkConfig(nativeOptions.network), ...nativeEnvironmentHints(scopedKeyName, env, nativeOptions.radiusCatalogueDirectory),
-    }), type: scopedKeyName, apiKey: selection.apiKey });
+    }), type: scopedKeyName, apiKey: selection.apiKey, ...(scopedKeyName === 'anthropic' ? { anthropicAuthMode: 'api-key' } : {}) });
     providers.set(scopedKeyName, scopedKeyProvider);
   }
 
@@ -370,7 +380,7 @@ export async function resolveStartupProvider(
             .filter(provider => !providers.has(provider))
             .map(provider => ({ provider, configured: false })),
         ])
-      : await collectProviderModelCatalog(scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider || scopedKeyProvider instanceof OpenRouterProvider
+      : await collectProviderModelCatalog(scopedKeyProvider instanceof AnthropicProvider || scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider || scopedKeyProvider instanceof OpenRouterProvider
         ? new Map([[scopedKeyName!, scopedKeyProvider]]) : providers, {
           includePublishedProviders: true,
           discover: selection.offline !== true,
@@ -457,6 +467,7 @@ export async function resolveStartupProvider(
         type: providerName as ProviderConfig['type'],
         apiKey: selection.apiKey,
         ...(providerName === 'kimi-coding' ? { kimiAuthMode: 'api-key' } : {}),
+        ...(providerName === 'anthropic' ? { anthropicAuthMode: 'api-key' } : {}),
         ...(model ? { model } : {}),
       });
       providers.set(providerName, provider);
