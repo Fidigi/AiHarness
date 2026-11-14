@@ -10,16 +10,18 @@ const roots: string[] = [], oauth: ProviderOAuthService[] = [], gateway = 'https
 const tokens = () => Response.json({ access_token: 'private-radius-access', refresh_token: 'private-radius-refresh', expires_in: 3600 });
 const device = () => Response.json({ device_code: 'private-radius-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', expires_in: 600, interval: 1 });
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
-afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function fixture(hold = false, closeOnPublish = false, persistent = true) {
+afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' = 'radius') {
+  vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
   const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
-  await registry.upsertProvider({ id, name: 'Radius', baseUrl: gateway, dialect: 'radius' });
+  await registry.upsertProvider({ id, name: 'Radius', baseUrl: issuer === 'radius' ? gateway : 'https://inference.kimi.test/coding', dialect: issuer });
   const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
     if (String(url).endsWith('/device')) return device();
+    if (String(url).endsWith('/device_authorization')) return Response.json({ device_code: 'private-kimi-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', verification_uri_complete: gateway + '/verify?code=VISIBLE-CODE', expires_in: 600, interval: 0.001 });
     if (String(url).endsWith('/v1/oauth')) return Response.json({ authorizationEndpoint: 'https://synthetic-navigation.test/authorize' });
-    expect(String(url)).toBe(gateway + '/v1/oauth/token'); reached.resolve(undefined); return hold ? held.promise : tokens();
+    expect(String(url)).toBe(gateway + (issuer === 'radius' ? '/v1/oauth/token' : '/api/oauth/token')); reached.resolve(undefined); return hold ? held.promise : tokens();
   });
   const prepare = customRadiusOAuthContext(Promise.resolve({ providerRegistry: registry, modelCatalog: { invalidateProvider: invalidate } }));
   const service = new ProviderOAuthService(proxy, () => undefined, fetcher, undefined, async (provider, signal) => {
@@ -28,6 +30,20 @@ async function fixture(hold = false, closeOnPublish = false, persistent = true) 
   const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
   return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
 }
+it('uses native Kimi device login in the same custom slot without borrowing the inference endpoint as issuer', async () => {
+  const f = await fixture(false, false, true, 'kimi-coding'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', provider: id, userCode: 'VISIBLE-CODE' });
+  await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected')); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(4); expect(f.invalidate).toHaveBeenCalledWith(id);
+  expect(f.fetcher.mock.calls.map(call => call[0])).toEqual([gateway + '/api/oauth/device_authorization', gateway + '/api/oauth/token']);
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' }))?.credential).toMatchObject({ subscription: { provider: 'kimi-coding', oauthHost: gateway } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined();
+});
+it('refuses native Kimi browser mode before issuer requests and releases the pending owner', async () => {
+  const f = await fixture(false, false, true, 'kimi-coding'); await expect(f.service.start(id, undefined, 'browser')).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('releases a held Kimi device-token response on disconnect without a late secret or native mount', async () => {
+  const f = await fixture(true, false, true, 'kimi-coding'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id);
+  const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false);
+  const reader = f.reader(); await reader.load(); expect(await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' })).toBeUndefined(); expect(f.invalidate).not.toHaveBeenCalled();
+});
 it('requires the custom encrypted store before native Radius issuer work', async () => {
   const f = await fixture(false, false, false); await expect(f.service.start(id)).rejects.toMatchObject({ status: 409 }); expect(f.fetcher).not.toHaveBeenCalled();
 });

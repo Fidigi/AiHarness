@@ -65,8 +65,8 @@ export function createProviderRegistryRouter(
         type: provider.id,
         name: provider.name,
         configured: provider.configured,
-        connected: provider.dialect === 'radius' ? provider.configured : proxy.isConfigured(provider.id),
-        method: services.providerRegistry.hasRadiusOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
+        connected: ['radius', 'kimi-coding'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
+        method: services.providerRegistry.hasNativeOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
         reconnectSupported: true,
         disconnectSupported: provider.configured,
         ...(proxy.getUsage(provider.id) ? { usage: proxy.getUsage(provider.id) } : {}),
@@ -208,7 +208,7 @@ export function createProviderRegistryRouter(
       }
       const services = await servicesPromise;
       const oldId = identifier(request.params.id, 'provider id').toLowerCase();
-      if (services.providerRegistry.hasPendingRadiusOAuth(oldId)) {
+      if (services.providerRegistry.hasPendingNativeOAuth(oldId)) {
         response.status(409).json({ error: 'Provider login is pending.', code: 'PROVIDER_OAUTH_PENDING', uncertain: false });
         return;
       }

@@ -349,10 +349,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             : null}
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
-            {provider.dialect === 'radius' && <>
-              <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>
-              <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>
-            </>}
+            {['radius', 'kimi-coding'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>}
+            {provider.dialect === 'radius' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
             <button type="button" onClick={() => {
               setEditing(provider.id);
               setForm({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' });
@@ -365,7 +363,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             {provider.configured && <button type="button" onClick={async () => {
               if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await disconnectProvider(provider.id);
-              if (!result.success) error(result.error); else if (provider.dialect === 'radius') await reconcile(); else await load();
+              if (!result.success) error(result.error); else if (['radius', 'kimi-coding'].includes(provider.dialect)) await reconcile(); else await load();
             }}>{t('settings.disconnect')}</button>}
             <button type="button" onClick={async () => {
               const result = await importCustomProviderModels(provider.id);

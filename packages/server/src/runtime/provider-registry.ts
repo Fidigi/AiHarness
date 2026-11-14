@@ -31,7 +31,7 @@ import {
   BasetenProvider, BASETEN_MODELS,
   FireworksProvider, FIREWORKS_MODELS,
   HuggingFaceProvider, HUGGINGFACE_MODELS,
-  KimiCodingProvider, KIMI_CODING_MODELS,
+  KimiCodingProvider, KimiCodingOAuthProvider, KIMI_CODING_MODELS, getKimiCodingOAuthConfig,
   MetaProvider, META_MODELS,
   MiniMaxProvider, MINIMAX_MODELS,
   MiniMaxCnProvider, MINIMAX_CN_MODELS,
@@ -50,7 +50,7 @@ import {
   RadiusProvider,
   getRadiusOAuthConfig,
   type ProviderOAuthCredential,
-  type RadiusOAuthCredential,
+  type RadiusOAuthCredential, type KimiCodingOAuthCredential, type AiProvider,
   CloudflareAiGatewayProvider, CLOUDFLARE_AI_GATEWAY_MODELS,
   VercelAiGatewayProvider, VERCEL_AI_GATEWAY_MODELS,
   CLOUDFLARE_CHAT_MODELS,
@@ -377,8 +377,8 @@ export class ProviderRegistryService {
   private source?: string;
   private sourceIdentity?: Stats;
   private readonly revisionKey = randomBytes(32);
-  private readonly radiusLogins = new Map<string, { controller: AbortController; identity?: Stats; fingerprint: string }>();
-  private cancelRadiusLogin(id: string): void { this.radiusLogins.get(id)?.controller.abort(); }
+  private readonly nativeLogins = new Map<string, { controller: AbortController; identity?: Stats; fingerprint: string }>();
+  private cancelRadiusLogin(id: string): void { this.nativeLogins.get(id)?.controller.abort(); }
 
   constructor(
     private readonly filePath: string,
@@ -411,7 +411,7 @@ export class ProviderRegistryService {
     await this.secretStore?.load();
     await this.migrateLegacySecrets();
     await this.credentialService.load();
-    for (const [id, login] of this.radiusLogins) {
+    for (const [id, login] of this.nativeLogins) {
       if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) this.cancelRadiusLogin(id);
     }
     for (const provider of this.state.providers) {
@@ -447,30 +447,34 @@ export class ProviderRegistryService {
     return this.state.providers.map(({ credentialId: _privateIdentity, ...provider }) => ({
       ...provider,
       revision: this.getRevision(),
-      configured: this.proxy.isConfigured(provider.id) && (provider.dialect !== 'radius' || this.proxy.getAgentProvider(provider.id)?.validateConfig() === true),
+      configured: this.proxy.isConfigured(provider.id) && (!['radius', 'kimi-coding'].includes(provider.dialect) || this.proxy.getAgentProvider(provider.id)?.validateConfig() === true),
       modelCount: this.state.models.filter(model => model.provider === provider.id).length,
     }));
   }
 
   hasCredentials(id: string): boolean { return Boolean(this.readSecrets(id)); }
-  hasPendingRadiusOAuth(id: string): boolean { return this.radiusLogins.has(id); }
-  hasRadiusOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius') && Boolean(this.readSecrets(id)?.oauth); }
+  hasPendingNativeOAuth(id: string): boolean { return this.nativeLogins.has(id); }
+  hasPendingRadiusOAuth(id: string): boolean { return this.hasPendingNativeOAuth(id) && this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius'); }
+  hasNativeOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && ['radius', 'kimi-coding'].includes(provider.dialect)) && Boolean(this.readSecrets(id)?.oauth); }
+  hasRadiusOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius') && this.hasNativeOAuth(id); }
 
   /** One existing custom record owns the issuer, headers, encrypted slot and eventual runtime admission. */
-  async prepareRadiusOAuth(idValue: string, parent: AbortSignal) {
+  async prepareRadiusOAuth(idValue: string, parent: AbortSignal) { return this.prepareIssuerOAuth(idValue, parent, 'radius'); }
+  async prepareNativeOAuth(idValue: string, parent: AbortSignal) { return this.prepareIssuerOAuth(idValue, parent); }
+  private async prepareIssuerOAuth(idValue: string, parent: AbortSignal, expectedIssuer?: 'radius') {
     parent.throwIfAborted();
     return this.withMutation(async () => {
       parent.throwIfAborted();
       const id = providerId(idValue);
-      let record = this.state.providers.find(provider => provider.id === id && provider.dialect === 'radius');
+      let record = this.state.providers.find(provider => provider.id === id && ['radius', 'kimi-coding'].includes(provider.dialect) && (!expectedIssuer || provider.dialect === expectedIssuer));
       if (!record) throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
       if (!this.secretStore) throw Object.assign(new Error('OAuth credential storage is unavailable.'), { status: 409 });
-      const gateway = getRadiusOAuthConfig(record.baseUrl).gateway, identity = record.credentialId ?? id;
+      const issuer = record.dialect === 'radius' ? 'radius' : 'kimi-coding', realm = issuer === 'radius' ? getRadiusOAuthConfig(record.baseUrl).gateway : this.kimiIssuerHost(this.readSecrets(id)), identity = record.credentialId ?? id;
       this.cancelRadiusLogin(id);
       const login = { controller: new AbortController(), identity: this.sourceIdentity, fingerprint: JSON.stringify(record) };
-      this.radiusLogins.set(id, login);
+      this.nativeLogins.set(id, login);
       const signal = AbortSignal.any([parent, login.controller.signal]);
-      const release = () => { if (this.radiusLogins.get(id) === login) this.radiusLogins.delete(id); };
+      const release = () => { if (this.nativeLogins.get(id) === login) this.nativeLogins.delete(id); };
       if (signal.aborted) release(); else signal.addEventListener('abort', release, { once: true });
       let publish: Awaited<ReturnType<ProviderCredentialService['prepareOAuthLogin']>>;
       try { await this.assertSource(); signal.throwIfAborted(); publish = await this.credentialService.prepareOAuthLogin(identity, signal); }
@@ -479,11 +483,13 @@ export class ProviderRegistryService {
         signal.throwIfAborted(); await this.assertSource();
         if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) throw Object.assign(new Error('Provider changed during login.'), { status: 409 });
       };
-      return { gateway, signal, redactor: this.redactor, publish: async (credential: RadiusOAuthCredential): Promise<() => void> => this.withMutation(async () => {
+      return { issuer, realm, gateway: realm, signal, redactor: this.redactor, publish: async (credential: RadiusOAuthCredential | KimiCodingOAuthCredential): Promise<() => void> => this.withMutation(async () => {
         await guard();
-        if (credential.subscription.provider !== 'radius' || credential.subscription.gateway !== gateway) throw new Error('Invalid Radius issuer.');
+        const credentialRealm = credential.subscription.provider === 'radius' ? credential.subscription.gateway : credential.subscription.oauthHost;
+        if (credential.subscription.provider !== issuer || credentialRealm !== realm) throw new Error('Invalid native issuer.');
         const secrets: ProviderSecrets = { oauth: { version: 1, type: 'oauth', ...credential }, headers: this.readSecrets(id)?.headers ?? {} };
-        const prepared = this.createRadiusProvider(record!, secrets, secrets.oauth);
+        const prepared = this.createNativeOAuthProvider(record!, secrets, secrets.oauth);
+        if (!prepared) throw new Error('Native OAuth provider is unavailable.');
         await guard();
         if (record!.disconnected) {
           const previous = this.state, connected = { ...record!, disconnected: false, updatedAt: new Date().toISOString() };
@@ -539,7 +545,7 @@ export class ProviderRegistryService {
     for (const model of this.state.models.filter(model => model.provider === id)) {
       validateDialectModel(record.dialect, model.id);
     }
-    if (previous?.dialect === 'radius') { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (previous && ['radius', 'kimi-coding'].includes(previous.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     const currentSecrets = this.readSecrets(id) ?? { headers: {} };
     if (!previous && this.state.providers.length >= MAX_CUSTOM_PROVIDERS) {
       badRequest('Too many custom providers are configured.');
@@ -556,7 +562,7 @@ export class ProviderRegistryService {
       headers: customHeaders ?? currentSecrets.headers,
     };
     // Radius may load its explicit private catalogue locally; reject unsafe cache before mutating credentials/metadata.
-    const preparedRadius = record.dialect === 'radius' ? this.createRadiusProvider(record, nextSecrets) : undefined;
+    const preparedNative = this.createNativeOAuthProvider(record, nextSecrets);
     await this.assertSource();
     await this.saveSecrets(id, nextSecrets, record.credentialId);
     const credentialRevision = this.secretStore?.getRevision();
@@ -575,7 +581,7 @@ export class ProviderRegistryService {
     }
     this.cancelRadiusLogin(id);
     await this.proxy.resetNetworkDispatchers();
-    this.applyProvider(record, preparedRadius);
+    this.applyProvider(record, preparedNative);
     return this.listProviders().find(provider => provider.id === id)!;
   }
 
@@ -596,7 +602,7 @@ export class ProviderRegistryService {
       const previous = this.state.providers.find(provider => provider.id === oldId);
       if (!previous) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
       if (oldId === newId) return this.listProviders().find(provider => provider.id === oldId)!;
-      if (this.radiusLogins.has(oldId)) throw Object.assign(new Error('Provider login is pending.'), { status: 409, code: 'PROVIDER_OAUTH_PENDING' });
+      if (this.nativeLogins.has(oldId)) throw Object.assign(new Error('Provider login is pending.'), { status: 409, code: 'PROVIDER_OAUTH_PENDING' });
       if (this.state.providers.some(provider => provider.id === newId) || this.proxy.getAgentProvider(newId)) {
         throw Object.assign(new Error('Provider already exists.'), { status: 409, code: 'PROVIDER_EXISTS' });
       }
@@ -652,7 +658,7 @@ export class ProviderRegistryService {
   private async deleteProviderUnlocked(idValue: string): Promise<boolean> {
     const id = providerId(idValue);
     if (!this.state.providers.some(provider => provider.id === id)) return false;
-    if (this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius')) { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (this.state.providers.some(provider => provider.id === id && ['radius', 'kimi-coding'].includes(provider.dialect))) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const identity = this.storageId(id);
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
@@ -694,7 +700,7 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.state.providers.find(item => item.id === id);
     if (!provider) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
-    if (provider.dialect === 'radius') { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (['radius', 'kimi-coding'].includes(provider.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
     this.cancelRadiusLogin(id);
@@ -913,8 +919,8 @@ export class ProviderRegistryService {
 
   private async hydrateSecrets(id: string): Promise<void> {
     const stored = this.credentialService.readStoredCredential(this.storageId(id));
-    const oauth = this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius')
-      && stored?.type === 'oauth' && stored.subscription?.provider === 'radius' ? stored : undefined;
+    const issuer = this.state.providers.find(provider => provider.id === id)?.dialect;
+    const oauth = stored?.type === 'oauth' && (issuer === 'radius' || issuer === 'kimi-coding') && stored.subscription?.provider === issuer ? stored : undefined;
     const resolved = oauth ? undefined : await this.credentialService.resolve(this.storageId(id), { env: {} });
     const storedHeaders = this.secretStore?.get(this.headerStorageName(id));
     let customHeaders: Record<string, string> = {};
@@ -968,26 +974,44 @@ export class ProviderRegistryService {
     return `provider-headers:${this.storageId(id)}`;
   }
 
-  private createRadiusProvider(record: StoredProvider, secrets: ProviderSecrets | undefined, initial?: ProviderOAuthCredential): RadiusProvider {
-    const native = secrets?.oauth?.subscription?.provider === 'radius' && secrets.oauth.subscription.gateway === getRadiusOAuthConfig(record.baseUrl).gateway;
+  private kimiIssuerHost(secrets?: ProviderSecrets): string {
+    const stored = secrets?.oauth?.subscription;
+    return getKimiCodingOAuthConfig(process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST || (stored?.provider === 'kimi-coding' ? stored.oauthHost : undefined)).tokenUrl.slice(0, -'/api/oauth/token'.length);
+  }
+
+  private nativeCredentialSource(record: StoredProvider, secrets: ProviderSecrets | undefined, issuer: 'radius' | 'kimi-coding', realm: string) {
     const bound = () => {
       const current = this.state.providers.find(provider => provider.id === record.id);
-      return current && !current.disconnected && current.dialect === 'radius' && current.baseUrl === record.baseUrl
+      return current && !current.disconnected && current.dialect === record.dialect && current.baseUrl === record.baseUrl
         && (current.credentialId ?? current.id) === (record.credentialId ?? record.id)
         && JSON.stringify(Object.entries(this.readSecrets(record.id)?.headers ?? {}).sort()) === JSON.stringify(Object.entries(secrets?.headers ?? {}).sort());
     };
-    const source = native ? async (signal?: AbortSignal, allowRefresh = true) => {
+    return async (signal?: AbortSignal, allowRefresh = true) => {
       if (!bound()) return undefined;
-      const resolved = await this.credentialService.resolve(record.credentialId ?? record.id, { env: {}, subscriptionProvider: 'radius', radiusGateway: record.baseUrl, signal, allowRefresh });
+      const resolved = await this.credentialService.resolve(record.credentialId ?? record.id, { env: {}, subscriptionProvider: issuer,
+        ...(issuer === 'radius' ? { radiusGateway: realm } : { kimiOAuthHost: realm }), signal, allowRefresh });
       return bound() && resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
-    } : undefined;
-    const credential = initial ?? (source && secrets?.oauth?.expiresAt !== undefined && secrets.oauth.expiresAt > Date.now() + 60_000 ? secrets.oauth : undefined);
-    return new RadiusProvider({ type: record.id, apiKey: secrets?.apiKey, customHeaders: secrets?.headers,
-      gateway: record.baseUrl, catalogueDirectory: path.join(path.dirname(this.filePath), 'radius-models', record.credentialId ?? record.id),
-      model: this.state.models.find(model => model.provider === record.id)?.id }, source, credential);
+    };
   }
 
-  private applyProvider(record: StoredProvider, prepared?: RadiusProvider): void {
+  private createNativeOAuthProvider(record: StoredProvider, secrets: ProviderSecrets | undefined, initial?: ProviderOAuthCredential): AiProvider | undefined {
+    const model = this.state.models.find(model => model.provider === record.id)?.id;
+    if (record.dialect === 'radius') {
+      const gateway = getRadiusOAuthConfig(record.baseUrl).gateway;
+      const native = secrets?.oauth?.subscription?.provider === 'radius' && secrets.oauth.subscription.gateway === gateway;
+      const source = native ? this.nativeCredentialSource(record, secrets, 'radius', gateway) : undefined;
+      const credential = initial ?? (source && secrets?.oauth?.expiresAt !== undefined && secrets.oauth.expiresAt > Date.now() + 60_000 ? secrets.oauth : undefined);
+      return new RadiusProvider({ type: record.id, apiKey: secrets?.apiKey, customHeaders: secrets?.headers, gateway: record.baseUrl,
+        catalogueDirectory: path.join(path.dirname(this.filePath), 'radius-models', record.credentialId ?? record.id), model }, source, credential);
+    }
+    if (record.dialect === 'kimi-coding' && secrets?.oauth?.subscription?.provider === 'kimi-coding') {
+      const oauthHost = this.kimiIssuerHost(secrets); if (oauthHost !== secrets.oauth.subscription.oauthHost) return undefined;
+      return new KimiCodingOAuthProvider({ type: record.id, baseUrl: record.baseUrl, customHeaders: secrets.headers, model, oauthHost }, this.nativeCredentialSource(record, secrets, 'kimi-coding', oauthHost));
+    }
+    return undefined;
+  }
+
+  private applyProvider(record: StoredProvider, prepared?: AiProvider): void {
     if (record.disconnected) { this.proxy.removeProvider(record.id); return; }
     const secrets = this.readSecrets(record.id);
     const config: ProviderConfig = {
@@ -998,7 +1022,7 @@ export class ProviderRegistryService {
       model: this.state.models.find(model => model.provider === record.id)?.id,
     };
     const Adapter = nativeDialect(record.dialect)?.Adapter;
-    const provider = prepared ?? (record.dialect === 'radius' ? this.createRadiusProvider(record, secrets) : Adapter ? new Adapter(config)
+    const provider = prepared ?? this.createNativeOAuthProvider(record, secrets) ?? (Adapter ? new Adapter(config)
       : record.dialect === 'openai-completions' ? new OpenAiProvider(config)
       : record.dialect === 'openai-responses' ? new OpenAiResponsesProvider(config)
         : record.dialect === 'mistral-conversations' ? new MistralProvider(config)
@@ -1013,7 +1037,7 @@ export class ProviderRegistryService {
                           : record.dialect === 'groq' ? new GroqProvider(config)
                             : record.dialect === 'anthropic' ? new AnthropicProvider(config)
                               : new GeminiProvider(config));
-    if (record.dialect === 'radius' && !provider.validateConfig()) { this.proxy.removeProvider(record.id); return; }
+    if (['radius', 'kimi-coding'].includes(record.dialect) && !provider.validateConfig()) { this.proxy.removeProvider(record.id); return; }
     this.proxy.setCustomProvider(record.id, provider);
   }
 

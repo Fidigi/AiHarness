@@ -1,0 +1,57 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "687246f",
+  "scope": "Native Kimi custom Server/Settings Device login and live inference, reusing the existing Radius encrypted-owner lifecycle",
+  "dependencies": ["MOD-01-kimi-oauth-sdk.json", "MOD-01-kimi-oauth-live-sdk.json", "MOD-01-kimi-oauth-cli.json", "MOD-01-radius-oauth-server.json"],
+  "requirements": [
+    {
+      "requirement": "Usable native custom Kimi login/composition, not another builtin or label-inferred issuer",
+      "implementation": "Registry prepareNativeOAuth selects Radius or Kimi only from the explicit custom dialect, reserves the existing stable encrypted slot before remote work and retains the Radius compatibility entry point. Kimi uses its Core fixed-client Device Flow; browser mode refuses400. KIMI_CODE_OAUTH_HOST precedes KIMI_OAUTH_HOST, then stored native issuer/default; inference baseUrl never becomes the token issuer. Settings custom Kimi cards expose the existing Device connect/reconnect action, not PKCE. Existing capability/request/provider-operation guards remain. Credentialless Kimi is not mounted/reported connected; native method metadata is OAuth, without claiming account entitlement.",
+      "proof": "New registry/service cases and one real HTTP scenario use foreign custom IDs and distinct issuer/inference endpoints. HTTP asserts user capability403, browser400 before issuer traffic, guarded device publication, honest static Test409/Import and actual A→codemode→A. SDK static four-model declarations are not an account model endpoint."
+    },
+    {
+      "requirement": "Live issuer/record/header ownership across passive restart, refresh and edits",
+      "implementation": "Share existing native credential-source binding for record/dialect/endpoint/stable identity/headers, with issuer-specific Core resolution. Administrative hydration admits typed native Kimi metadata, including expired credentials, without refresh or key flattening. Selected inference alone resolves/refreshes the persisted issuer. Metadata/header edits preserve independently rotated tokens; existing revision/CAS rollback machinery applies to both native credential shapes. API-key Kimi still uses the original adapter. Local grant continuity is inherited from the native SDK, not inferred from a label.",
+      "proof": "Registry fixture refreshes, edits headers/name, checks rotated encrypted credentials and refuses the retained old header-bound instance. Explicit foreign issuer reload unmounts without requests. Real HTTP expires ciphertext, stops/restarts Server with issuer environment removed, asserts zero eager refresh, resumes signed history through one stored-issuer refresh, then edits visible metadata without restoring an old token. Existing Radius native rollback/owner/header/cache controls remain selected after sharing the binding code."
+    },
+    {
+      "requirement": "No late credential/mount after replacement, disconnect or retired publication ownership",
+      "implementation": "One native pending-owner map now guards both dialects, preserving source identity/fingerprint, pre-abort, unchanged-reload, update/disconnect/delete/rename and final synchronous admission fences. Native publication validates issuer/realm and constructs before mutation. Native Kimi shares the existing detached flow/body/shutdown ownership; no duplicate secret store or publication framework is introduced. Disconnect reconciles canonical Settings metadata/models using the existing guarded readback.",
+      "proof": "New Kimi registry tests retire pending login/final admit and exclude pending rename. Reused service fixture adds Device success, browser refusal/owner release and held-token-body disconnect without late secret/mount. Actual HTTP closes a held token body once despite hostile cancellation, refuses pending rename with the native409 before reference scanning, removes credentials, cancels the flow and refuses another agent run without additional inference. Existing Radius pre-abort/shutdown/committed-return/refreshed-owner controls remain."
+    },
+    {
+      "requirement": "Useful private A tool/restart continuation with accounting/privacy and bounded affected UI regression",
+      "implementation": "Consume existing native Kimi grant envelopes, A codec and shared agent/session loop. Settings reuses the generic Device action and offers Browser only for Radius; no new browser callback/form protocol is added. Legacy Radius-named internal context/factory spellings are retained while the validated record determines the native issuer.",
+      "proof": "Actual authenticated HTTP performs two signed A/tool turns, then refreshed/restarted A with both exact thinking signatures, one tool and30 observed session tokens. No harness prefix reaches vendor wire and no synthetic credential/tenant data reaches public state/journal/metadata/encrypted file bytes. The existing built-Server/static-Web Radius PKCE→Import→P→full Settings navigation→Disconnect journey passes after the shared owner/markup changes. No native Kimi browser journey is credited; its Device UI action is unchanged generic wiring, separately compiled and backed by actual native HTTP."
+    }
+  ],
+  "qualification": {
+    "environment": "Docker only; --network none; CI=true; synthetic credentials/disposable stores. Server API is actual loopback HTTP; upstream issuer/inference URLs are mocked HTTPS fetch responses, not live/TLS service acceptance. No personal stores, real-account opt-in or protected-container operation.",
+    "image": "ai-harness:mod01-kimi-server",
+    "imageId": "sha256:86761d4195748bde6326587eb2f5a682f0182744fc5e6a0c03c7862296e591d3",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-kimi-server; Core/CLI/Server/Web and workspace/parity types PASS",
+    "buildLog": "/tmp/mod01-kimi-server/build.log",
+    "strict": { "passed": true, "roots": 8, "config": "/tmp/mod01-kimi-server/strict.json", "logs": ["/tmp/mod01-kimi-server/focused.log", "/tmp/mod01-kimi-server/registry-final.log"] },
+    "focused": { "passed": 119, "failed": 0, "files": 8, "selection": ["packages/server/src/runtime/provider-kimi-oauth.test.ts", "packages/server/src/runtime/provider-oauth-radius.test.ts", "packages/server/src/runtime/provider-radius-oauth.test.ts", "packages/server/src/runtime/provider-registry.test.ts", "packages/server/src/api/kimi-oauth-http.test.ts", "packages/server/src/api/radius-oauth-http.test.ts", "packages/server/src/runtime/provider-oauth-codex.test.ts", "packages/server/src/runtime/provider-oauth-copilot.test.ts"], "log": "/tmp/mod01-kimi-server/focused.log" },
+    "finalStrongerRegistryAssertions": { "passed": 2, "failed": 0, "files": 1, "log": "/tmp/mod01-kimi-server/registry-final.log", "meaning": "Test-only overlay adds the explicit foreign-Kimi-issuer/no-I/O reload assertion. Same product, no additional distinct cases." },
+    "affectedRegression": { "passed": 24, "failed": 0, "files": 3, "selection": ["packages/server/src/api/native-dialects-http.test.ts", "packages/server/src/api/provider-lifecycle-routes.test.ts", "packages/web/src/services/provider-lifecycle.test.ts"], "log": "/tmp/mod01-kimi-server/regression.log", "limit": "Existing lifecycle-routes runtime retained, not a newly qualified strict root; its prior baseline-reproduced TS2322 remains unchanged/open." },
+    "browserRegression": { "passed": 1, "failed": 0, "workers": 1, "retries": 0, "selection": "e2e/radius-oauth-live.spec.ts --project=chromium", "log": "/tmp/mod01-kimi-server/browser.log", "artifacts": "/tmp/mod01-kimi-server/browser-results/", "meaning": "Affected shared custom-issuer owner/Settings markup, not native Kimi browser/account or new generic platform certification." },
+    "distinctFinalRuntimeTests": 143,
+    "distinctFinalBrowserTests": 1,
+    "counterfactual": { "failed": 2, "log": "/tmp/mod01-kimi-server/red.log", "image": "ai-harness:mod01-kimi-cli-owned", "meaning": "Uncredentialed Kimi is wrongly reported configured, and native custom issuer preparation is absent." },
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-kimi-server/docs.log" },
+    "limits": "No new installed/production/global/real-account or MOD-01.04b qualification. Native Kimi Device UI is reused wiring, not a new browser journey; the single browser result is Radius regression only. Static Kimi import/Test409 does not certify access. Previous failed gates/strict fixture/oracle/native incidents and exactly three historical acceptances remain unchanged; no assertion/deadline/flag weakening, new SDK acquisition or MOD-03 redelivery."
+  },
+  "sourceSha256": {
+    "packages/server/src/runtime/provider-registry.ts": "c36c74d3b5031ad6999145d5bf43c00c2532bf5f92428e74fbca5b8d04093674",
+    "packages/server/src/runtime/provider-oauth.ts": "1654a414665a318bf8086c6dc488ccca018826fb3d9f2582e1acd69403be2335",
+    "packages/server/src/runtime/provider-oauth-radius.test.ts": "12e3c989d634a2dc370662d739d0545caa5b51dbe7a1eace9d43cb6d435fb1d2",
+    "packages/server/src/runtime/provider-kimi-oauth.test.ts": "778795d584e7d534ff0ecdc5e76d24f40561830994cd74c75e557deae531cb1c",
+    "packages/server/src/api/provider-registry-routes.ts": "ba62ae1a27c6612c969920fc4f767936c43c71a9335390d2703258d8cd0afabd",
+    "packages/server/src/api/kimi-oauth-http.test.ts": "883cab14924f1693ee0f7e3f4b5d54e92c06e4e80d841ad53427860710ea9fd5",
+    "packages/web/src/components/EcosystemSettings.tsx": "3455d6e48bc96e2b679f0d415cdc7048c9b4e44abe51df6d5206fb9b5f44732b"
+  },
+  "remaining": ["Other required issuers/federation/cloud chains, effective policies and MOD-01.04b media preparation", "Final MOD-01 requirement-to-implementation-to-proof closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}
