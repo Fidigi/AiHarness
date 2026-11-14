@@ -14,6 +14,8 @@ export * from './sdk/index.js';
 // Providers
 export { azureEnvironmentConfig } from './providers/azure-config.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
+export type { RadiusChatOptions } from './providers/radius.js';
+export { RadiusProtocolError } from './providers/radius.js';
 export * from './providers/specialized-models.js';
 export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
 export type { NativeClassifierQuestion, NativeClassifierRequest, NativeClassifierAnswer, NativeClassifierResult } from './providers/native-classification.js';
@@ -55,6 +57,8 @@ export {
   OpenAiResponsesProvider,
   OpenAiMixedProvider,
   OPENAI_RESPONSE_MODELS,
+  RadiusProvider,
+  RADIUS_MODELS,
   AzureProvider,
   AzureResponsesProvider,
   AzureCompletionsProvider,

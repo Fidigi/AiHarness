@@ -47,7 +47,7 @@ Native column: **subset** means an existing built-in, never complete catalogue/a
 | qwen-token-plan-cn | 20 | C | Plan API key | Custom candidate; plan-specific qualification missing |
 | qwen-token-plan-individual | 9 | C | Plan API key | Custom candidate; plan-specific qualification missing |
 | qwen-token-plan | 20 | C | Plan API key | Custom candidate; plan-specific qualification missing |
-| radius | 29 | P | API key, OAuth, configurable gateway | P and issuer integration missing |
+| radius | 29 | P | API key, OAuth, configurable gateway | Explicit native P API-key SDK foundation:29 baseline declarations, real context/options/SSE, terminal/tool/usage/cancellation and scoped private continuation. Account-owned catalogue replacement/persistence, OAuth/issuer and native hosts remain missing; no service or image-preparation claim |
 | together | 17 | C | API key | Explicit native supplied-key SDK subset:E72 JSON configured-fallback capture correction/unchanged SSE;17 C profiles,enabled/combined/effort-only reasoning,omitted tool strict,exact caps/no automatic affinity,disjoint prices and actual-adapter metadata/windows/levels;trusted CLI registration remains explicit. No ambient key,factory,dialect,Server/Settings,Pi omitted-reasoning/full-default/account/effective-profile qualification |
 | typesafe | 1 | T | API key | Native T SDK plus CLI/custom Server/Settings auxiliary composition beside another conversation provider; finite guest and distinct direct scalar contracts, one pinned Jev profile, no chat rows. Real-service qualification remains separate |
 | vercel-ai-gateway | 251 | A, T | Gateway API key | Custom A candidate; T host composition/gateway-specific behavior missing |

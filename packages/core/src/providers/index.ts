@@ -79,6 +79,9 @@ import { OPENROUTER_IMAGE_MODELS, openRouterImagePricing } from './openrouter-im
 export { OPENROUTER_IMAGE_MODELS } from './openrouter-images-metadata.js';
 import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, openRouterImagesUsage, type NativeImageRequest, type NativeImageResult } from './openrouter-images.js';
 import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
+import { RADIUS_MODELS, radiusModel } from './radius-models.js';
+export { RADIUS_MODELS } from './radius-models.js';
+import { radiusBase, radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type RadiusChatOptions } from './radius.js';
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
@@ -4309,6 +4312,70 @@ export class OpenAiMixedProvider extends AiProvider {
     return this.classifier().classifyNativeQuestions(request, options);
   }
   override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Image model or options are not supported.'); }
+}
+
+const nativeRadiusProviders = new WeakSet<AiProvider>();
+/** Explicit API-key P SDK. Account catalogue/issuer/host composition is separate from this transport. */
+export class RadiusProvider extends AiProvider {
+  private readonly baseUrl: string;
+  constructor(config: ProviderConfig) {
+    const model = config.model ?? 'balanced'; radiusModel(model);
+    super({ ...config, model }); this.baseUrl = radiusBase(config.baseUrl);
+    if (new.target === RadiusProvider) nativeRadiusProviders.add(this);
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return RADIUS_MODELS.map(model => model.id); }
+  override getModelApi(model = this.config.model): string | undefined { return RADIUS_MODELS.some(profile => profile.id === model) ? 'pi-messages' : undefined; }
+  override setConfiguredModel(model: string): void { radiusModel(model); super.setConfiguredModel(model); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return RADIUS_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+      maxOutputTokens: profile.maxOutputTokens, ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true }, pricing: { ...profile.pricing } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = radiusModel(String(this.config.model));
+    return [{ id: `${profile.id}:classifier`, model: profile.id, provider: this.getProviderType(), type: 'classifier', virtual: true,
+      api: 'pi-messages', contextWindow: profile.contextWindow, imageInput: profile.declaredInput.includes('image'), pricing: { ...profile.pricing } }];
+  }
+  override async chat(messages: Message[], options?: RadiusChatOptions): Promise<ChatResponse> {
+    let result: ChatResponse | undefined, failure: Error | undefined;
+    await this.streamChat(messages, () => undefined, response => { result = response; }, error => { failure = error; }, options);
+    if (failure) throw failure;
+    if (!result) throw new RadiusProtocolError('Invalid Radius stream.');
+    return result;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options: RadiusChatOptions = {}): Promise<void> {
+    let activeSignal: AbortSignal | undefined;
+    try {
+      if (!this.validateConfig()) throw new Error('Radius API key is required.');
+      const key = String(this.config.apiKey), model = options.model ?? String(this.config.model), provider = String(this.config.type);
+      radiusModel(model);
+      const network = providerNetworkSettings(this.config);
+      const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : []),
+        ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+      activeSignal = signal; signal.throwIfAborted();
+      const owner = { provider, model, ...(nativeRadiusProviders.has(this) ? { scope: radiusScope(provider, this.baseUrl, model, key) } : {}) };
+      const body = serializeProviderBody(radiusBody(structuredClone(messages), options, owner));
+      const response = await this.request(`${this.baseUrl}/messages`, { method: 'POST', signal, body,
+        headers: { ...configuredHeaders(this.config), Authorization: `Bearer ${key}`, Accept: 'text/event-stream', 'Content-Type': 'application/json' } });
+      if (!response.ok) rejectProviderResponse(response, 'Radius request failed.');
+      const result = await readRadiusStream(response, owner, signal, onChunk);
+      signal.throwIfAborted(); onComplete?.(result);
+    } catch (error) {
+      onError?.(new RadiusProtocolError(activeSignal?.aborted || options.signal?.aborted ? 'Radius request aborted.' : 'Radius request failed.',
+        error instanceof RadiusProtocolError ? error.usage : undefined));
+    }
+  }
+  override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
+    try { return await super.classify(request, options); }
+    catch (error) { if (error instanceof RadiusProtocolError) throw new SpecializedModelError('Radius classification failed.', error.usage); throw error; }
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options?: SpecializedModelOptions): Promise<QuestionClassificationResult> {
+    try { return await super.classifyQuestions(request, options); }
+    catch (error) { if (error instanceof RadiusProtocolError) throw new SpecializedModelError('Radius classification failed.', error.usage); throw error; }
+  }
 }
 
 // ===================================================================
