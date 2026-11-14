@@ -18,6 +18,8 @@ import {
   type KimiCodingOAuthCredentialSource,
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
+  resolveVertexAdcEnvironment,
+  type VertexProviderConfig,
   type MetaOAuthCredentialSource,
   type XaiOAuthCredentialSource,
 } from '@ai-harness/core';
@@ -68,6 +70,7 @@ export interface CliProviderRuntime {
   anthropicAuthMode?: 'api-key' | 'oauth';
   anthropicOAuth?: CliAnthropicOAuth;
   anthropicFederation?: AnthropicFederationConfig;
+  vertexAdc?: VertexProviderConfig;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -219,7 +222,11 @@ export async function createCliProviderRuntime(
   const storedXai = present.has('xai') && !values.has('xai') && !commandEnv[commandVariable('xai')] ? credentials.readStoredCredential('xai') : undefined;
   const xai = storedXai?.type === 'oauth' && storedXai.subscription?.provider === 'xai'
     && (!offline || storedXai.expiresAt! > Date.now() + 60_000) ? storedXai : undefined;
+  const vertexAdc = !offline && !values.has('vertex') && !present.has('vertex') && !commandEnv[commandVariable('vertex')]
+    ? await resolveVertexAdcEnvironment(env, lifetime) : undefined;
+  lifetime.throwIfAborted();
   return {
+    ...(vertexAdc ? { vertexAdc: { ...vertexAdc, vertexAdc: { ...vertexAdc.vertexAdc!, signal: lifetime, redactor } } } : {}),
     ...(xai ? { xaiOAuth: { credential: xai, credentialSource: xaiSource } } : {}),
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),
     ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),

@@ -13,7 +13,7 @@ export * from './sdk/index.js';
 
 // Providers
 export { azureEnvironmentConfig } from './providers/azure-config.js';
-export { vertexEnvironmentConfig } from './providers/vertex-config.js';
+export { vertexEnvironmentConfig, resolveVertexAdcEnvironment } from './providers/vertex-config.js';
 export { beginXaiDeviceLogin, refreshXaiToken } from './providers/xai-oauth.js';
 export type { XaiOAuthIdentity, XaiOAuthCredential, XaiOAuthCredentialSource, XaiOAuthOptions, XaiDeviceLogin } from './providers/xai-oauth.js';
 export { beginMetaDeviceLogin, refreshMetaApiKey, MetaOAuthSetupRequiredError } from './providers/meta-oauth.js';
