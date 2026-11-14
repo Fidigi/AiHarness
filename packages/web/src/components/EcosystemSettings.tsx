@@ -314,7 +314,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           <option value="opencode-go">OpenCode Go Messages / Chat / Responses</option>
           <option value="opencode">OpenCode Zen Messages / Google / Chat / Responses</option>
           <option value="together">Together Chat Completions</option>
-          <option value="xai">xAI Responses (API key)</option>
+          <option value="xai">xAI Responses (API key or Grok/X)</option>
           <option value="xiaomi">Xiaomi Chat Completions</option>
           <option value="moonshot-cn">Moonshot CN Chat Completions</option>
           <option value="qwen-token-plan">Qwen Token Plan</option>
@@ -349,7 +349,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             : null}
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
-            {['radius', 'kimi-coding', 'meta'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>}
+            {['radius', 'kimi-coding', 'meta', 'xai'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>}
             {['radius', 'openrouter', 'anthropic'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
             {provider.dialect === 'anthropic' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'copy-code'); }}>{providerSettingsMessage(locale, 'copyCode')}</button>}
             <button type="button" onClick={() => {
@@ -364,7 +364,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             {provider.configured && <button type="button" onClick={async () => {
               if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await disconnectProvider(provider.id);
-              if (!result.success) error(result.error); else if (['radius', 'kimi-coding', 'openrouter', 'anthropic', 'meta'].includes(provider.dialect)) await reconcile(); else await load();
+              if (!result.success) error(result.error); else if (['radius', 'kimi-coding', 'openrouter', 'anthropic', 'meta', 'xai'].includes(provider.dialect)) await reconcile(); else await load();
             }}>{t('settings.disconnect')}</button>}
             <button type="button" onClick={async () => {
               const result = await importCustomProviderModels(provider.id);

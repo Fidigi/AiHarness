@@ -66,7 +66,7 @@ export function createProviderRegistryRouter(
         type: provider.id,
         name: provider.name,
         configured: provider.configured,
-        connected: ['radius', 'kimi-coding', 'openrouter', 'anthropic', 'meta'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
+        connected: ['radius', 'kimi-coding', 'openrouter', 'anthropic', 'meta', 'xai'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
         method: services.providerRegistry.hasNativeOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
         reconnectSupported: true,
         disconnectSupported: provider.configured,

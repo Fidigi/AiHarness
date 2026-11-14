@@ -11,13 +11,17 @@ const tokens = () => Response.json({ access_token: 'private-radius-access', refr
 const device = () => Response.json({ device_code: 'private-radius-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', expires_in: 600, interval: 1 });
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' | 'anthropic' | 'meta' = 'radius') {
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' | 'anthropic' | 'meta' | 'xai' = 'radius') {
   vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
   const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
   await registry.upsertProvider({ id, name: 'Radius', baseUrl: issuer === 'radius' ? gateway : 'https://inference.kimi.test/coding', dialect: issuer });
   const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
+    if (issuer === 'xai') {
+      if (String(url) === 'https://auth.x.ai/oauth2/device/code') return Response.json({ device_code: 'private-xai-device', user_code: 'VISIBLE-XAI', verification_uri: 'https://auth.x.ai/verify', expires_in: 600, interval: 1 });
+      expect(String(url)).toBe('https://auth.x.ai/oauth2/token'); reached.resolve(undefined); return hold ? held.promise : Response.json({ access_token: 'private-xai-access', refresh_token: 'private-xai-refresh' });
+    }
     if (issuer === 'meta') {
       if (String(url) === 'https://auth.meta.com/oidc/device/authorization/') return Response.json({ device_code: 'private-meta-device', user_code: 'VISIBLE-META', verification_uri: 'https://auth.meta.com/verify', expires_in: 600, interval: 1 });
       if (String(url) === 'https://auth.meta.com/oidc/device/token/') return Response.json({ access_token: 'private-meta-identity', token_type: 'Bearer', expires_in: 3600 });
@@ -37,6 +41,18 @@ async function fixture(hold = false, closeOnPublish = false, persistent = true, 
   const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
   return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
 }
+it('owns Grok Device access/refresh in the custom encrypted slot without key flattening', async () => {
+  const f = await fixture(false, false, true, 'xai'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', userCode: 'VISIBLE-XAI', verificationUri: 'https://auth.x.ai/verify' }); await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected'), { timeout: 5000 }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(4); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-xai-access', refreshToken: 'private-xai-refresh', subscription: { provider: 'xai' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-xai'); expect(f.fetcher).toHaveBeenCalledTimes(2);
+});
+it('refuses Grok browser/copy-code before issuer work and releases its pending custom owner', async () => {
+  const f = await fixture(false, false, true, 'xai'); for (const method of ['browser', 'copy-code'] as const) { await expect(f.service.start(id, undefined, method)).rejects.toMatchObject({ status: 400 }); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false); } expect(f.fetcher).not.toHaveBeenCalled();
+});
+it('retires a held Grok token on disconnect with no late secret/admission', async () => {
+  const f = await fixture(true, false, true, 'xai'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
+it('does not mount or erase a committed Grok credential returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'xai'), flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toBeUndefined(), { timeout: 5000 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-xai-access', subscription: { provider: 'xai' } });
+});
 it('owns Meta Device identity/mint in the custom encrypted slot without key flattening', async () => {
   const f = await fixture(false, false, true, 'meta'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', userCode: 'VISIBLE-META', verificationUri: 'https://auth.meta.com/verify' }); await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected'), { timeout: 5000 }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(6); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-meta-minted-key', refreshToken: 'private-meta-identity', subscription: { provider: 'meta' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-meta'); expect(f.fetcher).toHaveBeenCalledTimes(3);
 });
