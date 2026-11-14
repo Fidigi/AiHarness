@@ -8,6 +8,7 @@ import type { TerminalUI } from '../tui/terminal-ui.js';
 import * as radiusLogin from '../security/radius-login.js';
 import * as kimiLogin from '../security/kimi-login.js';
 import * as metaLogin from '../security/meta-login.js';
+import * as xaiLogin from '../security/xai-login.js';
 import * as anthropicLogin from '../security/anthropic-login.js';
 import * as openrouterLogin from '../security/openrouter-login.js';
 
@@ -29,6 +30,26 @@ async function fixture(persistent = true, hold = false, issuer: 'radius' | 'kimi
   });
   return { handler, credentials, messages, errors, host, caller, mock, fetch, file, reached, release: () => release(tokens()) };
 }
+async function xaiFixture(hold = false) {
+  const f = await fixture(); for (const name of ['XAI_API_KEY', 'AI_HARNESS_XAI_API_KEY', 'AI_HARNESS_XAI_API_KEY_COMMAND']) vi.stubEnv(name, undefined); vi.stubEnv('XAI_BASE_URL', 'https://synthetic-interactive-xai.test/v1'); vi.stubEnv('XAI_MODEL', 'grok-4.3'); let entered!: () => void, cancel = 0; const ready = new Promise<void>(resolve => { entered = resolve; });
+  f.fetch.mockImplementation(async url => {
+    if (String(url) === 'https://auth.x.ai/oauth2/device/code') return Response.json({ device_code: 'private-xai-device', user_code: 'VISIBLE-XAI', verification_uri: 'https://auth.x.ai/verify', verification_uri_complete: 'https://auth.x.ai/verify?code=VISIBLE-XAI', expires_in: 600, interval: 1 });
+    expect(String(url)).toBe('https://auth.x.ai/oauth2/token'); entered(); return hold ? new Response(new ReadableStream({ cancel() { cancel++; return new Promise(() => {}); } })) : Response.json({ access_token: 'private-xai-access', refresh_token: 'private-xai-refresh' });
+  }); return { ...f, ready, cancellations: () => cancel };
+}
+it.each(['xai', 'team-xai'])('mounts canonical-only %s native Grok Device state without selection/key flattening', async label => {
+  const f = await xaiFixture(); await f.handler.execute(`/login ${label} --issuer xai --method device`); expect(f.errors).toEqual([]); expect(f.messages[0]).toBe('Ouvrez https://auth.x.ai/verify?code=VISIBLE-XAI et saisissez le code VISIBLE-XAI.'); expect(f.handler.getContext().provider).toBe(f.mock); expect(f.handler.getContext().providers.has('xai')).toBe(label === 'xai'); expect(f.fetch).toHaveBeenCalledTimes(2); expect(await f.credentials.resolve(label, { env: {} })).toBeUndefined(); expect((await f.credentials.resolve(label, { env: {}, subscriptionProvider: 'xai' }))?.credential).toMatchObject({ accessToken: 'private-xai-access', refreshToken: 'private-xai-refresh', subscription: { provider: 'xai' } }); for (const secret of ['private-xai-device', 'private-xai-access', 'private-xai-refresh']) expect(f.messages.join('\n') + await readFile(f.file, 'utf8')).not.toContain(secret);
+});
+it.each(['environment', 'command'] as const)('retains Grok %s key priority after explicit native interactive login', async source => {
+  const f = await xaiFixture(); if (source === 'environment') vi.stubEnv('XAI_API_KEY', 'priority-xai-key'); else vi.stubEnv('AI_HARNESS_XAI_API_KEY_COMMAND', 'must-not-run'); await f.handler.execute('/login xai --issuer xai'); expect(f.errors).toEqual([]); if (source === 'command') { expect(f.handler.getContext().providers.has('xai')).toBe(false); return; }
+  f.fetch.mockImplementation(async (_url, init) => { expect(new Headers(init?.headers).get('authorization')).toBe('Bearer priority-xai-key'); return new Response('data: ' + JSON.stringify({ type: 'response.completed', response: { id: 'r', status: 'completed', output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'priority kept' }] }], usage: { input_tokens: 1, output_tokens: 1 } } }) + '\n\n', { headers: { 'content-type': 'text/event-stream' } }); }); expect((await f.handler.getContext().providers.get('xai')!.chat([{ id: 'u', role: 'user', timestamp: new Date(), content: 'Probe' }])).content).toBe('priority kept');
+});
+it('does not mount retired Grok ownership after encrypted commit or erase the committed native credential', async () => {
+  const f = await fixture(); vi.spyOn(xaiLogin, 'loginXai').mockImplementationOnce(async (credentials, label, _instructions, signal) => { const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'committed-xai-access', refreshToken: 'committed-xai-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'xai', grantId: '12345678-1234-4234-8234-123456789abc' } }; const publish = await credentials.prepareOAuthLogin(label, signal); await publish(credential); f.host.abort(); return credential; }); await f.handler.execute('/login xai --issuer xai'); expect(f.errors).toEqual(['Command failed.']); expect(f.handler.getContext().providers.has('xai')).toBe(false); expect((await f.credentials.resolve('xai', { env: {}, subscriptionProvider: 'xai' }))?.credential.type).toBe('oauth'); expect(f.fetch).not.toHaveBeenCalled();
+});
+it('cancels held Grok token with the interactive caller without late publication and rejects browser before I/O', async () => {
+  const f = await xaiFixture(true); await f.handler.execute('/login xai --issuer xai --method browser'); expect(f.fetch).not.toHaveBeenCalled(); const pending = f.handler.execute('/login xai --issuer xai'); await f.ready; f.caller.abort(); await pending; expect(f.cancellations()).toBe(1); expect(f.handler.getContext().providers.has('xai')).toBe(false); expect(await f.credentials.resolve('xai', { env: {}, subscriptionProvider: 'xai' })).toBeUndefined();
+});
 async function metaFixture(hold = false) {
   const f = await fixture(); for (const name of ['META_API_KEY', 'AI_HARNESS_META_API_KEY', 'AI_HARNESS_META_API_KEY_COMMAND']) vi.stubEnv(name, undefined); vi.stubEnv('META_BASE_URL', 'https://synthetic-interactive-meta.test/v1'); vi.stubEnv('META_MODEL', 'muse-spark-1.1'); let entered!: () => void, cancel = 0; const ready = new Promise<void>(resolve => { entered = resolve; });
   f.fetch.mockImplementation(async url => {

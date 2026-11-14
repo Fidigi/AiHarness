@@ -9,7 +9,7 @@ import {
   PUBLISHED_THINKING_LEVELS,
   ProviderFactory,
   OpenAiMixedProvider,
-  AnthropicProvider, AnthropicOAuthProvider, MetaOAuthProvider,
+  AnthropicProvider, AnthropicOAuthProvider, MetaOAuthProvider, XaiOAuthProvider,
   DeepSeekProvider,
   GroqProvider,
   ZaiProvider,
@@ -163,6 +163,7 @@ export interface CreateConfiguredProvidersOptions {
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
   metaOAuth?: CliProviderRuntime['metaOAuth'];
+  xaiOAuth?: CliProviderRuntime['xaiOAuth'];
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -256,6 +257,12 @@ export function createConfiguredProviders(
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
     if (name === 'anthropic') continue; // Preserve existing built-in insertion/default-selection order above.
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
+    if (name === 'xai' && !key && options.xaiOAuth) {
+      const config = { ...network, ...nativeEnvironmentHints(name, env), type: name };
+      try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new XaiOAuthProvider(config, options.xaiOAuth.credentialSource)); }
+      catch { /* A retired xAI source does not disable unrelated providers. */ }
+      continue;
+    }
     if (name === 'meta' && !key && options.metaOAuth) {
       const config = { ...network, ...nativeEnvironmentHints(name, env), type: name };
       try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new MetaOAuthProvider(config, options.metaOAuth.credentialSource)); }

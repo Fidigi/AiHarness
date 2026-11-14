@@ -19,6 +19,7 @@ import {
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
   type MetaOAuthCredentialSource,
+  type XaiOAuthCredentialSource,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -45,6 +46,11 @@ export interface CliAnthropicOAuth {
   credentialSource: AnthropicOAuthCredentialSource;
 }
 
+export interface CliXaiOAuth {
+  credential: ProviderOAuthCredential;
+  credentialSource: XaiOAuthCredentialSource;
+}
+
 export interface CliMetaOAuth {
   credential: ProviderOAuthCredential;
   credentialSource: MetaOAuthCredentialSource;
@@ -66,6 +72,7 @@ export interface CliProviderRuntime {
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
   metaOAuth?: CliMetaOAuth;
+  xaiOAuth?: CliXaiOAuth;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -102,7 +109,7 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic' | 'meta',
+  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic' | 'meta' | 'xai',
   lifetime?: AbortSignal,
   allowRefresh = true,
   issuerRealm?: string,
@@ -208,7 +215,12 @@ export async function createCliProviderRuntime(
   const storedMeta = present.has('meta') && !values.has('meta') && !commandEnv[commandVariable('meta')] ? credentials.readStoredCredential('meta') : undefined;
   const meta = storedMeta?.type === 'oauth' && storedMeta.subscription?.provider === 'meta'
     && (!offline || storedMeta.expiresAt! > Date.now() + 60_000) ? storedMeta : undefined;
+  const xaiSource = cliSubscriptionCredentialSource(credentials, 'xai', lifetime, !offline);
+  const storedXai = present.has('xai') && !values.has('xai') && !commandEnv[commandVariable('xai')] ? credentials.readStoredCredential('xai') : undefined;
+  const xai = storedXai?.type === 'oauth' && storedXai.subscription?.provider === 'xai'
+    && (!offline || storedXai.expiresAt! > Date.now() + 60_000) ? storedXai : undefined;
   return {
+    ...(xai ? { xaiOAuth: { credential: xai, credentialSource: xaiSource } } : {}),
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),
     ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),
     ...(anthropicAuthMode ? { anthropicAuthMode } : {}),

@@ -338,6 +338,7 @@ async function main(): Promise<void> {
         radiusOAuth: providerRuntime.radiusOAuth,
         kimiOAuth: providerRuntime.kimiOAuth,
         metaOAuth: providerRuntime.metaOAuth,
+        xaiOAuth: providerRuntime.xaiOAuth,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -856,6 +857,7 @@ async function main(): Promise<void> {
       radiusOAuth: refreshedRuntime.radiusOAuth,
       kimiOAuth: refreshedRuntime.kimiOAuth,
       metaOAuth: refreshedRuntime.metaOAuth,
+      xaiOAuth: refreshedRuntime.xaiOAuth,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -1016,6 +1018,7 @@ async function main(): Promise<void> {
     radiusOAuth: providerRuntime.radiusOAuth,
     kimiOAuth: providerRuntime.kimiOAuth,
     metaOAuth: providerRuntime.metaOAuth,
+    xaiOAuth: providerRuntime.xaiOAuth,
     network: providerRuntime.network,
   });
 
