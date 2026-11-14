@@ -1,0 +1,116 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "f662dd9",
+  "scope": "Native custom Meta/Muse Server/Settings Device login and live minted-key authority, not a new builtin or vendor account certificate",
+  "implementation": "Existing native encrypted owner now admits explicit meta dialect/fixed https://auth.meta.com issuer realm, independent of inference proxy, labels, generic issuer hints and headers. Core fixed Device identity→mint only; identity remains remint secret, minted accessToken alone inference key. Passive expired hydration, exact live record/dialect/base/stable-slot/header binding and latest-remint-safe metadata edits reuse native ownership/CAS/rollback/retirement. Publisher reserves before issuer work; prepared facade plus typed issuer checks precede encrypted commit, then synchronous guarded admission/invalidation. Pending rename/disconnect/replace/shutdown share existing leases; no Server listener/opener, second store or builtin. Ordinary API-key Meta remains distinct, keyless native record unavailable. Browser/copy-code400 before I/O; declared Import6/Test409 not access discovery. SDK-validated setup action error alone passes redacted public flow error; other vendor errors stay generic. Existing Settings Device controls now include Meta, no Browser button, canonical reconciliation on disconnect, no clipboard/focus/storage/remote navigation.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true, synthetic temporary encrypted stores and mock/loopback transports only; no real account, personal store, live mode, SDK acquisition, protected container operation or local generated edits.",
+    "image": "ai-harness:mod01-meta-server-owned",
+    "imageId": "sha256:f6c5b690e719b2197b24588be4335c3325858cad6912a428e719304eaad47dc8",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-meta-server-owned; four workspace builds/types PASS",
+    "buildLog": "/tmp/mod01-meta-server/build-owned-r2.log",
+    "strict": {
+      "passed": true,
+      "roots": 8,
+      "config": "/tmp/mod01-meta-server/strict.json",
+      "log": "/tmp/mod01-meta-server/owned.log"
+    },
+    "runtime": {
+      "passed": 91,
+      "failed": 0,
+      "new": 9,
+      "files": [
+        "packages/server/src/runtime/provider-meta-oauth.test.ts",
+        "packages/server/src/runtime/provider-oauth-radius.test.ts",
+        "packages/server/src/api/meta-oauth-http.test.ts",
+        "packages/server/src/runtime/provider-radius-oauth.test.ts",
+        "packages/server/src/runtime/provider-kimi-oauth.test.ts",
+        "packages/server/src/runtime/provider-anthropic-oauth.test.ts",
+        "packages/server/src/runtime/provider-openrouter-oauth.test.ts",
+        "packages/server/src/runtime/provider-registry.test.ts"
+      ],
+      "log": "/tmp/mod01-meta-server/owned.log",
+      "meaning": "Three registry cases fixed realm/live remint/latest-header edit/old-instance retirement/pending rename/disconnect/late admit/foreign hydration; five shared service additions Device→identity→mint, unsupported-method release, validated setup error with absent key, held-mint retirement and committed-but-retired non-erasure; actual HTTP case below.82 reused shared native owner/API-key/CRUD/generation/header/rollback controls. No six-profile rerun or MOD-03 redelivery."
+    },
+    "actualHttp": {
+      "cases": 1,
+      "includedInRuntime": true,
+      "file": "packages/server/src/api/meta-oauth-http.test.ts",
+      "log": "/tmp/mod01-meta-server/owned.log",
+      "meaning": "Real authenticated loopback HTTP custom Meta: keyless false, capability403/method400 no wire, Device identity/mint then static Import6/Test409, native R→codemode→R with owned reasoning; encrypted expiry/restart zero eager remint then selected remint/third R preserves same local grant and all old opaque items.30 tokens/$0.0000555 across three committed assistants once, one tool; metadata preserves latest key/identity. Held mint/rename409/disconnect cancel once without hostile cancel wait/no late credential/mount/run; journal0600 and persisted/public privacy. Ten synthetic vendor attempts: two Device/two identity/three mint (two successful, one cancelled)/three R. Separate registry R response is not HTTP usage credit."
+    },
+    "browser": {
+      "passed": 2,
+      "new": 1,
+      "project": "chromium",
+      "workers": 1,
+      "retries": 0,
+      "runner": ".docker/run-e2e.mjs",
+      "files": [
+        "e2e/meta-oauth-live.spec.ts",
+        "e2e/anthropic-oauth-live.spec.ts"
+      ],
+      "log": "/tmp/mod01-meta-server/browser-final.log",
+      "artifacts": "/tmp/mod01-meta-server/browser-final-results",
+      "meaning": "Actual Settings keyless Meta create→Connect Device/public code+verification URL (inspected only)→typed encrypted admission→Import6/live count→configured native R reply→reload/full Settings navigation→canonical Disconnect. Four loopback wire calls Device/identity/mint/R, no browser auth navigation/token storage. Unchanged Anthropic copy-code/browser interaction protects existing panel/import/reconnect/navigation. Official runner rebuilds same emitted sources, not installed/production/global certification."
+    },
+    "counterfactual": {
+      "failed": 7,
+      "unselected": 20,
+      "image": "ai-harness:mod01-meta-cli-owned",
+      "log": "/tmp/mod01-meta-server/red-r2.log",
+      "meaning": "Test-only overlay on predecessor source image exposes keyless false connection and missing custom Meta native eligibility. Later wire/assertions unreached are not extra REDs."
+    },
+    "setupCounterfactual": {
+      "failed": 1,
+      "unselected": 24,
+      "log": "/tmp/mod01-meta-server/setup-red.log",
+      "meaning": "Initial Meta host candidate genericized the validated setup action; typed Core exception/redaction now retained, no arbitrary vendor message reflection."
+    },
+    "retainedFailures": [
+      {
+        "exit": 125,
+        "log": "/tmp/mod01-meta-server/red.log",
+        "meaning": "Docker bind-mount setup failed against daemon host path; no test/credit. Replaced harness injection by test-only tar overlay, not product workaround."
+      },
+      {
+        "passed": 26,
+        "failed": 1,
+        "log": "/tmp/mod01-meta-server/focused.log",
+        "meaning": "Fixture expected cancelled flow to remain queryable after close(); existing service clears flow registry. Exact get(flow)===undefined assertion now follows existing stronger retirement contract;5000ms deadline/flags unchanged, no production close behavior changed."
+      }
+    ],
+    "earlierPasses": "focused-r2.log28 and browser.log2 PASS before validated setup-error preservation. Final owned91/browser-final2 on final source supersede their scope without duplicate credit.",
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 4,
+      "imageWitness": "/tmp/mod01-meta-server/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-meta-server/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-meta-server/runtime-witness.diff",
+      "meaning": "Four changed production inputs match final owned image. Final tests/spec source-built; strict config only injected. Earlier probes explicitly test-only overlays, no runtime/dependency/whole-image attestation."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-meta-server/docs.log"
+    },
+    "limits": "Custom Meta owner only, not builtin subscription, vendor subject/plan/entitlement/invoice or new account discovery. Native six-profile transport/private policy unchanged; no exhaustive model×host/SDK acquisition/installed/production/global/full default/tool/media/04b/MOD-03/historical repair/acceptance expansion."
+  },
+  "sourceSha256": {
+    "packages/server/src/runtime/provider-registry.ts": "492706efc2bf4bebe3d64797e548a157049ce0fd9f234f7493ec22d2d39a7a50",
+    "packages/server/src/runtime/provider-oauth.ts": "3f5eca1f6fa88b5e1fcce60fcdc82403865f421591c1839e14b09b151fc51d53",
+    "packages/server/src/api/provider-registry-routes.ts": "5d347e014d4a0a48df9828d011d160e2d46342f0310681cf9b43dd7d2e709f2b",
+    "packages/web/src/components/EcosystemSettings.tsx": "316647af62e0fd08be9a84b42bb8f9993ea955ac75e61611add9f5c53373b02a",
+    "packages/server/src/runtime/provider-meta-oauth.test.ts": "883ecb58f45a16d29affdb0aa09319cc2010c464588343ef18de9e15d3017e2f",
+    "packages/server/src/runtime/provider-oauth-radius.test.ts": "fad2e08c120f16c163a59c4b15584ce7dbeae67b6f95d0d4d48e674990c62b61",
+    "packages/server/src/api/meta-oauth-http.test.ts": "c1a671bcbe6042632791e59db480b1378b838d16ec58ed6c87b1174fcb715cc9",
+    "e2e/meta-oauth-live.spec.ts": "1859aeb6671f7bdb7ab46804b186dfb7b4cf64bed4f2f8ca5b4eec25acc9eff1"
+  },
+  "remaining": [
+    "Reconcile pinned Grok/xAI issuer/live/native host requirement then deliver minimal missing composition",
+    "Cloud credential chains and effective default/tool/media/MOD-01.04b",
+    "OpenRouter Server operator/static-catalogue/freshness boundary and final MOD-01 requirement-to-proof audit"
+  ],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

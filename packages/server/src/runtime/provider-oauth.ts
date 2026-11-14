@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { beginOpenAICodexBrowserLogin, type OpenAICodexBrowserLogin, beginOpenAICodexDeviceLogin, OPENAI_CODEX_MODELS, exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig, GITHUB_COPILOT_MODELS, type ProviderCredentialService } from '@ai-harness/core';
-import { beginRadiusBrowserLogin, beginRadiusDeviceLogin, beginKimiCodingDeviceLogin, beginOpenRouterLogin, beginAnthropicBrowserLogin, beginAnthropicCopyCodeLogin, type AnthropicLogin, type RadiusBrowserLogin, type OpenRouterLogin } from '@ai-harness/core';
+import { beginRadiusBrowserLogin, beginRadiusDeviceLogin, beginKimiCodingDeviceLogin, beginMetaDeviceLogin, MetaOAuthSetupRequiredError, beginOpenRouterLogin, beginAnthropicBrowserLogin, beginAnthropicCopyCodeLogin, type AnthropicLogin, type RadiusBrowserLogin, type OpenRouterLogin } from '@ai-harness/core';
 import type { ProviderRegistryService } from './provider-registry.js';
 import type { AiProxyServer } from '../api/proxy.js';
 type RadiusContext = Awaited<ReturnType<ProviderRegistryService['prepareNativeOAuth']>>;
@@ -242,9 +242,9 @@ export class ProviderOAuthService {
     if (caller?.aborted) abort(); else caller?.addEventListener('abort', abort, { once: true });
     try {
       const context = await this.radius(provider, signal); signal = AbortSignal.any([signal, context.signal]); signal.throwIfAborted();
-      if (context.issuer === 'kimi-coding' && method !== 'device' || context.issuer === 'openrouter' && method !== 'browser' || context.issuer === 'radius' && method === 'copy-code' || context.issuer === 'anthropic' && method === 'device') throw Object.assign(new Error('OAuth method is unavailable for this provider.'), { status: 400 });
+      if ((context.issuer === 'kimi-coding' || context.issuer === 'meta') && method !== 'device' || context.issuer === 'openrouter' && method !== 'browser' || context.issuer === 'radius' && method === 'copy-code' || context.issuer === 'anthropic' && method === 'device') throw Object.assign(new Error('OAuth method is unavailable for this provider.'), { status: 400 });
       const options = { signal, fetcher: this.fetcher, redactor: context.redactor };
-      const device = method === 'device' ? context.issuer === 'kimi-coding' ? await beginKimiCodingDeviceLogin({ ...options, oauthHost: context.realm }) : await beginRadiusDeviceLogin({ ...options, gateway: context.realm }) : undefined;
+      const device = method === 'device' ? context.issuer === 'meta' ? await beginMetaDeviceLogin(options) : context.issuer === 'kimi-coding' ? await beginKimiCodingDeviceLogin({ ...options, oauthHost: context.realm }) : await beginRadiusDeviceLogin({ ...options, gateway: context.realm }) : undefined;
       const browser = context.issuer === 'anthropic' ? method === 'copy-code' ? beginAnthropicCopyCodeLogin(options) : beginAnthropicBrowserLogin(options)
         : method === 'browser' ? context.issuer === 'openrouter' ? beginOpenRouterLogin(`http://127.0.0.1:1457/oauth/callback/${crypto.randomUUID()}`, options) : await beginRadiusBrowserLogin({ ...options, gateway: context.realm }) : undefined;
       const login = (device ?? browser)!; signal.throwIfAborted(); this.checkCapacity();
@@ -258,7 +258,7 @@ export class ProviderOAuthService {
         try {
           const credential = await device.complete(), admit = await context.publish(credential); signal.throwIfAborted();
           admit(); flow.state = 'connected';
-        } catch { if (flow.state === 'pending') { flow.state = 'failed'; flow.error = 'OAuth token exchange failed.'; } }
+        } catch (error) { if (flow.state === 'pending') { flow.state = 'failed'; flow.error = context.issuer === 'meta' && error instanceof MetaOAuthSetupRequiredError ? context.redactor.redact(error.message) : 'OAuth token exchange failed.'; } }
         finally { clearTimeout(expiry); device.cancel(); controller.abort(); }
       })();
       return this.public(flow);

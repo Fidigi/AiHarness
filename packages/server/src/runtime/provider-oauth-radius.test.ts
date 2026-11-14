@@ -11,13 +11,18 @@ const tokens = () => Response.json({ access_token: 'private-radius-access', refr
 const device = () => Response.json({ device_code: 'private-radius-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', expires_in: 600, interval: 1 });
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' | 'anthropic' = 'radius') {
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' | 'anthropic' | 'meta' = 'radius') {
   vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
   const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
   await registry.upsertProvider({ id, name: 'Radius', baseUrl: issuer === 'radius' ? gateway : 'https://inference.kimi.test/coding', dialect: issuer });
   const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
+    if (issuer === 'meta') {
+      if (String(url) === 'https://auth.meta.com/oidc/device/authorization/') return Response.json({ device_code: 'private-meta-device', user_code: 'VISIBLE-META', verification_uri: 'https://auth.meta.com/verify', expires_in: 600, interval: 1 });
+      if (String(url) === 'https://auth.meta.com/oidc/device/token/') return Response.json({ access_token: 'private-meta-identity', token_type: 'Bearer', expires_in: 3600 });
+      expect(String(url)).toBe('https://api.meta.ai/muse-code/key'); reached.resolve(undefined); return hold ? held.promise : Response.json({ api_key: 'private-meta-minted-key' });
+    }
     if (issuer === 'anthropic') { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); reached.resolve(undefined); return hold ? held.promise : tokens(); }
     if (issuer === 'openrouter') { expect(String(url)).toBe('https://openrouter.ai/api/v1/auth/keys'); reached.resolve(undefined); return hold ? held.promise : Response.json({ key: 'synthetic-openrouter-permanent-key' }); }
     if (String(url).endsWith('/device')) return device();
@@ -32,6 +37,21 @@ async function fixture(hold = false, closeOnPublish = false, persistent = true, 
   const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
   return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
 }
+it('owns Meta Device identity/mint in the custom encrypted slot without key flattening', async () => {
+  const f = await fixture(false, false, true, 'meta'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', userCode: 'VISIBLE-META', verificationUri: 'https://auth.meta.com/verify' }); await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected'), { timeout: 5000 }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(6); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-meta-minted-key', refreshToken: 'private-meta-identity', subscription: { provider: 'meta' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-meta'); expect(f.fetcher).toHaveBeenCalledTimes(3);
+});
+it('keeps only the SDK-validated Meta setup action public without publishing an absent minted key', async () => {
+  const f = await fixture(false, false, true, 'meta'), fetch = f.fetcher.getMockImplementation()!; f.fetcher.mockImplementation((url, init) => String(url) === 'https://api.meta.ai/muse-code/key' ? Promise.resolve(Response.json({ action_url: 'https://api.meta.ai/setup' })) : fetch(url, init)); const flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toMatchObject({ state: 'failed', error: 'Meta did not issue an API key. Complete setup at https://api.meta.ai/setup' }), { timeout: 5000 }); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined(); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-meta');
+});
+it('refuses Meta browser/copy-code before issuer work and releases the pending owner', async () => {
+  const f = await fixture(false, false, true, 'meta'); for (const method of ['browser', 'copy-code'] as const) { await expect(f.service.start(id, undefined, method)).rejects.toMatchObject({ status: 400 }); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false); } expect(f.fetcher).not.toHaveBeenCalled();
+});
+it('retires a held Meta mint on disconnect with no late secret/admission', async () => {
+  const f = await fixture(true, false, true, 'meta'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
+it('does not mount or erase a committed Meta credential returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'meta'), flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toBeUndefined(), { timeout: 5000 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-meta-minted-key', subscription: { provider: 'meta' } });
+});
 it.each(['browser', 'copy-code'] as const)('owns native Anthropic %s PKCE in the custom encrypted slot with retryable invalid input', async method => {
   const f = await fixture(false, false, true, 'anthropic'), flow = await f.service.start(id, undefined, method), authorization = new URL(flow.authorizationUrl!); expect(authorization.origin + authorization.pathname).toBe('https://claude.ai/oauth/authorize'); expect(f.fetcher).not.toHaveBeenCalled(); const callback = authorization.searchParams.get('redirect_uri')!, state = authorization.searchParams.get('state'); expect(callback).toBe(method === 'browser' ? 'http://localhost:53692/callback' : 'https://platform.claude.com/oauth/code/callback');
   await expect(f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=wrong' : 'synthetic-code#wrong')).rejects.toMatchObject({ status: 400 }); expect(f.service.get(flow.id)?.state).toBe('pending'); expect(f.fetcher).not.toHaveBeenCalled(); expect(await f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=' + state : 'synthetic-code#' + state)).toMatchObject({ state: 'connected' }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(17); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ subscription: { provider: 'anthropic' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-radius-access');
