@@ -72,7 +72,7 @@ import {
   type RuntimeServices,
 } from './runtime/services.js';
 import { getAppUpdateStatus } from './runtime/app-update.js';
-import { ProviderOAuthService } from './runtime/provider-oauth.js';
+import { ProviderOAuthService, customRadiusOAuthContext } from './runtime/provider-oauth.js';
 import { resolveGitHubCopilotSubscription } from './runtime/github-copilot.js';
 import { resolveOpenAICodexSubscription } from './runtime/openai-codex.js';
 import { providerOperation } from './runtime/provider-administration.js';
@@ -677,7 +677,7 @@ export function createApp(config?: ServerConfig): express.Application {
   app.use('/api/configuration', configurationRouter);
   app.use('/api/settings', configurationRouter); // Backward-compatible alias.
   app.use('/api/models', createModelRouter(servicesPromise));
-  const providerOAuth = new ProviderOAuthService(applicationProxy, () => credentialRuntime.service);
+  const providerOAuth = new ProviderOAuthService(applicationProxy, () => credentialRuntime.service, undefined, undefined, customRadiusOAuthContext(servicesPromise));
   activeProviderOAuth = providerOAuth;
   app.use('/api/provider-registry', createProviderRegistryRouter(
     servicesPromise,

@@ -1,0 +1,77 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "5383ae2eef5cf4613b111c4edb7acd887d77449a",
+  "scope": "Native Radius custom Server/Settings device/browser login and live P composition in the existing encrypted registry slot",
+  "dependencies": ["MOD-01-radius-oauth-sdk.json", "MOD-01-radius-oauth-cli.json", "MOD-01-radius-hosts.json"],
+  "requirements": [
+    {
+      "requirement": "Usable explicit native Server/Settings issuer without a competing builtin or API-key flattening",
+      "implementation": "Existing custom radius records own their configured gateway, stable credentialId and provider-secrets.enc slot. prepareRadiusOAuth reserves Core encrypted publication before issuer I/O. Existing OAuth service accepts the Core fixed-client device flow or browser full-redirect paste, not a Server listener/opener or caller token endpoint. API routes retain credentials capability, request lifetime and providerOperation leases. Settings custom cards expose Device connect/reconnect and Browser PKCE without selecting a model/provider. Public status is metadata only; an uncredentialed Radius adapter is not mounted or reported connected.",
+      "proof": "New service9/registry11 cases and one actual authenticated HTTP scenario; one actual built-Server/static-Web Chromium journey creates the record, performs PKCE paste, imports real account config, explicitly configures defaults, infers P, reloads history and disconnects. Synthetic user capability403 and pending rename409 are explicit HTTP assertions."
+    },
+    {
+      "requirement": "Live refresh/restart and transport/credential ownership",
+      "implementation": "Core readStoredCredential returns a defensive process-private administration snapshot, including expired data, without environment/commands/refresh/I/O or request authority. Registry uses validated snapshots only to bootstrap cache metadata; actual P operations resolve issuer-bound credentials with gateway/caller/refresh permission and revalidate current record, stable identity and headers before/after resolution. Metadata/header edits do not write an old OAuth token over a fresh refresh. Explicit key replacement remains separate. Rollback uses encrypted revision/CAS and refuses to overwrite a newer owner.",
+      "proof": "Administrative snapshot test asserts no fetch/write and no allowRefresh:false availability for expired data. Registry fixture covers live refresh, header/token preservation, stale-handle refusal, same-grant cache/reload, foreign gateway and three failed-metadata rollback paths plus newer-writer refusal. Real HTTP expires the encrypted token, restarts Server, refreshes once, edits metadata, resumes private P history and proves the rotated credential is retained."
+    },
+    {
+      "requirement": "No late publication, stale admission or credential resurrection",
+      "implementation": "Registry pending owners bind source identity and record fingerprint; update/disconnect/delete withdraw them, unchanged reload remains eligible and pending rename refuses. Publication preflights the native cache before mutation and returns a separately guarded synchronous admit closure; the flow owner checks again after await. An already committed grant is not erased merely because its helper returns after shutdown. Pre-aborted replacement requests cannot cancel an existing flow or leak an owner. Service/body/expiry/shutdown cancellation reuses Core ownership. Settings preserves the existing selection guard and falls back to global metadata reads after a stale/failed initial canonical reconcile.",
+      "proof": "Held token responses are retired on replacement/disconnect/shutdown; caller cancellation releases a late body. Registry tests cover unsafe-cache byte preservation and final-owner refusal. Actual HTTP disconnect closes a held token body, leaves cache bytes unchanged, removes encrypted credentials and refuses inference; a cancelled browser callback also refuses. The original full-document Settings navigation now passes after the metadata-only fallback; existing late-rename/canonical-ID and passive-paste browser controls remain green."
+    },
+    {
+      "requirement": "Useful native P tool/private continuation and bounded affected-host regression",
+      "implementation": "Existing P encoder, grant-owned continuation/cache, agent loop and durable session mechanisms are reused, not redelivered under MOD-03. Radius credentials are never passed as another issuer/API key. Shared paste help is loopback-neutral in EN/FR.",
+      "proof": "Actual HTTP runs P→codemode→P, then refreshed/restarted P with the exact private tool/thinking fields, one tool and30 observed session tokens. Journals/public state/metadata/encrypted bytes do not expose synthetic credentials or tenant header. Existing API-key P, CLI print/JSON/RPC API-key and native OAuth, Codex HTTP and Web lifecycle-service checks pass separately."
+    }
+  ],
+  "qualification": {
+    "environment": "Docker only; --network none; CI=true; synthetic credentials, disposable stores and mocked/loopback transports. No personal store, account opt-in or protected-container operation.",
+    "runtimeImage": "ai-harness:mod01-radius-server-bound",
+    "runtimeImageId": "sha256:c835e7167e20d2ad8baa6e09cb1af8ade42f5b15c9ae72722e7ee56c5037e5f3",
+    "finalImage": "ai-harness:mod01-radius-server-ui",
+    "finalImageId": "sha256:2f492b97cf440b21f99fee236ec676935126ac605a9f58c6c0be0183fcc7d0a2",
+    "build": "Both Make typecheck constructions pass Core/CLI/Server/Web and workspace/parity types. Final UI candidate changes only the metadata fallback and the browser fixture's restored full navigation, not runtime Server/Core behavior.",
+    "buildLogs": ["/tmp/mod01-radius-server/build-bound.log", "/tmp/mod01-radius-server/build-ui.log"],
+    "runtimeWitness": { "equal": 9, "logs": ["/tmp/mod01-radius-server/runtime-witness-bound.txt", "/tmp/mod01-radius-server/runtime-witness-ui.txt", "/tmp/mod01-radius-server/runtime-witness.diff"], "meaning": "Nine changed Core/Server source/test inputs are byte-identical in both actual images. This is bounded runtime-source equality, not whole-image, dependency or distribution attestation." },
+    "strict": { "passed": true, "roots": 8, "config": "/tmp/mod01-radius-server/strict.json", "logs": ["/tmp/mod01-radius-server/bound.log", "/tmp/mod01-radius-server/ui-strict.log"], "limit": "Existing lifecycle-routes fixture is not a strict root; its unchanged TS2322 is reproduced below. Its runtime file remains selected." },
+    "focused": { "passed": 145, "failed": 0, "files": 8, "selection": ["packages/core/src/providers/credentials.test.ts", "packages/server/src/runtime/provider-radius-oauth.test.ts", "packages/server/src/runtime/provider-oauth-radius.test.ts", "packages/server/src/runtime/provider-registry.test.ts", "packages/server/src/runtime/provider-oauth-codex.test.ts", "packages/server/src/runtime/provider-oauth-copilot.test.ts", "packages/server/src/api/provider-lifecycle-routes.test.ts", "packages/server/src/api/radius-oauth-http.test.ts"], "log": "/tmp/mod01-radius-server/bound.log" },
+    "affectedRegression": { "passed": 43, "failed": 0, "files": 6, "selection": ["packages/core/src/providers/radius.test.ts", "packages/cli/src/cli/radius-process.test.ts", "packages/cli/src/cli/radius-oauth-process.test.ts", "packages/server/src/api/radius-http.test.ts", "packages/server/src/api/openai-codex-http.test.ts", "packages/web/src/services/provider-lifecycle.test.ts"], "log": "/tmp/mod01-radius-server/regression.log" },
+    "browser": { "passed": 4, "failed": 0, "workers": 1, "retries": 0, "selection": "New radius-oauth-live.spec.ts plus existing provider-settings.spec.ts passive-paste, uncertain-late-rename and successful-canonical-rename controls", "log": "/tmp/mod01-radius-server/browser-ui.log", "artifacts": "/tmp/mod01-radius-server/browser-ui-results/", "meaning": "Radius uses the actual emitted Server/static Web; the three existing generic controls use the configured Vite/Express fixture. They qualify different UI risks, not accounts or an exhaustive browser matrix." },
+    "distinctFinalRuntimeTests": 188,
+    "distinctFinalBrowserTests": 4,
+    "counterfactuals": [
+      { "log": "/tmp/mod01-radius-server/red.log", "failed": 2, "filterUnselected": 28, "meaning": "Previous CLI image lacks the administrative snapshot and registry native issuer composition." },
+      { "log": "/tmp/mod01-radius-server/preabort-red.log", "failed": 2, "filterUnselected": 18, "meaning": "Pre-aborted replacement retires the still-valid previous native registry/service owner; corrected before replacement and mutation queue entry." },
+      { "log": "/tmp/mod01-radius-server/header-source-red.log", "failed": 1, "filterUnselected": 10, "meaning": "A retained old Radius instance can still discover with the old header after metadata replacement; live source now revalidates current record/identity/headers before and after resolution." }
+    ],
+    "retainedFailures": [
+      { "log": "/tmp/mod01-radius-server/focused.log", "exit": 2, "meaning": "Strict existing provider-lifecycle-routes.test.ts(69,5) fails TS2322: undefined is not ProviderAdministration; no runtime executed." },
+      { "log": "/tmp/mod01-radius-server/lifecycle-baseline-strict.log", "image": "ai-harness:mod01-radius-cli-owned", "exit": 2, "meaning": "One bounded unchanged-baseline assessment reproduces the same fixture TS2322. Assertion/source remains unchanged and OPEN; runtime coverage retained. No all-root strict qualification." },
+      { "log": "/tmp/mod01-radius-server/focused-r2.log", "passed": 139, "failed": 2, "meaning": "Uncredentialed custom Radius was counted connected/mounted after foreign-gateway or retired admission. Product now refuses that local admission/status." },
+      { "log": "/tmp/mod01-radius-server/owned.log", "passed": 141, "failed": 1, "meaning": "Pending rename returned the unrelated reference-store-unavailable refusal before the intended native OAuth guard. Route now checks pending OAuth before the unchanged durable-reference scanner." },
+      { "log": "/tmp/mod01-radius-server/browser.log", "failed": 1, "meaning": "New fixture expected capitalized Disconnected but product already exposes lowercase status with model count. Exact scoped lowercase assertions replace the incorrect new expectation; no issuer requests yet." },
+      { "log": "/tmp/mod01-radius-server/browser-case.log", "failed": 1, "meaning": "Full-document Settings navigation loses custom metadata while initial canonical reconcile is superseded/fails during hydration. Temporary ordinary-SPA-navigation fixture passed in browser-nav/final/bound logs, but is not the final correction. Product preserves the selection guard and rereads only global metadata; final fixture restores full navigation and passes on the fresh UI image. Original30s timeout and artifacts retained." }
+    ],
+    "earlierPasses": "delivered.log143/8 files precedes the two pre-abort additions; final.log145 precedes the stale-header assertion/binding fix. browser-nav/final/bound each pass one earlier SPA-navigation fixture. These are separate historical selections, not extra distinct final tests or repair of their earlier failed gates.",
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-radius-server/docs.log" },
+    "limits": "No installed/production/real-account/global qualification, new SDK acquisition or MOD-01.04b preparation. Native grantId remains a local grant identity, not a vendor-verified subject. The final188 runtime/four browser passes do not repair prior CLI C/R139, Radius strict139, Codex WebSocket oracle, lifecycle strict fixture or any other historical measurement; exactly three historical acceptances are unchanged. No assertion/deadline/flag weakening."
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/credentials.ts": "d65848fb26322f7cf6c219f8504e2c0140f3104c05ae946dff7db11022b08bef",
+    "packages/core/src/providers/credentials.test.ts": "b22eed8f9fb627aa7494c574d50909b2571bb29df2f6ed0f070da3166f59a7fe",
+    "packages/server/src/index.ts": "020580bd91b087c365a4d7a046cb67a0166084483dacec592165dcf7a4e5c0b9",
+    "packages/server/src/api/provider-registry-routes.ts": "24ee5632360ca6cd3117ad3e3d8a2b710664ef63149d41f8c1330a375a288c38",
+    "packages/server/src/api/radius-oauth-http.test.ts": "96d8c68d8cb189255cd7f14d1c72e26afbc746db02eba44d984757b57d2b3a46",
+    "packages/server/src/runtime/provider-registry.ts": "5e31fab02160560aa4896e55e2560dc58e2b0d3095e1560d8a71ab25d082477e",
+    "packages/server/src/runtime/provider-oauth.ts": "466f0bfe642909a00d19749df2d0493322a0688460046cd261595c42e58e9c03",
+    "packages/server/src/runtime/provider-radius-oauth.test.ts": "e5eee458e0ae891f9d5452d9250f7db776874c3be5b634501e08d3083162344d",
+    "packages/server/src/runtime/provider-oauth-radius.test.ts": "725c1d76b94e6cf4ab5623f01ddd40435663893b46d624f1a9474eccf87e2638",
+    "packages/web/src/components/EcosystemSettings.tsx": "96a09ff48473ce517a50bbbd578800a7db11d613a209cbce9cac782f23f2c61d",
+    "packages/web/src/components/provider-settings-messages.ts": "c95d809d6d0bac90679a69a969518932d299abd0f193e23cd64cca02bd862e72",
+    "e2e/radius-oauth-live.spec.ts": "1d54504062b6385f049c3b18645c3aaaf731887ac78c588881309a069e2342c0"
+  },
+  "remaining": ["Other required issuers/federation/cloud chains and effective-profile exceptions", "MOD-01.04b model-owned image preparation and final completion audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; exactly three historical acceptances unchanged. Goal remains active."
+}

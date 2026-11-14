@@ -109,6 +109,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
       // Ask the still-mounted Settings owner for a fresh, selection-bound read;
       // never apply this old operation's mutation result to the new selection.
       if (outcome) onSelectionInvalidated?.();
+      else if (mounted.current && generation === epoch.current && sequence === loadSequence.current) await load();
       return;
     }
     // Navigation/new selection owns its own reload.
@@ -154,7 +155,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     ++epoch.current;
     void load();
     void reconcile(undefined, false).catch(() => {
-      if (mounted.current) setRenameCapability({ supported: false, mode: 'disabled', reason: 'unavailable' });
+      if (mounted.current) { setRenameCapability({ supported: false, mode: 'disabled', reason: 'unavailable' }); void load(); }
     });
     return () => { mounted.current = false; ++epoch.current; retireOAuth(); };
   }, []);
@@ -348,6 +349,10 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             : null}
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
+            {provider.dialect === 'radius' && <>
+              <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>
+              <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>
+            </>}
             <button type="button" onClick={() => {
               setEditing(provider.id);
               setForm({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' });
@@ -358,8 +363,9 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
               else error(result.error);
             }}>{t('settings.testConnection')}</button>
             {provider.configured && <button type="button" onClick={async () => {
+              if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await disconnectProvider(provider.id);
-              if (!result.success) error(result.error); else await load();
+              if (!result.success) error(result.error); else if (provider.dialect === 'radius') await reconcile(); else await load();
             }}>{t('settings.disconnect')}</button>}
             <button type="button" onClick={async () => {
               const result = await importCustomProviderModels(provider.id);
@@ -370,6 +376,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             }}>{t('settings.importModels')}</button>
             <button type="button" onClick={async () => {
               if (!window.confirm(t('settings.customProviders.deleteConfirm', { name: provider.name }))) return;
+              if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await deleteCustomProvider(provider.id);
               if (!result.success) error(result.error);
               else await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);

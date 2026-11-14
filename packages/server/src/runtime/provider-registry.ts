@@ -48,6 +48,9 @@ import {
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
   RadiusProvider,
+  getRadiusOAuthConfig,
+  type ProviderOAuthCredential,
+  type RadiusOAuthCredential,
   CloudflareAiGatewayProvider, CLOUDFLARE_AI_GATEWAY_MODELS,
   VercelAiGatewayProvider, VERCEL_AI_GATEWAY_MODELS,
   CLOUDFLARE_CHAT_MODELS,
@@ -97,6 +100,8 @@ interface RegistryState {
 
 interface ProviderSecrets {
   apiKey?: string;
+  /** Administrative snapshot only; live native requests always resolve the service. */
+  oauth?: ProviderOAuthCredential;
   headers: Record<string, string>;
 }
 
@@ -372,6 +377,8 @@ export class ProviderRegistryService {
   private source?: string;
   private sourceIdentity?: Stats;
   private readonly revisionKey = randomBytes(32);
+  private readonly radiusLogins = new Map<string, { controller: AbortController; identity?: Stats; fingerprint: string }>();
+  private cancelRadiusLogin(id: string): void { this.radiusLogins.get(id)?.controller.abort(); }
 
   constructor(
     private readonly filePath: string,
@@ -404,6 +411,9 @@ export class ProviderRegistryService {
     await this.secretStore?.load();
     await this.migrateLegacySecrets();
     await this.credentialService.load();
+    for (const [id, login] of this.radiusLogins) {
+      if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) this.cancelRadiusLogin(id);
+    }
     for (const provider of this.state.providers) {
       await this.hydrateSecrets(provider.id);
       this.applyProvider(provider);
@@ -437,16 +447,65 @@ export class ProviderRegistryService {
     return this.state.providers.map(({ credentialId: _privateIdentity, ...provider }) => ({
       ...provider,
       revision: this.getRevision(),
-      configured: this.proxy.isConfigured(provider.id),
+      configured: this.proxy.isConfigured(provider.id) && (provider.dialect !== 'radius' || this.proxy.getAgentProvider(provider.id)?.validateConfig() === true),
       modelCount: this.state.models.filter(model => model.provider === provider.id).length,
     }));
   }
 
   hasCredentials(id: string): boolean { return Boolean(this.readSecrets(id)); }
+  hasPendingRadiusOAuth(id: string): boolean { return this.radiusLogins.has(id); }
+  hasRadiusOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius') && Boolean(this.readSecrets(id)?.oauth); }
+
+  /** One existing custom record owns the issuer, headers, encrypted slot and eventual runtime admission. */
+  async prepareRadiusOAuth(idValue: string, parent: AbortSignal) {
+    parent.throwIfAborted();
+    return this.withMutation(async () => {
+      parent.throwIfAborted();
+      const id = providerId(idValue);
+      let record = this.state.providers.find(provider => provider.id === id && provider.dialect === 'radius');
+      if (!record) throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
+      if (!this.secretStore) throw Object.assign(new Error('OAuth credential storage is unavailable.'), { status: 409 });
+      const gateway = getRadiusOAuthConfig(record.baseUrl).gateway, identity = record.credentialId ?? id;
+      this.cancelRadiusLogin(id);
+      const login = { controller: new AbortController(), identity: this.sourceIdentity, fingerprint: JSON.stringify(record) };
+      this.radiusLogins.set(id, login);
+      const signal = AbortSignal.any([parent, login.controller.signal]);
+      const release = () => { if (this.radiusLogins.get(id) === login) this.radiusLogins.delete(id); };
+      if (signal.aborted) release(); else signal.addEventListener('abort', release, { once: true });
+      let publish: Awaited<ReturnType<ProviderCredentialService['prepareOAuthLogin']>>;
+      try { await this.assertSource(); signal.throwIfAborted(); publish = await this.credentialService.prepareOAuthLogin(identity, signal); }
+      catch (error) { login.controller.abort(); throw error; }
+      const guard = async () => {
+        signal.throwIfAborted(); await this.assertSource();
+        if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) throw Object.assign(new Error('Provider changed during login.'), { status: 409 });
+      };
+      return { gateway, signal, redactor: this.redactor, publish: async (credential: RadiusOAuthCredential): Promise<() => void> => this.withMutation(async () => {
+        await guard();
+        if (credential.subscription.provider !== 'radius' || credential.subscription.gateway !== gateway) throw new Error('Invalid Radius issuer.');
+        const secrets: ProviderSecrets = { oauth: { version: 1, type: 'oauth', ...credential }, headers: this.readSecrets(id)?.headers ?? {} };
+        const prepared = this.createRadiusProvider(record!, secrets, secrets.oauth);
+        await guard();
+        if (record!.disconnected) {
+          const previous = this.state, connected = { ...record!, disconnected: false, updatedAt: new Date().toISOString() };
+          this.state = { ...previous, providers: previous.providers.map(provider => provider.id === id ? connected : provider) };
+          try { await this.persist(); record = connected; login.identity = this.sourceIdentity; login.fingerprint = JSON.stringify(record); } catch (error) { this.state = previous; throw error; }
+        }
+        await publish(credential); signal.throwIfAborted();
+        this.volatileSecrets.set(id, secrets); this.proxy.removeProvider(id);
+        await this.proxy.resetNetworkDispatchers(); await guard();
+        return () => {
+          signal.throwIfAborted();
+          if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) throw new Error('Provider changed during login.');
+          this.proxy.setCustomProvider(id, prepared);
+        };
+      }) };
+    });
+  }
 
   getModels(): CustomModelDefinition[] { return structuredClone(this.state.models); }
 
   async upsertProvider(input: Record<string, unknown>, existingId?: string): Promise<CustomProviderDefinition> {
+    if (existingId) this.cancelRadiusLogin(providerId(existingId));
     return this.withMutation(() => this.upsertProviderUnlocked(input, existingId));
   }
 
@@ -480,6 +539,7 @@ export class ProviderRegistryService {
     for (const model of this.state.models.filter(model => model.provider === id)) {
       validateDialectModel(record.dialect, model.id);
     }
+    if (previous?.dialect === 'radius') { await this.credentialService.load(); await this.hydrateSecrets(id); }
     const currentSecrets = this.readSecrets(id) ?? { headers: {} };
     if (!previous && this.state.providers.length >= MAX_CUSTOM_PROVIDERS) {
       badRequest('Too many custom providers are configured.');
@@ -492,13 +552,14 @@ export class ProviderRegistryService {
     }
     const nextSecrets: ProviderSecrets = {
       ...(typeof input.apiKey === 'string' ? (input.apiKey ? { apiKey: input.apiKey } : {})
-        : currentSecrets.apiKey ? { apiKey: currentSecrets.apiKey } : {}),
+        : currentSecrets.oauth ? { oauth: currentSecrets.oauth } : currentSecrets.apiKey ? { apiKey: currentSecrets.apiKey } : {}),
       headers: customHeaders ?? currentSecrets.headers,
     };
     // Radius may load its explicit private catalogue locally; reject unsafe cache before mutating credentials/metadata.
     const preparedRadius = record.dialect === 'radius' ? this.createRadiusProvider(record, nextSecrets) : undefined;
     await this.assertSource();
     await this.saveSecrets(id, nextSecrets, record.credentialId);
+    const credentialRevision = this.secretStore?.getRevision();
     const previousState = this.state;
     this.state = {
       ...previousState,
@@ -508,10 +569,11 @@ export class ProviderRegistryService {
     try { await this.persist(); }
     catch (error) {
       this.state = previousState;
-      try { await this.saveSecrets(id, currentSecrets, record.credentialId); }
+      try { await this.restoreSecrets(id, currentSecrets, nextSecrets, credentialRevision, record.credentialId); }
       catch { throw Object.assign(new Error('Provider update rollback failed.'), { status: 500, uncertain: true }); }
       throw error;
     }
+    this.cancelRadiusLogin(id);
     await this.proxy.resetNetworkDispatchers();
     this.applyProvider(record, preparedRadius);
     return this.listProviders().find(provider => provider.id === id)!;
@@ -534,6 +596,7 @@ export class ProviderRegistryService {
       const previous = this.state.providers.find(provider => provider.id === oldId);
       if (!previous) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
       if (oldId === newId) return this.listProviders().find(provider => provider.id === oldId)!;
+      if (this.radiusLogins.has(oldId)) throw Object.assign(new Error('Provider login is pending.'), { status: 409, code: 'PROVIDER_OAUTH_PENDING' });
       if (this.state.providers.some(provider => provider.id === newId) || this.proxy.getAgentProvider(newId)) {
         throw Object.assign(new Error('Provider already exists.'), { status: 409, code: 'PROVIDER_EXISTS' });
       }
@@ -582,21 +645,25 @@ export class ProviderRegistryService {
   }
 
   async deleteProvider(idValue: string): Promise<boolean> {
+    this.cancelRadiusLogin(providerId(idValue));
     return this.withMutation(() => this.deleteProviderUnlocked(idValue));
   }
 
   private async deleteProviderUnlocked(idValue: string): Promise<boolean> {
     const id = providerId(idValue);
     if (!this.state.providers.some(provider => provider.id === id)) return false;
+    if (this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius')) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const identity = this.storageId(id);
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
+    this.cancelRadiusLogin(id);
     try {
       await this.saveSecrets(id, { headers: {} });
     } catch (error) {
-      await this.saveSecrets(id, previousSecrets).catch(() => undefined);
+      await this.restoreSecrets(id, previousSecrets, { headers: {} }, this.secretStore?.getRevision()).catch(() => undefined);
       throw error;
     }
+    const credentialRevision = this.secretStore?.getRevision();
     const previous = this.state;
     this.state = {
       ...previous,
@@ -606,7 +673,7 @@ export class ProviderRegistryService {
     try { await this.persist(); }
     catch (error) {
       this.state = previous;
-      try { await this.saveSecrets(id, previousSecrets, identity); }
+      try { await this.restoreSecrets(id, previousSecrets, { headers: {} }, credentialRevision, identity); }
       catch {
         throw Object.assign(new Error('Provider deletion rollback failed.'), { status: 500, uncertain: true });
       }
@@ -619,6 +686,7 @@ export class ProviderRegistryService {
   }
 
   async disconnect(idValue: string): Promise<CustomProviderDefinition> {
+    this.cancelRadiusLogin(providerId(idValue));
     return this.withMutation(() => this.disconnectUnlocked(idValue));
   }
 
@@ -626,22 +694,25 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.state.providers.find(item => item.id === id);
     if (!provider) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
+    if (provider.dialect === 'radius') { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
+    this.cancelRadiusLogin(id);
     try {
       await this.saveSecrets(id, { headers: {} });
     } catch (error) {
-      try { await this.saveSecrets(id, previousSecrets); }
-      catch { throw Object.assign(new Error('Provider disconnection rollback failed.'), { status: 500 }); }
+      try { await this.restoreSecrets(id, previousSecrets, { headers: {} }, this.secretStore?.getRevision()); }
+      catch { throw Object.assign(new Error('Provider disconnection rollback failed.'), { status: 500, uncertain: true }); }
       throw error;
     }
+    const credentialRevision = this.secretStore?.getRevision();
     const before = this.state;
     this.state = { ...before, providers: before.providers.map(item => item.id === id
       ? { ...item, disconnected: true, updatedAt: new Date().toISOString() } : item) };
     try { await this.persist(); }
     catch (error) {
       this.state = before;
-      try { await this.saveSecrets(id, previousSecrets); }
+      try { await this.restoreSecrets(id, previousSecrets, { headers: {} }, credentialRevision); }
       catch { throw Object.assign(new Error('Provider disconnection rollback failed.'), { status: 500, uncertain: true }); }
       throw error;
     }
@@ -809,17 +880,17 @@ export class ProviderRegistryService {
   }
 
   private async saveSecrets(id: string, value: ProviderSecrets, identity = this.storageId(id)): Promise<void> {
-    this.redactor.add(value.apiKey);
+    this.redactor.add(value.apiKey); this.redactor.add(value.oauth?.accessToken); this.redactor.add(value.oauth?.refreshToken);
     this.redactor.addAll(Object.values(value.headers));
-    const hasSecrets = Boolean(value.apiKey) || Object.keys(value.headers).length > 0;
+    const hasSecrets = Boolean(value.apiKey || value.oauth) || Object.keys(value.headers).length > 0;
     if (hasSecrets && !this.secretStore) {
       throw Object.assign(new Error('Credential storage is unavailable.'), { status: 503 });
     }
     if (this.secretStore) {
       await this.secretStore.update({
-        [`provider:${identity}`]: value.apiKey
-          ? JSON.stringify({ version: 1, type: 'api-key', apiKey: value.apiKey })
-          : undefined,
+        // Metadata/header edits must not overwrite an independently refreshed native token.
+        ...(value.oauth ? {} : { [`provider:${identity}`]: value.apiKey
+          ? JSON.stringify({ version: 1, type: 'api-key', apiKey: value.apiKey }) : undefined }),
         [`provider-headers:${identity}`]: Object.keys(value.headers).length
           ? JSON.stringify(value.headers)
           : undefined,
@@ -832,8 +903,19 @@ export class ProviderRegistryService {
     else this.volatileSecrets.delete(id);
   }
 
+  private async restoreSecrets(id: string, before: ProviderSecrets, after: ProviderSecrets, revision?: string, identity = this.storageId(id)): Promise<void> {
+    if (before.oauth && !after.oauth) {
+      const expected = after.apiKey ? JSON.stringify({ version: 1, type: 'api-key', apiKey: after.apiKey }) : undefined;
+      if (!await this.secretStore?.compareAndSet(`provider:${identity}`, expected, JSON.stringify(before.oauth), revision)) throw new Error('Credential rollback changed.');
+    }
+    await this.saveSecrets(id, before, identity);
+  }
+
   private async hydrateSecrets(id: string): Promise<void> {
-    const resolved = await this.credentialService.resolve(this.storageId(id), { env: {} });
+    const stored = this.credentialService.readStoredCredential(this.storageId(id));
+    const oauth = this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius')
+      && stored?.type === 'oauth' && stored.subscription?.provider === 'radius' ? stored : undefined;
+    const resolved = oauth ? undefined : await this.credentialService.resolve(this.storageId(id), { env: {} });
     const storedHeaders = this.secretStore?.get(this.headerStorageName(id));
     let customHeaders: Record<string, string> = {};
     if (storedHeaders) {
@@ -844,11 +926,11 @@ export class ProviderRegistryService {
     const apiKey = resolved?.credential.type === 'api-key'
       ? resolved.credential.apiKey
       : resolved?.credential.accessToken;
-    if (!apiKey && !Object.keys(customHeaders).length) return;
+    if (!apiKey && !oauth && !Object.keys(customHeaders).length) return;
     this.redactor.add(apiKey);
     this.redactor.addAll(Object.values(customHeaders));
     this.volatileSecrets.set(id, {
-      ...(apiKey ? { apiKey } : {}),
+      ...(apiKey ? { apiKey } : {}), ...(oauth ? { oauth } : {}),
       headers: customHeaders,
     });
   }
@@ -886,10 +968,23 @@ export class ProviderRegistryService {
     return `provider-headers:${this.storageId(id)}`;
   }
 
-  private createRadiusProvider(record: StoredProvider, secrets: ProviderSecrets | undefined): RadiusProvider {
+  private createRadiusProvider(record: StoredProvider, secrets: ProviderSecrets | undefined, initial?: ProviderOAuthCredential): RadiusProvider {
+    const native = secrets?.oauth?.subscription?.provider === 'radius' && secrets.oauth.subscription.gateway === getRadiusOAuthConfig(record.baseUrl).gateway;
+    const bound = () => {
+      const current = this.state.providers.find(provider => provider.id === record.id);
+      return current && !current.disconnected && current.dialect === 'radius' && current.baseUrl === record.baseUrl
+        && (current.credentialId ?? current.id) === (record.credentialId ?? record.id)
+        && JSON.stringify(Object.entries(this.readSecrets(record.id)?.headers ?? {}).sort()) === JSON.stringify(Object.entries(secrets?.headers ?? {}).sort());
+    };
+    const source = native ? async (signal?: AbortSignal, allowRefresh = true) => {
+      if (!bound()) return undefined;
+      const resolved = await this.credentialService.resolve(record.credentialId ?? record.id, { env: {}, subscriptionProvider: 'radius', radiusGateway: record.baseUrl, signal, allowRefresh });
+      return bound() && resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
+    } : undefined;
+    const credential = initial ?? (source && secrets?.oauth?.expiresAt !== undefined && secrets.oauth.expiresAt > Date.now() + 60_000 ? secrets.oauth : undefined);
     return new RadiusProvider({ type: record.id, apiKey: secrets?.apiKey, customHeaders: secrets?.headers,
       gateway: record.baseUrl, catalogueDirectory: path.join(path.dirname(this.filePath), 'radius-models', record.credentialId ?? record.id),
-      model: this.state.models.find(model => model.provider === record.id)?.id });
+      model: this.state.models.find(model => model.provider === record.id)?.id }, source, credential);
   }
 
   private applyProvider(record: StoredProvider, prepared?: RadiusProvider): void {
@@ -918,6 +1013,7 @@ export class ProviderRegistryService {
                           : record.dialect === 'groq' ? new GroqProvider(config)
                             : record.dialect === 'anthropic' ? new AnthropicProvider(config)
                               : new GeminiProvider(config));
+    if (record.dialect === 'radius' && !provider.validateConfig()) { this.proxy.removeProvider(record.id); return; }
     this.proxy.setCustomProvider(record.id, provider);
   }
 

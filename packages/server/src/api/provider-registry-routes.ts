@@ -3,7 +3,7 @@ import type { ProviderAuthStatus, ProviderCredentialService } from '@ai-harness/
 import type { AiProxyServer } from './proxy.js';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
-import { ProviderOAuthService } from '../runtime/provider-oauth.js';
+import { ProviderOAuthService, customRadiusOAuthContext } from '../runtime/provider-oauth.js';
 import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
 import { sessionCopyRequest as requestLifetime } from './session-copy-request.js';
 
@@ -31,7 +31,7 @@ export function createProviderRegistryRouter(
   servicesPromise: Promise<RuntimeServices>,
   proxy: AiProxyServer,
   credentialService: () => ProviderCredentialService | undefined,
-  oauth = new ProviderOAuthService(proxy, credentialService),
+  oauth = new ProviderOAuthService(proxy, credentialService, undefined, undefined, customRadiusOAuthContext(servicesPromise)),
 ): Router {
   const router = Router();
   const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
@@ -65,8 +65,8 @@ export function createProviderRegistryRouter(
         type: provider.id,
         name: provider.name,
         configured: provider.configured,
-        connected: proxy.isConfigured(provider.id),
-        method: services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
+        connected: provider.dialect === 'radius' ? provider.configured : proxy.isConfigured(provider.id),
+        method: services.providerRegistry.hasRadiusOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
         reconnectSupported: true,
         disconnectSupported: provider.configured,
         ...(proxy.getUsage(provider.id) ? { usage: proxy.getUsage(provider.id) } : {}),
@@ -98,7 +98,7 @@ export function createProviderRegistryRouter(
     } catch (error) { next(error); }
   }));
 
-  router.post('/auth/:id/oauth', requireCapability('credentials'), async (request, response, next) => {
+  router.post('/auth/:id/oauth', requireCapability('credentials'), operation(async (request, response, next) => {
     const lifetime = requestLifetime(request, response);
     try {
       const method: unknown = request.body?.method ?? 'device';
@@ -109,9 +109,9 @@ export function createProviderRegistryRouter(
     }
     catch (error) { next(error); }
     finally { lifetime.dispose(); }
-  });
+  }));
 
-  router.post('/auth/oauth/:flowId/redirect', requireCapability('credentials'), async (request, response, next) => {
+  router.post('/auth/oauth/:flowId/redirect', requireCapability('credentials'), operation(async (request, response, next) => {
     const lifetime = requestLifetime(request, response);
     try {
       if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)
@@ -119,7 +119,7 @@ export function createProviderRegistryRouter(
       response.json(await oauth.redirect(request.params.flowId, request.body.redirectUrl, lifetime.signal));
     } catch (error) { next(error); }
     finally { lifetime.dispose(); }
-  });
+  }));
 
   router.get('/auth/oauth/:flowId', requireCapability('credentials'), (request, response) => {
     const flow = oauth.get(request.params.flowId);
@@ -208,6 +208,10 @@ export function createProviderRegistryRouter(
       }
       const services = await servicesPromise;
       const oldId = identifier(request.params.id, 'provider id').toLowerCase();
+      if (services.providerRegistry.hasPendingRadiusOAuth(oldId)) {
+        response.status(409).json({ error: 'Provider login is pending.', code: 'PROVIDER_OAUTH_PENDING', uncertain: false });
+        return;
+      }
       // Refuse even idle durable session references: history and provider/model
       // runtime fields must not silently point to a removed identity.
       if (services.agentRuntime.listRunning().length > 0

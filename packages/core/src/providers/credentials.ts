@@ -788,6 +788,18 @@ export class ProviderCredentialService {
     }
   }
 
+  /** Process-private administration snapshot, including expired credentials; never request authority.
+   * Uses only the loaded memory/store snapshot: no environment, commands, refresh or I/O.
+   */
+  readStoredCredential(provider: string): ProviderCredential | undefined {
+    const id = providerId(provider), memory = this.volatile.get(id);
+    const raw = memory ?? this.options.store?.get(this.storageName(id));
+    if (raw === undefined) return undefined;
+    const credential = typeof raw === 'string' ? parseStoredCredential(raw) : validateCredential(raw);
+    this.rememberCredential(credential);
+    return structuredClone(credential);
+  }
+
   async setApiKey(provider: string, apiKey: string, persist = true): Promise<ProviderCredentialDescriptor> {
     const id = providerId(provider);
     const credential: ProviderApiKeyCredential = { version: 1, type: 'api-key', apiKey: secret(apiKey) };
