@@ -300,4 +300,4 @@ export class OAuthDeviceClient {
 }
 
 // Shared bounded transport/reader, not a source of issuer or endpoint authority.
-export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson, boundedJson as readProviderJson };
+export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson, boundedJson as readProviderJson, oauthDelay as waitForOAuth };

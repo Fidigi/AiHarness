@@ -13,6 +13,8 @@ export * from './sdk/index.js';
 
 // Providers
 export { azureEnvironmentConfig } from './providers/azure-config.js';
+export { beginXaiDeviceLogin, refreshXaiToken } from './providers/xai-oauth.js';
+export type { XaiOAuthIdentity, XaiOAuthCredential, XaiOAuthCredentialSource, XaiOAuthOptions, XaiDeviceLogin } from './providers/xai-oauth.js';
 export { beginMetaDeviceLogin, refreshMetaApiKey, MetaOAuthSetupRequiredError } from './providers/meta-oauth.js';
 export type { MetaOAuthIdentity, MetaOAuthCredential, MetaOAuthCredentialSource, MetaOAuthOptions, MetaDeviceLogin } from './providers/meta-oauth.js';
 export { beginAnthropicBrowserLogin, beginAnthropicCopyCodeLogin, refreshAnthropicToken } from './providers/anthropic-oauth.js';
