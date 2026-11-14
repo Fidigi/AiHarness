@@ -20,7 +20,7 @@ export const CLI_CREDENTIAL_PROVIDERS = [
   'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
   'huggingface', 'xiaomi', 'meta', 'xai', 'fireworks', 'opencode', 'opencode-go', 'openrouter',
   'cloudflare-workers-ai', 'qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual',
-  'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'typesafe', 'azure', 'vertex', 'bedrock', 'local',
+  'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'typesafe', 'radius', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {
@@ -34,6 +34,7 @@ export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
+  radiusCatalogueDirectory?: string;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -162,6 +163,7 @@ export async function createCliProviderRuntime(
     ...(kimiCodingAuthMode ? { kimiCodingAuthMode } : {}),
     network: resolveAgentProviderNetworkSettings(settings),
     redactor,
+    ...(persistCredentials ? { radiusCatalogueDirectory: path.join(agentDir, 'radius-models') } : {}),
     credentialStoreId: `${persistCredentials ? 'persistent' : 'memory'}:${path.resolve(agentDir)}`,
     signal: lifetime,
     close: () => controller.abort(),

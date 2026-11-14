@@ -88,10 +88,11 @@ export class RadiusCatalogue {
   private readonly file?: string;
   private snapshot?: Snapshot;
   private digest: string;
-  constructor(config: RadiusProviderConfig, key?: string) {
+  constructor(config: RadiusProviderConfig, key?: string, headers: Readonly<Record<string, string>> = {}) {
     this.gateway = gatewayUrl(config.gateway);
     this.overrideBase = config.baseUrl ? radiusBase(config.baseUrl) : undefined;
-    this.scope = createHash('sha256').update(JSON.stringify([this.gateway, this.overrideBase, key])).digest('hex');
+    const entries = Object.entries(headers).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+    this.scope = createHash('sha256').update(JSON.stringify([this.gateway, this.overrideBase, key, ...(entries.length ? [entries] : [])])).digest('hex');
     this.digest = JSON.stringify(raw({ baseUrl: this.baseUrl, models: this.models }));
     if (config.catalogueDirectory !== undefined && key) {
       if (!bounded(config.catalogueDirectory, 4000)) invalid();

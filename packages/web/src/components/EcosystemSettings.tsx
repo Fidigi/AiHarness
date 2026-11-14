@@ -324,6 +324,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           <option value="xiaomi-token-plan-sgp">Xiaomi Token Plan SGP</option>
           <option value="zai-coding-cn">Z.ai Coding CN</option>
           <option value="typesafe">TypeSafe System One</option>
+          <option value="radius">Radius Pi Messages (gateway URL)</option>
           <option value="anthropic">Anthropic Messages</option>
           <option value="google">Google Generative Language</option>
         </select></label>

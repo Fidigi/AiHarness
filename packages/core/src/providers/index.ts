@@ -4321,12 +4321,15 @@ const nativeRadiusProviders = new WeakSet<AiProvider>();
 /** Native P with account-owned catalogue; issuer and native host composition remain separate. */
 export class RadiusProvider extends AiProvider {
   private readonly catalogue: RadiusCatalogue;
+  private readonly radiusHeaders: Readonly<Record<string, string>>;
   private explicitModel: boolean;
   private catalogueController?: AbortController;
   private readonly activeRadius = new Set<AbortController>();
   constructor(config: RadiusProviderConfig) {
     super({ ...config, model: config.model ?? 'balanced' }); this.explicitModel = config.model !== undefined;
-    this.catalogue = new RadiusCatalogue(config, validBearerApiKey(config.apiKey) ? config.apiKey : undefined);
+    const headers = new Headers(configuredHeaders(this.config)); headers.delete('accept'); headers.delete('content-type');
+    this.radiusHeaders = Object.freeze(Object.fromEntries(headers));
+    this.catalogue = new RadiusCatalogue(config, validBearerApiKey(config.apiKey) ? config.apiKey : undefined, this.radiusHeaders);
     if (new.target === RadiusProvider) nativeRadiusProviders.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
@@ -4348,7 +4351,7 @@ export class RadiusProvider extends AiProvider {
     try {
       signal.throwIfAborted();
       const response = await this.request(new URL('/v1/config', this.catalogue.gateway), { signal,
-        headers: { Authorization: `Bearer ${String(this.config.apiKey)}`, Accept: 'application/json' } });
+        headers: { ...this.radiusHeaders, authorization: `Bearer ${String(this.config.apiKey)}`, accept: 'application/json' } });
       if (!response.ok) rejectProviderResponse(response, 'Radius catalogue is unavailable.');
       const snapshot = await readRadiusCatalogue(response, signal);
       const changed = await this.catalogue.publish(snapshot, signal, () => { if (this.catalogueController !== controller) throw new RadiusProtocolError('Radius catalogue changed.'); });
@@ -4393,10 +4396,10 @@ export class RadiusProvider extends AiProvider {
       const signal = AbortSignal.any([authority.signal, providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : []),
         ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
       activeSignal = signal; signal.throwIfAborted();
-      const owner = { provider, model, ...(nativeRadiusProviders.has(this) ? { scope: radiusScope(provider, baseUrl, model, key) } : {}) };
+      const owner = { provider, model, ...(nativeRadiusProviders.has(this) ? { scope: radiusScope(provider, baseUrl, model, key, this.radiusHeaders) } : {}) };
       const body = serializeProviderBody(radiusBody(structuredClone(messages), options, owner, profile));
       const response = await this.request(`${baseUrl}/messages`, { method: 'POST', signal, body,
-        headers: { ...configuredHeaders(this.config), Authorization: `Bearer ${key}`, Accept: 'text/event-stream', 'Content-Type': 'application/json' } });
+        headers: { ...this.radiusHeaders, authorization: `Bearer ${key}`, accept: 'text/event-stream', 'content-type': 'application/json' } });
       if (!response.ok) rejectProviderResponse(response, 'Radius request failed.');
       const result = await readRadiusStream(response, owner, signal, onChunk);
       signal.throwIfAborted(); onComplete?.(result);

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -9,6 +9,35 @@ import {
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it('composes Radius with independent gateway/key hints and keeps explicit extension factories authoritative', async () => {
+    expect(createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-other' }).has('radius')).toBe(false);
+    const native = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-second', AI_HARNESS_RADIUS_API_KEY: 'synthetic-first',
+      RADIUS_GATEWAY: 'http://127.0.0.1:1', RADIUS_BASE_URL: 'http://127.0.0.1:2/inference/v1' });
+    expect(native.get('radius')).toBeInstanceOf(RadiusProvider);
+    expect((native.get('radius') as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-first', gateway: 'http://127.0.0.1:1' });
+    expect((await collectProviderModelCatalog(native, { discover: false })).find(provider => provider.provider === 'radius')?.models).toEqual([]);
+    const cold = await resolveStartupProvider(createConfiguredProviders({}), { provider: 'radius', model: 'balanced', apiKey: 'synthetic-cold', offline: true },
+      { RADIUS_BASE_URL: 'http://127.0.0.1:2/inference/v1' }, undefined, { network: { transport: 'sse', requestTimeoutMs: 123, maxRetries: 0,
+        httpIdleTimeoutMs: 100, websocketConnectTimeoutMs: 100, maxRetryDelayMs: 100 } });
+    expect(cold.provider).toBeInstanceOf(RadiusProvider); expect(cold.model).toBe('balanced');
+    expect(cold.provider.getNetworkSettings()).toMatchObject({ requestTimeoutMs: 123, maxRetries: 0 });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer synthetic-invocation');
+      return Response.json({ baseUrl: 'http://127.0.0.1:1/v1', models: [{ id: 'owned-new', name: 'Invocation account', reasoning: false,
+        input: ['text'], cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024 }] });
+    });
+    try {
+      expect((await resolveStartupProvider(native, { provider: 'radius', models: ['radius/*'], apiKey: 'synthetic-invocation' }, {})).model).toBe('owned-new');
+      expect(fetch).toHaveBeenCalledTimes(1);
+    } finally { fetch.mockRestore(); }
+    expect(ProviderFactory.has('radius')).toBe(false);
+    const unregister = ProviderFactory.register('radius', config => new MockProvider({ ...config, model: 'operator-chat' }));
+    try {
+      const overridden = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-override' });
+      expect(overridden.get('radius')).toBeInstanceOf(MockProvider);
+      expect((await resolveStartupProvider(overridden, { provider: 'radius', model: 'operator-chat', offline: true }, {})).model).toBe('operator-chat');
+    } finally { unregister(); }
+  });
   it('keeps explicit native OpenAI R/D separate from legacy C, subscription labels and registered factories', async () => {
     const legacy = createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-legacy', OPENAI_CODEX_API_KEY: 'synthetic-foreign' });
     expect(legacy.get('openai')).toBeInstanceOf(OpenAiProvider); expect(legacy.has('openai-native')).toBe(false);

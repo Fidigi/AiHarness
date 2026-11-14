@@ -47,6 +47,7 @@ import {
   OpenRouterProvider,
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
+  RadiusProvider,
   CLOUDFLARE_CHAT_MODELS,
   OPENROUTER_MESSAGE_MODELS,
   OPENROUTER_COMPLETION_MODELS,
@@ -160,7 +161,7 @@ function nativeDialect(value: string | undefined) {
 }
 
 function dialect(value: unknown): ProviderDialect {
-  if (!['openai', 'openai-completions', 'openai-responses', 'anthropic', 'google', 'mistral-conversations', 'openrouter', 'cloudflare-workers-ai', 'cerebras', 'deepseek', 'groq', 'zai', 'moonshot', 'nvidia', ...Object.keys(NATIVE_DIALECTS)].includes(String(value))) {
+  if (!['openai', 'openai-completions', 'openai-responses', 'anthropic', 'google', 'mistral-conversations', 'openrouter', 'cloudflare-workers-ai', 'cerebras', 'deepseek', 'groq', 'zai', 'moonshot', 'nvidia', 'radius', ...Object.keys(NATIVE_DIALECTS)].includes(String(value))) {
     badRequest('Unsupported provider dialect.');
   }
   return value as ProviderDialect;
@@ -490,6 +491,8 @@ export class ProviderRegistryService {
         : currentSecrets.apiKey ? { apiKey: currentSecrets.apiKey } : {}),
       headers: customHeaders ?? currentSecrets.headers,
     };
+    // Radius may load its explicit private catalogue locally; reject unsafe cache before mutating credentials/metadata.
+    const preparedRadius = record.dialect === 'radius' ? this.createRadiusProvider(record, nextSecrets) : undefined;
     await this.assertSource();
     await this.saveSecrets(id, nextSecrets, record.credentialId);
     const previousState = this.state;
@@ -506,7 +509,7 @@ export class ProviderRegistryService {
       throw error;
     }
     await this.proxy.resetNetworkDispatchers();
-    this.applyProvider(record);
+    this.applyProvider(record, preparedRadius);
     return this.listProviders().find(provider => provider.id === id)!;
   }
 
@@ -666,7 +669,14 @@ export class ProviderRegistryService {
       badRequest('Unknown model provider.', 'INVALID_MODEL');
     }
     const id = boundedString(input.id ?? existingKey?.slice(provider.length + 1), 'model id', 500);
-    validateDialectModel(this.state.providers.find(item => item.id === provider)?.dialect, id);
+    const providerRecord = this.state.providers.find(item => item.id === provider);
+    validateDialectModel(providerRecord?.dialect, id);
+    if (providerRecord?.dialect === 'radius') {
+      const current = this.proxy.getAgentProvider(provider);
+      if (!(current instanceof RadiusProvider) || !current.validateConfig() || !current.getCachedAvailableModelIds().includes(id)) {
+        badRequest('Radius model is not in the current account catalogue.', 'INVALID_MODEL');
+      }
+    }
     const key = `${provider}:${id}`;
     const previous = this.state.models.find(model => model.key === (existingKey ?? key));
     const published = getPublishedModelMetadata(provider, id);
@@ -872,7 +882,13 @@ export class ProviderRegistryService {
     return `provider-headers:${this.storageId(id)}`;
   }
 
-  private applyProvider(record: StoredProvider): void {
+  private createRadiusProvider(record: StoredProvider, secrets: ProviderSecrets | undefined): RadiusProvider {
+    return new RadiusProvider({ type: record.id, apiKey: secrets?.apiKey, customHeaders: secrets?.headers,
+      gateway: record.baseUrl, catalogueDirectory: path.join(path.dirname(this.filePath), 'radius-models', record.credentialId ?? record.id),
+      model: this.state.models.find(model => model.provider === record.id)?.id });
+  }
+
+  private applyProvider(record: StoredProvider, prepared?: RadiusProvider): void {
     if (record.disconnected) { this.proxy.removeProvider(record.id); return; }
     const secrets = this.readSecrets(record.id);
     const config: ProviderConfig = {
@@ -883,7 +899,7 @@ export class ProviderRegistryService {
       model: this.state.models.find(model => model.provider === record.id)?.id,
     };
     const Adapter = nativeDialect(record.dialect)?.Adapter;
-    const provider = Adapter ? new Adapter(config)
+    const provider = prepared ?? (record.dialect === 'radius' ? this.createRadiusProvider(record, secrets) : Adapter ? new Adapter(config)
       : record.dialect === 'openai-completions' ? new OpenAiProvider(config)
       : record.dialect === 'openai-responses' ? new OpenAiResponsesProvider(config)
         : record.dialect === 'mistral-conversations' ? new MistralProvider(config)
@@ -897,7 +913,7 @@ export class ProviderRegistryService {
                         : record.dialect === 'zai' ? new ZaiProvider(config)
                           : record.dialect === 'groq' ? new GroqProvider(config)
                             : record.dialect === 'anthropic' ? new AnthropicProvider(config)
-                              : new GeminiProvider(config);
+                              : new GeminiProvider(config));
     this.proxy.setCustomProvider(record.id, provider);
   }
 

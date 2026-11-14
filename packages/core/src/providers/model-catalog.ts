@@ -59,6 +59,7 @@ export interface ModelScopeResult<T extends ModelIdentity = ModelIdentity> {
 }
 
 export interface ModelDiscoveryOptions {
+  signal?: AbortSignal;
   timeoutMs?: number;
   retries?: number;
   retryDelayMs?: number;
@@ -193,13 +194,15 @@ function positiveInteger(value: number, name: string): number {
   return value;
 }
 
-async function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number, lifetime?: AbortSignal): Promise<T> {
   const controller = new AbortController();
+  const signal = lifetime ? AbortSignal.any([controller.signal, lifetime]) : controller.signal;
   let timer: NodeJS.Timeout | undefined;
   try {
-    if (timeoutMs === 0) return await operation(controller.signal);
+    if (signal.aborted) throw new Error('Model discovery aborted.');
+    if (timeoutMs === 0) return await operation(signal);
     return await Promise.race([
-      operation(controller.signal),
+      operation(signal),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error('Model discovery timed out.')); }, timeoutMs);
         timer.unref?.();
@@ -225,7 +228,7 @@ export async function discoverProviderModelIds(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const values = await withTimeout(signal => provider.getAvailableModels({ signal }), timeoutMs);
+      const values = await withTimeout(signal => provider.getAvailableModels({ signal }), timeoutMs, options.signal);
       const models: string[] = [];
       const seen = new Set<string>();
       for (const value of values) {
@@ -239,6 +242,7 @@ export async function discoverProviderModelIds(
       return models;
     } catch (error) {
       lastError = error;
+      if (options.signal?.aborted) throw new Error('Model discovery aborted.');
       if (attempt < retries && retryDelayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, retryDelayMs * 2 ** attempt));
       }

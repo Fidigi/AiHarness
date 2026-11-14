@@ -149,7 +149,7 @@ export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-response
   | 'ant-ling' | 'baseten' | 'fireworks' | 'huggingface' | 'kimi-coding' | 'meta' | 'minimax' | 'minimax-cn'
   | 'opencode-go' | 'opencode' | 'together' | 'xai' | 'xiaomi' | 'moonshot-cn'
   | 'qwen-token-plan' | 'qwen-token-plan-cn' | 'qwen-token-plan-individual'
-  | 'xiaomi-token-plan-ams' | 'xiaomi-token-plan-cn' | 'xiaomi-token-plan-sgp' | 'zai-coding-cn' | 'typesafe';
+  | 'xiaomi-token-plan-ams' | 'xiaomi-token-plan-cn' | 'xiaomi-token-plan-sgp' | 'zai-coding-cn' | 'typesafe' | 'radius';
 
 /** Public metadata for an operator-managed provider. Header values and credentials never cross the API. */
 export interface CustomProviderDefinition {

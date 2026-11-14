@@ -78,7 +78,8 @@ describe('Radius account-owned catalogue', () => {
     const { provider, config, gateway, calls } = await fixture(); await provider.getAvailableModels();
     for (const isolated of [new RadiusProvider({ ...config, apiKey: 'synthetic-other-key' }),
       new RadiusProvider({ ...config, gateway: gateway.replace('127.0.0.1', 'localhost') }),
-      new RadiusProvider({ ...config, baseUrl: `${gateway}/explicit/v1` })]) {
+      new RadiusProvider({ ...config, baseUrl: `${gateway}/explicit/v1` }),
+      new RadiusProvider({ ...config, customHeaders: { 'x-tenant': 'synthetic-other-tenant' } })]) {
       expect(await isolated.getAvailableModels({ allowNetwork: false })).toEqual([]); expect(isolated.getPublishedModels()).toEqual([]);
     }
     expect(calls).toHaveLength(1);
@@ -144,7 +145,7 @@ describe('Radius account-owned catalogue', () => {
     expect(calls.map(call => call.method)).toEqual(['GET', 'POST', 'GET']);
   });
 
-  it('propagates the shared discovery deadline into an uncooperative config body and prevents late cache publication', async () => {
+  it.each(['deadline', 'owner'] as const)('propagates shared discovery %s cancellation into an uncooperative config body without late cache publication', async lifetime => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-timeout-')); roots.push(root);
     let entered!: () => void; const reached = new Promise<void>(resolve => { entered = resolve; });
     const cancel = vi.fn(() => new Promise<never>(() => undefined));
@@ -153,8 +154,10 @@ describe('Radius account-owned catalogue', () => {
     let requestSignal: AbortSignal | null | undefined;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => { requestSignal = init?.signal; return new Response(body, { headers: { 'content-type': 'application/json' } }); });
     const provider = new RadiusProvider({ type: 'radius', apiKey: key, catalogueDirectory: root });
-    const pending = discoverProviderModelIds(provider, { timeoutMs: 25, retries: 0 }).catch(error => error);
-    await reached; expect((await pending).message).toBe('Model discovery timed out.');
+    const owner = new AbortController();
+    const pending = discoverProviderModelIds(provider, { timeoutMs: lifetime === 'deadline' ? 25 : 8_000, retries: 0, signal: owner.signal }).catch(error => error);
+    await reached; if (lifetime === 'owner') owner.abort(new Error(key));
+    expect((await pending).message).toBe(lifetime === 'deadline' ? 'Model discovery timed out.' : 'Model discovery aborted.');
     expect(requestSignal?.aborted).toBe(true); expect(cancel).toHaveBeenCalledTimes(1); expect(await readdir(root)).toEqual([]);
     expect(provider.getPublishedModels()).toHaveLength(29);
   });

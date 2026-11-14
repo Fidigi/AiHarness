@@ -491,6 +491,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       githubCopilot: providerRuntime.githubCopilot,
       openaiCodex: providerRuntime.openaiCodex,
       kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
+      radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });
@@ -518,7 +519,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         ...effectiveModels.selection, provider: startupSession.providerConfig.type, model: startupSession.model,
       };
     }
-    const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline }, process.env, extensionRegistry.virtualModels);
+    const startup = await resolveStartupProvider(providers, { ...effectiveModels.selection, offline }, process.env, extensionRegistry.virtualModels, providerRuntime);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
     const startupThinking = options.thinking ?? resumedThinking

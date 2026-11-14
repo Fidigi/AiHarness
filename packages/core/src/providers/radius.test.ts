@@ -92,7 +92,7 @@ describe('explicit native Radius P SDK', () => {
     expect(JSON.stringify(result)).not.toContain(key);
   });
 
-  it('replays owned opaque fields after private v2 reload and keeps native tool pairs without exposing them to another key/endpoint/model/owner', async () => {
+  it('replays owned opaque fields after private v2 reload and keeps native tool pairs without exposing them to another key/endpoint/model/owner/headers', async () => {
     const opaque = 'redacted-private-payload'.repeat(4000);
     const { provider, calls, config, baseUrl } = await fixture(() => { const values = frames(); values[6]!.content = opaque; return values; });
     const result = await provider.chat([user()]);
@@ -114,7 +114,8 @@ describe('explicit native Radius P SDK', () => {
     expect(native[2]).toMatchObject({ role: 'toolResult', toolCallId: 'call-1', toolName: 'echo', isError: false, content: [{ type: 'text', text: 'echoed' }] });
     class Derived extends RadiusProvider {}
     for (const peer of [new RadiusProvider({ ...config, apiKey: 'synthetic-other-key' }), new RadiusProvider({ ...config, baseUrl: baseUrl.replace('/proxy', '/other') }),
-      new RadiusProvider({ ...config, type: 'other-owner' }), new RadiusProvider({ ...config, model: 'cheap' }), new Derived(config)]) {
+      new RadiusProvider({ ...config, type: 'other-owner' }), new RadiusProvider({ ...config, model: 'cheap' }),
+      new RadiusProvider({ ...config, customHeaders: { 'x-tenant': 'synthetic-other-tenant' } }), new Derived(config)]) {
       const result = await peer.chat(history);
       if (peer instanceof Derived) expect(JSON.stringify(result)).not.toMatch(/private-payload|private-.*signature/);
       const body = JSON.stringify(calls.at(-1)!.body);

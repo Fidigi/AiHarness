@@ -3,6 +3,7 @@ import type { ModelCatalog, ProviderModelCatalog, ResourceEnableOutcome } from '
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
+import { providerOperation } from '../runtime/provider-administration.js';
 
 import { mergeResourceChanges, resourceBatchBody } from '../runtime/resource-batches.js';
 
@@ -50,8 +51,9 @@ function withEnabledState(
 
 export function createModelRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
-  router.get('/', async (request, response, next) => {
+  router.get('/', operation(async (request, response, next) => {
     try {
       const projectId = optionalProjectId(request.query.projectId);
       const services = await servicesPromise;
@@ -65,9 +67,9 @@ export function createModelRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/enabled/batch', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/enabled/batch', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const projectId = optionalProjectId(request.body?.projectId);
       const changes = resourceBatchBody(request.body, ['projectId']);
@@ -98,9 +100,9 @@ export function createModelRouter(servicesPromise: Promise<RuntimeServices>): Ro
       }
       response.json({ outcomes, catalog: withEnabledState(providers, services, projectId) });
     } catch (error) { next(error); }
-  });
+  }));
 
-  router.patch('/enabled', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/enabled', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const projectId = optionalProjectId(request.body?.projectId);
       const enabledModels = enabledModelKeys(request.body?.enabledModels);
@@ -121,7 +123,7 @@ export function createModelRouter(servicesPromise: Promise<RuntimeServices>): Ro
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   return router;
 }

@@ -331,6 +331,7 @@ async function main(): Promise<void> {
         githubCopilot: providerRuntime.githubCopilot,
         openaiCodex: providerRuntime.openaiCodex,
         kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
+        radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -842,6 +843,7 @@ async function main(): Promise<void> {
       githubCopilot: refreshedRuntime.githubCopilot,
       openaiCodex: refreshedRuntime.openaiCodex,
       kimiCodingAuthMode: refreshedRuntime.kimiCodingAuthMode,
+      radiusCatalogueDirectory: refreshedRuntime.radiusCatalogueDirectory,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -861,7 +863,7 @@ async function main(): Promise<void> {
       models: cliArguments.models,
       apiKey: cliArguments.apiKey,
     }, settingsResolution.settings);
-    const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels);
+    const refreshedStartup = await resolveStartupProvider(configuredProviders, { ...refreshedModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels, refreshedRuntime);
     refreshedStartup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     commandContext.provider = refreshedStartup.provider;
     commandContext.modelPatterns = refreshedModelSettings.modelPatterns;
@@ -994,6 +996,7 @@ async function main(): Promise<void> {
     githubCopilot: providerRuntime.githubCopilot,
     openaiCodex: providerRuntime.openaiCodex,
     kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
+    radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
     network: providerRuntime.network,
   });
 
@@ -1106,7 +1109,7 @@ async function main(): Promise<void> {
         }
       }
     }
-    const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels);
+    const startup = await resolveStartupProvider(ctx.providers, { ...effectiveModelSettings.selection, offline }, process.env, extensionRegistry.virtualModels, providerRuntime);
     startup.scopeDiagnostics?.forEach(() => process.stderr.write('Warning: A model scope entry could not be resolved.\n'));
     ctx.provider = startup.provider;
     const startupModel = startup.model ?? startup.provider.getConfiguredModel();
