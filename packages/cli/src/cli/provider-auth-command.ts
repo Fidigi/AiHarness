@@ -9,7 +9,7 @@ import { terminalText } from '../tui/terminal-text.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
 import { loginKimiCoding } from '../security/kimi-login.js';
-import { loginOpenRouter } from '../security/openrouter-login.js';
+import { loginOpenRouter, readOpenRouterRedirect } from '../security/openrouter-login.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
@@ -25,7 +25,8 @@ Device endpoints: AI_HARNESS_OAUTH_<PROVIDER>_{DEVICE_URL,TOKEN_URL,CLIENT_ID,SC
 --issuer openai-codex selects the fixed OpenAI ChatGPT client, not API-key OpenAI.
 --issuer radius selects the gateway client; optional RADIUS_GATEWAY, independent of API keys.
 Codex/Radius browser PKCE uses 127.0.0.1 ports1455/1456 respectively; no automatic opener.
---issuer openrouter uses fixed OpenRouter PKCE with an ephemeral loopback port and returns a permanent API key.
+--issuer openrouter uses fixed OpenRouter PKCE/ephemeral loopback and returns a permanent API key.
+Standalone OpenRouter also accepts a full callback on hidden stdin (no history); EOF keeps browser callback available.
 Login does not select a provider/model or change account model policies.
 Authorization instructions go to stderr; tokens and device codes are never printed.
 Exits: 0 success/help, 2 usage, 1 operation failure, 124 deadline, 130 cancellation.
@@ -134,7 +135,11 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       timer = setTimeout(expire, parsed.timeout * 1000);
       if (parsed.issuer === 'openrouter') await loginOpenRouter(service, parsed.provider!, uri => {
         process.stderr.write(`Authorize at ${uri}\n`);
-      }, controller.signal);
+      }, controller.signal, signal => {
+        const input = readOpenRouterRedirect(signal, cancel);
+        process.stderr.write('Paste the full OAuth callback address (hidden input), or complete browser callback.\n');
+        return input;
+      });
       else if (parsed.issuer === 'kimi-coding') await loginKimiCoding(service, parsed.provider!, (uri, code) => {
         process.stderr.write(`Authorize at ${uri}\nUser code: ${code}\n`);
       }, controller.signal, process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST);

@@ -1,0 +1,30 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "6f3f7af",
+  "scope": "Native standalone OpenRouter full-callback stdin fallback for SSH/headless, without a new TUI input mode or duplicate exchange path",
+  "reference": { "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff", "path": "packages/ai/src/auth/oauth/openrouter.ts", "sha256": "3d90d1955672b64e3039e760c41b4ff1c43f5b3fc6fcbe7f80fa6f552997893a", "meaning": "Existing pinned source confirms manual input raced with the ephemeral listener for remote/headless CLI. We require the complete owned callback URL, not its permissive loose-code parser or callback-host override. Separate source review confirms models/user personalization is wired in coding-agent/src/core/model-runtime.ts and remains required." },
+  "implementation": "auth login <label> --issuer openrouter prepares hidden standalone stdin before publishing instructions/authorization URL. Bounded8192-byte/fatal-UTF8 single-line input uses no readline/history/output, owns raw mode only when necessary and restores/pauses its input on EOF/error/retirement. EOF/empty input disables paste without cancelling browser callback; raw Ctrl-C invokes the existing command owner and abort/deadline semantics. Helper accepts a complete callback only for its already bound origin/UUID path, no userinfo/fragment/control/foreign endpoint. It forwards GET solely to that owned loopback listener, reusing its parser/one-shot admission/Core PKCE/CAS publication and publication-before-close rather than adding another key-exchange path. Shared owner clips reader/local request; callback winner cancels hidden input. Invalid paste fails closed without overwriting prior key. No opener, new flags/issuer endpoints or TUI input owner borrowing; /login still uses browser callback and remote users can first run standalone auth.",
+  "proof": "Four new reader/security cases cover hidden raw setup/restoration/no history, fatal UTF8/size/EOF, caller/keyboard retirement and a foreign loopback trap receiving zero requests with prior key preserved. Existing emitted print case now uses piped full callback, JSON/RPC retain browser+EOF, and one new real node-pty case proves no private code echo through actual terminal output. All four perform fixed S256/JSON/native key publication,0600 encrypted stores/two independent C inference processes/logout, exact10-token/$0.00004 accounting per assistant and private-output guards. Raw input is ready before authorization URI is displayed, avoiding an echo race. No new account/model/profile matrix.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true only; synthetic credentials/disposable stores, verified-loopback TLS/mocks and real disposable node-pty; no real-account switch/personal store/protected-container operation",
+    "image": "ai-harness:mod01-openrouter-manual-owned",
+    "imageId": "sha256:2439ca8b5c3bc4b494fd95a910214db45886ca1530d89c0ebc37b4238d44668b",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-openrouter-manual-owned; four builds/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-openrouter-manual/build-owned.log",
+    "strict": { "passed": true, "roots": 7, "config": "/tmp/mod01-openrouter-manual/strict.json", "log": "/tmp/mod01-openrouter-manual/final.log" },
+    "targeted": { "passed": 79, "failed": 0, "files": 6, "selection": ["packages/cli/src/security/openrouter-login.test.ts", "packages/cli/src/commands/radius-login.test.ts", "packages/cli/src/cli/provider-auth-command.test.ts", "packages/cli/src/cli/openrouter-oauth-process.test.ts", "packages/core/src/providers/credentials.test.ts", "packages/core/src/providers/openrouter-oauth.test.ts"], "log": "/tmp/mod01-openrouter-manual/final.log", "meaning": "Five added distinct cases (four reader/security+one TTY), plus strengthened existing print manual scenario and unchanged useful browser/interactive/credential controls. NodePTY output is recorded as combined terminal stdout, not falsely separated stderr." },
+    "counterfactual": { "failed": 4, "filterUnselected": 2, "image": "ai-harness:mod01-openrouter-server-owned", "log": "/tmp/mod01-openrouter-manual/red.log", "meaning": "Earlier snapshot: three reader cases fail on missing reader; piped print login reaches unchanged --timeout5 and exits124 instead of success. No timeout/deadline/assertion weakening; later foreign-endpoint and TTY cases are not credited as reached counterfactual assertions." },
+    "earlierPass": "/tmp/mod01-openrouter-manual/focused.log78 precedes added foreign-endpoint guard case; final owned build includes all source/tests with no final overlay. Not an additional78 tests.",
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-openrouter-manual/docs.log" },
+    "limits": "Standalone only: no new sensitive input mode in regular/fullscreen /login, no loose code/query acceptance, remote website/account/entitlement/models-user filtering, new inference policy, Chromium/Server requalification, installed/production/global or04b claim. Existing Core/loopback SDK and Server/Settings receipts remain source-bound; no SDK acquisition/MOD-03 redelivery/historical incident repair/acceptance extension."
+  },
+  "sourceSha256": {
+    "packages/cli/src/security/openrouter-login.ts": "dfe4064848db6408855302797a06b23db9b699fb3ddd99b1a3d0a949c7b4bfed",
+    "packages/cli/src/security/openrouter-login.test.ts": "1e05b1b93a96062a0f651f09ba37ed2330c3a6a6836e514f1d6132c4de1e66c7",
+    "packages/cli/src/cli/provider-auth-command.ts": "770b509ed10d545b23aa6d6a7bb835f3802ee8f92df15b3f2a38ba582c36a8a1",
+    "packages/cli/src/cli/openrouter-oauth-process.test.ts": "90a6fe9bc52893056569e63c1d75a55f8f50df2e238829fc527e187b9f81fbc8"
+  },
+  "remaining": ["OpenRouter user-catalogue filtering with actually effective limits/prices", "Anthropic subscription/federation and other approved issuers/cloud chains/policies/MOD-01.04b", "Final MOD-01 closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; exactly three historical acceptances unchanged; active goal."
+}
