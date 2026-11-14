@@ -69,6 +69,7 @@ import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiC
 export { KIMI_CODING_MODELS } from './kimi-coding.js';
 import { validAnthropicOAuthIdentity, type AnthropicOAuthCredential, type AnthropicOAuthCredentialSource } from './anthropic-oauth.js';
 import { anthropicOAuthHeaders, prepareAnthropicOAuthBody, anthropicOAuthNames, anthropicOAuthBlocks } from './anthropic-oauth-policy.js';
+import { AnthropicFederation, hasAnthropicAuthHeaders, type AnthropicFederationConfig } from './anthropic-federation.js';
 import { anthropicOAuthHistory, sealAnthropicOAuthCall, sealAnthropicOAuthResponse, withoutAnthropicOAuthReplay } from './anthropic-oauth-replay.js';
 import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthCredential, type KimiCodingOAuthCredentialSource } from './kimi-coding-oauth.js';
 import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
@@ -5162,7 +5163,7 @@ const nativeKimiOAuthProviders = new WeakSet<AiProvider>();
 const nativeAnthropicOAuthProviders = new WeakSet<AiProvider>();
 const nativeAiGatewayDelegates = new WeakMap<AiProvider, AiGatewayProfile>();
 
-export interface AnthropicProviderConfig extends ProviderConfig { anthropicAuthMode?: 'api-key' | 'oauth' }
+export interface AnthropicProviderConfig extends ProviderConfig { anthropicAuthMode?: 'api-key' | 'oauth'; anthropicFederation?: AnthropicFederationConfig }
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
@@ -5177,6 +5178,7 @@ export class AnthropicProvider extends AiProvider {
 
   private readonly ownsNativeProfiles: boolean;
   private readonly ownsKimiCodingReplay: boolean;
+  private readonly federation?: AnthropicFederation;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
@@ -5189,6 +5191,13 @@ export class AnthropicProvider extends AiProvider {
     if (new.target === MiniMaxProvider || new.target === MiniMaxCnProvider) nativeMiniMaxReplay.add(this);
     this.ownsKimiCodingReplay = new.target === KimiCodingProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
+    if (this.ownsNativeProfiles && !config.apiKey && config.anthropicAuthMode !== 'oauth' && config.anthropicFederation
+      && !hasAnthropicAuthHeaders(config)) {
+      this.baseUrl = this.baseUrl.replace(/\/+$/u, '');
+      this.federation = new AnthropicFederation(config.anthropicFederation, this.baseUrl);
+      this.config = { ...config, baseUrl: this.baseUrl, customHeaders: Object.freeze({ ...configuredHeaders(config) }) };
+      nativeSubscriptionStreamConsumers.add(this);
+    }
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
       return (options, messages) => prepareAnthropicOutputBudget(options, model, messages);
@@ -5196,11 +5205,21 @@ export class AnthropicProvider extends AiProvider {
   }
 
   validateConfig(): boolean {
-    return !!this.config.apiKey;
+    return !!this.config.apiKey || !!this.federation;
   }
 
-  async getAvailableModels(): Promise<string[]> {
+  protected override request(url: string | URL, init: RequestInit = {}, noRetryStatuses?: readonly number[]): Promise<Response> {
+    if (!this.federation) return super.request(url, init, noRetryStatuses);
+    const network = providerNetworkSettings(this.config);
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(init.signal ? [init.signal] : []),
+      ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    return this.federation.request(url, init, signal, (target, request) => super.request(target, request, noRetryStatuses));
+  }
+
+  async getAvailableModels(options?: { signal?: AbortSignal; allowNetwork?: boolean }): Promise<string[]> {
+    if (this.federation && options?.allowNetwork === false) return [];
     const response = await this.request(resolveProviderDiscoveryEndpoint('anthropic', this.baseUrl), {
+      signal: options?.signal,
       headers: this.oauthMode ? this.messageHeaders() : {
         ...configuredHeaders(this.config),
         ...(this.config.apiKey ? { 'x-api-key': String(this.config.apiKey) } : {}),

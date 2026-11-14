@@ -1269,9 +1269,27 @@ Detached HTTP conversations delegate native A/C and, when code mode is explicitl
 
 CLI print/JSON/RPC use trusted `registerProvider('router-native', {defaultConfig:{model:'openai/gpt-4o'}, create:config=>new OpenRouterProvider(config)})`, then explicit `--model router-native/anthropic/claude-sonnet-4.6 --api-key <key>` (and an explicitly configured proxy base when required). Fully qualified selection preserves the physical ID's slash. This is explicit registration/key selection, not automatic CLI configuration, durable CLI `models.json`, OAuth or account qualification. Complete per-model host descriptors, defaults/reserves/media/replay, freshness and platform qualification remain open.
 
+### Explicit Anthropic workload SDK
+
+The [WIF SDK receipt](../../audit/pi/evidence/MOD-01-anthropic-wif-sdk.json) qualifies explicit `AnthropicProviderConfig.anthropicFederation`/public `AnthropicFederationConfig`: rule/org/identity-token-file, optional service-account/workspace. Only the original native constructor without key/OAuth mode/auth-header intent admits it; keys and protected auth intent suppress file/exchange, derived transports never acquire WIF by label. No environment/profile discovery. Configuration and headers are captured; passive validation/metadata does not read the file or establish access, explicit offline discovery returns[] not a verified cache.
+
+```typescript
+const provider = new AnthropicProvider({
+  type: 'anthropic', model: 'claude-sonnet-4-6',
+  anthropicFederation: {
+    federationRuleId: 'fdrl-example', organizationId: 'org-example',
+    identityTokenFile: '/run/secrets/workload.jwt',
+  },
+});
+```
+
+The configured native base owns `/v1/oauth/token` and inference, consistently normalizes trailing slashes and accepts HTTPS or loopback only for credential exchange. Explicit projected symlinks work; nonblocking regular-file/16KiB assertion/fatal UTF8 bounds, shared256KiB response/actual Bearer Header validation, manual redirects,15s auth and shared caller/scope/deadline clipping prevent late publication/hostile-body waits. JSON JWT-bearer exchange sends rule/org/optional IDs and oauth+federation betas; short-lived token re-exchanges without a refresh token. Each instance/caller owns cache/publication; >120s cached,30–120 foreground advisory refresh can fall back outside the mandatory≤30s window, authenticated401 retries once after invalidation. No background work/dedup/global or disk token cache; the foreground advisory scheduling is deliberately simpler than the reference SDK background advisory task.
+
+Inference sends Bearer/API OAuth beta but no Claude identity/system/canonical-tool policy or federation exchange beta. Existing native A profiles/reasoning/tools/accounting/raw signed history remain unchanged. Seven old-image REDs plus protected-header and trailing-base strengthened REDs; final build/types/two strict roots/34 runtime (seven new)/one compiled public SDK smoke PASS, three production inputs image-identical. JSON/signed history/SSE/symlink rotation/401/advisory/mandatory/cache isolation/cancellation/file-response bounds plus existing native grant/issuer/eight scoped API-key controls, not a new all-model matrix. Failed fixture/runtime/strict gates and exact overlays remain in receipt; old profiles strict fixture remains baseline/runtime-only. **SDK only:** actual trusted CLI/Server fallback/admission/privacy lifecycle is still missing; no native host/access/entitlement/installed/production/04b or MOD-03/historical repair claim.
+
 ### Anthropic workload boundary
 
-[Source reconciliation](../../audit/pi/MOD-01-tracking.md) separates the still-absent explicit WIF fallback (rule/org/token-file triplet, optional service-account/workspace, JWT-bearer exchange/re-exchange) from ambient `ANTHROPIC_PROFILE` loading, which pinned `PiAnthropic` deliberately disables. Current manual Core transport also has no ambient SDK credential scan; do not turn a historical “profile chain” reservation into an implicit personal-profile reader. Existing key/raw-token/custom native grant delivery is not WIF. Already-installed matching SDK0.129.0 was inspected for the exact protocol without acquisition/new dependency, no runtime/access certificate; WIF and its actual trusted CLI/Server composition still require implementation/proof.
+[Source reconciliation](../../audit/pi/MOD-01-tracking.md) separates the now-delivered explicit WIF SDK (above; trusted CLI/Server composition still missing) from ambient `ANTHROPIC_PROFILE` loading, which pinned `PiAnthropic` deliberately disables. Current Core also has no ambient SDK credential scan; do not turn a historical “profile chain” reservation into an implicit personal-profile reader. Existing key/raw-token/custom native grant delivery is distinct from WIF. Already-installed matching SDK0.129.0 was inspected for the exact protocol without acquisition/new dependency, not a vendor/access certificate.
 
 ### Anthropic builtin Server raw credentials
 

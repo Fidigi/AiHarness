@@ -16,6 +16,7 @@ export { azureEnvironmentConfig } from './providers/azure-config.js';
 export { beginAnthropicBrowserLogin, beginAnthropicCopyCodeLogin, refreshAnthropicToken } from './providers/anthropic-oauth.js';
 export type { AnthropicOAuthIdentity, AnthropicOAuthCredential, AnthropicOAuthCredentialSource, AnthropicOAuthOptions, AnthropicBrowserOAuthOptions, AnthropicLogin } from './providers/anthropic-oauth.js';
 export type { AnthropicProviderConfig } from './providers/index.js';
+export type { AnthropicFederationConfig } from './providers/anthropic-federation.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export type { RadiusChatOptions } from './providers/radius.js';
 export type { RadiusProviderConfig, RadiusDiscoveryOptions } from './providers/radius-catalogue.js';
