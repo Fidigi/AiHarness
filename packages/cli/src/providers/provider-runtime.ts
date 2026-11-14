@@ -19,7 +19,7 @@ export const CLI_CREDENTIAL_PROVIDERS = [
   'openai', 'openai-native', 'anthropic', 'google', 'cerebras', 'mistral-conversations', 'deepseek', 'groq', 'zai', 'nvidia',
   'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
   'huggingface', 'xiaomi', 'meta', 'xai', 'fireworks', 'opencode', 'opencode-go', 'openrouter',
-  'cloudflare-workers-ai', 'qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual',
+  'cloudflare-workers-ai', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual',
   'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'typesafe', 'radius', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 

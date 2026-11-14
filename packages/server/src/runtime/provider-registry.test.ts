@@ -6,7 +6,7 @@ import { CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, Moonshot
   AntLingProvider, BasetenProvider, FireworksProvider, HuggingFaceProvider, KimiCodingProvider, MetaProvider,
   MiniMaxProvider, MiniMaxCnProvider, OpenCodeGoProvider, OpenCodeProvider, TogetherProvider, XaiProvider, XiaomiProvider, MoonshotCnProvider,
   QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, TypesafeProvider } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, TypesafeProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ProviderRegistryService } from './provider-registry.js';
 
@@ -55,6 +55,7 @@ describe('ProviderRegistryService', () => {
     ['qwen-token-plan', QwenTokenPlanProvider, 20], ['qwen-token-plan-cn', QwenTokenPlanCnProvider, 20],
     ['qwen-token-plan-individual', QwenTokenPlanIndividualProvider, 9], ['xiaomi-token-plan-ams', XiaomiTokenPlanAmsProvider, 4],
     ['xiaomi-token-plan-cn', XiaomiTokenPlanCnProvider, 4], ['xiaomi-token-plan-sgp', XiaomiTokenPlanSgpProvider, 4], ['zai-coding-cn', ZaiCodingCnProvider, 4],
+    ['cloudflare-ai-gateway', CloudflareAiGatewayProvider, 57], ['vercel-ai-gateway', VercelAiGatewayProvider, 245],
   ] as const)('composes %s through encrypted native registry lifecycle without discovery or borrowed model admission', async (dialect, Adapter, count) => {
     const { root, proxy, service } = await fixture();
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected discovery'));
@@ -74,6 +75,7 @@ describe('ProviderRegistryService', () => {
     const before = await readFile(path.join(root, 'providers.json'), 'utf8');
     const beforeSecrets = await readFile(path.join(root, 'secrets.enc'), 'utf8');
     await expect(service.upsertModel({ provider: id, id: 'future/private' })).rejects.toMatchObject({ status: 400, code: 'INVALID_MODEL' });
+    if (dialect === 'vercel-ai-gateway') await expect(service.upsertModel({ provider: id, id: 'typesafe-ai/jev' })).rejects.toMatchObject({ status: 400, code: 'INVALID_MODEL' });
     expect(await readFile(path.join(root, 'providers.json'), 'utf8')).toBe(before);
     expect(await readFile(path.join(root, 'secrets.enc'), 'utf8')).toBe(beforeSecrets);
     await service.upsertProvider({ apiKey: rotated }, id);

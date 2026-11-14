@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -9,6 +9,24 @@ import {
 } from './configured-providers.js';
 
 describe('configured CLI providers', () => {
+  it.each([['cloudflare-ai-gateway', 'CLOUDFLARE_AI_GATEWAY', 'CLOUDFLARE_API_KEY', CloudflareAiGatewayProvider, 'gpt-4.1'],
+    ['vercel-ai-gateway', 'VERCEL_AI_GATEWAY', 'AI_GATEWAY_API_KEY', VercelAiGatewayProvider, 'alibaba/qwen-3-14b']] as const)(
+    'composes native %s gateway hints/aliases without vendor credentials, discovery or factory reservation', async (name, prefix, alias, Adapter, model) => {
+      expect(createConfiguredProviders({ ANTHROPIC_API_KEY: 'synthetic-vendor', OPENAI_API_KEY: 'synthetic-other' }).has(name)).toBe(false);
+      const env = { [alias]: 'synthetic-alias', [`${prefix}_API_KEY`]: 'synthetic-second', [`AI_HARNESS_${prefix}_API_KEY`]: 'synthetic-first',
+        [`${prefix}_MODEL`]: model, [`${prefix}_BASE_URL`]: 'http://127.0.0.1/owned', CLOUDFLARE_ACCOUNT_ID: 'synthetic-account', CLOUDFLARE_GATEWAY_ID: 'synthetic-gateway' };
+      const providers = createConfiguredProviders(env); expect(providers.get(name)).toBeInstanceOf(Adapter);
+      expect((providers.get(name) as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-first', model, baseUrl: 'http://127.0.0.1/owned' });
+      expect(providers.get(name)!.canDiscoverModels()).toBe(false);
+      const scoped = await resolveStartupProvider(createConfiguredProviders({}), { provider: name, models: [`${name}/${model}`], apiKey: 'synthetic-cold', offline: true }, env);
+      expect(scoped.provider).toBeInstanceOf(Adapter); expect(scoped.model).toBe(model);
+      expect((scoped.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-cold', baseUrl: 'http://127.0.0.1/owned' });
+      expect(getConfiguredSpecializedProviders(providers).has(name)).toBe(name === 'vercel-ai-gateway');
+      expect(ProviderFactory.has(name)).toBe(false);
+      const unregister = ProviderFactory.register(name, config => new MockProvider({ ...config, model: 'operator-chat' }));
+      try { expect(createConfiguredProviders(env).get(name)).toBeInstanceOf(MockProvider); } finally { unregister(); }
+    });
+
   it('composes Radius with independent gateway/key hints and keeps explicit extension factories authoritative', async () => {
     expect(createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-other' }).has('radius')).toBe(false);
     const native = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-second', AI_HARNESS_RADIUS_API_KEY: 'synthetic-first',

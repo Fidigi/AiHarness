@@ -32,6 +32,7 @@ import {
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
   RadiusProvider,
+  CloudflareAiGatewayProvider, VercelAiGatewayProvider,
   discoverProviderModelIds,
   QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider,
@@ -121,13 +122,14 @@ const NATIVE_PROVIDERS = {
   'xiaomi-token-plan-ams': XiaomiTokenPlanAmsProvider, 'xiaomi-token-plan-cn': XiaomiTokenPlanCnProvider,
   'xiaomi-token-plan-sgp': XiaomiTokenPlanSgpProvider, 'zai-coding-cn': ZaiCodingCnProvider,
   typesafe: TypesafeProvider, 'openai-native': OpenAiMixedProvider, radius: RadiusProvider,
+  'cloudflare-ai-gateway': CloudflareAiGatewayProvider, 'vercel-ai-gateway': VercelAiGatewayProvider,
 };
 
 /** Existing native specialized services only; names/Mock factories never grant auxiliary authority. */
 export function getConfiguredSpecializedProviders(providers: ReadonlyMap<string, AiProvider>): ReadonlyMap<string, AiProvider> {
   return new Map([...providers].filter(([, provider]) => provider instanceof TypesafeProvider
     || provider instanceof OpenRouterProvider || provider instanceof OpenAiMixedProvider || provider instanceof OpenCodeProvider
-    || provider instanceof CloudflareWorkersAiMixedProvider));
+    || provider instanceof CloudflareWorkersAiMixedProvider || provider instanceof VercelAiGatewayProvider));
 }
 
 function createProvider(config: ProviderConfig): AiProvider {
@@ -168,6 +170,15 @@ function configuredCredential(
     return (credentials as ReadonlyMap<string, string>).get(provider);
   }
   return (credentials as Readonly<Record<string, string>>)[provider];
+}
+
+function nativeEnvironmentHints(name: string, env: NodeJS.ProcessEnv, catalogueDirectory?: string): Partial<ProviderConfig> {
+  if (!Object.hasOwn(NATIVE_PROVIDERS, name)) return {};
+  const prefix = name.toUpperCase().replace(/-/g, '_');
+  return { model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
+    ...(name === 'cloudflare-workers-ai' || name === 'cloudflare-ai-gateway' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
+    ...(name === 'cloudflare-ai-gateway' ? { gatewayId: env.CLOUDFLARE_GATEWAY_ID } : {}),
+    ...(name === 'radius' ? { gateway: env.RADIUS_GATEWAY, catalogueDirectory } : {}) };
 }
 
 function networkConfig(network?: AgentProviderNetworkSettings): Partial<ProviderConfig> {
@@ -228,12 +239,9 @@ export function createConfiguredProviders(
     ? { ...network, type: 'mistral-conversations', apiKey: mistralKey, model: env.MISTRAL_MODEL, baseUrl: env.MISTRAL_BASE_URL }
     : undefined);
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
-    const prefix = name.toUpperCase().replace(/-/g, '_');
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
     attempt(providers, name, key ? { ...network, type: name, apiKey: key,
-      model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
-      ...(name === 'cloudflare-workers-ai' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
-      ...(name === 'radius' ? { gateway: env.RADIUS_GATEWAY, catalogueDirectory: options.radiusCatalogueDirectory } : {}),
+      ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory),
       ...(name === 'kimi-coding' ? { kimiAuthMode: providerCredentialEnvironmentKeys(name).some(key => env[key]) ? 'api-key' : options.kimiCodingAuthMode ?? 'api-key' } : {}),
     } : undefined);
   }
@@ -299,16 +307,16 @@ export async function resolveStartupProvider(
   }
   if (!requestedModel && selection.model !== undefined) throw new Error('--model requires a non-empty value.');
 
-  // Account scopes must discover with the invocation key, not another cached account's key.
+  // These native scopes must start with the invocation key, not a cached account or missing static source.
   let scopedKeyProvider: AiProvider | undefined;
-  if (selection.apiKey && selection.models?.length && (requestedProvider === 'radius'
-    || !requestedProvider && selection.models.every(pattern => pattern.trim().toLowerCase().startsWith('radius/')))) {
-    const previous = providers.get('radius');
+  const scopedNames = [...new Set(selection.models?.map(pattern => pattern.trim().split('/')[0]!.toLowerCase()) ?? [])];
+  const scopedKeyName = requestedProvider ?? (scopedNames.length === 1 ? scopedNames[0] : undefined);
+  if (selection.apiKey && selection.models?.length && scopedKeyName && ['radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway'].includes(scopedKeyName)) {
+    const previous = providers.get(scopedKeyName);
     scopedKeyProvider = createProvider({ ...(previous ? providerConfig(previous) : {
-      ...networkConfig(nativeOptions.network), type: 'radius', model: env.RADIUS_MODEL, baseUrl: env.RADIUS_BASE_URL,
-      gateway: env.RADIUS_GATEWAY, catalogueDirectory: nativeOptions.radiusCatalogueDirectory,
-    }), type: 'radius', apiKey: selection.apiKey });
-    providers.set('radius', scopedKeyProvider);
+      ...networkConfig(nativeOptions.network), ...nativeEnvironmentHints(scopedKeyName, env, nativeOptions.radiusCatalogueDirectory),
+    }), type: scopedKeyName, apiKey: selection.apiKey });
+    providers.set(scopedKeyName, scopedKeyProvider);
   }
 
   let providerName = requestedProvider;
@@ -331,7 +339,8 @@ export async function resolveStartupProvider(
             .filter(provider => !providers.has(provider))
             .map(provider => ({ provider, configured: false })),
         ])
-      : await collectProviderModelCatalog(scopedKeyProvider instanceof RadiusProvider ? new Map([['radius', scopedKeyProvider]]) : providers, {
+      : await collectProviderModelCatalog(scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider
+        ? new Map([[scopedKeyName!, scopedKeyProvider]]) : providers, {
           includePublishedProviders: true,
           discover: selection.offline !== true,
           timeoutMs: 2_000,
@@ -407,15 +416,9 @@ export async function resolveStartupProvider(
     ?? 'mock';
   let provider = providers.get(providerName);
   if (selection.apiKey && (!scopedKeyProvider || provider !== scopedKeyProvider)) {
-    const prefix = providerName.toUpperCase().replace(/-/g, '_');
     const base = provider ? providerConfig(provider) : {
-      ...networkConfig(nativeOptions.network),
-      type: providerName as ProviderConfig['type'],
-      ...(Object.hasOwn(NATIVE_PROVIDERS, providerName) ? {
-        model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
-        ...(providerName === 'cloudflare-workers-ai' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
-        ...(providerName === 'radius' ? { gateway: env.RADIUS_GATEWAY, catalogueDirectory: nativeOptions.radiusCatalogueDirectory } : {}),
-      } : {}),
+      ...networkConfig(nativeOptions.network), type: providerName as ProviderConfig['type'],
+      ...nativeEnvironmentHints(providerName, env, nativeOptions.radiusCatalogueDirectory),
     };
     try {
       provider = createProvider({

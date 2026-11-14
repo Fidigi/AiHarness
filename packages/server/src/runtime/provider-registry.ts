@@ -48,6 +48,8 @@ import {
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
   RadiusProvider,
+  CloudflareAiGatewayProvider, CLOUDFLARE_AI_GATEWAY_MODELS,
+  VercelAiGatewayProvider, VERCEL_AI_GATEWAY_MODELS,
   CLOUDFLARE_CHAT_MODELS,
   OPENROUTER_MESSAGE_MODELS,
   OPENROUTER_COMPLETION_MODELS,
@@ -152,6 +154,8 @@ const NATIVE_DIALECTS = {
   'xiaomi-token-plan-cn': { Adapter: XiaomiTokenPlanCnProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-cn'] },
   'xiaomi-token-plan-sgp': { Adapter: XiaomiTokenPlanSgpProvider, models: TOKEN_PLAN_MODELS['xiaomi-token-plan-sgp'] },
   'zai-coding-cn': { Adapter: ZaiCodingCnProvider, models: TOKEN_PLAN_MODELS['zai-coding-cn'] },
+  'cloudflare-ai-gateway': { Adapter: CloudflareAiGatewayProvider, models: CLOUDFLARE_AI_GATEWAY_MODELS },
+  'vercel-ai-gateway': { Adapter: VercelAiGatewayProvider, models: VERCEL_AI_GATEWAY_MODELS },
   typesafe: { Adapter: TypesafeProvider, models: [] }, // Classifier-only: never import or admit a chat row.
 };
 

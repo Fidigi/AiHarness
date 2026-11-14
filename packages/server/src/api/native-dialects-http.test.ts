@@ -16,6 +16,8 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
     { dialect: 'qwen-token-plan', model: 'qwen3.8-flash', api: 'c', count: 20 },
     { dialect: 'xiaomi-token-plan-cn', model: 'mimo-v2.5', api: 'c', count: 4 },
     { dialect: 'zai-coding-cn', model: 'glm-5.3', api: 'c', count: 4 },
+    { dialect: 'cloudflare-ai-gateway', model: 'claude-fable-5', api: 'a', count: 57 },
+    { dialect: 'vercel-ai-gateway', model: 'alibaba/qwen-3-14b', api: 'a', count: 245 },
   ];
   const calls: Array<{ model: string; key: string | undefined; url: string | undefined }> = [];
   let fixtureError: unknown;
@@ -29,8 +31,9 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       if (profile.dialect === 'qwen-token-plan') expect(body).toMatchObject({ enable_thinking: true, reasoning_effort: 'low', max_completion_tokens: 64 });
       if (profile.dialect === 'xiaomi-token-plan-cn') expect(body).toMatchObject({ thinking: { type: 'disabled' }, store: false, max_completion_tokens: 64 });
       if (profile.dialect === 'zai-coding-cn') expect(body).toMatchObject({ thinking: { type: 'enabled', clear_thinking: false }, reasoning_effort: 'low', tool_stream: true, max_tokens: 64 });
-      const header = profile.api === 'a' ? request.headers['x-api-key'] : profile.api === 'g' ? request.headers['x-goog-api-key'] : request.headers.authorization;
+      const header = profile.dialect === 'cloudflare-ai-gateway' ? request.headers['cf-aig-authorization'] : profile.api === 'a' ? request.headers['x-api-key'] : profile.api === 'g' ? request.headers['x-goog-api-key'] : request.headers.authorization;
       expect(typeof header).toBe('string');
+      if (profile.dialect === 'cloudflare-ai-gateway') { expect(request.headers.authorization).toBeUndefined(); expect(request.headers['x-api-key']).toBeUndefined(); }
       calls.push({ model, key: String(header).replace(/^Bearer /, ''), url: request.url });
       const a = [{ type: 'message_start', message: { id: 'answer', model, usage: { input_tokens: 4, output_tokens: 0 } } },
         { type: 'content_block_start', index: 0, content_block: { type: 'text', text: 'native-http-ok' } },
@@ -78,7 +81,7 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       }
       await stop();
     }
-    expect(calls).toHaveLength(21); expect(fixtureError).toBeUndefined();
+    expect(calls).toHaveLength(27); expect(fixtureError).toBeUndefined();
     expect(calls.some(call => call.url?.endsWith('/v1/messages'))).toBe(true);
     expect(calls.some(call => call.url?.includes(':streamGenerateContent?alt=sse'))).toBe(true);
     expect(calls.some(call => call.url?.endsWith('/chat/completions'))).toBe(true);

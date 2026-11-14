@@ -193,6 +193,8 @@ describe('CLI provider runtime', () => {
     ['zai-coding-cn', 'ZAI_CODING_CN_API_KEY', 'AI_HARNESS_ZAI_CODING_CN_API_KEY'],
     ['typesafe', 'TYPESAFE_API_KEY', 'AI_HARNESS_TYPESAFE_API_KEY'],
     ['radius', 'RADIUS_API_KEY', 'AI_HARNESS_RADIUS_API_KEY'],
+    ['cloudflare-ai-gateway', 'CLOUDFLARE_API_KEY', 'AI_HARNESS_CLOUDFLARE_AI_GATEWAY_API_KEY'],
+    ['vercel-ai-gateway', 'AI_GATEWAY_API_KEY', 'AI_HARNESS_VERCEL_AI_GATEWAY_API_KEY'],
     ['openai-native', 'OPENAI_NATIVE_API_KEY', 'AI_HARNESS_OPENAI_NATIVE_API_KEY']] as const)(
     'resolves native %s environment, command and encrypted credentials without registration', async (provider, variable, firstVariable) => {
     const agentDir = await mkdtemp(path.join(os.tmpdir(), 'aih-cli-cerebras-credentials-'));
