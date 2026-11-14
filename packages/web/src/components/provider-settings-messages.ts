@@ -1,6 +1,8 @@
 const messages = {
   en: {
     browser: 'Browser sign-in (PKCE)',
+    copyCode: 'Copy-code sign-in (PKCE)', codePaste: 'Paste the Anthropic authorization code', codePlaceholder: 'code#state', codeSubmit: 'Submit code',
+    copyCodeHelp: 'Authorize in the browser, then copy the displayed code here. It is bound to this explicit sign-in; this server does not open a callback listener.',
     browserHelp: 'After authorization, copy the full loopback return address from the browser and submit it here, even if that page cannot connect. This server does not open a callback listener.',
     paste: 'Paste the full OAuth callback address', placeholder: 'http://127.0.0.1:…/oauth/callback?…',
     submit: 'Submit callback', cancel: 'Cancel sign-in', open: 'Open authorization page',
@@ -20,6 +22,8 @@ const messages = {
   },
   fr: {
     browser: 'Connexion par navigateur (PKCE)',
+    copyCode: 'Connexion par code copié (PKCE)', codePaste: 'Coller le code d’autorisation Anthropic', codePlaceholder: 'code#state', codeSubmit: 'Envoyer le code',
+    copyCodeHelp: 'Autorisez la connexion dans le navigateur, puis copiez ici le code affiché. Il est lié à cette connexion explicite ; ce serveur n’ouvre pas de point d’écoute de retour.',
     browserHelp: 'Après autorisation, copiez l’adresse complète de retour local du navigateur et envoyez-la ici, même si cette page ne peut pas se connecter. Ce serveur n’ouvre pas de point d’écoute de retour.',
     paste: 'Coller l’adresse complète de retour OAuth', placeholder: 'http://127.0.0.1:…/oauth/callback?…',
     submit: 'Envoyer l’adresse de retour', cancel: 'Annuler la connexion', open: 'Ouvrir la page d’autorisation',

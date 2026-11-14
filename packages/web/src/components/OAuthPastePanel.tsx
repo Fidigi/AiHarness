@@ -9,6 +9,7 @@ export interface OAuthPastePanelProps {
   operationId: string;
   busy?: boolean;
   authorizationUrl?: string;
+  inputKind?: 'redirect' | 'code';
   onPaste: (redirectUrl: string) => void | Promise<void>;
   onCancel: () => void | Promise<void>;
 }
@@ -67,7 +68,7 @@ export function OAuthPastePanel(props: OAuthPastePanelProps) {
   return <ActiveOAuthPastePanel key={props.operationId} {...props} />;
 }
 
-function ActiveOAuthPastePanel({ busy = false, authorizationUrl, onPaste, onCancel }: OAuthPastePanelProps) {
+function ActiveOAuthPastePanel({ busy = false, authorizationUrl, inputKind = 'redirect', onPaste, onCancel }: OAuthPastePanelProps) {
   const { locale } = useI18n();
   const [pending, setPending] = useState(false);
   const [pasteGeneration, setPasteGeneration] = useState(0);
@@ -76,8 +77,8 @@ function ActiveOAuthPastePanel({ busy = false, authorizationUrl, onPaste, onCanc
   const link = safeOAuthAuthorizationUrl(authorizationUrl);
   return <div className="provider-oauth-paste">
     {link && <a href={link} target="_blank" rel="noopener noreferrer">{message('open')}</a>}
-    <OAuthPasteInput key={pasteGeneration} busy={busy || pending} label={message('paste')} placeholder={message('placeholder')}
-      submitLabel={message('submit')} onPaste={async value => {
+    <OAuthPasteInput key={pasteGeneration} busy={busy || pending} label={message(inputKind === 'code' ? 'codePaste' : 'paste')} placeholder={message(inputKind === 'code' ? 'codePlaceholder' : 'placeholder')}
+      submitLabel={message(inputKind === 'code' ? 'codeSubmit' : 'submit')} onPaste={async value => {
         setPending(true); setFailed(false);
         try { await onPaste(value); } catch { setFailed(true); } finally { setPending(false); }
       }} />

@@ -11,13 +11,14 @@ const tokens = () => Response.json({ access_token: 'private-radius-access', refr
 const device = () => Response.json({ device_code: 'private-radius-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', expires_in: 600, interval: 1 });
 function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
 afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
-async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' = 'radius') {
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'radius' | 'kimi-coding' | 'openrouter' | 'anthropic' = 'radius') {
   vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
   const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
   await registry.upsertProvider({ id, name: 'Radius', baseUrl: issuer === 'radius' ? gateway : 'https://inference.kimi.test/coding', dialect: issuer });
   const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
+    if (issuer === 'anthropic') { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); reached.resolve(undefined); return hold ? held.promise : tokens(); }
     if (issuer === 'openrouter') { expect(String(url)).toBe('https://openrouter.ai/api/v1/auth/keys'); reached.resolve(undefined); return hold ? held.promise : Response.json({ key: 'synthetic-openrouter-permanent-key' }); }
     if (String(url).endsWith('/device')) return device();
     if (String(url).endsWith('/device_authorization')) return Response.json({ device_code: 'private-kimi-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', verification_uri_complete: gateway + '/verify?code=VISIBLE-CODE', expires_in: 600, interval: 0.001 });
@@ -31,6 +32,16 @@ async function fixture(hold = false, closeOnPublish = false, persistent = true, 
   const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
   return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
 }
+it.each(['browser', 'copy-code'] as const)('owns native Anthropic %s PKCE in the custom encrypted slot with retryable invalid input', async method => {
+  const f = await fixture(false, false, true, 'anthropic'), flow = await f.service.start(id, undefined, method), authorization = new URL(flow.authorizationUrl!); expect(authorization.origin + authorization.pathname).toBe('https://claude.ai/oauth/authorize'); expect(f.fetcher).not.toHaveBeenCalled(); const callback = authorization.searchParams.get('redirect_uri')!, state = authorization.searchParams.get('state'); expect(callback).toBe(method === 'browser' ? 'http://localhost:53692/callback' : 'https://platform.claude.com/oauth/code/callback');
+  await expect(f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=wrong' : 'synthetic-code#wrong')).rejects.toMatchObject({ status: 400 }); expect(f.service.get(flow.id)?.state).toBe('pending'); expect(f.fetcher).not.toHaveBeenCalled(); expect(await f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=' + state : 'synthetic-code#' + state)).toMatchObject({ state: 'connected' }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(17); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ subscription: { provider: 'anthropic' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-radius-access');
+});
+it('refuses Anthropic device mode before issuer work and releases its pending custom owner', async () => {
+  const f = await fixture(false, false, true, 'anthropic'); await expect(f.service.start(id)).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('retires a held native Anthropic token exchange on disconnect with no late publication or admission', async () => {
+  const f = await fixture(true, false, true, 'anthropic'), flow = await f.service.start(id, undefined, 'copy-code'), state = new URL(flow.authorizationUrl!).searchParams.get('state'), pending = f.service.redirect(flow.id, 'synthetic-code#' + state).catch(error => error); await f.reached.promise; await f.registry.disconnect(id); expect(await pending).toMatchObject({ status: 409 }); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
 it('owns native OpenRouter full-paste PKCE without state and stores a permanent API key in the custom slot', async () => {
   const f = await fixture(false, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), authorization = new URL(flow.authorizationUrl!);
   expect(authorization.origin + authorization.pathname).toBe('https://openrouter.ai/auth'); expect(authorization.searchParams.has('state')).toBe(false); expect(f.fetcher).not.toHaveBeenCalled();

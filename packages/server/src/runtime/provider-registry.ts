@@ -5,7 +5,7 @@ import path from 'node:path';
 import type {
   CredentialRedactor} from '@ai-harness/core';
 import {
-  AnthropicProvider,
+  AnthropicProvider, AnthropicOAuthProvider,
   atomicWriteStableFile,
   discoverProviderModelIds,
   getProviderPublishedModels,
@@ -50,7 +50,7 @@ import {
   RadiusProvider,
   getRadiusOAuthConfig,
   type ProviderOAuthCredential,
-  type RadiusOAuthCredential, type KimiCodingOAuthCredential, type AiProvider,
+  type RadiusOAuthCredential, type KimiCodingOAuthCredential, type AnthropicOAuthCredential, type AiProvider,
   CloudflareAiGatewayProvider, CLOUDFLARE_AI_GATEWAY_MODELS,
   VercelAiGatewayProvider, VERCEL_AI_GATEWAY_MODELS,
   CLOUDFLARE_CHAT_MODELS,
@@ -69,6 +69,7 @@ import { getPublishedModelMetadata } from './model-catalog.js';
 import { EncryptedCredentialStore } from '../security/credential-store.js';
 
 const BUILTIN_IDS = new Set(['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock', 'github-copilot', 'openai-codex']);
+const NATIVE_AUTH_DIALECTS = ['radius', 'kimi-coding', 'openrouter', 'anthropic'];
 const MAX_CUSTOM_PROVIDERS = 256;
 const MAX_CUSTOM_MODELS = 10_000;
 const MAX_PROVIDER_SECRET_BYTES = 64 * 1024;
@@ -447,7 +448,7 @@ export class ProviderRegistryService {
     return this.state.providers.map(({ credentialId: _privateIdentity, ...provider }) => ({
       ...provider,
       revision: this.getRevision(),
-      configured: this.proxy.isConfigured(provider.id) && (!['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect) || this.proxy.getAgentProvider(provider.id)?.validateConfig() === true),
+      configured: this.proxy.isConfigured(provider.id) && (!NATIVE_AUTH_DIALECTS.includes(provider.dialect) || this.proxy.getAgentProvider(provider.id)?.validateConfig() === true),
       modelCount: this.state.models.filter(model => model.provider === provider.id).length,
     }));
   }
@@ -455,7 +456,7 @@ export class ProviderRegistryService {
   hasCredentials(id: string): boolean { return Boolean(this.readSecrets(id)); }
   hasPendingNativeOAuth(id: string): boolean { return this.nativeLogins.has(id); }
   hasPendingRadiusOAuth(id: string): boolean { return this.hasPendingNativeOAuth(id) && this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius'); }
-  hasNativeOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && ['radius', 'kimi-coding'].includes(provider.dialect)) && Boolean(this.readSecrets(id)?.oauth); }
+  hasNativeOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && ['radius', 'kimi-coding', 'anthropic'].includes(provider.dialect)) && Boolean(this.readSecrets(id)?.oauth); }
   hasRadiusOAuth(id: string): boolean { return this.state.providers.some(provider => provider.id === id && provider.dialect === 'radius') && this.hasNativeOAuth(id); }
 
   /** One existing custom record owns the issuer, headers, encrypted slot and eventual runtime admission. */
@@ -466,11 +467,11 @@ export class ProviderRegistryService {
     return this.withMutation(async () => {
       parent.throwIfAborted();
       const id = providerId(idValue);
-      let record = this.state.providers.find(provider => provider.id === id && ['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect) && (!expectedIssuer || provider.dialect === expectedIssuer));
+      let record = this.state.providers.find(provider => provider.id === id && NATIVE_AUTH_DIALECTS.includes(provider.dialect) && (!expectedIssuer || provider.dialect === expectedIssuer));
       if (!record) throw Object.assign(new Error('OAuth is unavailable for this provider.'), { status: 404 });
       if (!this.secretStore) throw Object.assign(new Error('OAuth credential storage is unavailable.'), { status: 409 });
-      const issuer = record.dialect === 'radius' ? 'radius' : record.dialect === 'openrouter' ? 'openrouter' : 'kimi-coding';
-      const realm = issuer === 'radius' ? getRadiusOAuthConfig(record.baseUrl).gateway : issuer === 'openrouter' ? 'https://openrouter.ai' : this.kimiIssuerHost(this.readSecrets(id)), identity = record.credentialId ?? id;
+      const issuer = record.dialect === 'radius' ? 'radius' : record.dialect === 'openrouter' ? 'openrouter' : record.dialect === 'anthropic' ? 'anthropic' : 'kimi-coding';
+      const realm = issuer === 'radius' ? getRadiusOAuthConfig(record.baseUrl).gateway : issuer === 'openrouter' ? 'https://openrouter.ai' : issuer === 'anthropic' ? 'https://platform.claude.com' : this.kimiIssuerHost(this.readSecrets(id)), identity = record.credentialId ?? id;
       this.cancelRadiusLogin(id);
       const login = { controller: new AbortController(), identity: this.sourceIdentity, fingerprint: JSON.stringify(record) };
       this.nativeLogins.set(id, login);
@@ -487,10 +488,10 @@ export class ProviderRegistryService {
         signal.throwIfAborted(); await this.assertSource();
         if (!this.sameIdentity(login.identity, this.sourceIdentity) || JSON.stringify(this.state.providers.find(provider => provider.id === id)) !== login.fingerprint) throw Object.assign(new Error('Provider changed during login.'), { status: 409 });
       };
-      return { issuer, realm, gateway: realm, signal, redactor: this.redactor, publish: async (credential: RadiusOAuthCredential | KimiCodingOAuthCredential | { apiKey: string }): Promise<() => void> => this.withMutation(async () => {
+      return { issuer, realm, gateway: realm, signal, redactor: this.redactor, publish: async (credential: RadiusOAuthCredential | KimiCodingOAuthCredential | AnthropicOAuthCredential | { apiKey: string }): Promise<() => void> => this.withMutation(async () => {
         await guard();
         if ('apiKey' in credential ? issuer !== 'openrouter' : issuer === 'openrouter' || credential.subscription.provider !== issuer
-          || (credential.subscription.provider === 'radius' ? credential.subscription.gateway : credential.subscription.oauthHost) !== realm) throw new Error('Invalid native issuer.');
+          || (credential.subscription.provider === 'radius' ? credential.subscription.gateway : credential.subscription.provider === 'kimi-coding' ? credential.subscription.oauthHost : 'https://platform.claude.com') !== realm) throw new Error('Invalid native issuer.');
         const secrets: ProviderSecrets = { ...('apiKey' in credential ? { apiKey: credential.apiKey } : { oauth: { version: 1 as const, type: 'oauth' as const, ...credential } }), headers: this.readSecrets(id)?.headers ?? {} };
         const prepared = issuer === 'openrouter' ? new OpenRouterProvider({ type: id, baseUrl: record!.baseUrl, apiKey: secrets.apiKey, customHeaders: secrets.headers, model: this.state.models.find(model => model.provider === id)?.id }) : this.createNativeOAuthProvider(record!, secrets, secrets.oauth);
         if (!prepared || issuer === 'openrouter' && !prepared.validateConfig()) throw new Error('Native OAuth provider is unavailable.');
@@ -549,7 +550,7 @@ export class ProviderRegistryService {
     for (const model of this.state.models.filter(model => model.provider === id)) {
       validateDialectModel(record.dialect, model.id);
     }
-    if (previous && ['radius', 'kimi-coding', 'openrouter'].includes(previous.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (previous && NATIVE_AUTH_DIALECTS.includes(previous.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     const currentSecrets = this.readSecrets(id) ?? { headers: {} };
     if (!previous && this.state.providers.length >= MAX_CUSTOM_PROVIDERS) {
       badRequest('Too many custom providers are configured.');
@@ -663,7 +664,7 @@ export class ProviderRegistryService {
   private async deleteProviderUnlocked(idValue: string): Promise<boolean> {
     const id = providerId(idValue);
     if (!this.state.providers.some(provider => provider.id === id)) return false;
-    if (this.state.providers.some(provider => provider.id === id && ['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect))) { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (this.state.providers.some(provider => provider.id === id && NATIVE_AUTH_DIALECTS.includes(provider.dialect))) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const identity = this.storageId(id);
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
@@ -705,7 +706,7 @@ export class ProviderRegistryService {
     const id = providerId(idValue);
     const provider = this.state.providers.find(item => item.id === id);
     if (!provider) throw Object.assign(new Error('Custom provider not found.'), { status: 404 });
-    if (['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
+    if (NATIVE_AUTH_DIALECTS.includes(provider.dialect)) { await this.credentialService.load(); await this.hydrateSecrets(id); }
     await this.assertSource();
     const previousSecrets = this.readSecrets(id) ?? { headers: {} };
     this.cancelRadiusLogin(id);
@@ -929,7 +930,7 @@ export class ProviderRegistryService {
   private async hydrateSecrets(id: string): Promise<void> {
     const stored = this.credentialService.readStoredCredential(this.storageId(id));
     const issuer = this.state.providers.find(provider => provider.id === id)?.dialect;
-    const oauth = stored?.type === 'oauth' && (issuer === 'radius' || issuer === 'kimi-coding') && stored.subscription?.provider === issuer ? stored : undefined;
+    const oauth = stored?.type === 'oauth' && (issuer === 'radius' || issuer === 'kimi-coding' || issuer === 'anthropic') && stored.subscription?.provider === issuer ? stored : undefined;
     const resolved = oauth ? undefined : await this.credentialService.resolve(this.storageId(id), { env: {} });
     const storedHeaders = this.secretStore?.get(this.headerStorageName(id));
     let customHeaders: Record<string, string> = {};
@@ -988,7 +989,7 @@ export class ProviderRegistryService {
     return getKimiCodingOAuthConfig(process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST || (stored?.provider === 'kimi-coding' ? stored.oauthHost : undefined)).tokenUrl.slice(0, -'/api/oauth/token'.length);
   }
 
-  private nativeCredentialSource(record: StoredProvider, secrets: ProviderSecrets | undefined, issuer: 'radius' | 'kimi-coding', realm: string) {
+  private nativeCredentialSource(record: StoredProvider, secrets: ProviderSecrets | undefined, issuer: 'radius' | 'kimi-coding' | 'anthropic', realm: string) {
     const bound = () => {
       const current = this.state.providers.find(provider => provider.id === record.id);
       return current && !current.disconnected && current.dialect === record.dialect && current.baseUrl === record.baseUrl
@@ -998,7 +999,7 @@ export class ProviderRegistryService {
     return async (signal?: AbortSignal, allowRefresh = true) => {
       if (!bound()) return undefined;
       const resolved = await this.credentialService.resolve(record.credentialId ?? record.id, { env: {}, subscriptionProvider: issuer,
-        ...(issuer === 'radius' ? { radiusGateway: realm } : { kimiOAuthHost: realm }), signal, allowRefresh });
+        ...(issuer === 'radius' ? { radiusGateway: realm } : issuer === 'kimi-coding' ? { kimiOAuthHost: realm } : {}), signal, allowRefresh });
       return bound() && resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
     };
   }
@@ -1012,6 +1013,9 @@ export class ProviderRegistryService {
       const credential = initial ?? (source && secrets?.oauth?.expiresAt !== undefined && secrets.oauth.expiresAt > Date.now() + 60_000 ? secrets.oauth : undefined);
       return new RadiusProvider({ type: record.id, apiKey: secrets?.apiKey, customHeaders: secrets?.headers, gateway: record.baseUrl,
         catalogueDirectory: path.join(path.dirname(this.filePath), 'radius-models', record.credentialId ?? record.id), model }, source, credential);
+    }
+    if (record.dialect === 'anthropic' && secrets?.oauth?.subscription?.provider === 'anthropic') {
+      return new AnthropicOAuthProvider({ type: record.id, baseUrl: record.baseUrl, customHeaders: secrets.headers, model }, this.nativeCredentialSource(record, secrets, 'anthropic', 'https://platform.claude.com'));
     }
     if (record.dialect === 'kimi-coding' && secrets?.oauth?.subscription?.provider === 'kimi-coding') {
       const oauthHost = this.kimiIssuerHost(secrets); if (oauthHost !== secrets.oauth.subscription.oauthHost) return undefined;
@@ -1046,7 +1050,7 @@ export class ProviderRegistryService {
                           : record.dialect === 'groq' ? new GroqProvider(config)
                             : record.dialect === 'anthropic' ? new AnthropicProvider(config)
                               : new GeminiProvider(config));
-    if (['radius', 'kimi-coding', 'openrouter'].includes(record.dialect) && !provider.validateConfig()) { this.proxy.removeProvider(record.id); return; }
+    if (NATIVE_AUTH_DIALECTS.includes(record.dialect) && !provider.validateConfig()) { this.proxy.removeProvider(record.id); return; }
     this.proxy.setCustomProvider(record.id, provider);
   }
 

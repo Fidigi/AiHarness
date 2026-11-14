@@ -69,7 +69,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
   const [oauthStarting, setOauthStarting] = useState(false);
-  const oauthOperation = useRef<{ provider: string; method: 'device' | 'browser'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
+  const oauthOperation = useRef<{ provider: string; method: 'device' | 'browser' | 'copy-code'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
   const retireOAuth = () => {
     const previous = oauthOperation.current;
     oauthOperation.current = undefined;
@@ -176,7 +176,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     }, 2_000);
     return () => { active = false; window.clearTimeout(timer); };
   }, [oauthFlow]);
-  const login = async (provider: string, method: 'device' | 'browser' = 'device') => {
+  const login = async (provider: string, method: 'device' | 'browser' | 'copy-code' = 'device') => {
     retireOAuth();
     const operation = { provider, method, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
     oauthOperation.current = operation;
@@ -260,7 +260,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
       </article>)}
     </div>
     {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status">
-      {oauthOperation.current?.method === 'browser' ? <strong>PKCE</strong> :
+      {oauthOperation.current?.method === 'browser' || oauthOperation.current?.method === 'copy-code' ? <strong>PKCE</strong> :
       <strong>{t('settings.oauth.title')}</strong>}
       {oauthStarting && <button type="button" onClick={() => {
         retireOAuth(); setOauthStarting(false);
@@ -268,8 +268,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
       {oauthFlow && <>
       {oauthFlow.state === 'pending' ? <>
         {oauthFlow.authorizationUrl ? <>
-          <p className="settings-help">{providerSettingsMessage(locale, 'browserHelp')}</p>
-          <OAuthPastePanel active operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl}
+          <p className="settings-help">{providerSettingsMessage(locale, oauthOperation.current?.method === 'copy-code' ? 'copyCodeHelp' : 'browserHelp')}</p>
+          <OAuthPastePanel active operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl} inputKind={oauthOperation.current?.method === 'copy-code' ? 'code' : 'redirect'}
             onPaste={completeOAuth} onCancel={() => { retireOAuth(); setOauthFlow(undefined); }} />
         </> : <>
         <p>{t('settings.oauth.code')}: <code>{oauthFlow.userCode}</code></p>
@@ -350,7 +350,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
             {['radius', 'kimi-coding'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>}
-            {['radius', 'openrouter'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
+            {['radius', 'openrouter', 'anthropic'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
+            {provider.dialect === 'anthropic' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'copy-code'); }}>{providerSettingsMessage(locale, 'copyCode')}</button>}
             <button type="button" onClick={() => {
               setEditing(provider.id);
               setForm({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' });
@@ -363,13 +364,13 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
             {provider.configured && <button type="button" onClick={async () => {
               if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await disconnectProvider(provider.id);
-              if (!result.success) error(result.error); else if (['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect)) await reconcile(); else await load();
+              if (!result.success) error(result.error); else if (['radius', 'kimi-coding', 'openrouter', 'anthropic'].includes(provider.dialect)) await reconcile(); else await load();
             }}>{t('settings.disconnect')}</button>}
             <button type="button" onClick={async () => {
               const result = await importCustomProviderModels(provider.id);
               if (result.success) {
                 publishNotice(t('settings.modelsImported', { count: result.data?.length ?? 0 }), { level: 'success' });
-                await hydrateModelCatalog(true);
+                await hydrateModelCatalog(true); await load();
               } else error(result.error);
             }}>{t('settings.importModels')}</button>
             <button type="button" onClick={async () => {

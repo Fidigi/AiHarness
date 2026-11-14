@@ -2075,9 +2075,9 @@ export interface ProviderOAuthFlow {
   error?: string;
 }
 
-export function startProviderOAuth(type: string, signal?: AbortSignal, method: 'device' | 'browser' = 'device'): Promise<ApiResponse<ProviderOAuthFlow>> {
+export function startProviderOAuth(type: string, signal?: AbortSignal, method: 'device' | 'browser' | 'copy-code' = 'device'): Promise<ApiResponse<ProviderOAuthFlow>> {
   return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST', signal,
-    ...(method === 'browser' ? { body: JSON.stringify({ method }) } : {}) });
+    ...(method !== 'device' ? { body: JSON.stringify({ method }) } : {}) });
 }
 
 export function submitProviderOAuthRedirect(flowId: string, redirectUrl: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {

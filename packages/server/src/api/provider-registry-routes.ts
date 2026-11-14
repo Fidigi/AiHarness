@@ -65,7 +65,7 @@ export function createProviderRegistryRouter(
         type: provider.id,
         name: provider.name,
         configured: provider.configured,
-        connected: ['radius', 'kimi-coding', 'openrouter'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
+        connected: ['radius', 'kimi-coding', 'openrouter', 'anthropic'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
         method: services.providerRegistry.hasNativeOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
         reconnectSupported: true,
         disconnectSupported: provider.configured,
@@ -102,7 +102,7 @@ export function createProviderRegistryRouter(
     const lifetime = requestLifetime(request, response);
     try {
       const method: unknown = request.body?.method ?? 'device';
-      if (method !== 'device' && method !== 'browser') throw Object.assign(new Error('Invalid OAuth method.'), { status: 400 });
+      if (method !== 'device' && method !== 'browser' && method !== 'copy-code') throw Object.assign(new Error('Invalid OAuth method.'), { status: 400 });
       const flow = await oauth.start(identifier(request.params.id, 'provider id'), lifetime.signal, method);
       if (lifetime.signal.aborted) { oauth.cancel(flow.id); lifetime.signal.throwIfAborted(); }
       response.status(201).json(flow);
