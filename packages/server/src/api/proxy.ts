@@ -460,13 +460,15 @@ export class AiProxyServer {
       } catch { /* Skip initialization */ }
     }
 
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_OAUTH_TOKEN;
     if (anthropicKey) {
       try {
         const provider = new CoreAnthropicProvider({
           ...network,
           type: ProviderType.ANTHROPIC,
           apiKey: anthropicKey,
+          anthropicAuthMode: process.env.ANTHROPIC_API_KEY ? 'api-key' : 'oauth',
+          baseUrl: process.env.ANTHROPIC_BASE_URL,
           model: process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307',
         });
         this.anthropicProxy = new CoreProviderProxy(provider, true);
@@ -562,7 +564,7 @@ export class AiProxyServer {
   }
 
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
-  setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string): void {
+  setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key'): void {
     if (apiKey) this.redactor.add(apiKey);
     const bedrockCredential = type === 'bedrock' ? bedrockCredentialConfig(apiKey) : undefined;
     if (type === 'bedrock' && !bedrockCredential) throw new Error('Invalid provider credential.');
@@ -573,7 +575,7 @@ export class AiProxyServer {
       provider = new CoreOpenAiProvider({ ...network, type: ProviderType.OPENAI, apiKey, baseUrl, model });
       this.openaiProxy = new CoreProviderProxy(provider, true);
     } else if (type === 'anthropic') {
-      provider = new CoreAnthropicProvider({ ...network, type: ProviderType.ANTHROPIC, apiKey, baseUrl, model });
+      provider = new CoreAnthropicProvider({ ...network, type: ProviderType.ANTHROPIC, apiKey, baseUrl, model, anthropicAuthMode });
       this.anthropicProxy = new CoreProviderProxy(provider, true);
     } else if (type === 'google') {
       provider = new GeminiProvider({

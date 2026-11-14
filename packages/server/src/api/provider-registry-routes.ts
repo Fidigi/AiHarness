@@ -9,7 +9,7 @@ import { sessionCopyRequest as requestLifetime } from './session-copy-request.js
 
 const BUILTIN_ENVIRONMENT: Record<string, string[]> = {
   openai: ['OPENAI_API_KEY'],
-  anthropic: ['ANTHROPIC_API_KEY'],
+  anthropic: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN'],
   google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   azure: ['AZURE_OPENAI_API_KEY'],
   vertex: ['GOOGLE_VERTEX_ACCESS_TOKEN'],

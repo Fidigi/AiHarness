@@ -238,7 +238,11 @@ function initializeCredentials(
       if (!resolved) continue;
       const value = resolved.credential.type === 'api-key'
         ? resolved.credential.apiKey : resolved.credential.accessToken;
-      proxy.setApiKey(type, type === 'bedrock' && resolved.descriptor.source === 'environment'
+      if (type === 'anthropic') {
+        const mode = resolved.credential.type === 'oauth' || resolved.descriptor.source === 'environment'
+          && !credentialEnvironment.ANTHROPIC_API_KEY && !!(credentialEnvironment.ANTHROPIC_AUTH_TOKEN || credentialEnvironment.ANTHROPIC_OAUTH_TOKEN) ? 'oauth' : 'api-key';
+        proxy.setApiKey(type, value, credentialEnvironment.ANTHROPIC_BASE_URL, credentialEnvironment.ANTHROPIC_MODEL, mode);
+      } else proxy.setApiKey(type, type === 'bedrock' && resolved.descriptor.source === 'environment'
         ? JSON.stringify({ bearerToken: value }) : value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
