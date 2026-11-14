@@ -28,7 +28,7 @@ function safeUrl(value: unknown): URL {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) invalid();
   return url;
 }
-function gatewayUrl(value = DEFAULT_GATEWAY): string {
+export function normalizeRadiusGatewayUrl(value = DEFAULT_GATEWAY): string {
   return safeUrl(/^https?:\/\//iu.test(value) ? value : `https://${value}`).toString().replace(/\/+$/u, '');
 }
 function costs(value: unknown): Required<ModelPricing> {
@@ -88,11 +88,11 @@ export class RadiusCatalogue {
   private readonly file?: string;
   private snapshot?: Snapshot;
   private digest: string;
-  constructor(config: RadiusProviderConfig, key?: string, headers: Readonly<Record<string, string>> = {}) {
-    this.gateway = gatewayUrl(config.gateway);
+  constructor(config: RadiusProviderConfig, key?: string, headers: Readonly<Record<string, string>> = {}, oauthGrantId?: string) {
+    this.gateway = normalizeRadiusGatewayUrl(config.gateway);
     this.overrideBase = config.baseUrl ? radiusBase(config.baseUrl) : undefined;
     const entries = Object.entries(headers).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
-    this.scope = createHash('sha256').update(JSON.stringify([this.gateway, this.overrideBase, key, ...(entries.length ? [entries] : [])])).digest('hex');
+    this.scope = createHash('sha256').update(JSON.stringify([this.gateway, this.overrideBase, oauthGrantId ? ['radius-oauth-v1', oauthGrantId] : key, ...(entries.length ? [entries] : [])])).digest('hex');
     this.digest = JSON.stringify(raw({ baseUrl: this.baseUrl, models: this.models }));
     if (config.catalogueDirectory !== undefined && key) {
       if (!bounded(config.catalogueDirectory, 4000)) invalid();

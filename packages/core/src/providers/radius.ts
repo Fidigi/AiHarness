@@ -24,9 +24,9 @@ export function radiusBase(value = 'https://radius.pi.dev/v1'): string {
   url.pathname = url.pathname.replace(/\/+$/u, '').replace(/\/messages$/u, '') || '/v1';
   return url.toString().replace(/\/$/u, '');
 }
-export function radiusScope(provider: string, base: string, model: string, key: string, headers: Readonly<Record<string, string>> = {}): string {
+export function radiusScope(provider: string, base: string, model: string, key: string, headers: Readonly<Record<string, string>> = {}, oauthGrantId?: string): string {
   const entries = Object.entries(headers).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
-  return createHash('sha256').update(JSON.stringify([API, provider, base, model, key, ...(entries.length ? [entries] : [])])).digest('hex');
+  return createHash('sha256').update(JSON.stringify([API, provider, base, model, oauthGrantId ? ['radius-oauth-v1', oauthGrantId] : key, ...(entries.length ? [entries] : [])])).digest('hex');
 }
 function seal(owner: RadiusOwner, kind: string, signature?: string, content?: string): string | undefined {
   if (!owner.scope) return undefined;

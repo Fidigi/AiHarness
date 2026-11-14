@@ -3,6 +3,7 @@ import path from 'node:path';
 import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
 import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
 import { openAICodexAccountId, refreshOpenAICodexToken } from './openai-codex-oauth.js';
+import { refreshRadiusToken, validRadiusOAuthIdentity, type RadiusOAuthIdentity } from './radius-oauth.js';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
   executeShellCommand,
@@ -54,7 +55,7 @@ export interface ProviderOAuthCredential {
   } | {
     provider: 'openai-codex';
     accountId: string;
-  };
+  } | RadiusOAuthIdentity;
 }
 
 export type ProviderCredential = ProviderApiKeyCredential | ProviderOAuthCredential;
@@ -84,7 +85,7 @@ export interface ProviderOAuthRefreshConfig {
 export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
-  subscriptionProvider?: 'github-copilot' | 'openai-codex';
+  subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius';
   cwd?: string;
   signal?: AbortSignal;
   commandTimeoutMs?: number;
@@ -191,6 +192,10 @@ function validateCredential(value: unknown): ProviderCredential {
         if (accountId !== subscription.accountId) invalid();
         credential.subscription = { provider: 'openai-codex', accountId };
       } catch { invalid(); }
+    } else if (subscription?.provider === 'radius') {
+      if (!validRadiusOAuthIdentity(subscription) || !credential.refreshToken || /\s/u.test(credential.refreshToken)
+        || /\s/u.test(credential.accessToken) || credential.expiresAt === undefined) invalid();
+      credential.subscription = { provider: 'radius', gateway: subscription.gateway, grantId: subscription.grantId };
     } else {
       if (!subscription || typeof subscription !== 'object' || Array.isArray(subscription)
         || subscription.provider !== 'github-copilot' || !credential.refreshToken || credential.expiresAt === undefined
@@ -1034,6 +1039,15 @@ export class ProviderCredentialService {
         const refreshed = await refreshOpenAICodexToken(current.refreshToken!, current.subscription.accountId, {
           signal, fetcher: options.fetcher, redactor: this.redactor,
         });
+        return { version: 1, type: 'oauth', ...refreshed };
+      } catch {
+        if (options.signal?.aborted) throw options.signal.reason;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+    }
+    if (current.subscription?.provider === 'radius') {
+      try {
+        const refreshed = await refreshRadiusToken(current.refreshToken!, current.subscription, { signal, fetcher: options.fetcher, redactor: this.redactor });
         return { version: 1, type: 'oauth', ...refreshed };
       } catch {
         if (options.signal?.aborted) throw options.signal.reason;

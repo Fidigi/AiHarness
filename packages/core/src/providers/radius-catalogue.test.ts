@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RadiusProvider } from './index.js';
+import { ProviderCredentialService, type ProviderOAuthCredential } from './credentials.js';
+import { createProviderNetworkScope, closeProviderNetworkDispatchers, PROVIDER_NETWORK_SCOPE } from './provider-network.js';
 import type { RadiusProviderConfig } from './radius-catalogue.js';
 import { collectProviderModelCatalog, discoverProviderModelIds } from './model-catalog.js';
 import type { Message } from '../types/index.js';
@@ -18,7 +20,7 @@ afterEach(async () => {
   for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
-async function fixture() {
+async function fixture(signature?: string) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-radius-catalogue-')); roots.push(root);
   const directory = path.join(root, 'catalogue');
   const calls: Array<{ method?: string; url?: string; auth?: string; body: Record<string, any> | undefined }> = [];
@@ -29,7 +31,7 @@ async function fixture() {
     if (request.method === 'GET') { response.writeHead(200, { 'content-type': 'application/json' }); response.end(JSON.stringify(snapshot)); return; }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
     response.end([{ type: 'start' }, { type: 'text_start', contentIndex: 0 }, { type: 'text_delta', contentIndex: 0, delta: 'allowed' },
-      { type: 'text_end', contentIndex: 0, content: 'allowed' },
+      { type: 'text_end', contentIndex: 0, content: 'allowed', ...(signature ? { contentSignature: signature } : {}) },
       { type: 'done', reason: 'stop', usage: { input: 8, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 10, cost: { total: 0.001 } } },
     ].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
@@ -41,6 +43,89 @@ async function fixture() {
 }
 
 describe('Radius account-owned catalogue', () => {
+  it('keeps live native OAuth distinct from API keys, preserves grant-owned replay/cache across token rotation and isolates reauthentication', async () => {
+    const f = await fixture('private-oauth-text'), service = new ProviderCredentialService();
+    const initial: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-oauth-initial', refreshToken: 'private-oauth-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: f.gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    await service.setOAuth('team-radius', initial, false);
+    const source = async (signal?: AbortSignal, allowRefresh?: boolean) => (await service.resolve('team-radius', { env: {}, subscriptionProvider: 'radius', signal, allowRefresh }))?.credential as ProviderOAuthCredential | undefined;
+    const config = { ...f.config, apiKey: 'must-not-borrow-api-key' }, provider = new RadiusProvider(config, source, initial);
+    const first = await provider.chat([user()]);
+    expect(f.calls.map(call => [call.method, call.url, call.auth])).toEqual([
+      ['GET', '/v1/config', 'Bearer private-oauth-initial'], ['POST', '/account/v1/messages', 'Bearer private-oauth-initial'],
+    ]);
+    const history: Message[] = [user(), { id: 'assistant', role: 'assistant', content: first.content, blocks: first.blocks, provider: first.provider, model: first.model, api: first.api, timestamp: new Date(1) }];
+    const rotated = { ...initial, accessToken: 'private-oauth-rotated' }; await service.setOAuth('team-radius', rotated, false);
+    const restored = new RadiusProvider(config, source, rotated), before = f.calls.length;
+    expect(restored.getCachedAvailableModelIds()).toEqual(['account-only']);
+    expect(await restored.getAvailableModels({ allowNetwork: false })).toEqual(['account-only']); expect(f.calls).toHaveLength(before);
+    await restored.chat(history); await provider.chat(history);
+    for (const call of f.calls.slice(-2)) {
+      expect(call.auth).toBe('Bearer private-oauth-rotated'); expect(call.body!.context.messages[1].content).toEqual([{ type: 'text', text: 'allowed', textSignature: 'private-oauth-text' }]);
+    }
+    expect(await readdir(f.directory)).toHaveLength(1);
+    const apiKey = new RadiusProvider({ ...config, apiKey: rotated.accessToken }); await apiKey.getAvailableModels(); await apiKey.chat(history);
+    expect(f.calls.at(-1)!.body!.context.messages[1].content).toEqual([{ type: 'text', text: 'allowed' }]);
+    const next = { ...rotated, subscription: { ...initial.subscription!, provider: 'radius' as const, gateway: f.gateway, grantId: '533fa824-4f8b-4d80-84b9-e542c22215eb' } };
+    await service.setOAuth('team-radius', next, false); const nextReply = await new RadiusProvider(config, source, next).chat(history);
+    expect(f.calls.at(-1)!.body!.context.messages[1].content).toEqual([{ type: 'text', text: 'allowed' }]);
+    const nextHistory: Message[] = [user(), { id: 'assistant-next', role: 'assistant', content: nextReply.content, blocks: nextReply.blocks, provider: nextReply.provider, model: nextReply.model, api: nextReply.api, timestamp: new Date(1) }];
+    class Derived extends RadiusProvider {} const derived = new Derived(config, source, next); await derived.chat(nextHistory);
+    expect(f.calls.at(-1)!.body!.context.messages[1].content).toEqual([{ type: 'text', text: 'allowed' }]);
+    f.set({ baseUrl: `${f.gateway}/account/v1`, models: [] }); const empty = new RadiusProvider(config, source, next); expect(await empty.getAvailableModels()).toEqual([]);
+    const newer = { ...next, accessToken: 'private-oauth-newer' }; await service.setOAuth('team-radius', newer, false);
+    const offline = new RadiusProvider(config, source, newer), requests = f.calls.length; expect(offline.getPublishedModels()).toEqual([]);
+    expect(await offline.getAvailableModels({ allowNetwork: false })).toEqual([]); expect(f.calls).toHaveLength(requests); expect(await readdir(f.directory)).toHaveLength(3);
+    await service.delete('team-radius'); await expect(restored.chat(history)).rejects.toThrow('Radius request aborted.');
+    expect(restored.getPublishedModels()).toEqual([]); expect(f.calls).toHaveLength(requests);
+  });
+
+  it('refuses a foreign issuer/gateway or a withdrawn grant before metadata/inference publication', async () => {
+    const f = await fixture(), credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-native-access', refreshToken: 'private-native-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: f.gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    expect(() => new RadiusProvider({ ...f.config, gateway: 'https://foreign.test' }, async () => credential, credential)).toThrow('unavailable');
+    let current: ProviderOAuthCredential | undefined = credential;
+    const provider = new RadiusProvider(f.config, async () => current, credential);
+    let complete = false, error: Error | undefined;
+    await provider.streamChat([user()], () => { current = undefined; }, () => { complete = true; }, failure => { error = failure; });
+    expect(complete).toBe(false); expect(error).toMatchObject({ usage: { totalTokens: 10, costUsd: 0.001 } });
+    expect(provider.getCachedAvailableModelIds()).toEqual([]); expect(f.calls).toHaveLength(2);
+    const other = new RadiusProvider(f.config, async () => ({ ...credential, subscription: undefined }));
+    await expect(other.chat([user()])).rejects.toThrow('Radius request aborted.'); expect(f.calls).toHaveLength(2);
+  });
+
+  it('keeps another native OAuth turn and cached availability alive when only one resolver caller cancels', async () => {
+    const f = await fixture(), credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-native-access', refreshToken: 'private-native-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: f.gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    let hold = false, sourceReached!: () => void, chunkReached!: () => void, release!: () => void;
+    const sourceStarted = new Promise<void>(resolve => { sourceReached = resolve; }), chunkStarted = new Promise<void>(resolve => { chunkReached = resolve; }), heldChunk = new Promise<void>(resolve => { release = resolve; });
+    const provider = new RadiusProvider(f.config, async () => { if (hold) { hold = false; sourceReached(); return new Promise(() => undefined); } return credential; }, credential);
+    await provider.getAvailableModels(); hold = true; const caller = new AbortController();
+    const cancelled = provider.chat([user()], { signal: caller.signal }).catch(error => error); await sourceStarted;
+    let complete = false, failure: Error | undefined;
+    const other = provider.streamChat([user()], async () => { chunkReached(); await heldChunk; }, () => { complete = true; }, error => { failure = error; }); await chunkStarted;
+    caller.abort(); expect(await cancelled).toBeInstanceOf(Error);
+    const stillAvailable = provider.getCachedAvailableModelIds(), stillConfigured = provider.validateConfig(); release(); await other;
+    expect(stillConfigured).toBe(true); expect(stillAvailable).toEqual(['account-only']); expect(complete).toBe(true); expect(failure).toBeUndefined();
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it('does not persist an authenticated catalogue after the live OAuth source is withdrawn', async () => {
+    const f = await fixture(), credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-native-access', refreshToken: 'private-native-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: f.gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    let reads = 0; const provider = new RadiusProvider(f.config, async () => ++reads === 1 ? credential : undefined, credential);
+    await expect(provider.getAvailableModels()).rejects.toThrow('Radius catalogue request aborted.');
+    expect(f.calls).toHaveLength(1); expect(provider.getPublishedModels()).toEqual([]); await expect(readdir(f.directory)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it.each(['caller', 'scope'] as const)('retires a pending native OAuth resolver on %s cancellation before any transport', async owner => {
+    const f = await fixture(), caller = new AbortController(), scope = createProviderNetworkScope(); let reached!: () => void;
+    const started = new Promise<void>(resolve => { reached = resolve; });
+    const provider = new RadiusProvider({ ...f.config, [PROVIDER_NETWORK_SCOPE]: scope }, () => { reached(); return new Promise(() => undefined); });
+    const result = provider.chat([user()], { signal: caller.signal }).catch(error => error); await started;
+    if (owner === 'caller') caller.abort(); else await closeProviderNetworkDispatchers(scope);
+    expect(await result).toBeInstanceOf(Error); expect(f.calls).toHaveLength(0); await closeProviderNetworkDispatchers(scope);
+  });
   it('admits dynamic P models only after authenticated discovery, persists exact account state and reloads offline without a baseline overlay', async () => {
     const { config, provider, directory, gateway, calls, set } = await fixture();
     expect(provider.getPublishedModels()).toEqual([]); await expect(provider.chat([user()])).rejects.toThrow('Radius request failed.'); expect(calls).toHaveLength(0);

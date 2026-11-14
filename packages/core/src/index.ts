@@ -16,6 +16,8 @@ export { azureEnvironmentConfig } from './providers/azure-config.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export type { RadiusChatOptions } from './providers/radius.js';
 export type { RadiusProviderConfig, RadiusDiscoveryOptions } from './providers/radius-catalogue.js';
+export { getRadiusOAuthConfig, beginRadiusDeviceLogin, beginRadiusBrowserLogin, refreshRadiusToken } from './providers/radius-oauth.js';
+export type { RadiusOAuthIdentity, RadiusOAuthCredential, RadiusOAuthCredentialSource, RadiusOAuthOptions, RadiusDeviceLogin, RadiusBrowserLogin } from './providers/radius-oauth.js';
 export type { AiGatewayConfig } from './providers/ai-gateways.js';
 export { RadiusProtocolError } from './providers/radius.js';
 export * from './providers/specialized-models.js';
