@@ -235,7 +235,16 @@ function initializeCredentials(
         oauth: providerOAuthRefresh(type),
       });
       if (runtime.closed) throw new Error('Application runtime is no longer active.');
-      if (!resolved) continue;
+      if (!resolved) {
+        if (type === 'anthropic' && !proxy.isConfigured(type) && !credentials.list().some(item => item.provider === type) && !credentialEnvironment[credentialCommandVariable(type)]
+          && credentialEnvironment.ANTHROPIC_FEDERATION_RULE_ID && credentialEnvironment.ANTHROPIC_ORGANIZATION_ID && credentialEnvironment.ANTHROPIC_IDENTITY_TOKEN_FILE) {
+          proxy.setAnthropicFederation({ federationRuleId: credentialEnvironment.ANTHROPIC_FEDERATION_RULE_ID, organizationId: credentialEnvironment.ANTHROPIC_ORGANIZATION_ID,
+            identityTokenFile: credentialEnvironment.ANTHROPIC_IDENTITY_TOKEN_FILE, ...(credentialEnvironment.ANTHROPIC_SERVICE_ACCOUNT_ID ? { serviceAccountId: credentialEnvironment.ANTHROPIC_SERVICE_ACCOUNT_ID } : {}),
+            ...(credentialEnvironment.ANTHROPIC_WORKSPACE_ID ? { workspaceId: credentialEnvironment.ANTHROPIC_WORKSPACE_ID } : {}), signal: runtime.controller.signal },
+          credentialEnvironment.ANTHROPIC_BASE_URL, credentialEnvironment.ANTHROPIC_MODEL);
+        }
+        continue;
+      }
       const value = resolved.credential.type === 'api-key'
         ? resolved.credential.apiKey : resolved.credential.accessToken;
       if (type === 'anthropic') {

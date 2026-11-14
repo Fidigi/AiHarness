@@ -46,17 +46,18 @@ export function createProviderRegistryRouter(
       const builtin: ProviderAuthStatus[] = proxy.getProviders()
         .filter(provider => provider.type in BUILTIN_ENVIRONMENT)
         .map(provider => {
-          const environmentVariable = BUILTIN_ENVIRONMENT[provider.type]?.find(name => Boolean(process.env[name]));
+          const workload = provider.type === 'anthropic' && proxy.hasAnthropicFederation();
+          const environmentVariable = BUILTIN_ENVIRONMENT[provider.type]?.find(name => Boolean(process.env[name])) ?? (workload ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
           return {
             type: provider.type,
             name: provider.type,
             configured: provider.configured,
             connected: provider.configured,
-            method: provider.type === 'mock' || provider.type === 'local' && !environmentVariable
+            method: workload ? 'environment' : provider.type === 'mock' || provider.type === 'local' && !environmentVariable
               ? 'none' : provider.type === 'vertex' && environmentVariable === 'GOOGLE_VERTEX_ACCESS_TOKEN'
                 || provider.type === 'github-copilot' || provider.type === 'openai-codex' || oauth.isSupported(provider.type) ? 'oauth' : environmentVariable ? 'environment' : 'api-key',
             ...(environmentVariable ? { environmentVariable } : {}),
-            reconnectSupported: provider.type !== 'mock',
+            reconnectSupported: provider.type !== 'mock' && !workload,
             disconnectSupported: provider.type !== 'mock' && !environmentVariable,
             ...(proxy.getUsage(provider.type) ? { usage: proxy.getUsage(provider.type) } : {}),
           };
@@ -139,7 +140,7 @@ export function createProviderRegistryRouter(
         response.json(await services.providerRegistry.disconnect(id));
         return;
       }
-      const environmentVariable = BUILTIN_ENVIRONMENT[id]?.find(name => Boolean(process.env[name]));
+      const environmentVariable = BUILTIN_ENVIRONMENT[id]?.find(name => Boolean(process.env[name])) ?? (id === 'anthropic' && proxy.hasAnthropicFederation() ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
       if (environmentVariable) {
         response.status(409).json({
           error: `Provider is controlled by ${environmentVariable}; remove it from the server environment.`,

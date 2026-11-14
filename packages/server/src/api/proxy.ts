@@ -36,6 +36,7 @@ import {
 } from '@ai-harness/core';
 import type {
   AgentProviderNetworkSettings,
+  AnthropicFederationConfig,
   AiProvider,
   ChatOptions,
   ExtensionRegistry,
@@ -414,6 +415,7 @@ function addMetric(left: number, right: number): number {
 export class AiProxyServer {
   private openaiProxy?: ProviderProxy;
   private anthropicProxy?: ProviderProxy;
+  private anthropicWorkload?: AbortController;
   private localProxy?: ProviderProxy;
   private googleProxy?: CoreProviderProxy;
   private azureProxy?: CoreProviderProxy;
@@ -563,6 +565,17 @@ export class AiProxyServer {
     this.openaiCodexProxy = new CoreProviderProxy(provider);
   }
 
+  /** Trusted startup fallback only; no workload path is admitted from API configuration DTOs. */
+  setAnthropicFederation(config: AnthropicFederationConfig, baseUrl?: string, model?: string): void {
+    const controller = new AbortController();
+    const provider = new CoreAnthropicProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'anthropic', baseUrl, model,
+      anthropicFederation: { ...config, signal: config.signal ? AbortSignal.any([config.signal, controller.signal]) : controller.signal, redactor: this.redactor } });
+    this.anthropicWorkload?.abort(); this.anthropicWorkload = controller;
+    this.anthropicProxy = new CoreProviderProxy(provider, true); this.agentProviders.set('anthropic', provider);
+  }
+
+  hasAnthropicFederation(): boolean { return !!this.anthropicWorkload; }
+
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key'): void {
     if (apiKey) this.redactor.add(apiKey);
@@ -576,6 +589,7 @@ export class AiProxyServer {
       this.openaiProxy = new CoreProviderProxy(provider, true);
     } else if (type === 'anthropic') {
       provider = new CoreAnthropicProvider({ ...network, type: ProviderType.ANTHROPIC, apiKey, baseUrl, model, anthropicAuthMode });
+      this.anthropicWorkload?.abort(); this.anthropicWorkload = undefined;
       this.anthropicProxy = new CoreProviderProxy(provider, true);
     } else if (type === 'google') {
       provider = new GeminiProvider({
@@ -704,7 +718,7 @@ export class AiProxyServer {
     if (custom) return true;
     switch (normalized) {
       case 'openai': this.openaiProxy = undefined; break;
-      case 'anthropic': this.anthropicProxy = undefined; break;
+      case 'anthropic': this.anthropicWorkload?.abort(); this.anthropicWorkload = undefined; this.anthropicProxy = undefined; break;
       case 'google': this.googleProxy = undefined; break;
       case 'azure': this.azureProxy = undefined; break;
       case 'vertex': this.vertexProxy = undefined; break;
