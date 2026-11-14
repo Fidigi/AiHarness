@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ProviderOAuthCredential } from '@ai-harness/core';
 import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
@@ -48,11 +49,20 @@ describe('configured CLI providers', () => {
       expect((await resolveStartupProvider(native, { provider: 'radius', models: ['radius/*'], apiKey: 'synthetic-invocation' }, {})).model).toBe('owned-new');
       expect(fetch).toHaveBeenCalledTimes(1);
     } finally { fetch.mockRestore(); }
+    const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-configured-radius', refreshToken: 'private-configured-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'radius', gateway: 'https://radius.pi.dev', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    const source = vi.fn(async () => credential), options = { radiusOAuth: { credential, credentialSource: source } };
+    const oauth = createConfiguredProviders({}, options); expect(oauth.get('radius')).toBeInstanceOf(RadiusProvider);
+    await expect(resolveStartupProvider(oauth, { provider: 'radius', model: 'balanced', offline: true }, {})).rejects.toThrow('Radius model is not available.');
+    const invocation = await resolveStartupProvider(oauth, { provider: 'radius', model: 'balanced', offline: true, apiKey: 'synthetic-api-override' }, {});
+    expect((invocation.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-api-override' }); expect(source).not.toHaveBeenCalled();
     expect(ProviderFactory.has('radius')).toBe(false);
     const unregister = ProviderFactory.register('radius', config => new MockProvider({ ...config, model: 'operator-chat' }));
     try {
       const overridden = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-override' });
       expect(overridden.get('radius')).toBeInstanceOf(MockProvider);
+      const nativeOverride = createConfiguredProviders({}, options).get('radius'); expect(nativeOverride).toBeInstanceOf(MockProvider);
+      expect((nativeOverride as unknown as { config: { apiKey?: string } }).config.apiKey).toBeUndefined(); expect(source).not.toHaveBeenCalled();
       expect((await resolveStartupProvider(overridden, { provider: 'radius', model: 'operator-chat', offline: true }, {})).model).toBe('operator-chat');
     } finally { unregister(); }
   });

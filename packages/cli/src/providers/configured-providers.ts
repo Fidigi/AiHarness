@@ -51,7 +51,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription, CliSubscription } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -153,6 +153,7 @@ export interface CreateConfiguredProvidersOptions {
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   radiusCatalogueDirectory?: string;
+  radiusOAuth?: CliRadiusOAuth;
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -240,6 +241,13 @@ export function createConfiguredProviders(
     : undefined);
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
+    if (name === 'radius' && !key && options.radiusOAuth) {
+      const config = { ...network, ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory), type: name,
+        gateway: env.RADIUS_GATEWAY ?? (options.radiusOAuth.credential.subscription?.provider === 'radius' ? options.radiusOAuth.credential.subscription.gateway : undefined) };
+      try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new RadiusProvider(config, options.radiusOAuth.credentialSource, options.radiusOAuth.credential)); }
+      catch { /* Invalid or foreign issuer state does not disable other providers. */ }
+      continue;
+    }
     attempt(providers, name, key ? { ...network, type: name, apiKey: key,
       ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory),
       ...(name === 'kimi-coding' ? { kimiAuthMode: providerCredentialEnvironmentKeys(name).some(key => env[key]) ? 'api-key' : options.kimiCodingAuthMode ?? 'api-key' } : {}),

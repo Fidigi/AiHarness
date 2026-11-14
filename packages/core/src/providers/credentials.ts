@@ -3,7 +3,7 @@ import path from 'node:path';
 import { KIMI_CODING_OAUTH_CLIENT_ID } from './kimi-coding-oauth.js';
 import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
 import { openAICodexAccountId, refreshOpenAICodexToken } from './openai-codex-oauth.js';
-import { refreshRadiusToken, validRadiusOAuthIdentity, type RadiusOAuthIdentity } from './radius-oauth.js';
+import { refreshRadiusToken, validRadiusOAuthIdentity, getRadiusOAuthConfig, type RadiusOAuthIdentity } from './radius-oauth.js';
 import type { EncryptedCredentialStore } from '../security/credential-store.js';
 import {
   executeShellCommand,
@@ -86,6 +86,8 @@ export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
   subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius';
+  /** An explicit Radius gateway must match the stored issuer before any refresh I/O. */
+  radiusGateway?: string;
   cwd?: string;
   signal?: AbortSignal;
   commandTimeoutMs?: number;
@@ -994,6 +996,8 @@ export class ProviderCredentialService {
   ): Promise<ResolvedProviderCredential | undefined> {
     const subscriptionProvider = credential.type === 'oauth' ? credential.subscription?.provider : undefined;
     if (subscriptionProvider !== options.subscriptionProvider) return undefined;
+    if (credential.type === 'oauth' && credential.subscription?.provider === 'radius' && options.radiusGateway !== undefined
+      && getRadiusOAuthConfig(options.radiusGateway).gateway !== credential.subscription.gateway) return undefined;
     const now = options.now ?? Date.now();
     if (credential.type !== 'oauth' || credential.expiresAt === undefined || credential.expiresAt > now + 60_000) {
       return { credential: structuredClone(credential), descriptor: descriptor(provider, credential, source) };

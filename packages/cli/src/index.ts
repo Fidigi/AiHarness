@@ -332,6 +332,7 @@ async function main(): Promise<void> {
         openaiCodex: providerRuntime.openaiCodex,
         kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
         radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
+        radiusOAuth: providerRuntime.radiusOAuth,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -844,6 +845,7 @@ async function main(): Promise<void> {
       openaiCodex: refreshedRuntime.openaiCodex,
       kimiCodingAuthMode: refreshedRuntime.kimiCodingAuthMode,
       radiusCatalogueDirectory: refreshedRuntime.radiusCatalogueDirectory,
+      radiusOAuth: refreshedRuntime.radiusOAuth,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -857,6 +859,7 @@ async function main(): Promise<void> {
     commandContext.credentialService = refreshedRuntime.credentials;
     commandContext.providerCredentialValues = refreshedRuntime.values;
     commandContext.providerNetwork = refreshedRuntime.network;
+    commandContext.radiusCatalogueDirectory = refreshedRuntime.radiusCatalogueDirectory;
     const refreshedModelSettings = applyAgentModelSettings({
       provider: cliArguments.provider,
       model: cliArguments.model,
@@ -997,6 +1000,7 @@ async function main(): Promise<void> {
     openaiCodex: providerRuntime.openaiCodex,
     kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
     radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
+    radiusOAuth: providerRuntime.radiusOAuth,
     network: providerRuntime.network,
   });
 
@@ -1019,6 +1023,7 @@ async function main(): Promise<void> {
       providers: configuredProviders,
       credentialService: providerRuntime.credentials,
       providerLifetime: providerRuntime.signal,
+      radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       providerCredentialValues: providerRuntime.values,
       allowCredentialReveal: applicationMode === 'interactive'
         && process.stdin.isTTY === true && process.stdout.isTTY === true,

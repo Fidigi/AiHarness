@@ -43,6 +43,14 @@ async function fixture(signature?: string) {
 }
 
 describe('Radius account-owned catalogue', () => {
+  it('does not advertise the baseline as cold offline OAuth account availability', async () => {
+    const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-native-access', refreshToken: 'private-native-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: 'https://radius.pi.dev', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const provider = new RadiusProvider({ type: 'radius' }, async () => credential, credential);
+    expect(provider.getPublishedModels()).toEqual([]); expect(await provider.getAvailableModels({ allowNetwork: false })).toEqual([]);
+    expect(provider.getConfiguredModel()).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
+  });
   it('keeps live native OAuth distinct from API keys, preserves grant-owned replay/cache across token rotation and isolates reauthentication', async () => {
     const f = await fixture('private-oauth-text'), service = new ProviderCredentialService();
     const initial: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-oauth-initial', refreshToken: 'private-oauth-refresh', expiresAt: Date.now() + 3600000,

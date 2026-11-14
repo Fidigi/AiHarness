@@ -4344,7 +4344,7 @@ export class RadiusProvider extends AiProvider {
     this.catalogue = new RadiusCatalogue(config, validBearerApiKey(this.config.apiKey) ? this.config.apiKey : undefined, this.radiusHeaders, this.radiusOAuthIdentity?.grantId);
     if (new.target === RadiusProvider) nativeRadiusProviders.add(this);
   }
-  private get radiusModels() { return this.radiusCredentialUnavailable ? [] : this.catalogue.models; }
+  private get radiusModels() { return this.radiusCredentialUnavailable || this.radiusCredentialSource && !this.catalogue.known ? [] : this.catalogue.models; }
   private async resolveRadiusCredential(signal: AbortSignal, allowRefresh: boolean, expectedGrant?: string): Promise<void> {
     if (!this.radiusCredentialSource) return;
     try {

@@ -88,6 +88,8 @@ it('does not infer Radius authority from an API key, a generic credential, a lab
     await expect(service.setOAuth('radius', { ...stored, subscription: { ...subscription, ...mutation } }, false)).rejects.toThrow('invalid');
   }
   const fetcher = vi.fn<typeof fetch>(); await expect(refreshRadiusToken(tokens.refresh_token, subscription, { gateway: 'https://other-radius.test', fetcher })).rejects.toThrow('Radius token refresh failed.'); expect(fetcher).not.toHaveBeenCalled();
+  await service.setOAuth('radius', stored, false);
+  expect(await service.resolve('radius', { ...options, radiusGateway: 'https://other-radius.test', fetcher })).toBeUndefined(); expect(fetcher).not.toHaveBeenCalled();
 });
 it.each([{ access_token: 'private\r\ninjected: yes' }, { refresh_token: 'private with whitespace' }, { expires_in: 0 }, { expires_in: null }])('refuses malformed token fields %j without exposing private response data', async mutation => {
   await expect(refreshRadiusToken('private-refresh', subscription, { fetcher: vi.fn().mockResolvedValue(json({ ...tokens, ...mutation })) })).rejects.toThrow('Radius token refresh failed.');

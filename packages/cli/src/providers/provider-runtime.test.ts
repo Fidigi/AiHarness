@@ -14,6 +14,51 @@ afterEach(async () => {
 });
 
 describe('CLI provider runtime', () => {
+  it('composes native Radius OAuth with a live gateway-owned resolver rather than an API-key snapshot', async () => {
+    const credentials = new ProviderCredentialService(), gateway = 'https://synthetic-runtime-radius.test';
+    const original = { accessToken: 'private-radius-original', refreshToken: 'private-radius-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'radius' as const, gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    await credentials.setOAuth('radius', original, false);
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+    expect(runtime.values.has('radius')).toBe(false); expect(runtime.radiusOAuth).toBeDefined();
+    const providers = createConfiguredProviders({}, { credentials: runtime.values, radiusOAuth: runtime.radiusOAuth });
+    expect(providers.get('radius')?.getPublishedModels?.()).toEqual([]);
+    const calls: Array<{ url: string; auth: string | null }> = [];
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push({ url: String(url), auth: new Headers(init?.headers).get('authorization') });
+      if (String(url).endsWith('/oauth/token')) return Response.json({ access_token: 'private-radius-rotated', refresh_token: 'private-radius-new-refresh', expires_in: 3600 });
+      if (String(url).endsWith('/config')) return Response.json({ baseUrl: gateway + '/v1', models: [{ id: 'account-only', name: 'Owned', reasoning: false, input: ['text'], contextWindow: 1000000, maxTokens: 65536, cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 } }] });
+      return new Response([{ type: 'start' }, { type: 'text_start', contentIndex: 0 }, { type: 'text_delta', contentIndex: 0, delta: 'ok' }, { type: 'text_end', contentIndex: 0, content: 'ok' }, { type: 'done', reason: 'stop' }].map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+    });
+    await credentials.setOAuth('radius', { ...original, expiresAt: Date.now() - 1000 }, false);
+    const selected = await resolveStartupProvider(providers, { model: 'radius/account-only' }, {});
+    expect(await selected.provider.chat([{ id: 'user', role: 'user', content: 'probe', timestamp: new Date(0) }])).toMatchObject({ content: 'ok', provider: 'radius', model: 'account-only', api: 'pi-messages' });
+    expect(calls).toEqual([{ url: gateway + '/v1/oauth/token', auth: null }, { url: gateway + '/v1/config', auth: 'Bearer private-radius-rotated' }, { url: gateway + '/v1/messages', auth: 'Bearer private-radius-rotated' }]);
+    await credentials.delete('radius'); await expect(selected.provider.chat([])).rejects.toThrow('Radius'); expect(transport).toHaveBeenCalledTimes(3); runtime.close();
+  });
+
+  it.each(['key', 'command-offline', 'expired-offline', 'gateway-mismatch'] as const)('does not substitute Radius OAuth for %s policy', async mode => {
+    const credentials = new ProviderCredentialService(), gateway = 'https://synthetic-runtime-radius.test';
+    await credentials.setOAuth('radius', { accessToken: 'private-radius', refreshToken: 'private-radius-refresh', expiresAt: mode === 'expired-offline' || mode === 'gateway-mismatch' ? 1 : Date.now() + 120000,
+      subscription: { provider: 'radius', gateway, grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const runtime = await createCliProviderRuntime('/unused', mode === 'command-offline' ? { providerApiKeyCommands: { radius: 'must-not-execute' } } : {},
+      mode === 'key' ? { RADIUS_API_KEY: 'private-api-key' } : mode === 'gateway-mismatch' ? { RADIUS_GATEWAY: 'https://other-radius.test' } : {}, credentials, false, [], undefined, mode === 'command-offline' || mode === 'expired-offline');
+    expect(runtime.radiusOAuth).toBeUndefined(); expect(runtime.values.get('radius')).toBe(mode === 'key' ? 'private-api-key' : undefined); expect(fetch).not.toHaveBeenCalled(); runtime.close();
+  });
+
+  it('clips Radius refresh to the native runtime and offline operation lifetimes', async () => {
+    const credentials = new ProviderCredentialService(), original = { accessToken: 'private-radius', refreshToken: 'private-radius-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'radius' as const, gateway: 'https://synthetic-runtime-radius.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    await credentials.setOAuth('radius', original, false); const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+    await credentials.setOAuth('radius', { ...original, expiresAt: 1 }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    expect(await runtime.radiusOAuth!.credentialSource(undefined, false)).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
+    let ready!: () => void; const reached = new Promise<void>(resolve => { ready = resolve; });
+    fetch.mockImplementationOnce(() => { ready(); return new Promise(() => undefined); });
+    const pending = runtime.radiusOAuth!.credentialSource().catch(error => error); await reached; runtime.close(); expect(await pending).toBeInstanceOf(Error);
+    await expect(runtime.radiusOAuth!.credentialSource()).rejects.toMatchObject({ name: 'AbortError' });
+  });
   it('composes Copilot subscription routing without flattening tokens and observes logout on the next turn', async () => {
     const credentials = new ProviderCredentialService();
     const models = ['claude-fable-5', 'gemini-3.5-flash', 'gpt-5-mini'];

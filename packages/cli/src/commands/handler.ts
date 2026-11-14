@@ -63,6 +63,7 @@ import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.
 import { createConfiguredProviders, getConfiguredSpecializedProviders } from '../providers/configured-providers.js';
 import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
+import { loginRadius } from '../security/radius-login.js';
 import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
 
@@ -139,6 +140,7 @@ export interface CommandContext {
   /** Foreground command lifetime supplied by the interactive input owner. */
   signal?: AbortSignal;
   providerLifetime?: AbortSignal;
+  radiusCatalogueDirectory?: string;
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
@@ -187,6 +189,7 @@ export interface CommandMcpControl {
 export interface CommandWorkspaceContext {
   offline?: boolean;
   providerLifetime?: AbortSignal;
+  radiusCatalogueDirectory?: string;
   writeWarning?: (message: string) => void;
   cwd: string;
   workspaceManager?: WorkspaceManager;
@@ -713,7 +716,7 @@ const commands: CommandEntry[] = [
   {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth explicite',
-    usage: '/login <provider> [--issuer github-copilot|openai-codex] [--method device|browser]',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex|radius] [--method device|browser]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
       let issuer: string | undefined, method: string | undefined, valid = true;
@@ -724,13 +727,31 @@ const commands: CommandEntry[] = [
         else if (key === '--method' && method === undefined && (value === 'device' || value === 'browser')) method = value;
         else valid = false;
       }
-      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex'
-        || method !== undefined && issuer !== 'openai-codex') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex] [--method device|browser]');
+      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'radius'
+        || method !== undefined && issuer !== 'openai-codex' && issuer !== 'radius') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|radius] [--method device|browser]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
       if (!credentialService?.hasPersistentStore?.()) {
         return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
+      }
+      if (issuer === 'radius') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          const credential = await loginRadius(credentialService, providerName, method === 'browser' ? 'browser' : 'device', (uri, code) => {
+            ctx.terminal.writeOutput(code === undefined ? `Ouvrez ${uri} pour autoriser AiHarness.` : `Ouvrez ${uri} et saisissez le code ${code}.`);
+          }, signal, process.env.RADIUS_GATEWAY);
+          signal.throwIfAborted();
+          if (providerName === 'radius' && !process.env.AI_HARNESS_RADIUS_API_KEY_COMMAND && !ctx.agentSettings?.().providerApiKeyCommands?.radius) {
+            const provider = createConfiguredProviders(process.env, { network: ctx.providerNetwork, radiusCatalogueDirectory: ctx.radiusCatalogueDirectory,
+              radiusOAuth: { credential, credentialSource: cliSubscriptionCredentialSource(credentialService, 'radius', ctx.providerLifetime, !ctx.offline, process.env.RADIUS_GATEWAY) },
+            }).get('radius');
+            if (provider) ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
       }
       if (issuer === 'openai-codex') {
         const controller = new AbortController();
@@ -1699,6 +1720,7 @@ export class CommandHandler {
       modelPatterns: workspace.modelPatterns,
       offline: workspace.offline,
       providerLifetime: workspace.providerLifetime,
+      radiusCatalogueDirectory: workspace.radiusCatalogueDirectory,
       settingsInfo: workspace.settingsInfo,
       agentSettings: workspace.agentSettings,
       credentialService: workspace.credentialService,

@@ -13,6 +13,7 @@ import {
   type ExtensionProvider,
   type ProviderOAuthRefreshConfig,
   type ProviderOAuthCredential,
+  type RadiusOAuthCredentialSource,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -29,12 +30,17 @@ export interface CliSubscription {
 }
 
 export type CliGitHubCopilotSubscription = CliSubscription;
+export interface CliRadiusOAuth {
+  credential: ProviderOAuthCredential;
+  credentialSource: RadiusOAuthCredentialSource;
+}
 
 export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   radiusCatalogueDirectory?: string;
+  radiusOAuth?: CliRadiusOAuth;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -71,15 +77,17 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex',
+  issuer: 'github-copilot' | 'openai-codex' | 'radius',
   lifetime?: AbortSignal,
   allowRefresh = true,
+  radiusGateway?: string,
 ) {
-  return async (signal?: AbortSignal) => {
+  return async (signal?: AbortSignal, requestAllowRefresh = true) => {
     const requestSignal = lifetime && signal ? AbortSignal.any([lifetime, signal]) : lifetime ?? signal;
     requestSignal?.throwIfAborted();
     const resolved = await credentials.resolve(issuer, { env: {}, subscriptionProvider: issuer,
-      allowCommands: false, allowRefresh, signal: requestSignal });
+      allowCommands: false, allowRefresh: allowRefresh && requestAllowRefresh, signal: requestSignal,
+      ...(issuer === 'radius' ? { radiusGateway } : {}) });
     requestSignal?.throwIfAborted();
     return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
   };
@@ -155,9 +163,12 @@ export async function createCliProviderRuntime(
   const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.provider === 'github-copilot' && subscription.subscription.availableModelIds.includes(model.id));
   const codexSource = cliSubscriptionCredentialSource(credentials, 'openai-codex', lifetime, !offline);
   const codex = await codexSource();
+  const radiusSource = cliSubscriptionCredentialSource(credentials, 'radius', lifetime, !offline, env.RADIUS_GATEWAY);
+  const radius = present.has('radius') && !values.has('radius') && !commandEnv[commandVariable('radius')] ? await radiusSource() : undefined;
   return {
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),
+    ...(radius ? { radiusOAuth: { credential: radius, credentialSource: radiusSource } } : {}),
     credentials,
     values,
     ...(kimiCodingAuthMode ? { kimiCodingAuthMode } : {}),
