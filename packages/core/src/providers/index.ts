@@ -79,9 +79,9 @@ import { OPENROUTER_IMAGE_MODELS, openRouterImagePricing } from './openrouter-im
 export { OPENROUTER_IMAGE_MODELS } from './openrouter-images-metadata.js';
 import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, openRouterImagesUsage, type NativeImageRequest, type NativeImageResult } from './openrouter-images.js';
 import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
-import { RADIUS_MODELS, radiusModel } from './radius-models.js';
 export { RADIUS_MODELS } from './radius-models.js';
-import { radiusBase, radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type RadiusChatOptions } from './radius.js';
+import { RadiusCatalogue, readRadiusCatalogue, type RadiusProviderConfig, type RadiusDiscoveryOptions } from './radius-catalogue.js';
+import { radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type RadiusChatOptions } from './radius.js';
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
@@ -464,9 +464,12 @@ export abstract class AiProvider {
   abstract validateConfig(): boolean;
 
   /** Get the list of available models when the provider exposes discovery. */
-  async getAvailableModels(): Promise<string[]> {
+  async getAvailableModels(_options?: { signal?: AbortSignal }): Promise<string[]> {
     return [];
   }
+
+  /** Optional synchronous identity-owned IDs for passive/offline account catalogues. Never performs I/O. */
+  getCachedAvailableModelIds?(): readonly string[] | undefined { return undefined; }
 
   /** Discovery can be unauthenticated at an explicitly configured endpoint. */
   canDiscoverModels(): boolean {
@@ -4315,28 +4318,59 @@ export class OpenAiMixedProvider extends AiProvider {
 }
 
 const nativeRadiusProviders = new WeakSet<AiProvider>();
-/** Explicit API-key P SDK. Account catalogue/issuer/host composition is separate from this transport. */
+/** Native P with account-owned catalogue; issuer and native host composition remain separate. */
 export class RadiusProvider extends AiProvider {
-  private readonly baseUrl: string;
-  constructor(config: ProviderConfig) {
-    const model = config.model ?? 'balanced'; radiusModel(model);
-    super({ ...config, model }); this.baseUrl = radiusBase(config.baseUrl);
+  private readonly catalogue: RadiusCatalogue;
+  private explicitModel: boolean;
+  private catalogueController?: AbortController;
+  private readonly activeRadius = new Set<AbortController>();
+  constructor(config: RadiusProviderConfig) {
+    super({ ...config, model: config.model ?? 'balanced' }); this.explicitModel = config.model !== undefined;
+    this.catalogue = new RadiusCatalogue(config, validBearerApiKey(config.apiKey) ? config.apiKey : undefined);
     if (new.target === RadiusProvider) nativeRadiusProviders.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
-  override canDiscoverModels(): boolean { return false; }
-  override async getAvailableModels(): Promise<string[]> { return RADIUS_MODELS.map(model => model.id); }
-  override getModelApi(model = this.config.model): string | undefined { return RADIUS_MODELS.some(profile => profile.id === model) ? 'pi-messages' : undefined; }
-  override setConfiguredModel(model: string): void { radiusModel(model); super.setConfiguredModel(model); }
+  override canDiscoverModels(): boolean { return this.validateConfig(); }
+  override isModelDiscoveryAuthoritative(): boolean { return true; }
+  override getCachedAvailableModelIds(): readonly string[] { return this.catalogue.models.map(model => model.id); }
+  override getConfiguredModel(): string | undefined {
+    if (this.explicitModel) return String(this.config.model);
+    return this.catalogue.models.find(model => model.id === 'balanced')?.id ?? this.catalogue.models[0]?.id;
+  }
+  override async getAvailableModels(options: RadiusDiscoveryOptions = {}): Promise<string[]> {
+    if (options.signal?.aborted) throw new RadiusProtocolError('Radius catalogue request aborted.');
+    if (options.allowNetwork === false) return [...this.getCachedAvailableModelIds()];
+    if (!this.validateConfig()) throw new RadiusProtocolError('Radius catalogue is unavailable.');
+    this.catalogueController?.abort(); const controller = new AbortController(); this.catalogueController = controller;
+    const network = providerNetworkSettings(this.config);
+    const signal = AbortSignal.any([controller.signal, providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : []),
+      ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    try {
+      signal.throwIfAborted();
+      const response = await this.request(new URL('/v1/config', this.catalogue.gateway), { signal,
+        headers: { Authorization: `Bearer ${String(this.config.apiKey)}`, Accept: 'application/json' } });
+      if (!response.ok) rejectProviderResponse(response, 'Radius catalogue is unavailable.');
+      const snapshot = await readRadiusCatalogue(response, signal);
+      const changed = await this.catalogue.publish(snapshot, signal, () => { if (this.catalogueController !== controller) throw new RadiusProtocolError('Radius catalogue changed.'); });
+      if (changed) for (const active of this.activeRadius) active.abort();
+      return [...this.getCachedAvailableModelIds()];
+    } catch { throw new RadiusProtocolError(signal.aborted ? 'Radius catalogue request aborted.' : 'Radius catalogue is unavailable.'); }
+    finally { if (this.catalogueController === controller) this.catalogueController = undefined; }
+  }
+  override getModelApi(model = this.getConfiguredModel()): string | undefined { return this.catalogue.models.some(profile => profile.id === model) ? 'pi-messages' : undefined; }
+  override setConfiguredModel(model: string): void {
+    if (!this.catalogue.models.some(profile => profile.id === model)) throw new Error('Radius model is not available.');
+    this.explicitModel = true; super.setConfiguredModel(model);
+  }
   override getPublishedModels(): readonly PublishedModelMetadata[] {
-    return RADIUS_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
+    return this.catalogue.models.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
       maxOutputTokens: profile.maxOutputTokens, ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
-      capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true }, pricing: { ...profile.pricing } }));
+      capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true }, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) }));
   }
   override getSpecializedModels(): SpecializedModel[] {
-    const profile = radiusModel(String(this.config.model));
+    const profile = this.catalogue.models.find(profile => profile.id === this.getConfiguredModel()); if (!profile) return [];
     return [{ id: `${profile.id}:classifier`, model: profile.id, provider: this.getProviderType(), type: 'classifier', virtual: true,
-      api: 'pi-messages', contextWindow: profile.contextWindow, imageInput: profile.declaredInput.includes('image'), pricing: { ...profile.pricing } }];
+      api: 'pi-messages', contextWindow: profile.contextWindow, imageInput: profile.declaredInput.includes('image'), ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) }];
   }
   override async chat(messages: Message[], options?: RadiusChatOptions): Promise<ChatResponse> {
     let result: ChatResponse | undefined, failure: Error | undefined;
@@ -4348,17 +4382,20 @@ export class RadiusProvider extends AiProvider {
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options: RadiusChatOptions = {}): Promise<void> {
     let activeSignal: AbortSignal | undefined;
+    const authority = new AbortController(); this.activeRadius.add(authority);
     try {
       if (!this.validateConfig()) throw new Error('Radius API key is required.');
-      const key = String(this.config.apiKey), model = options.model ?? String(this.config.model), provider = String(this.config.type);
-      radiusModel(model);
+      const key = String(this.config.apiKey), model = options.model ?? this.getConfiguredModel(), provider = String(this.config.type);
+      const profile = this.catalogue.models.find(profile => profile.id === model);
+      if (!profile || !model) throw new Error('Radius model is not available.');
+      const baseUrl = this.catalogue.baseUrl;
       const network = providerNetworkSettings(this.config);
-      const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : []),
+      const signal = AbortSignal.any([authority.signal, providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : []),
         ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
       activeSignal = signal; signal.throwIfAborted();
-      const owner = { provider, model, ...(nativeRadiusProviders.has(this) ? { scope: radiusScope(provider, this.baseUrl, model, key) } : {}) };
-      const body = serializeProviderBody(radiusBody(structuredClone(messages), options, owner));
-      const response = await this.request(`${this.baseUrl}/messages`, { method: 'POST', signal, body,
+      const owner = { provider, model, ...(nativeRadiusProviders.has(this) ? { scope: radiusScope(provider, baseUrl, model, key) } : {}) };
+      const body = serializeProviderBody(radiusBody(structuredClone(messages), options, owner, profile));
+      const response = await this.request(`${baseUrl}/messages`, { method: 'POST', signal, body,
         headers: { ...configuredHeaders(this.config), Authorization: `Bearer ${key}`, Accept: 'text/event-stream', 'Content-Type': 'application/json' } });
       if (!response.ok) rejectProviderResponse(response, 'Radius request failed.');
       const result = await readRadiusStream(response, owner, signal, onChunk);
@@ -4366,7 +4403,7 @@ export class RadiusProvider extends AiProvider {
     } catch (error) {
       onError?.(new RadiusProtocolError(activeSignal?.aborted || options.signal?.aborted ? 'Radius request aborted.' : 'Radius request failed.',
         error instanceof RadiusProtocolError ? error.usage : undefined));
-    }
+    } finally { this.activeRadius.delete(authority); }
   }
   override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
     try { return await super.classify(request, options); }

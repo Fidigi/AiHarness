@@ -64,10 +64,11 @@ describe('explicit native Radius P SDK', () => {
       expect(model.imageResizeLimits).toEqual(raw.inputLimits?.images.resize);
     }
     const provider = new RadiusProvider({ type: 'operator-label', apiKey: key });
-    expect(provider.getPublishedModels()).toHaveLength(29); expect(await provider.getAvailableModels()).toHaveLength(29);
-    expect(provider.getModelApi('gpt-6-luna')).toBe('pi-messages'); expect(provider.canDiscoverModels()).toBe(false);
+    expect(provider.getPublishedModels()).toHaveLength(29); expect(await provider.getAvailableModels({ allowNetwork: false })).toHaveLength(29);
+    expect(provider.getModelApi('gpt-6-luna')).toBe('pi-messages'); expect(provider.canDiscoverModels()).toBe(true);
     expect(ProviderFactory.has('radius')).toBe(false); expect(fetch).not.toHaveBeenCalled();
-    expect(() => new RadiusProvider({ type: 'radius', model: 'unknown', apiKey: key })).toThrow('not supported');
+    await expect(new RadiusProvider({ type: 'radius', model: 'unknown', apiKey: key }).chat([user()])).rejects.toThrow('Radius request failed.');
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('posts the P context/options envelope, not C/A/R, and publishes ordered complete blocks with disjoint observed usage', async () => {

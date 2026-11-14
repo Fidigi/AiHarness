@@ -1,4 +1,14 @@
 import type { ThinkingLevel } from './index.js';
+import type { ModelPricing } from '../types/index.js';
+
+export interface RadiusModelProfile {
+  id: string; name: string; api: 'pi-messages'; reasoning: boolean; contextWindow: number; maxOutputTokens: number;
+  declaredInput: readonly ('text' | 'image')[];
+  thinkingLevelMap?: Readonly<Partial<Record<ThinkingLevel, string | null>>>;
+  pricing?: Readonly<ModelPricing>;
+  pricingTiers: readonly Readonly<Required<ModelPricing> & { inputTokensAbove: number }>[];
+  imageResizeLimits?: Readonly<{ maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }>;
+}
 
 type Cost = { input: number; output: number; cacheRead: number; cacheWrite: number;
   tiers?: readonly { inputTokensAbove: number; input: number; output: number; cacheRead: number; cacheWrite: number }[] };

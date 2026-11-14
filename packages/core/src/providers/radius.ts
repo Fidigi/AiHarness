@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ChatOptions, ChatResponse, StreamChunkCallback } from './index.js';
 import type { Message, MessageContentBlock, TokenUsage, ToolCall } from '../types/index.js';
 import { validateGeneratedImages } from './specialized-models.js';
-import { radiusModel } from './radius-models.js';
+import { radiusModel, type RadiusModelProfile } from './radius-models.js';
 
 const API = 'pi-messages', MAX_OUTPUT = 4 * 1024 * 1024, MAX_EVENT = 1024 * 1024;
 export interface RadiusChatOptions extends ChatOptions {
@@ -77,11 +77,11 @@ function tool(call: ToolCall, same: boolean, owner: RadiusOwner): RecordValue {
   return { type: 'toolCall', id: call.id, name: call.name, arguments: call.input,
     ...(privateData?.signature ? { thoughtSignature: privateData.signature } : {}) };
 }
-export function radiusBody(messages: Message[], options: RadiusChatOptions, owner: RadiusOwner): RecordValue {
-  const profile = radiusModel(owner.model);
+export function radiusBody(messages: Message[], options: RadiusChatOptions, owner: RadiusOwner, profile: RadiusModelProfile = radiusModel(owner.model)): RecordValue {
   if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > profile.maxOutputTokens)) throw new Error('Invalid Radius output limit.');
   if (options.temperature !== undefined && (!Number.isFinite(options.temperature) || options.temperature < 0 || options.temperature > 2)) throw new Error('Invalid Radius temperature.');
-  if (options.thinking !== undefined && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(options.thinking)) throw new Error('Invalid Radius thinking level.');
+  if (options.thinking !== undefined && (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(options.thinking)
+    || !profile.reasoning && options.thinking !== 'off')) throw new Error('Invalid Radius thinking level.');
   if (options.cacheRetention !== undefined && !['none', 'short', 'long'].includes(options.cacheRetention)) throw new Error('Invalid Radius cache retention.');
   if (!profile.declaredInput.includes('image') && messages.some(message => message.blocks?.some(block => block.type === 'image'))) throw new Error('Radius model does not support images.');
   if (options.tools && options.tools.length > 128) throw new Error('Radius tool limit exceeded.');

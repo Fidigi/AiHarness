@@ -193,19 +193,21 @@ function positiveInteger(value: number, name: string): number {
   return value;
 }
 
-async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
-  if (timeoutMs === 0) return operation;
+async function withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
   let timer: NodeJS.Timeout | undefined;
   try {
+    if (timeoutMs === 0) return await operation(controller.signal);
     return await Promise.race([
-      operation,
+      operation(controller.signal),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Model discovery timed out.')), timeoutMs);
+        timer = setTimeout(() => { controller.abort(); reject(new Error('Model discovery timed out.')); }, timeoutMs);
         timer.unref?.();
       }),
     ]);
   } finally {
     if (timer) clearTimeout(timer);
+    controller.abort();
   }
 }
 
@@ -223,7 +225,7 @@ export async function discoverProviderModelIds(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const values = await withTimeout(provider.getAvailableModels(), timeoutMs);
+      const values = await withTimeout(signal => provider.getAvailableModels({ signal }), timeoutMs);
       const models: string[] = [];
       const seen = new Set<string>();
       for (const value of values) {
@@ -253,7 +255,7 @@ export async function collectProviderModelCatalog(
   const states: ProviderModelState[] = await Promise.all([...providers].map(async ([providerName, provider]) => {
     let configured = false;
     try { configured = provider.validateConfig(); } catch { /* Treat invalid providers as unavailable. */ }
-    let discoveredModels: string[] = [];
+    let discoveredModels: string[] = options.discover === false ? [...(provider.getCachedAvailableModelIds?.() ?? [])] : [];
     if (options.discover !== false && provider.canDiscoverModels()) {
       try {
         discoveredModels = await discoverProviderModelIds(provider, options);

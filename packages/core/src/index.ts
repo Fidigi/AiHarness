@@ -15,6 +15,7 @@ export * from './sdk/index.js';
 export { azureEnvironmentConfig } from './providers/azure-config.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export type { RadiusChatOptions } from './providers/radius.js';
+export type { RadiusProviderConfig, RadiusDiscoveryOptions } from './providers/radius-catalogue.js';
 export { RadiusProtocolError } from './providers/radius.js';
 export * from './providers/specialized-models.js';
 export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
