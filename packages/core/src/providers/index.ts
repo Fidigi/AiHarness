@@ -67,6 +67,9 @@ import { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS, opencodeProfile, opencodeB
 export { OPENCODE_MODELS, OPENCODE_CLASSIFIER_MODELS } from './opencode.js';
 import { KIMI_CODING_MODELS, kimiCodingProfile, kimiCodingEndpoint, prepareKimiCodingMessage, prepareKimiCodingOutputBudget, kimiCodingUsage, mergeKimiCodingUsage, validateKimiCodingMessage, kimiCodingMessageText, kimiCodingStreamValidator } from './kimi-coding.js';
 export { KIMI_CODING_MODELS } from './kimi-coding.js';
+import { validAnthropicOAuthIdentity, type AnthropicOAuthCredential, type AnthropicOAuthCredentialSource } from './anthropic-oauth.js';
+import { anthropicOAuthHeaders, prepareAnthropicOAuthBody, anthropicOAuthNames, anthropicOAuthBlocks } from './anthropic-oauth-policy.js';
+import { anthropicOAuthHistory, sealAnthropicOAuthCall, sealAnthropicOAuthResponse, withoutAnthropicOAuthReplay } from './anthropic-oauth-replay.js';
 import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthCredential, type KimiCodingOAuthCredentialSource } from './kimi-coding-oauth.js';
 import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
@@ -5156,8 +5159,10 @@ const nativeOpenCodeGoReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeReplay = new WeakSet<AiProvider>();
 const nativeAiGatewayProviders = new WeakSet<AiProvider>();
 const nativeKimiOAuthProviders = new WeakSet<AiProvider>();
+const nativeAnthropicOAuthProviders = new WeakSet<AiProvider>();
 const nativeAiGatewayDelegates = new WeakMap<AiProvider, AiGatewayProfile>();
 
+export interface AnthropicProviderConfig extends ProviderConfig { anthropicAuthMode?: 'api-key' | 'oauth' }
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
@@ -5175,8 +5180,10 @@ export class AnthropicProvider extends AiProvider {
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
+  private get oauthMode(): boolean { return this.ownsNativeProfiles && this.config.anthropicAuthMode === 'oauth'; }
 
-  constructor(config: ProviderConfig) {
+  constructor(config: AnthropicProviderConfig) {
+    if (new.target === AnthropicProvider && config.anthropicAuthMode !== undefined && !['api-key', 'oauth'].includes(config.anthropicAuthMode)) throw new Error('Invalid Anthropic authentication mode.');
     super(config);
     this.ownsNativeProfiles = new.target === AnthropicProvider;
     if (new.target === MiniMaxProvider || new.target === MiniMaxCnProvider) nativeMiniMaxReplay.add(this);
@@ -5194,7 +5201,7 @@ export class AnthropicProvider extends AiProvider {
 
   async getAvailableModels(): Promise<string[]> {
     const response = await this.request(resolveProviderDiscoveryEndpoint('anthropic', this.baseUrl), {
-      headers: {
+      headers: this.oauthMode ? this.messageHeaders() : {
         ...configuredHeaders(this.config),
         ...(this.config.apiKey ? { 'x-api-key': String(this.config.apiKey) } : {}),
         'anthropic-version': AnthropicProvider.API_VERSION,
@@ -5210,6 +5217,7 @@ export class AnthropicProvider extends AiProvider {
     const headers = { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
     const betas = this.ownsNativeProfiles ? anthropicThinkingBetas(model ?? '', _options) : [];
+    if (this.oauthMode) return anthropicOAuthHeaders(headers, String(this.config.apiKey), betas);
     if (!betas.length) return headers;
     const merged = new Headers(headers);
     merged.set('anthropic-beta', [...new Set([...(merged.get('anthropic-beta')?.split(',').map(value => value.trim()).filter(Boolean) ?? []), ...betas])].join(','));
@@ -5223,6 +5231,7 @@ export class AnthropicProvider extends AiProvider {
       const data = parseDataImage(image.url);
       return data ? [{ type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } }] : [];
     }));
+    if (this.oauthMode) prepareAnthropicOAuthBody(body, options);
     return body;
   }
   protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions, messages?: readonly Message[]): void {
@@ -5275,7 +5284,7 @@ export class AnthropicProvider extends AiProvider {
   }
 
   protected nativeMessageHistory(messages: Message[], model: string): Message[] {
-    return messages.filter(message => {
+    return withoutAnthropicOAuthReplay(messages).filter(message => {
       if (message.role !== 'assistant') return true;
       if (message.metadata?.outputError) return false;
       const projected = projectAssistantReplay(message, this.config.type, model, 'anthropic-messages');
@@ -5355,6 +5364,7 @@ export class AnthropicProvider extends AiProvider {
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
     const native = this.hasNativeMessageReplay(model), owner = this.config.type;
+    const oauthName = this.oauthMode ? anthropicOAuthNames(options?.tools) : undefined;
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
 
     const systemPrompt = native
@@ -5406,7 +5416,7 @@ export class AnthropicProvider extends AiProvider {
     }
     if (native) assertAnthropicResponseActive(options?.signal);
     this.validateMessageResponse(data, native);
-    const blocks = native ? validateAnthropicResponse(data) : undefined;
+    const blocks = native ? anthropicOAuthBlocks(validateAnthropicResponse(data), oauthName) : undefined;
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -5414,7 +5424,7 @@ export class AnthropicProvider extends AiProvider {
       .join('');
     const toolCalls = data.content
       ?.filter((block): block is AnthropicToolUseContent => block.type === 'tool_use')
-      .map(block => ({ id: block.id, name: block.name, input: block.input }));
+      .map(block => ({ id: block.id, name: oauthName?.(block.name) ?? block.name, input: block.input }));
     if (!native && !contentBlock && !toolCalls?.length) {
       throw new Error('No text or tool content in Anthropic response');
     }
@@ -5445,6 +5455,7 @@ export class AnthropicProvider extends AiProvider {
 
     const model = options?.model || (this.config.model as string) || ANTHROPIC_DEFAULT_MODEL;
     const native = this.hasNativeMessageReplay(model), owner = this.config.type;
+    const oauthName = this.oauthMode ? anthropicOAuthNames(options?.tools) : undefined;
     const checkCancellation = () => { if (native) assertAnthropicResponseActive(options?.signal); };
     const url = this.getMessagesUrl();
     const history = native ? this.nativeMessageHistory(messages, model) : messages;
@@ -5613,7 +5624,7 @@ export class AnthropicProvider extends AiProvider {
       if (buffer.trim()) throw new Error('The provider streaming response was invalid.');
 
       checkCancellation();
-      const blocks = nativeStream?.finish();
+      const blocks = anthropicOAuthBlocks(nativeStream?.finish(), oauthName);
       validateStream();
       const toolCalls = blocks ? blocks.flatMap(block => block.type === 'tool_call'
         ? [{ id: block.id, name: block.name, input: block.input }] : [])
@@ -5643,6 +5654,74 @@ export class AnthropicProvider extends AiProvider {
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
     }
+  }
+}
+
+/** Issuer-owned Anthropic facade; static declarations are not a vendor account entitlement. */
+export class AnthropicOAuthProvider extends AnthropicProvider {
+  private readonly oauthHeaders: Readonly<Record<string, string>>;
+  constructor(config: ProviderConfig, private readonly credentialSource: AnthropicOAuthCredentialSource) {
+    if (typeof credentialSource !== 'function') throw new Error('Anthropic OAuth source is required.');
+    super({ ...config, model: config.model ?? ANTHROPIC_DEFAULT_MODEL, apiKey: undefined, anthropicAuthMode: 'oauth' });
+    const headers = new Headers(configuredHeaders(this.config)); headers.delete('authorization'); headers.delete('x-api-key');
+    this.oauthHeaders = Object.freeze(Object.fromEntries(headers)); this.config.customHeaders = this.oauthHeaders;
+    if (new.target === AnthropicOAuthProvider) nativeAnthropicOAuthProviders.add(this);
+    registerNativeOutputBudget(this, () => { const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL); return (options, messages) => prepareAnthropicOutputBudget(options, model, messages); });
+  }
+  override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
+  override canDiscoverModels(): boolean { return false; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] { return anthropicPublishedProfiles(); }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = anthropicPublishedProfiles().find(row => row.id === this.getConfiguredModel());
+    return profile ? [{ id: `${profile.id}:classifier`, type: 'classifier', virtual: true, provider: this.getProviderType(), model: profile.id,
+      api: 'anthropic-messages', imageInput: profile.capabilities.imageInput, contextWindow: profile.contextWindow, pricing: profile.pricing }] : [];
+  }
+  private async currentCredential(signal: AbortSignal, allowRefresh = true): Promise<AnthropicOAuthCredential> {
+    let abort!: () => void; const cancelled = new Promise<never>((_resolve, reject) => { abort = () => reject(new Error('Anthropic OAuth request cancelled.')); });
+    void cancelled.catch(() => undefined); signal.addEventListener('abort', abort, { once: true });
+    try {
+      signal.throwIfAborted(); const value = structuredClone(await Promise.race([this.credentialSource(signal, allowRefresh), cancelled])); signal.throwIfAborted();
+      if (!value || value.version !== 1 || value.type !== 'oauth' || !validAnthropicOAuthIdentity(value.subscription) || !Number.isSafeInteger(value.expiresAt) || value.expiresAt! <= Date.now()) throw new Error('Anthropic OAuth credential is unavailable.');
+      for (const token of [value.accessToken, value.refreshToken]) if (typeof token !== 'string' || !token || Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0020\u007f-\u009f]/u.test(token) || Buffer.from(token, 'utf8').toString('utf8') !== token) throw new Error('Anthropic OAuth credential is unavailable.');
+      new Headers({ authorization: `Bearer ${value.accessToken}` });
+      return { accessToken: value.accessToken, refreshToken: value.refreshToken!, expiresAt: value.expiresAt!, tokenType: 'Bearer', subscription: { ...value.subscription } };
+    } finally { signal.removeEventListener('abort', abort); }
+  }
+  override async getAvailableModels(options: { signal?: AbortSignal; allowNetwork?: boolean } = {}): Promise<string[]> {
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : [])]);
+    try { await this.currentCredential(signal, options.allowNetwork !== false); return anthropicPublishedProfiles().map(row => row.id); }
+    catch { if (signal.aborted) throw new Error('Anthropic OAuth catalogue cancelled.'); return []; }
+  }
+  override async chat(messages: Message[], options?: AnthropicChatOptions): Promise<ChatResponse> { return this.runOAuth(messages, options); }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: AnthropicChatOptions): Promise<void> {
+    try { await this.runOAuth(messages, options, onChunk, onComplete); } catch (error) { if (onError) await onError(error as Error); else throw error; }
+  }
+  private async runOAuth(messages: Message[], options?: AnthropicChatOptions, onChunk?: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void): Promise<ChatResponse> {
+    const network = providerNetworkSettings(this.config), config = { ...this.config }, provider = this.getProviderType(), model = options?.model || this.getConfiguredModel()!, endpoint = this.getMessagesUrl();
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options?.signal ? [options.signal] : []), ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    let abort!: () => void, response: ChatResponse | undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => { abort = () => reject(new Error('Anthropic OAuth request cancelled.')); }); void cancelled.catch(() => undefined); signal.addEventListener('abort', abort, { once: true });
+    const active = () => signal.throwIfAborted();
+    try {
+      active(); const input = structuredClone(messages), owned = { ...options, model, signal, ...(options?.tools ? { tools: structuredClone(options.tools) } : {}) };
+      const profile = anthropicPublishedProfiles().find(row => row.id === model); if (!profile) throw new Error('Anthropic OAuth model is not supported.');
+      prepareAnthropicOutputBudget(owned, model, input); anthropicOAuthNames(owned.tools);
+      for (const message of input) for (const image of messageImages(message)) if (!profile.capabilities.imageInput || !parseDataImage(image.url)) throw new Error('Invalid Anthropic OAuth image input.');
+      const credential = await Promise.race([this.currentCredential(signal), cancelled]); active();
+      const scope = nativeAnthropicOAuthProviders.has(this) ? gatewayReplayScope(provider, 'anthropic-messages', model, endpoint, JSON.stringify(['anthropic-native-grant-v1', credential.subscription.grantId]), this.oauthHeaders) : undefined;
+      const history = anthropicOAuthHistory(input, scope), delegate = new AnthropicProvider({ ...config, type: provider, model, apiKey: credential.accessToken, anthropicAuthMode: 'oauth', customHeaders: this.oauthHeaders }); nativeSubscriptionStreamConsumers.add(delegate);
+      if (onChunk) await Promise.race([delegate.streamChat(history, async (text, event) => {
+        active(); const visible = event?.type === 'tool_call' ? { type: 'tool_call' as const, data: sealAnthropicOAuthCall(event.data as ToolCall, scope) }
+          : event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text } : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        await Promise.race([Promise.resolve(onChunk(text, visible)), cancelled]); active();
+      }, value => { response = value; }, error => { throw error; }, owned), cancelled]);
+      else response = await Promise.race([delegate.chat(history, owned), cancelled]);
+      active(); if (!response) throw new Error('Anthropic OAuth response is incomplete.');
+      const current = await Promise.race([this.currentCredential(signal), cancelled]); active(); if (current.subscription.grantId !== credential.subscription.grantId) throw new Error('Anthropic OAuth credential changed.');
+      const result = sealAnthropicOAuthResponse({ ...response, provider, api: 'anthropic-messages', model }, scope); await Promise.race([Promise.resolve(onComplete?.(result)), cancelled]); active(); return result;
+    } catch (error) {
+      throw error instanceof ProviderContextOverflowError ? error : new SpecializedModelError(signal.aborted ? 'Anthropic OAuth request cancelled.' : 'Anthropic OAuth request failed.', error instanceof SpecializedModelError ? error.usage : normalizeProviderUsage(response?.usage));
+    } finally { signal.removeEventListener('abort', abort); }
   }
 }
 

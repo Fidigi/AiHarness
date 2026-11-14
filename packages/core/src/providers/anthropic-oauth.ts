@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { CredentialRedactor } from './credentials.js';
+import { CredentialRedactor, type ProviderOAuthCredential } from './credentials.js';
 import { fetchOAuthResponse, readOAuthJson } from './oauth-device.js';
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e', AUTHORIZE = 'https://claude.ai/oauth/authorize', TOKEN = 'https://platform.claude.com/v1/oauth/token';
 const BROWSER = 'http://localhost:53692/callback', COPY_CODE = 'https://platform.claude.com/oauth/code/callback', LOGIN_MS = 5 * 60_000;
 const SCOPES = 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload';
 export interface AnthropicOAuthIdentity { provider: 'anthropic'; grantId: string }
 export interface AnthropicOAuthCredential { accessToken: string; refreshToken: string; expiresAt: number; tokenType: 'Bearer'; subscription: AnthropicOAuthIdentity }
+export type AnthropicOAuthCredentialSource = (signal?: AbortSignal, allowRefresh?: boolean) => Promise<ProviderOAuthCredential | undefined>;
 export interface AnthropicOAuthOptions { signal?: AbortSignal; fetcher?: typeof fetch; redactor?: CredentialRedactor }
 export interface AnthropicBrowserOAuthOptions extends AnthropicOAuthOptions { callbackUrl?: string }
 export interface AnthropicLogin {
