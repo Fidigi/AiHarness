@@ -284,3 +284,6 @@ export class OAuthDeviceClient {
     return (await this.pollCredential(prompt, signal)).accessToken;
   }
 }
+
+// Shared bounded transport/reader, not a source of issuer or endpoint authority.
+export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson };

@@ -39,6 +39,8 @@ export { getKimiCodingOAuthConfig, beginKimiCodingDeviceLogin } from './provider
 export type { KimiCodingOAuthConfig, KimiCodingOAuthIdentity, KimiCodingOAuthCredential, KimiCodingOAuthOptions, KimiCodingDeviceLogin, KimiCodingOAuthCredentialSource } from './providers/kimi-coding-oauth.js';
 export { OAuthDeviceClient } from './providers/oauth-device.js';
 export type { OAuthDeviceConfig, OAuthDevicePrompt, OAuthDeviceCredential } from './providers/oauth-device.js';
+export { beginOpenRouterLogin } from './providers/openrouter-oauth.js';
+export type { OpenRouterLogin, OpenRouterOAuthOptions } from './providers/openrouter-oauth.js';
 export { getGitHubCopilotOAuthConfig, getGitHubCopilotBaseUrl, exchangeGitHubCopilotToken } from './providers/github-copilot-oauth.js';
 export type { GitHubCopilotOAuthCredential } from './providers/github-copilot-oauth.js';
 export { getOpenAICodexOAuthConfig, beginOpenAICodexDeviceLogin, beginOpenAICodexBrowserLogin, refreshOpenAICodexToken } from './providers/openai-codex-oauth.js';

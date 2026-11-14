@@ -828,6 +828,17 @@ export class ProviderCredentialService {
   async prepareOAuthLogin(provider: string, signal?: AbortSignal): Promise<
     (value: Omit<ProviderOAuthCredential, 'version' | 'type'>) => Promise<ProviderCredentialDescriptor>
   > {
+    const publish = await this.prepareLogin(provider, signal);
+    return async value => publish({ ...value, version: 1, type: 'oauth' });
+  }
+
+  /** Some issuers return a permanent API key; retain the same one-shot publication fences. */
+  async prepareApiKeyLogin(provider: string, signal?: AbortSignal): Promise<(apiKey: string) => Promise<ProviderCredentialDescriptor>> {
+    const publish = await this.prepareLogin(provider, signal);
+    return apiKey => publish({ version: 1, type: 'api-key', apiKey });
+  }
+
+  private async prepareLogin(provider: string, signal?: AbortSignal): Promise<(value: ProviderCredential) => Promise<ProviderCredentialDescriptor>> {
     const id = providerId(provider), store = this.options.store;
     if (!store) throw new ProviderCredentialError('storage-unavailable', 'Credential storage is unavailable.');
     const generation = (this.generations.get(id) ?? 0) + 1;
@@ -837,7 +848,7 @@ export class ProviderCredentialService {
     const name = this.storageName(id), expected = store.get(name), revision = store.getRevision();
     let consumed = false;
     return async value => {
-      const credential = validateCredential({ version: 1, type: 'oauth', ...value });
+      const credential = validateCredential(value);
       this.rememberCredential(credential);
       if (consumed) throw new ProviderCredentialError('credential-changed', 'The provider credential changed during resolution.');
       consumed = true;

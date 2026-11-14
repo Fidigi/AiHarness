@@ -1,0 +1,45 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "4f48333",
+  "scope": "Core OpenRouter PKCE/permanent-key issuer and guarded API-key login publication; native host login remains mandatory",
+  "reference": { "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff", "path": "packages/ai/src/auth/oauth/openrouter.ts", "sha256": "3d90d1955672b64e3039e760c41b4ff1c43f5b3fc6fcbe7f80fa6f552997893a", "meaning": "Existing pinned source read, not a new SDK acquisition or execution. OpenRouter returns a permanent API key, uses S256 and a random callback path without state; no expiring token pair or refresh exchange is inferred." },
+  "requirements": [
+    {
+      "requirement": "Actual fixed-authority OpenRouter PKCE/key exchange",
+      "implementation": "Public beginOpenRouterLogin(callbackUrl, options) returns authorizationUrl/callbackUrl/expiresAt/one-shot complete/cancel. Authorization is fixed openrouter.ai/auth; POST JSON code/code_verifier/code_challenge_method goes only to openrouter.ai/api/v1/auth/keys with manual redirects. Hosts supply a loopback HTTP port and generated UUID-v4 callback path; exact origin/path and one bounded code are required on completion, with no invented state requirement. Full callback paste is required, not arbitrary loose-code acceptance. Core owns no listener/browser or environment lookup.",
+      "proof": "New useful-flow case checks authorize parameters/no state, independent SHA256 verifier challenge, exact JSON wire/header/no auth and permanent {apiKey} output. Invalid origin/path/duplicate/error/raw-code inputs do not consume the pending flow; valid retry succeeds. Five-minute expiry/unsafe callback rejection, malformed/oversized/denied keys and caller-owned/late hostile-body cancellation refuse without provider-secret reflection."
+    },
+    {
+      "requirement": "Permanent API-key credentials with the existing encrypted publication fences",
+      "implementation": "ProviderCredentialService.prepareApiKeyLogin shares the original one-shot generation/document-revision/CAS/publication/withdrawal machinery with prepareOAuthLogin through a private publisher. The resulting credential is type api-key and not refreshable: no invented lifetime, OAuth refresh token or subscription/account marker. OAuth normalization remains Promise-based; its intended type/version cannot be replaced by input fields. Core bounded OAuth fetch/JSON readers are reused via internal exports, not a new HTTP/store framework.",
+      "proof": "Reserved publication precedes exchange, stored key reopens0600 under a foreign storage label and descriptors say api-key/refreshable:false. Concurrent absent-slot logout refuses key publication. Existing OAuth malformed-input normalization still rejects asynchronously and leaves the publisher usable for a subsequent valid candidate. Existing credentials, Radius/Kimi issuer/client and native Server publication controls retain their coverage."
+    }
+  ],
+  "qualification": {
+    "environment": "Docker only; --network none; CI=true; synthetic credentials/disposable stores/mocked transports; no personal credential store, real-account mode or protected-container operation",
+    "image": "ai-harness:mod01-openrouter-oauth-owned",
+    "imageId": "sha256:b8bf4fc88617d9616c66864c4aa9ed0030b2780110361bc4fcfba042feb8573b",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-openrouter-oauth-owned; Core/CLI/Server/Web and workspace/parity types PASS",
+    "buildLog": "/tmp/mod01-openrouter-oauth/build-owned.log",
+    "strict": { "passed": true, "roots": 6, "config": "/tmp/mod01-openrouter-oauth/strict.json", "log": "/tmp/mod01-openrouter-oauth/delivered.log" },
+    "targeted": { "passed": 87, "failed": 0, "files": 6, "selection": ["packages/core/src/providers/openrouter-oauth.test.ts", "packages/core/src/providers/credentials.test.ts", "packages/core/src/providers/radius-oauth.test.ts", "packages/core/src/providers/kimi-coding-oauth.test.ts", "packages/cli/src/security/oauth-device.test.ts", "packages/server/src/runtime/provider-oauth-radius.test.ts"], "log": "/tmp/mod01-openrouter-oauth/delivered.log", "meaning": "Seven new issuer/publication cases plus existing shared credential/device/native-owner controls; no provider/model/host cross-product." },
+    "emittedSdk": { "passed": true, "requests": 1, "program": "/tmp/mod01-openrouter-oauth/emitted-probe.mjs", "log": "/tmp/mod01-openrouter-oauth/delivered.log", "meaning": "Actual public compiled Core root/key exchange/encrypted publication, api-key descriptor and normal Node exit. Mocked service, not installed/production/account/native-host qualification." },
+    "counterfactual": { "failed": 2, "filterUnselected": 4, "image": "ai-harness:mod01-kimi-server", "log": "/tmp/mod01-openrouter-oauth/red.log", "meaning": "Both selected flows fail on the absent API-key publication entry point before their later PKCE assertions. Do not credit unreached exchange assertions as separate REDs." },
+    "retainedFailures": [
+      { "failed": 1, "filterUnselected": 6, "image": "ai-harness:mod01-openrouter-oauth-sdk", "log": "/tmp/mod01-openrouter-oauth/normalization-red.log", "meaning": "Initial publisher extraction runs OAuth normalization synchronously, violating the existing Promise rejection contract for a throwing getter. The wrapper is now async; unchanged reproduction passes on the corrected image." }
+    ],
+    "earlierPasses": "focused.log86 and initial emitted.log precede the added normalization reproduction/correction. They are separate source results, not additional final tests or qualification of the corrected wrapper.",
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-openrouter-oauth/docs.log" },
+    "limits": "No native OpenRouter CLI/Server/Settings listener/paste/login composition, new inference/account filtering, browser/installed/production/global/real-account or MOD-01.04b proof. Existing API-key A/C/I/T adapters remain unchanged; this SDK alone is not a usable host integration. No SDK acquisition, MOD-03 redelivery, assertion/deadline/flag weakening or historical incident repair/acceptance extension."
+  },
+  "sourceSha256": {
+    "packages/core/src/index.ts": "e417af1ba5fa86ea9ed2202c63d5165e6d1c4af9572b6872f134dfcf26011f2f",
+    "packages/core/src/providers/credentials.ts": "4fb3c293de79a2a266f633d73f86cfb71d50d5328e684cf55042c645567249b3",
+    "packages/core/src/providers/oauth-device.ts": "f1bf15a0ed1b77ef51236068acd993ea1a3a2070c5cfde0810482177957e0ad4",
+    "packages/core/src/providers/openrouter-oauth.ts": "f677bfeb4a01b2887c9737ef45722463c32532b32733a1d8d227889b3bc279d3",
+    "packages/core/src/providers/openrouter-oauth.test.ts": "eec8ed4c7023c0e24de2e338364eeba5563558668fcb456a001d07b23782bb47"
+  },
+  "remaining": ["Native OpenRouter CLI/Server/Settings login and callback ownership", "Other required issuers/federation/cloud chains, effective policies and MOD-01.04b preparation", "Final MOD-01 requirement-to-implementation-to-proof closure audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}
