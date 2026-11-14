@@ -7,6 +7,7 @@ import {
   EncryptedCredentialStore,
   ProviderCredentialService,
   providerCredentialEnvironmentKeys,
+  getKimiCodingOAuthConfig,
   resolveAgentProviderNetworkSettings,
   type AgentProviderNetworkSettings,
   type AgentSettings,
@@ -14,6 +15,7 @@ import {
   type ProviderOAuthRefreshConfig,
   type ProviderOAuthCredential,
   type RadiusOAuthCredentialSource,
+  type KimiCodingOAuthCredentialSource,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -35,12 +37,18 @@ export interface CliRadiusOAuth {
   credentialSource: RadiusOAuthCredentialSource;
 }
 
+export interface CliKimiOAuth {
+  credential: ProviderOAuthCredential;
+  credentialSource: KimiCodingOAuthCredentialSource;
+}
+
 export interface CliProviderRuntime {
   githubCopilot?: CliGitHubCopilotSubscription;
   openaiCodex?: CliSubscription;
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
+  kimiOAuth?: CliKimiOAuth;
   credentials: ProviderCredentialService;
   values: ReadonlyMap<string, string>;
   network: AgentProviderNetworkSettings;
@@ -77,17 +85,17 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex' | 'radius',
+  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding',
   lifetime?: AbortSignal,
   allowRefresh = true,
-  radiusGateway?: string,
+  issuerRealm?: string,
 ) {
   return async (signal?: AbortSignal, requestAllowRefresh = true) => {
     const requestSignal = lifetime && signal ? AbortSignal.any([lifetime, signal]) : lifetime ?? signal;
     requestSignal?.throwIfAborted();
     const resolved = await credentials.resolve(issuer, { env: {}, subscriptionProvider: issuer,
       allowCommands: false, allowRefresh: allowRefresh && requestAllowRefresh, signal: requestSignal,
-      ...(issuer === 'radius' ? { radiusGateway } : {}) });
+      ...(issuer === 'radius' ? { radiusGateway: issuerRealm } : issuer === 'kimi-coding' ? { kimiOAuthHost: issuerRealm } : {}) });
     requestSignal?.throwIfAborted();
     return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
   };
@@ -165,7 +173,14 @@ export async function createCliProviderRuntime(
   const codex = await codexSource();
   const radiusSource = cliSubscriptionCredentialSource(credentials, 'radius', lifetime, !offline, env.RADIUS_GATEWAY);
   const radius = present.has('radius') && !values.has('radius') && !commandEnv[commandVariable('radius')] ? await radiusSource() : undefined;
+  const kimiHost = env.KIMI_CODE_OAUTH_HOST || env.KIMI_OAUTH_HOST;
+  const kimiSource = cliSubscriptionCredentialSource(credentials, 'kimi-coding', lifetime, !offline, kimiHost);
+  const storedKimi = present.has('kimi-coding') && !values.has('kimi-coding') && !commandEnv[commandVariable('kimi-coding')] ? credentials.readStoredCredential('kimi-coding') : undefined;
+  const kimi = storedKimi?.type === 'oauth' && storedKimi.subscription?.provider === 'kimi-coding'
+    && (!kimiHost || getKimiCodingOAuthConfig(kimiHost).tokenUrl === getKimiCodingOAuthConfig(storedKimi.subscription.oauthHost).tokenUrl)
+    && (!offline || storedKimi.expiresAt! > Date.now() + 60_000) ? storedKimi : undefined;
   return {
+    ...(kimi ? { kimiOAuth: { credential: kimi, credentialSource: kimiSource } } : {}),
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),
     ...(radius ? { radiusOAuth: { credential: radius, credentialSource: radiusSource } } : {}),

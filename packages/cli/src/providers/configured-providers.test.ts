@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProviderOAuthCredential } from '@ai-harness/core';
-import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
+import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, KimiCodingOAuthProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
@@ -28,6 +28,17 @@ describe('configured CLI providers', () => {
       try { expect(createConfiguredProviders(env).get(name)).toBeInstanceOf(MockProvider); } finally { unregister(); }
     });
 
+  it('composes native Kimi issuer state while preserving key/ephemeral overrides and factory authority', async () => {
+    const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-configured-kimi', refreshToken: 'private-kimi-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'kimi-coding', oauthHost: 'https://issuer.kimi.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    const source = vi.fn(async () => credential), options = { kimiOAuth: { credential, credentialSource: source } }, env = { KIMI_CODING_BASE_URL: 'https://inference.kimi.test/coding' };
+    const native = createConfiguredProviders(env, options); expect(native.get('kimi-coding')).toBeInstanceOf(KimiCodingOAuthProvider);
+    const override = await resolveStartupProvider(native, { provider: 'kimi-coding', model: 'k3', apiKey: 'private-invocation', offline: true }, {});
+    expect(override.provider).not.toBeInstanceOf(KimiCodingOAuthProvider); expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'private-invocation', kimiAuthMode: 'api-key', baseUrl: 'https://inference.kimi.test/coding/v1/messages' });
+    expect(createConfiguredProviders({ ...env, KIMI_CODING_API_KEY: 'private-env-key' }, options).get('kimi-coding')).not.toBeInstanceOf(KimiCodingOAuthProvider); expect(source).not.toHaveBeenCalled();
+    const unregister = ProviderFactory.register('kimi-coding', config => new MockProvider({ ...config, model: 'operator-chat' }));
+    try { const provider = createConfiguredProviders(env, options).get('kimi-coding')!; expect(provider).toBeInstanceOf(MockProvider); expect((provider as unknown as { config: { apiKey?: string } }).config.apiKey).toBeUndefined(); expect(source).not.toHaveBeenCalled(); } finally { unregister(); }
+  });
   it('composes Radius with independent gateway/key hints and keeps explicit extension factories authoritative', async () => {
     expect(createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-other' }).has('radius')).toBe(false);
     const native = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-second', AI_HARNESS_RADIUS_API_KEY: 'synthetic-first',

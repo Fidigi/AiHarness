@@ -64,6 +64,7 @@ import { createConfiguredProviders, getConfiguredSpecializedProviders } from '..
 import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
+import { loginKimiCoding } from '../security/kimi-login.js';
 import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
 
@@ -716,7 +717,7 @@ const commands: CommandEntry[] = [
   {
     name: 'login',
     description: 'Authentifier un provider avec un flux OAuth explicite',
-    usage: '/login <provider> [--issuer github-copilot|openai-codex|radius] [--method device|browser]',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding] [--method device|browser]',
     handler: async (args, ctx) => {
       const providerName = args[0]?.trim().toLowerCase();
       let issuer: string | undefined, method: string | undefined, valid = true;
@@ -727,27 +728,29 @@ const commands: CommandEntry[] = [
         else if (key === '--method' && method === undefined && (value === 'device' || value === 'browser')) method = value;
         else valid = false;
       }
-      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'radius'
-        || method !== undefined && issuer !== 'openai-codex' && issuer !== 'radius') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|radius] [--method device|browser]');
+      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'radius' && issuer !== 'kimi-coding'
+        || method !== undefined && issuer !== 'openai-codex' && issuer !== 'radius') return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|radius|kimi-coding] [--method device|browser]');
       if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
       const credentialService = ctx.credentialService as (typeof ctx.credentialService
         & { hasPersistentStore?: () => boolean }) | undefined;
       if (!credentialService?.hasPersistentStore?.()) {
         return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
       }
-      if (issuer === 'radius') {
+      if (issuer === 'radius' || issuer === 'kimi-coding') {
         const controller = new AbortController();
         const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
         const timer = setTimeout(() => controller.abort(), 300_000);
         try {
-          const credential = await loginRadius(credentialService, providerName, method === 'browser' ? 'browser' : 'device', (uri, code) => {
-            ctx.terminal.writeOutput(code === undefined ? `Ouvrez ${uri} pour autoriser AiHarness.` : `Ouvrez ${uri} et saisissez le code ${code}.`);
-          }, signal, process.env.RADIUS_GATEWAY);
+          const instructions = (uri: string, code?: string) => ctx.terminal.writeOutput(code === undefined ? `Ouvrez ${uri} pour autoriser AiHarness.` : `Ouvrez ${uri} et saisissez le code ${code}.`);
+          const realm = issuer === 'radius' ? process.env.RADIUS_GATEWAY : process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST;
+          const credential = issuer === 'radius' ? await loginRadius(credentialService, providerName, method === 'browser' ? 'browser' : 'device', instructions, signal, realm)
+            : await loginKimiCoding(credentialService, providerName, instructions, signal, realm);
           signal.throwIfAborted();
-          if (providerName === 'radius' && !process.env.AI_HARNESS_RADIUS_API_KEY_COMMAND && !ctx.agentSettings?.().providerApiKeyCommands?.radius) {
+          if (providerName === issuer && !process.env[`AI_HARNESS_${issuer.toUpperCase().replace(/-/g, '_')}_API_KEY_COMMAND`] && !ctx.agentSettings?.().providerApiKeyCommands?.[issuer]) {
+            const oauth = { credential, credentialSource: cliSubscriptionCredentialSource(credentialService, issuer, ctx.providerLifetime, !ctx.offline, realm) };
             const provider = createConfiguredProviders(process.env, { network: ctx.providerNetwork, radiusCatalogueDirectory: ctx.radiusCatalogueDirectory,
-              radiusOAuth: { credential, credentialSource: cliSubscriptionCredentialSource(credentialService, 'radius', ctx.providerLifetime, !ctx.offline, process.env.RADIUS_GATEWAY) },
-            }).get('radius');
+              ...(issuer === 'radius' ? { radiusOAuth: oauth } : { kimiOAuth: oauth }),
+            }).get(issuer);
             if (provider) ctx.providers.set(providerName, provider);
           }
           return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);

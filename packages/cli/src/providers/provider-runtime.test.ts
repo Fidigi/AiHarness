@@ -14,6 +14,46 @@ afterEach(async () => {
 });
 
 describe('CLI provider runtime', () => {
+  it('composes native Kimi OAuth as a live issuer-owned resolver rather than an API-key snapshot', async () => {
+    const credentials = new ProviderCredentialService(), original = { accessToken: 'private-kimi-original', refreshToken: 'private-kimi-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'kimi-coding' as const, oauthHost: 'https://synthetic-runtime-kimi.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    await credentials.setOAuth('kimi-coding', original, false); const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false);
+    expect(runtime.values.has('kimi-coding')).toBe(false); expect(runtime.kimiOAuth).toBeDefined();
+    const provider = createConfiguredProviders({}, { credentials: runtime.values, kimiOAuth: runtime.kimiOAuth }).get('kimi-coding')!;
+    const calls: Array<{ url: string; auth: string | null }> = [], transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      calls.push({ url: String(url), auth: new Headers(init?.headers).get('authorization') });
+      return String(url).endsWith('/oauth/token') ? Response.json({ access_token: 'private-kimi-rotated', refresh_token: 'private-kimi-new-refresh', expires_in: 3600 }) : Response.json({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn', usage: { input_tokens: 5, output_tokens: 2 } });
+    });
+    await credentials.setOAuth('kimi-coding', { ...original, expiresAt: 1 }, false);
+    expect(await provider.chat([{ id: 'user', role: 'user', content: 'probe', timestamp: new Date(0) }])).toMatchObject({ content: 'ok', provider: 'kimi-coding', model: 'k3', api: 'anthropic-messages' });
+    expect(calls).toEqual([{ url: original.subscription.oauthHost + '/api/oauth/token', auth: null }, { url: 'https://api.kimi.com/coding/v1/messages', auth: 'Bearer private-kimi-rotated' }]);
+    await credentials.delete('kimi-coding'); await expect(provider.chat([])).rejects.toThrow('Kimi'); expect(transport).toHaveBeenCalledTimes(2); runtime.close();
+  });
+  it.each(['key', 'command-offline', 'expired-offline', 'issuer-mismatch'] as const)('does not substitute Kimi OAuth for %s policy', async mode => {
+    const credentials = new ProviderCredentialService(); await credentials.setOAuth('kimi-coding', { accessToken: 'private-kimi', refreshToken: 'private-kimi-refresh', expiresAt: mode === 'expired-offline' || mode === 'issuer-mismatch' ? 1 : Date.now() + 120000,
+      subscription: { provider: 'kimi-coding', oauthHost: 'https://synthetic-runtime-kimi.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const runtime = await createCliProviderRuntime('/unused', mode === 'command-offline' ? { providerApiKeyCommands: { 'kimi-coding': 'must-not-execute' } } : {},
+      mode === 'key' ? { KIMI_CODING_API_KEY: 'private-key' } : mode === 'issuer-mismatch' ? { KIMI_CODE_OAUTH_HOST: 'https://other.kimi.test' } : {}, credentials, false, [], undefined, mode === 'command-offline' || mode === 'expired-offline');
+    expect(runtime.kimiOAuth).toBeUndefined(); expect(runtime.values.get('kimi-coding')).toBe(mode === 'key' ? 'private-key' : undefined); expect(fetch).not.toHaveBeenCalled(); runtime.close();
+  });
+  it('bootstraps expired native Kimi administratively without refresh before an explicit invocation-key override', async () => {
+    const credentials = new ProviderCredentialService(); await credentials.setOAuth('kimi-coding', { accessToken: 'private-expired-kimi', refreshToken: 'private-kimi-refresh', expiresAt: 1,
+      subscription: { provider: 'kimi-coding', oauthHost: 'https://synthetic-runtime-kimi.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected issuer request'));
+    const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false); expect(runtime.kimiOAuth).toBeDefined(); expect(fetch).not.toHaveBeenCalled();
+    const native = createConfiguredProviders({}, { credentials: runtime.values, kimiOAuth: runtime.kimiOAuth });
+    const selected = await resolveStartupProvider(native, { provider: 'kimi-coding', model: 'k3', apiKey: 'private-invocation', offline: true }, {});
+    expect((selected.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'private-invocation', kimiAuthMode: 'api-key' }); expect(fetch).not.toHaveBeenCalled(); runtime.close();
+  });
+  it('clips native Kimi refresh to the CLI runtime and per-operation offline lifetime', async () => {
+    const credentials = new ProviderCredentialService(), original = { accessToken: 'private-kimi', refreshToken: 'private-kimi-refresh', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'kimi-coding' as const, oauthHost: 'https://synthetic-runtime-kimi.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
+    await credentials.setOAuth('kimi-coding', original, false); const runtime = await createCliProviderRuntime('/unused', {}, {}, credentials, false); await credentials.setOAuth('kimi-coding', { ...original, expiresAt: 1 }, false);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network')); expect(await runtime.kimiOAuth!.credentialSource(undefined, false)).toBeUndefined(); expect(fetch).not.toHaveBeenCalled();
+    let entered!: () => void; const ready = new Promise<void>(resolve => { entered = resolve; }); fetch.mockImplementationOnce(() => { entered(); return new Promise(() => undefined); });
+    const pending = runtime.kimiOAuth!.credentialSource().catch(error => error); await ready; runtime.close(); expect(await pending).toBeInstanceOf(Error); await expect(runtime.kimiOAuth!.credentialSource()).rejects.toMatchObject({ name: 'AbortError' });
+  });
   it('composes native Radius OAuth with a live gateway-owned resolver rather than an API-key snapshot', async () => {
     const credentials = new ProviderCredentialService(), gateway = 'https://synthetic-runtime-radius.test';
     const original = { accessToken: 'private-radius-original', refreshToken: 'private-radius-refresh', expiresAt: Date.now() + 120000,

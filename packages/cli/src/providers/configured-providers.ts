@@ -16,6 +16,7 @@ import {
   MiniMaxProvider,
   MiniMaxCnProvider,
   KimiCodingProvider,
+  KimiCodingOAuthProvider,
   MoonshotProvider,
   MoonshotCnProvider,
   AntLingProvider,
@@ -51,7 +52,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -154,6 +155,7 @@ export interface CreateConfiguredProvidersOptions {
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
+  kimiOAuth?: CliKimiOAuth;
   /** Process-local resolved secrets. They are never copied into descriptors or sessions. */
   credentials?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
   network?: AgentProviderNetworkSettings;
@@ -241,6 +243,13 @@ export function createConfiguredProviders(
     : undefined);
   for (const name of Object.keys(NATIVE_PROVIDERS)) {
     const key = configuredCredential(name, providerCredentialEnvironmentKeys(name).map(key => env[key]).find(Boolean), options.credentials);
+    if (name === 'kimi-coding' && !key && options.kimiOAuth) {
+      const config = { ...network, ...nativeEnvironmentHints(name, env), type: name,
+        oauthHost: env.KIMI_CODE_OAUTH_HOST || env.KIMI_OAUTH_HOST || (options.kimiOAuth.credential.subscription?.provider === 'kimi-coding' ? options.kimiOAuth.credential.subscription.oauthHost : undefined) };
+      try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new KimiCodingOAuthProvider(config, options.kimiOAuth.credentialSource)); }
+      catch { /* Invalid or foreign issuer state does not disable other providers. */ }
+      continue;
+    }
     if (name === 'radius' && !key && options.radiusOAuth) {
       const config = { ...network, ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory), type: name,
         gateway: env.RADIUS_GATEWAY ?? (options.radiusOAuth.credential.subscription?.provider === 'radius' ? options.radiusOAuth.credential.subscription.gateway : undefined) };

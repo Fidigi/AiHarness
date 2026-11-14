@@ -333,6 +333,7 @@ async function main(): Promise<void> {
         kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
         radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
         radiusOAuth: providerRuntime.radiusOAuth,
+        kimiOAuth: providerRuntime.kimiOAuth,
         network: providerRuntime.network,
       });
       const search = typeof cliArguments.listModels === 'string' ? cliArguments.listModels : undefined;
@@ -846,6 +847,7 @@ async function main(): Promise<void> {
       kimiCodingAuthMode: refreshedRuntime.kimiCodingAuthMode,
       radiusCatalogueDirectory: refreshedRuntime.radiusCatalogueDirectory,
       radiusOAuth: refreshedRuntime.radiusOAuth,
+      kimiOAuth: refreshedRuntime.kimiOAuth,
       network: refreshedRuntime.network,
     });
     const commandContext = commandHandler.getContext();
@@ -1001,6 +1003,7 @@ async function main(): Promise<void> {
     kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
     radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
     radiusOAuth: providerRuntime.radiusOAuth,
+    kimiOAuth: providerRuntime.kimiOAuth,
     network: providerRuntime.network,
   });
 

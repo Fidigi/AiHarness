@@ -493,6 +493,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
       radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       radiusOAuth: providerRuntime.radiusOAuth,
+      kimiOAuth: providerRuntime.kimiOAuth,
       network: providerRuntime.network,
       extensionProviders: extensionRegistry.getProviderDefinitions(),
     });

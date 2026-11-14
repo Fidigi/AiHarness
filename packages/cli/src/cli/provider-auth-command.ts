@@ -1,13 +1,14 @@
 import path from 'node:path';
 import {
   CredentialRedactor, EncryptedCredentialStore, ProviderCredentialService,
-  getGitHubCopilotOAuthConfig, getKimiCodingOAuthConfig, resolvePreTrustAgentDirectory,
+  getGitHubCopilotOAuthConfig, resolvePreTrustAgentDirectory,
 } from '@ai-harness/core';
 import { CLI_CREDENTIAL_PROVIDERS } from '../providers/provider-runtime.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
 import { terminalText } from '../tui/terminal-text.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
+import { loginKimiCoding } from '../security/kimi-login.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
@@ -125,11 +126,14 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       process.stdout.write('Stored provider credentials removed (environment/command credentials are unchanged).\n');
       return 0;
     }
-    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius') {
+    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius' || parsed.issuer === 'kimi-coding') {
       process.on('SIGINT', cancel);
       process.on('SIGTERM', cancel);
       timer = setTimeout(expire, parsed.timeout * 1000);
-      if (parsed.issuer === 'radius') await loginRadius(service, parsed.provider!, parsed.method ?? 'device', (uri, code) => {
+      if (parsed.issuer === 'kimi-coding') await loginKimiCoding(service, parsed.provider!, (uri, code) => {
+        process.stderr.write(`Authorize at ${uri}\nUser code: ${code}\n`);
+      }, controller.signal, process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST);
+      else if (parsed.issuer === 'radius') await loginRadius(service, parsed.provider!, parsed.method ?? 'device', (uri, code) => {
         process.stderr.write(`Authorize at ${uri}\n${code === undefined ? '' : `User code: ${code}\n`}`);
       }, controller.signal, process.env.RADIUS_GATEWAY);
       else if (parsed.method === 'browser') await loginOpenAICodexBrowser(service, parsed.provider!, uri => {
@@ -142,11 +146,9 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       process.stdout.write('Provider credentials encrypted and saved.\n');
       return 0;
     }
-    const config = parsed.issuer === 'kimi-coding'
-      ? getKimiCodingOAuthConfig(process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST)
-      : parsed.issuer === 'github-copilot'
-        ? getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN)
-        : oauthConfigFromEnv(parsed.provider!);
+    const config = parsed.issuer === 'github-copilot'
+      ? getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN)
+      : oauthConfigFromEnv(parsed.provider!);
     if (!config) { process.stderr.write('Auth unavailable: operator device flow is not configured.\n'); return 1; }
     const client = new OAuthDeviceClient(config, redactor);
     process.on('SIGINT', cancel);

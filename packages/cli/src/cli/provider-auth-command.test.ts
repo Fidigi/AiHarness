@@ -107,7 +107,7 @@ beforeEach(async () => {
         }
         res.end(JSON.stringify(copilotBody ?? (req.url === '/api/oauth/device_authorization' ? {
           device_code: 'private-device-code-743', user_code: deviceUserCode,
-          verification_uri: `${endpoint}/verify?private=do-not-print`, verification_uri_complete: `${endpoint}/verify?device=private-device-code-743`,
+          verification_uri: `${endpoint}/verify?private=do-not-print`, verification_uri_complete: `${endpoint}/verify?code=${encodeURIComponent(deviceUserCode)}`,
           expires_in: 30, interval: 0.01,
         } : req.url === '/coding/v1/messages' ? {
           id: 'issuer-message', type: 'message', role: 'assistant', model: 'kimi-for-coding',
@@ -364,14 +364,15 @@ globalThis.fetch = (input, init) => {
     const beforeRefresh = await readFile(file, 'utf8');
     for (const value of [token, refresh]) expect(beforeRefresh).not.toContain(value);
     const core = new URL('../../../core/dist/index.js', import.meta.url).href;
-    const code = `import { EncryptedCredentialStore, ProviderCredentialService, getKimiCodingOAuthConfig, KimiCodingProvider } from ${JSON.stringify(core)};
+    const code = `import { EncryptedCredentialStore, ProviderCredentialService, KimiCodingOAuthProvider } from ${JSON.stringify(core)};
 const service = new ProviderCredentialService({ store: new EncryptedCredentialStore(process.env.ISSUER_STORE, process.env.ISSUER_MASTER) });
 await service.load();
-const initial = await service.resolve('team-code', { env: {}, now: 0, allowRefresh: false });
-if (initial?.credential.type !== 'oauth' || !Number.isSafeInteger(initial.credential.expiresAt)) throw new Error('Kimi stored expiry fixture refused.');
-const resolved = await service.resolve('team-code', { env: {}, now: initial.credential.expiresAt + 1, oauth: getKimiCodingOAuthConfig(process.env.ISSUER_HOST) });
-if (resolved?.credential.type !== 'oauth' || resolved.credential.accessToken !== 'rotated-kimi-access' || resolved.credential.refreshToken !== 'rotated-kimi-refresh') throw new Error('Kimi refresh fixture refused.');
-const provider = new KimiCodingProvider({ type: 'operator', apiKey: resolved.credential.accessToken, kimiAuthMode: 'oauth', model: 'kimi-for-coding', baseUrl: process.env.ISSUER_HOST + '/coding' });
+if (await service.resolve('team-code', { env: {} }) !== undefined) throw new Error('Native Kimi leaked to ordinary consumer.');
+const initial = await service.resolve('team-code', { env: {}, subscriptionProvider: 'kimi-coding', now: 0, allowRefresh: false });
+if (initial?.credential.type !== 'oauth' || !Number.isSafeInteger(initial.credential.expiresAt) || initial.credential.subscription?.provider !== 'kimi-coding' || initial.credential.subscription.oauthHost !== process.env.ISSUER_HOST) throw new Error('Kimi stored expiry/issuer fixture refused.');
+const resolved = await service.resolve('team-code', { env: {}, subscriptionProvider: 'kimi-coding', now: initial.credential.expiresAt + 1 });
+if (resolved?.credential.type !== 'oauth' || resolved.credential.accessToken !== 'rotated-kimi-access' || resolved.credential.refreshToken !== 'rotated-kimi-refresh' || resolved.credential.subscription.grantId !== initial.credential.subscription.grantId) throw new Error('Kimi refresh fixture refused.');
+const provider = new KimiCodingOAuthProvider({ type: 'operator', oauthHost: process.env.ISSUER_HOST, model: 'kimi-for-coding', baseUrl: process.env.ISSUER_HOST + '/coding' }, async signal => (await service.resolve('team-code', { env: {}, subscriptionProvider: 'kimi-coding', signal }))?.credential);
 const reply = await provider.chat([{ id: 'issuer-user', role: 'user', content: 'Fixture only.', timestamp: new Date() }]);
 if (reply.content !== 'Ready after refresh.') throw new Error('Kimi dispatch fixture refused.');
 process.stdout.write('Kimi issuer SDK fixture passed.\\n');`;
@@ -391,7 +392,7 @@ process.stdout.write('Kimi issuer SDK fixture passed.\\n');`;
     expect(afterRefresh).not.toBe(beforeRefresh);
     for (const value of [token, refresh, 'rotated-kimi-access', 'rotated-kimi-refresh']) expect(afterRefresh + result.stdout + result.stderr + sdk.stdout + sdk.stderr).not.toContain(value);
     const reopened = new ProviderCredentialService({ store: new EncryptedCredentialStore(file, master) }); await reopened.load();
-    expect((await reopened.resolve('team-code', { env: {}, now: 0, allowRefresh: false }))?.credential).toMatchObject({ type: 'oauth', accessToken: 'rotated-kimi-access', refreshToken: 'rotated-kimi-refresh' });
+    expect((await reopened.resolve('team-code', { env: {}, subscriptionProvider: 'kimi-coding', now: 0, allowRefresh: false }))?.credential).toMatchObject({ type: 'oauth', accessToken: 'rotated-kimi-access', refreshToken: 'rotated-kimi-refresh' });
     expect(reopened.list().map(item => item.provider)).toEqual(['team-code']);
     expect(await invoke(['auth', 'logout', 'team-code'])).toMatchObject({ code: 0, signal: null, stderr: '' });
     await reopened.load(); expect(reopened.list()).toEqual([]);
