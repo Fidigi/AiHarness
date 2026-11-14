@@ -75,6 +75,7 @@ import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCoding
 import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
 import { vertexApiKeyBase } from './vertex-config.js';
+import { VertexAdc, hasVertexAuthHeaders, type VertexAdcConfig } from './vertex-adc.js';
 import { validXaiOAuthIdentity, type XaiOAuthCredential, type XaiOAuthCredentialSource } from './xai-oauth.js';
 import { xaiOAuthHistory, sealXaiOAuthCall, sealXaiOAuthResponse, withoutXaiOAuthReplay } from './xai-oauth-replay.js';
 import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
@@ -4957,17 +4958,37 @@ export class GeminiProvider extends AiProvider {
   }
 }
 
-/** Google Vertex AI with existing Bearer transport or explicit Cloud API-key mode. */
+export interface VertexProviderConfig extends ProviderConfig { vertexAdc?: VertexAdcConfig }
+
+/** Google Vertex AI with explicit key/Bearer or original-constructor file-backed ADC. */
 export class VertexGeminiProvider extends GeminiProvider {
+  private readonly adc?: VertexAdc;
   override getModelApi(): string { return 'google-vertex'; }
 
-  constructor(config: ProviderConfig) {
+  constructor(config: VertexProviderConfig) {
     if (config.vertexAuthMode !== undefined && !['api-key', 'bearer'].includes(config.vertexAuthMode)) throw new Error('Invalid Vertex authentication mode.');
     const project = String(config.project || process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || '');
-    const location = String(config.location || process.env.GOOGLE_CLOUD_LOCATION || 'us-central1');
-    const baseUrl = config.vertexAuthMode === 'api-key' ? vertexApiKeyBase(config.baseUrl) : config.baseUrl
-      || `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google`;
+    const admitted = new.target === VertexGeminiProvider && config.apiKey === undefined && config.vertexAuthMode !== 'api-key' && config.vertexAdc && !hasVertexAuthHeaders(config);
+    const location = String(config.location || process.env.GOOGLE_CLOUD_LOCATION || (admitted ? '' : 'us-central1'));
+    if (admitted && (!/^[A-Za-z0-9.:_-]{1,128}$/u.test(project) || !/^[a-z][a-z0-9-]{0,62}$/u.test(location))) throw new Error('Vertex ADC requires project and location.');
+    const host = admitted && location === 'global' ? 'aiplatform.googleapis.com' : admitted && ['us', 'eu'].includes(location) ? `aiplatform.${location}.rep.googleapis.com` : `${location}-aiplatform.googleapis.com`;
+    const baseUrl = config.vertexAuthMode === 'api-key' || admitted && config.baseUrl ? vertexApiKeyBase(config.baseUrl) : config.baseUrl
+      || `https://${host}/v1/projects/${project}/locations/${location}/publishers/google`;
     super({ ...config, type: ProviderType.VERTEX, baseUrl });
+    if (admitted) {
+      this.adc = new VertexAdc(config.vertexAdc!);
+      this.config = { ...this.config, customHeaders: Object.freeze({ ...configuredHeaders(this.config) }) };
+      nativeSubscriptionStreamConsumers.add(this);
+    }
+  }
+
+  override validateConfig(): boolean { return !!this.adc || super.validateConfig(); }
+  protected override request(url: string | URL, init: RequestInit = {}, noRetryStatuses?: readonly number[]): Promise<Response> {
+    if (!this.adc) return super.request(url, init, noRetryStatuses);
+    const network = providerNetworkSettings(this.config);
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(init.signal ? [init.signal] : []),
+      ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    return this.adc.request(url, init, signal, (target, request) => super.request(target, request, noRetryStatuses));
   }
 
   override canDiscoverModels(): boolean { return false; }
@@ -4980,6 +5001,7 @@ export class VertexGeminiProvider extends GeminiProvider {
   }
 
   protected requestHeaders(model?: string): Record<string, string> {
+    if (this.adc) return { ...configuredHeaders(this.config), 'Content-Type': 'application/json' };
     if (this.config.vertexAuthMode === 'api-key') {
       const headers = new Headers(configuredHeaders(this.config));
       headers.delete('authorization'); headers.set('Content-Type', 'application/json'); headers.set('x-goog-api-key', String(this.config.apiKey));

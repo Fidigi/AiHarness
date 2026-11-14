@@ -20,7 +20,8 @@ export { beginMetaDeviceLogin, refreshMetaApiKey, MetaOAuthSetupRequiredError } 
 export type { MetaOAuthIdentity, MetaOAuthCredential, MetaOAuthCredentialSource, MetaOAuthOptions, MetaDeviceLogin } from './providers/meta-oauth.js';
 export { beginAnthropicBrowserLogin, beginAnthropicCopyCodeLogin, refreshAnthropicToken } from './providers/anthropic-oauth.js';
 export type { AnthropicOAuthIdentity, AnthropicOAuthCredential, AnthropicOAuthCredentialSource, AnthropicOAuthOptions, AnthropicBrowserOAuthOptions, AnthropicLogin } from './providers/anthropic-oauth.js';
-export type { AnthropicProviderConfig } from './providers/index.js';
+export type { AnthropicProviderConfig, VertexProviderConfig } from './providers/index.js';
+export type { VertexAdcConfig } from './providers/vertex-adc.js';
 export type { AnthropicFederationConfig } from './providers/anthropic-federation.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export type { RadiusChatOptions } from './providers/radius.js';
