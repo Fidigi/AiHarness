@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { refreshMetaApiKey, validMetaOAuthIdentity, type MetaOAuthIdentity } from './meta-oauth.js';
 import { refreshAnthropicToken, validAnthropicOAuthIdentity, type AnthropicOAuthIdentity } from './anthropic-oauth.js';
 import path from 'node:path';
 import { KIMI_CODING_OAUTH_CLIENT_ID, getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthIdentity } from './kimi-coding-oauth.js';
@@ -56,7 +57,7 @@ export interface ProviderOAuthCredential {
   } | {
     provider: 'openai-codex';
     accountId: string;
-  } | RadiusOAuthIdentity | KimiCodingOAuthIdentity | AnthropicOAuthIdentity;
+  } | RadiusOAuthIdentity | KimiCodingOAuthIdentity | AnthropicOAuthIdentity | MetaOAuthIdentity;
 }
 
 export type ProviderCredential = ProviderApiKeyCredential | ProviderOAuthCredential;
@@ -86,7 +87,7 @@ export interface ProviderOAuthRefreshConfig {
 export interface ResolveProviderCredentialOptions {
   env?: NodeJS.ProcessEnv;
   /** Subscription consumers must select their issuer; ordinary API-key consumers cannot resolve subscription tokens. */
-  subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic';
+  subscriptionProvider?: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic' | 'meta';
   /** An explicit Radius gateway must match the stored issuer before any refresh I/O. */
   radiusGateway?: string;
   /** An explicit Kimi issuer must match the persisted realm before refresh I/O. */
@@ -197,6 +198,11 @@ function validateCredential(value: unknown): ProviderCredential {
         if (accountId !== subscription.accountId) invalid();
         credential.subscription = { provider: 'openai-codex', accountId };
       } catch { invalid(); }
+    } else if (subscription?.provider === 'meta') {
+      if (!validMetaOAuthIdentity(subscription) || !credential.refreshToken || /\s/u.test(credential.refreshToken)
+        || /\s/u.test(credential.accessToken) || credential.expiresAt === undefined) invalid();
+      try { new Headers({ authorization: `Bearer ${credential.accessToken}` }); new Headers({ authorization: `Bearer ${credential.refreshToken}` }); } catch { invalid(); }
+      credential.subscription = { provider: 'meta', grantId: subscription.grantId };
     } else if (subscription?.provider === 'anthropic') {
       if (!validAnthropicOAuthIdentity(subscription) || !credential.refreshToken || /\s/u.test(credential.refreshToken)
         || /\s/u.test(credential.accessToken) || credential.expiresAt === undefined) invalid();
@@ -1079,6 +1085,15 @@ export class ProviderCredentialService {
         const refreshed = await refreshOpenAICodexToken(current.refreshToken!, current.subscription.accountId, {
           signal, fetcher: options.fetcher, redactor: this.redactor,
         });
+        return { version: 1, type: 'oauth', ...refreshed };
+      } catch {
+        if (options.signal?.aborted) throw options.signal.reason;
+        throw new ProviderCredentialError('refresh-failed', 'The provider credential could not be refreshed.');
+      }
+    }
+    if (current.subscription?.provider === 'meta') {
+      try {
+        const refreshed = await refreshMetaApiKey(current.refreshToken!, current.subscription, { signal, fetcher: options.fetcher, redactor: this.redactor });
         return { version: 1, type: 'oauth', ...refreshed };
       } catch {
         if (options.signal?.aborted) throw options.signal.reason;

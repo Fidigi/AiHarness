@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { getMetaOAuthConfig, refreshMetaApiKey } from './meta-oauth.js';
 import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
 import { getKimiCodingOAuthConfig } from './kimi-coding-oauth.js';
 import type { CredentialRedactor, ProviderOAuthCredential, ProviderOAuthRefreshConfig } from './credentials.js';
@@ -7,7 +9,7 @@ export interface OAuthDeviceConfig {
   tokenUrl: string;
   clientId: string;
   scope?: string;
-  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'] | 'github-copilot';
+  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'] | 'github-copilot' | 'meta';
   enterpriseDomain?: string;
 }
 
@@ -130,8 +132,12 @@ export class OAuthDeviceClient {
   constructor(private readonly config: OAuthDeviceConfig, private readonly redactor?: CredentialRedactor, private readonly fetcher?: typeof fetch) {
     const deviceUrl = safeEndpoint(config.deviceAuthorizationUrl);
     const tokenUrl = safeEndpoint(config.tokenUrl);
-    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding' && config.responseProfile !== 'github-copilot') {
+    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding' && config.responseProfile !== 'github-copilot' && config.responseProfile !== 'meta') {
       throw new Error('La configuration OAuth est invalide.');
+    }
+    if (config.responseProfile === 'meta') {
+      const expected = getMetaOAuthConfig();
+      if (deviceUrl !== expected.deviceAuthorizationUrl || tokenUrl !== expected.tokenUrl || config.clientId !== expected.clientId || config.scope !== undefined) throw new Error('Invalid Meta device configuration.');
     }
     if (config.responseProfile === 'github-copilot') {
       const expected = getGitHubCopilotOAuthConfig(config.enterpriseDomain);
@@ -159,7 +165,7 @@ export class OAuthDeviceClient {
   async requestCode(signal?: AbortSignal): Promise<OAuthDevicePrompt> {
     if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
     let response: Response;
-    const deadline = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
+    const deadline = AbortSignal.timeout(this.config.responseProfile === 'meta' ? 30_000 : OAUTH_REQUEST_TIMEOUT_MS);
     const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     try {
       response = await abortableFetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
@@ -178,10 +184,12 @@ export class OAuthDeviceClient {
       throw new Error(`OAuth device authorization failed (${response.status})`);
     }
     const data = await boundedJson(response, requestSignal);
-    if (this.config.responseProfile === 'kimi-coding') this.redactor?.add(typeof data.device_code === 'string' ? data.device_code : undefined);
-    const verificationUri = data.verification_uri ?? data.verification_url;
+    if (this.config.responseProfile === 'kimi-coding' || this.config.responseProfile === 'meta') this.redactor?.add(typeof data.device_code === 'string' ? data.device_code : undefined);
+    const verificationUri = this.config.responseProfile === 'meta' ? data.verification_uri_complete ?? data.verification_uri : data.verification_uri ?? data.verification_url;
     const expiresIn = data.expires_in === undefined ? 900 : data.expires_in;
-    const interval = data.interval === undefined ? 5 : data.interval;
+    const interval = this.config.responseProfile === 'meta'
+      ? typeof data.interval === 'number' && Number.isFinite(data.interval) && data.interval > 0 ? Math.max(1, data.interval) : 5
+      : data.interval === undefined ? 5 : data.interval;
     if (!validOAuthText(data.device_code, 4_000) || !validOAuthText(data.user_code, 500)
       || !validOAuthText(verificationUri, 4_096)
       || (this.config.responseProfile === 'kimi-coding' && (!validOAuthText(data.verification_uri, 4_096)
@@ -189,7 +197,7 @@ export class OAuthDeviceClient {
       || (data.verification_uri_complete !== undefined
         && !validOAuthText(data.verification_uri_complete, 4_096))
       || typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn < 1 || expiresIn > 3_600
-      || typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0.001 || interval > 30) {
+      || typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0.001 || interval > (this.config.responseProfile === 'meta' ? 900 : 30)) {
       throw new Error('La réponse OAuth est invalide.');
     }
     return {
@@ -208,7 +216,7 @@ export class OAuthDeviceClient {
       || typeof prompt.expiresIn !== 'number' || !Number.isFinite(prompt.expiresIn)
       || prompt.expiresIn < 1 || prompt.expiresIn > 3_600
       || typeof prompt.interval !== 'number' || !Number.isFinite(prompt.interval)
-      || prompt.interval < 0.001 || prompt.interval > 30) {
+      || prompt.interval < 0.001 || prompt.interval > (this.config.responseProfile === 'meta' ? 900 : 30)) {
       throw new Error('La réponse OAuth est invalide.');
     }
     const deadline = Date.now() + prompt.expiresIn * 1000;
@@ -216,11 +224,12 @@ export class OAuthDeviceClient {
     let attempts = 0;
     while (Date.now() < deadline && attempts++ < MAX_POLL_ATTEMPTS) {
       if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
-      await oauthDelay(interval, signal);
+      await oauthDelay(this.config.responseProfile === 'meta' ? Math.min(interval, Math.max(0, deadline - Date.now())) : interval, signal);
+      if (this.config.responseProfile === 'meta' && Date.now() >= deadline) throw new Error('Le code OAuth a expiré.');
       let response: Response;
-      const requestSignal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS)])
-        : AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
+      const requestSignal = this.config.responseProfile === 'meta'
+        ? AbortSignal.any([AbortSignal.timeout(30_000), AbortSignal.timeout(Math.max(1, deadline - Date.now())), ...(signal ? [signal] : [])])
+        : signal ? AbortSignal.any([signal, AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
       try {
         response = await abortableFetch(safeEndpoint(this.config.tokenUrl), {
           method: 'POST',
@@ -239,7 +248,7 @@ export class OAuthDeviceClient {
         throw new Error('OAuth token exchange failed.');
       }
       const data = await boundedJson(response, requestSignal);
-      if (this.config.responseProfile === 'kimi-coding') {
+      if (this.config.responseProfile === 'kimi-coding' || this.config.responseProfile === 'meta') {
         this.redactor?.add(typeof data.access_token === 'string' ? data.access_token : undefined);
         this.redactor?.add(typeof data.refresh_token === 'string' ? data.refresh_token : undefined);
       }
@@ -253,6 +262,10 @@ export class OAuthDeviceClient {
             || !Number.isFinite(data.expires_in) || data.expires_in < 0
             || data.expires_in > 365 * 24 * 60 * 60))) {
           throw new Error('La réponse OAuth est invalide.');
+        }
+        if (this.config.responseProfile === 'meta') {
+          if (data.token_type !== undefined && (typeof data.token_type !== 'string' || data.token_type.toLowerCase() !== 'bearer')) throw new Error('Invalid Meta identity token type.');
+          return refreshMetaApiKey(data.access_token, { provider: 'meta', grantId: randomUUID() }, { signal, redactor: this.redactor, fetcher: this.fetcher });
         }
         if (this.config.responseProfile === 'github-copilot') {
           const exchanged = await exchangeGitHubCopilotToken(data.access_token, {
@@ -271,7 +284,8 @@ export class OAuthDeviceClient {
         };
       }
       if (data.error === 'slow_down') {
-        interval = Math.min(60_000, interval + 5000);
+        interval = this.config.responseProfile === 'meta' && typeof data.interval === 'number' && Number.isFinite(data.interval) && data.interval > 0 && data.interval <= 900
+          ? Math.max(1000, Math.floor(data.interval * 1000)) : Math.min(this.config.responseProfile === 'meta' ? 900_000 : 60_000, interval + 5000);
         continue;
       }
       if (data.error === 'authorization_pending') continue;
