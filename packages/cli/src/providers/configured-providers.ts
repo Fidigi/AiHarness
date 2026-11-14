@@ -54,7 +54,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth, CliAnthropicOAuth } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth, CliAnthropicOAuth, CliProviderRuntime } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -158,6 +158,7 @@ export interface CreateConfiguredProvidersOptions {
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   anthropicAuthMode?: 'api-key' | 'oauth';
   anthropicOAuth?: CliAnthropicOAuth;
+  anthropicFederation?: CliProviderRuntime['anthropicFederation'];
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -241,7 +242,7 @@ export function createConfiguredProviders(
     // Anthropic is an existing reserved Core built-in, not a newly reserved extension name.
     try { providers.set('anthropic', new AnthropicOAuthProvider(anthropicConfig, options.anthropicOAuth.credentialSource)); }
     catch { /* A retired native source must not disable unrelated providers. */ }
-  }
+  } else if (options.anthropicFederation) attempt(providers, 'anthropic', { ...anthropicConfig, anthropicFederation: options.anthropicFederation });
   attempt(providers, 'google', googleKey
     ? { ...network, type: 'google', apiKey: googleKey, model: env.GEMINI_MODEL || 'gemini-2.0-flash' }
     : undefined);

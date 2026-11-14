@@ -17,6 +17,7 @@ import {
   type RadiusOAuthCredentialSource,
   type KimiCodingOAuthCredentialSource,
   type AnthropicOAuthCredentialSource,
+  type AnthropicFederationConfig,
 } from '@ai-harness/core';
 
 export const CLI_CREDENTIAL_PROVIDERS = [
@@ -54,6 +55,7 @@ export interface CliProviderRuntime {
   kimiCodingAuthMode?: 'api-key' | 'oauth';
   anthropicAuthMode?: 'api-key' | 'oauth';
   anthropicOAuth?: CliAnthropicOAuth;
+  anthropicFederation?: AnthropicFederationConfig;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -198,6 +200,11 @@ export async function createCliProviderRuntime(
   return {
     ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),
     ...(anthropicAuthMode ? { anthropicAuthMode } : {}),
+    ...(!offline && !values.has('anthropic') && !present.has('anthropic') && !commandEnv[commandVariable('anthropic')]
+      && env.ANTHROPIC_FEDERATION_RULE_ID && env.ANTHROPIC_ORGANIZATION_ID && env.ANTHROPIC_IDENTITY_TOKEN_FILE
+      ? { anthropicFederation: { federationRuleId: env.ANTHROPIC_FEDERATION_RULE_ID, organizationId: env.ANTHROPIC_ORGANIZATION_ID,
+        identityTokenFile: env.ANTHROPIC_IDENTITY_TOKEN_FILE, ...(env.ANTHROPIC_SERVICE_ACCOUNT_ID ? { serviceAccountId: env.ANTHROPIC_SERVICE_ACCOUNT_ID } : {}),
+        ...(env.ANTHROPIC_WORKSPACE_ID ? { workspaceId: env.ANTHROPIC_WORKSPACE_ID } : {}), signal: lifetime, redactor } } : {}),
     ...(kimi ? { kimiOAuth: { credential: kimi, credentialSource: kimiSource } } : {}),
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),

@@ -493,6 +493,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       kimiCodingAuthMode: providerRuntime.kimiCodingAuthMode,
       anthropicAuthMode: providerRuntime.anthropicAuthMode,
       anthropicOAuth: providerRuntime.anthropicOAuth,
+      anthropicFederation: providerRuntime.anthropicFederation,
       radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       radiusOAuth: providerRuntime.radiusOAuth,
       kimiOAuth: providerRuntime.kimiOAuth,

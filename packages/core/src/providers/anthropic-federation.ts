@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { readOAuthJson } from './oauth-device.js';
+import type { CredentialRedactor } from './credentials.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
 
 /** Explicit workload configuration only; never discovers profiles or reads environment variables. */
@@ -10,6 +11,9 @@ export interface AnthropicFederationConfig {
   identityTokenFile: string;
   serviceAccountId?: string;
   workspaceId?: string;
+  /** Process-local host lifetime and secret enrollment; never persisted as workload configuration. */
+  signal?: AbortSignal;
+  redactor?: Pick<CredentialRedactor, 'add'>;
 }
 
 export function hasAnthropicAuthHeaders(config: object): boolean {
@@ -60,6 +64,8 @@ async function observed<T>(work: () => Promise<T>, signal: AbortSignal): Promise
 export class AnthropicFederation {
   private readonly config: Readonly<AnthropicFederationConfig>;
   private readonly endpoint: string;
+  private readonly lifetime?: AbortSignal;
+  private readonly redactor?: Pick<CredentialRedactor, 'add'>;
   private cached?: { token: string; expiresAt: number };
   private sequence = 0;
   private published = 0;
@@ -73,6 +79,7 @@ export class AnthropicFederation {
     let base: URL; try { base = new URL(baseUrl); } catch { throw failure(); }
     if (base.username || base.password || base.search || base.hash || !(base.protocol === 'https:'
       || base.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname))) throw failure();
+    this.lifetime = config.signal; this.redactor = config.redactor;
     this.endpoint = base.toString().replace(/\/+$/u, '') + '/v1/oauth/token';
     this.config = Object.freeze({ federationRuleId: config.federationRuleId, organizationId: config.organizationId,
       identityTokenFile: config.identityTokenFile, ...(config.serviceAccountId ? { serviceAccountId: config.serviceAccountId } : {}),
@@ -87,7 +94,7 @@ export class AnthropicFederation {
     disableProviderNetworkRetries(signal);
     try {
       return await observed(async () => {
-        const assertion = await identityToken(this.config.identityTokenFile, signal); signal.throwIfAborted();
+        const assertion = await identityToken(this.config.identityTokenFile, signal); signal.throwIfAborted(); this.redactor?.add(assertion);
         const response = await send(this.endpoint, { method: 'POST', redirect: 'manual', signal,
           headers: { 'content-type': 'application/json', 'anthropic-beta': `${OAUTH_BETA},oidc-federation-2026-04-01` },
           body: JSON.stringify({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion,
@@ -98,6 +105,7 @@ export class AnthropicFederation {
         const body = await readOAuthJson(response, signal);
         if (!text(body.access_token, 16 * 1024) || body.token_type !== undefined && (typeof body.token_type !== 'string' || body.token_type.toLowerCase() !== 'bearer')
           || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000) throw failure();
+        this.redactor?.add(body.access_token);
         new Headers({ authorization: `Bearer ${body.access_token}` }); signal.throwIfAborted();
         const token = { token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
         if (sequence > this.published) { this.published = sequence; this.cached = token; }
@@ -113,6 +121,7 @@ export class AnthropicFederation {
 
   async request(url: string | URL, init: RequestInit, signal: AbortSignal, send: Send): Promise<Response> {
     try {
+      if (this.lifetime) signal = AbortSignal.any([signal, this.lifetime]);
       let token = await this.token(send, signal); signal.throwIfAborted();
       const authenticated = (): RequestInit => {
         const headers = new Headers(init.headers); headers.delete('x-api-key'); headers.set('authorization', `Bearer ${token}`);

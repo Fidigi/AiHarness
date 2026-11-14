@@ -5208,6 +5208,8 @@ export class AnthropicProvider extends AiProvider {
     return !!this.config.apiKey || !!this.federation;
   }
 
+  override canDiscoverModels(): boolean { return this.federation ? false : super.canDiscoverModels(); }
+
   protected override request(url: string | URL, init: RequestInit = {}, noRetryStatuses?: readonly number[]): Promise<Response> {
     if (!this.federation) return super.request(url, init, noRetryStatuses);
     const network = providerNetworkSettings(this.config);
