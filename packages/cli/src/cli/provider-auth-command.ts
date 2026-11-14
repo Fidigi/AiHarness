@@ -9,12 +9,13 @@ import { terminalText } from '../tui/terminal-text.js';
 import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
 import { loginRadius } from '../security/radius-login.js';
 import { loginKimiCoding } from '../security/kimi-login.js';
+import { loginOpenRouter } from '../security/openrouter-login.js';
 
 export const PROVIDER_AUTH_HELP = `Usage: ai-harness auth <help|list|login|logout> [options]
   list [--json]                      Stored credential metadata only (no refresh/commands)
-  login <provider> [--timeout <1..300>] [--issuer kimi-coding|github-copilot|openai-codex|radius]
+  login <provider> [--timeout <1..300>] [--issuer kimi-coding|github-copilot|openai-codex|radius|openrouter]
                                      Explicit OAuth login; provider is the storage label
-        [--method device|browser]     Codex/Radius only; device is the default
+        [--method device|browser]     Codex/Radius default device; OpenRouter browser only
   logout <provider>                  Delete local stored credentials; no remote revocation
   -h, --help                         Show help without startup
 Login/logout require AI_HARNESS_MASTER_KEY and the independent encrypted credential store.
@@ -24,7 +25,8 @@ Device endpoints: AI_HARNESS_OAUTH_<PROVIDER>_{DEVICE_URL,TOKEN_URL,CLIENT_ID,SC
 --issuer openai-codex selects the fixed OpenAI ChatGPT client, not API-key OpenAI.
 --issuer radius selects the gateway client; optional RADIUS_GATEWAY, independent of API keys.
 Codex/Radius browser PKCE uses 127.0.0.1 ports1455/1456 respectively; no automatic opener.
-Subscription login does not select a provider/model or change account model policies.
+--issuer openrouter uses fixed OpenRouter PKCE with an ephemeral loopback port and returns a permanent API key.
+Login does not select a provider/model or change account model policies.
 Authorization instructions go to stderr; tokens and device codes are never printed.
 Exits: 0 success/help, 2 usage, 1 operation failure, 124 deadline, 130 cancellation.
 `;
@@ -42,7 +44,7 @@ export async function loadTopLevelCredentialService(cwd: string, redactor: Crede
 
 class AuthUsageError extends Error {}
 
-function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius'; method?: 'device' | 'browser'; json: boolean; timeout: number; help: boolean } {
+function parse(args: readonly string[]): { action: string; provider?: string; issuer?: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter'; method?: 'device' | 'browser'; json: boolean; timeout: number; help: boolean } {
   if (args.length > 16 || args.some(arg => Buffer.byteLength(arg) > 4096 || /[\x00-\x1f\x7f-\x9f]/u.test(arg))) throw new AuthUsageError();
   const action = args[0] ?? 'help';
   if (['help', '-h', '--help'].includes(action)) {
@@ -51,7 +53,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
   }
   if (!['list', 'login', 'logout'].includes(action)) throw new AuthUsageError();
   let provider: string | undefined;
-  let issuer: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | undefined;
+  let issuer: 'kimi-coding' | 'github-copilot' | 'openai-codex' | 'radius' | 'openrouter' | undefined;
   let method: 'device' | 'browser' | undefined;
   let json = false, timeout = 300, help = false;
   const seen = new Set<string>();
@@ -78,7 +80,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
         method = value;
       } else if (key === '--issuer' && action === 'login') {
         const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
-        if (value !== 'kimi-coding' && value !== 'github-copilot' && value !== 'openai-codex' && value !== 'radius') throw new AuthUsageError();
+        if (value !== 'kimi-coding' && value !== 'github-copilot' && value !== 'openai-codex' && value !== 'radius' && value !== 'openrouter') throw new AuthUsageError();
         issuer = value;
       } else throw new AuthUsageError();
     } else {
@@ -87,7 +89,7 @@ function parse(args: readonly string[]): { action: string; provider?: string; is
     }
   }
   if (!help && action !== 'list' && !provider) throw new AuthUsageError();
-  if (method && issuer !== 'openai-codex' && issuer !== 'radius') throw new AuthUsageError();
+  if (method && issuer !== 'openai-codex' && issuer !== 'radius' && !(issuer === 'openrouter' && method === 'browser')) throw new AuthUsageError();
   return { action, provider, issuer, method, json, timeout, help };
 }
 
@@ -126,11 +128,14 @@ export async function runProviderAuthCommand(args: readonly string[]): Promise<n
       process.stdout.write('Stored provider credentials removed (environment/command credentials are unchanged).\n');
       return 0;
     }
-    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius' || parsed.issuer === 'kimi-coding') {
+    if (parsed.issuer === 'openai-codex' || parsed.issuer === 'radius' || parsed.issuer === 'kimi-coding' || parsed.issuer === 'openrouter') {
       process.on('SIGINT', cancel);
       process.on('SIGTERM', cancel);
       timer = setTimeout(expire, parsed.timeout * 1000);
-      if (parsed.issuer === 'kimi-coding') await loginKimiCoding(service, parsed.provider!, (uri, code) => {
+      if (parsed.issuer === 'openrouter') await loginOpenRouter(service, parsed.provider!, uri => {
+        process.stderr.write(`Authorize at ${uri}\n`);
+      }, controller.signal);
+      else if (parsed.issuer === 'kimi-coding') await loginKimiCoding(service, parsed.provider!, (uri, code) => {
         process.stderr.write(`Authorize at ${uri}\nUser code: ${code}\n`);
       }, controller.signal, process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST);
       else if (parsed.issuer === 'radius') await loginRadius(service, parsed.provider!, parsed.method ?? 'device', (uri, code) => {
