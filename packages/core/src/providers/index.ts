@@ -19,7 +19,7 @@ import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWir
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
-import { applyNativeResponsesToolHistory, nativeResponsesToolId, nativeResponsesGrammarProperty, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { applyNativeResponsesToolHistory, prepareNativeResponses, nativeResponsesToolId, nativeResponsesGrammarProperty, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
 import { applyResponsesReplay, applyResponsesWholeIdHistory, applyResponsesSplitIdHistory, createResponsesReplayCapture, type ResponsesReplayOwner } from './responses-replay.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
@@ -81,6 +81,11 @@ import { copyNativeImageRequest, openRouterImagesBody, openRouterImagesOutput, o
 import { copyNativeClassifierRequest, parseSystemOneAnswers, type NativeClassifierRequest, type NativeClassifierResult } from './native-classification.js';
 export { RADIUS_MODELS } from './radius-models.js';
 import { RadiusCatalogue, readRadiusCatalogue, type RadiusProviderConfig, type RadiusDiscoveryOptions } from './radius-catalogue.js';
+import { VERCEL_AI_GATEWAY_CLASSIFIER_MODELS, gatewayModels, gatewayProfile, gatewayBase, gatewayEndpoint,
+  gatewayThinking, gatewayUsage, prepareGatewayMessage, prepareGatewayCompletion, prepareGatewayResponse, prepareGatewayOutputBudget,
+  type AiGatewayConfig, type AiGatewayId, type AiGatewayProfile } from './ai-gateways.js';
+import { gatewayReplayScope, gatewayReplayHistory, sealGatewayResponse, sealGatewayCall } from './gateway-replay.js';
+export { CLOUDFLARE_AI_GATEWAY_MODELS, VERCEL_AI_GATEWAY_MODELS, VERCEL_AI_GATEWAY_CLASSIFIER_MODELS } from './ai-gateways.js';
 import { radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type RadiusChatOptions } from './radius.js';
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
@@ -2324,11 +2329,12 @@ export class CloudflareWorkersAiChatProvider extends OpenAiProvider {
 
 /** Shared bounded native questions/answers; service identity owns wire shape and pricing. */
 class NativeClassifierProvider extends AiProvider {
-  protected constructor(config: ProviderConfig, private readonly service: 'TypeSafe' | 'Cloudflare Workers AI' | 'OpenAI Decisions' | 'OpenRouter classifiers' | 'OpenCode classifiers', private readonly endpoint: string) { super(config); }
+  protected constructor(config: ProviderConfig, private readonly service: 'TypeSafe' | 'Cloudflare Workers AI' | 'OpenAI Decisions' | 'OpenRouter classifiers' | 'OpenCode classifiers' | 'Vercel AI Gateway classifiers', private readonly endpoint: string) { super(config); }
   private profiles() {
     if (this.service === 'TypeSafe') return [TYPESAFE_CLASSIFIER_MODEL];
     if (this.service === 'OpenRouter classifiers') return OPENROUTER_CLASSIFIER_MODELS;
     if (this.service === 'OpenCode classifiers') return OPENCODE_CLASSIFIER_MODELS;
+    if (this.service === 'Vercel AI Gateway classifiers') return VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
     return this.service === 'Cloudflare Workers AI' ? CLOUDFLARE_CLASSIFIER_MODELS : [OPENAI_DECISIONS_MODEL];
   }
   private defaultModel(): string { return this.profiles()[0].id; }
@@ -5107,6 +5113,8 @@ const nativeFireworksCompletions = new WeakSet<AiProvider>();
 const nativeOpenRouterReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeGoReplay = new WeakSet<AiProvider>();
 const nativeOpenCodeReplay = new WeakSet<AiProvider>();
+const nativeAiGatewayProviders = new WeakSet<AiProvider>();
+const nativeAiGatewayDelegates = new WeakMap<AiProvider, AiGatewayProfile>();
 
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
@@ -5220,7 +5228,8 @@ export class AnthropicProvider extends AiProvider {
       || nativeGitHubCopilotReplay.has(this) && githubCopilotModel(model).api === 'anthropic-messages'
       || nativeOpenRouterReplay.has(this) && OPENROUTER_MESSAGE_MODELS.some(profile => profile.id === model)
       || nativeOpenCodeGoReplay.has(this) && OPENCODE_GO_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
-      || nativeOpenCodeReplay.has(this) && OPENCODE_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model);
+      || nativeOpenCodeReplay.has(this) && OPENCODE_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
+      || nativeAiGatewayDelegates.get(this)?.api === 'anthropic-messages' && nativeAiGatewayDelegates.get(this)?.id === model;
   }
 
   protected nativeMessageHistory(messages: Message[], model: string): Message[] {
@@ -6625,6 +6634,183 @@ export class OpenRouterProvider extends AiProvider {
     return new OpenRouterImagesProvider({ ...this.config, model: request.model }).generateImages(request, options);
   }
 }
+
+function aiGatewayHeaders(config: ProviderConfig, gateway: AiGatewayId, profile: AiGatewayProfile, options?: ChatOptions): Record<string, string> {
+  const headers = new Headers(configuredHeaders(config));
+  for (const name of ['authorization', 'api-key', 'x-api-key', 'cf-aig-authorization']) headers.delete(name);
+  headers.set('content-type', 'application/json');
+  if (gateway === 'cloudflare-ai-gateway') headers.set('cf-aig-authorization', `Bearer ${config.apiKey}`);
+  else headers.set('x-api-key', String(config.apiKey));
+  if (profile.api === 'anthropic-messages') {
+    headers.set('anthropic-version', AnthropicProvider.API_VERSION);
+    if (gatewayThinking(profile, options) !== 'off' && !profile.compat.forceAdaptiveThinking) headers.set('anthropic-beta', 'interleaved-thinking-2025-05-14');
+  }
+  if (profile.compat.sendSessionAffinityHeaders && options?.sessionId) headers.set('x-session-affinity', options.sessionId);
+  return Object.fromEntries(headers);
+}
+class AiGatewayCompletionsDelegate extends OpenAiProvider {
+  constructor(config: ProviderConfig, private readonly gateway: AiGatewayId, private readonly profile: AiGatewayProfile, private readonly endpoint: string, native: boolean) {
+    super(config); if (native) nativeAiGatewayDelegates.set(this, profile);
+  }
+  protected override getChatUrl(): string { return this.endpoint; }
+  protected override getHeaders(options?: ChatOptions): Record<string, string> { return aiGatewayHeaders(this.config, this.gateway, this.profile, options); }
+  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    prepareGatewayCompletion(body, this.profile, options, messages);
+    if (nativeAiGatewayDelegates.has(this)) {
+      applyCompletionHistory(body, messages, this.config.type, this.profile.compat.requiresReasoningContentOnAssistantMessages === true, false);
+      nativeCompletionsOwners.set(body, { provider: this.getProviderType(), api: this.profile.api, model: this.profile.id,
+        normalizeReasoningMarker: this.profile.compat.thinkingFormat === 'deepseek', invalidResponse: 'Invalid gateway response.' });
+    }
+    return body;
+  }
+  protected override validateChatResponse(value: unknown): void { validateOpenCodeGoChat(value, true); }
+  protected override createStreamValidator(): (value?: unknown) => void { return opencodeGoStreamValidator('openai-completions', true); }
+  protected override responseReasoning(value: unknown): string | undefined { return opencodeGoReasoning(value, true); }
+  protected override responseUsage(value: unknown): ChatResponse['usage'] { return gatewayUsage(this.profile, value); }
+}
+class AiGatewayMessagesDelegate extends AnthropicProvider {
+  constructor(config: ProviderConfig, private readonly gateway: AiGatewayId, private readonly profile: AiGatewayProfile, private readonly endpoint: string, native: boolean) {
+    super(config); if (native) nativeAiGatewayDelegates.set(this, profile);
+  }
+  protected override getMessagesUrl(): string { return this.endpoint; }
+  protected override messageHeaders(options?: ChatOptions): Record<string, string> { return aiGatewayHeaders(this.config, this.gateway, this.profile, options); }
+  protected override applyMessageThinking(): void {}
+  protected override prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+    return prepareGatewayMessage(body, this.profile, options, messages);
+  }
+  protected override permitsEmptyMessageSignature(): boolean { return this.profile.compat.allowEmptySignature === true; }
+  protected override updateMessageUsage(previous: unknown, value: unknown, start: boolean): unknown { return mergeOpenRouterMessageUsage(previous, value, start); }
+  protected override messageUsage(value: unknown): ChatResponse['usage'] { return gatewayUsage(this.profile, value); }
+  protected override messageText(content: unknown): string { return openRouterMessageText(content); }
+  protected override buildAnthropicMessages(messages: Message[], native = false, model?: string): Array<{ role: 'user' | 'assistant'; content: unknown }> {
+    const converted = super.buildAnthropicMessages(messages, native, model), original = messages.filter(message => message.role !== 'system');
+    if (native) for (const [index, message] of original.entries()) if (message.role === 'tool') {
+      const result = (converted[index].content as Array<Record<string, unknown>>)[0]!; result.is_error = message.isError === true;
+      const images = messageImages(message);
+      if (images.length) result.content = [{ type: 'text', text: message.content || '(see attached image)' }, ...images.map(image => {
+        const data = parseDataImage(image.url); if (!data) throw new Error('Invalid gateway image.');
+        return { type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } };
+      })];
+    }
+    return converted;
+  }
+}
+class AiGatewayResponsesDelegate extends OpenAiResponsesProvider {
+  constructor(config: ProviderConfig, private readonly gateway: AiGatewayId, private readonly profile: AiGatewayProfile,
+    private readonly endpoint: string, private readonly options: ChatOptions | undefined, native: boolean) {
+    super({ ...config, baseUrl: endpoint.replace(/\/responses$/u, '') }); if (native) nativeAiGatewayDelegates.set(this, profile);
+  }
+  protected override responseUrl(): string { return this.endpoint; }
+  protected override requiresCompleteSseResponse(): boolean { return true; }
+  protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
+    const headers = new Headers(super.headers(websocket, sessionId)); headers.delete('authorization');
+    for (const [name, value] of Object.entries(aiGatewayHeaders(this.config, this.gateway, this.profile, this.options))) headers.set(name, value);
+    return Object.fromEntries(headers);
+  }
+  protected override responseUsage(value: unknown): ChatResponse['usage'] { return gatewayUsage(this.profile, value); }
+  protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
+  protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined { return nativeResponsesGrammarProperty(body, name); }
+  protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    const native = nativeAiGatewayDelegates.has(this), body = super.requestBody(messages, options, native);
+    if (native) prepareNativeResponses(body, options, { ...this.profile, maxOutputTokens: this.profile.maxOutputTokens!, pricing: this.profile.pricing! }, 'OpenAI', this.profile.compat.supportsOpenAIGrammarTools === true);
+    prepareGatewayResponse(body, this.profile, options, messages);
+    if (native) {
+      const owner = { provider: this.getProviderType(), api: this.profile.api, model: this.profile.id };
+      nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, messages, owner);
+      applyNativeResponsesToolHistory(body, messages, 'cloudflare-ai-gateway', body.model, owner.api, owner.provider);
+    }
+    return body;
+  }
+}
+class VercelGatewayClassifierDelegate extends NativeClassifierProvider {
+  constructor(config: ProviderConfig, endpoint: string) { super(config, 'Vercel AI Gateway classifiers', endpoint); }
+}
+abstract class AiGatewayProvider extends AiProvider {
+  private readonly root: string;
+  private readonly gatewayHeaders: Readonly<Record<string, string>>;
+  protected constructor(private readonly gateway: AiGatewayId, config: AiGatewayConfig, native: boolean) {
+    const profile = gatewayModels(gateway).find(profile => profile.type === 'chat' && (!config.model || profile.id === config.model));
+    if (!profile) throw new Error('Gateway chat model is not supported.');
+    const root = gatewayBase(gateway, config); super({ ...config, model: profile.id, baseUrl: root }); this.root = root;
+    const headers = new Headers(configuredHeaders(this.config));
+    for (const name of ['authorization', 'api-key', 'x-api-key', 'cf-aig-authorization', 'accept', 'content-type']) headers.delete(name);
+    this.gatewayHeaders = Object.freeze(Object.fromEntries(headers));
+    if (native) {
+      nativeAiGatewayProviders.add(this);
+      registerNativeOutputBudget(this, () => { const selected = captureNativeConfiguredModel(this.config, profile.id); return (options, messages) => prepareGatewayOutputBudget(gateway, selected, options, messages); });
+    }
+  }
+  override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
+  override canDiscoverModels(): boolean { return false; }
+  override async getAvailableModels(): Promise<string[]> { return gatewayModels(this.gateway).filter(profile => profile.type === 'chat').map(profile => profile.id); }
+  override getModelApi(model = this.getConfiguredModel()!): string | undefined { return gatewayModels(this.gateway).find(profile => profile.id === model)?.api; }
+  override setConfiguredModel(model: string): void { if (gatewayProfile(this.gateway, model).type !== 'chat') throw new Error('Gateway chat model is not supported.'); super.setConfiguredModel(model); }
+  override getPublishedModels(): readonly PublishedModelMetadata[] {
+    return gatewayModels(this.gateway).filter(profile => profile.type === 'chat').map(profile => ({ id: profile.id, name: profile.name, api: profile.api,
+      contextWindow: profile.contextWindow, maxOutputTokens: profile.maxOutputTokens, ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}), capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
+  }
+  override getSpecializedModels(): SpecializedModel[] {
+    const profile = gatewayProfile(this.gateway, this.getConfiguredModel()!);
+    return [{ id: `${profile.id}:classifier`, model: profile.id, name: profile.name, type: 'classifier', virtual: true, provider: this.getProviderType(), api: profile.api,
+      contextWindow: profile.contextWindow, imageInput: profile.declaredInput.includes('image'), ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) },
+    ...(this.gateway === 'vercel-ai-gateway' ? new VercelGatewayClassifierDelegate({ ...this.config, customHeaders: this.gatewayHeaders, model: undefined }, gatewayEndpoint(this.gateway, this.root, 'typesafe-system-one')).getSpecializedModels() : [])];
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+    let response: ChatResponse | undefined, failure: Error | undefined;
+    await this.streamChat(messages, () => undefined, value => { response = value; }, error => { failure = error; }, options);
+    if (failure) throw failure; if (!response) throw new Error('Gateway response is incomplete.'); return response;
+  }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
+    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    const network = providerNetworkSettings(this.config);
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options?.signal ? [options.signal] : []),
+      ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    let abort!: () => void, response: ChatResponse | undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => { abort = () => reject(new Error('Gateway request cancelled.')); });
+    signal.addEventListener('abort', abort, { once: true });
+    const active = () => { if (signal.aborted) throw new Error('Gateway request cancelled.'); };
+    try {
+      active(); if (!this.validateConfig()) throw new Error('Gateway API key is required.');
+      const model = options?.model ?? this.getConfiguredModel()!, profile = gatewayProfile(this.gateway, model);
+      if (profile.type !== 'chat') throw new Error('Gateway chat model is not supported.');
+      for (const message of messages) for (const image of messageImages(message)) if (!profile.declaredInput.includes('image') || !parseDataImage(image.url)) throw new Error('Invalid gateway image.');
+      const endpoint = gatewayEndpoint(this.gateway, this.root, profile.api), native = nativeAiGatewayProviders.has(this);
+      const scope = native ? gatewayReplayScope(this.getProviderType(), profile.api, model, endpoint, String(this.config.apiKey), this.gatewayHeaders) : undefined;
+      const history = gatewayReplayHistory(messages, scope), config = { ...this.config, model, customHeaders: this.gatewayHeaders };
+      const delegate = profile.api === 'anthropic-messages' ? new AiGatewayMessagesDelegate(config, this.gateway, profile, endpoint, native)
+        : profile.api === 'openai-completions' ? new AiGatewayCompletionsDelegate(config, this.gateway, profile, endpoint, native)
+          : new AiGatewayResponsesDelegate(config, this.gateway, profile, endpoint, options, native);
+      nativeSubscriptionStreamConsumers.add(delegate);
+      await Promise.race([delegate.streamChat(history, async (text, event) => {
+        active(); const visible = event?.type === 'tool_call' ? { type: 'tool_call' as const, data: sealGatewayCall(event.data as ToolCall, scope) }
+          : event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text }
+            : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        await onChunk(text, visible); active();
+      }, value => { response = value; }, error => { throw error; }, { ...options, model, signal }), cancelled]);
+      active(); if (!response) throw new Error('Gateway response is incomplete.');
+      const result = sealGatewayResponse({ ...response, provider: this.getProviderType(), api: profile.api, model }, scope);
+      await Promise.race([Promise.resolve(onComplete?.(result)), cancelled]); active();
+    } catch (error) {
+      const failure = error instanceof ProviderContextOverflowError ? error : new SpecializedModelError(signal.aborted ? 'Gateway request cancelled.' : 'Gateway request failed.', normalizeProviderUsage(response?.usage));
+      if (onError) onError(failure); else throw failure;
+    } finally { signal.removeEventListener('abort', abort); }
+  }
+  private classifier(model: string): VercelGatewayClassifierDelegate {
+    const profile = gatewayProfile(this.gateway, model); if (this.gateway !== 'vercel-ai-gateway' || profile.type !== 'classifier') throw new Error('Gateway classifier is not supported.');
+    return new VercelGatewayClassifierDelegate({ ...this.config, customHeaders: this.gatewayHeaders, model }, gatewayEndpoint(this.gateway, this.root, profile.api));
+  }
+  async classifyNativeQuestions(request: NativeClassifierRequest, options?: SpecializedModelOptions): Promise<NativeClassifierResult> { return this.classifier(request.model).classifyNativeQuestions(request, options); }
+  override async classify(request: ClassificationRequest, options?: SpecializedModelOptions): Promise<ClassificationResult> {
+    return gatewayProfile(this.gateway, request.model).type === 'classifier' ? this.classifier(request.model).classify(request, options) : super.classify(request, options);
+  }
+  override async classifyQuestions(request: QuestionClassificationRequest, options?: SpecializedModelOptions): Promise<QuestionClassificationResult> {
+    return gatewayProfile(this.gateway, request.model).type === 'classifier' ? this.classifier(request.model).classifyQuestions(request, options) : super.classifyQuestions(request, options);
+  }
+  override async generateImages(_request: ImageGenerationRequest, _options?: SpecializedModelOptions): Promise<ImageGenerationResult> { throw new Error('Gateway image models are not supported.'); }
+}
+export class CloudflareAiGatewayProvider extends AiGatewayProvider { constructor(config: AiGatewayConfig) { super('cloudflare-ai-gateway', config, new.target === CloudflareAiGatewayProvider); } }
+export class VercelAiGatewayProvider extends AiGatewayProvider { constructor(config: ProviderConfig) { super('vercel-ai-gateway', config, new.target === VercelAiGatewayProvider); } }
 
 // Anthropic internal types
 interface AnthropicUsage {

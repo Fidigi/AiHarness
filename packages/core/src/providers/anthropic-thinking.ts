@@ -66,7 +66,7 @@ export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, 
 
 const NATIVE_NUMERIC_BUDGETS = { minimal: 1024, low: 2048, medium: 8192, high: 16384 } as const;
 /** Pinned Pi estimate on Core's text/image/tool transcript; not a vendor tokenizer. */
-function numericContextTokens(messages: readonly Message[], options?: ChatOptions): number {
+export function numericContextTokens(messages: readonly Message[], options?: ChatOptions): number {
   const tokens = (chars: number) => Math.ceil(chars / 3.5);
   let total = tokens(options?.systemPrompt?.length ?? 0)
     + (options?.tools?.length ? tokens(JSON.stringify(options.tools).length) : 0);

@@ -5,6 +5,6 @@
     "rootDir": "./src",
     "composite": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/providers/data/cloudflare-ai-gateway.json", "src/providers/data/vercel-ai-gateway.json"],
   "exclude": ["src/**/*.test.ts", "node_modules", "dist"]
 }

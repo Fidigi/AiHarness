@@ -49,7 +49,7 @@ export function responseItemHash(value: string): string {
 
 /** Only private native owners call this on freshly converted bodies, before deployment rewriting. */
 export function applyNativeResponsesToolHistory(body: Record<string, unknown>, messages: Message[],
-  provider: 'openai' | 'azure' | 'openai-codex', model: string, api: string, physicalProvider = provider as string): void {
+  provider: 'openai' | 'azure' | 'openai-codex' | 'cloudflare-ai-gateway', model: string, api: string, physicalProvider = provider as string): void {
   if (!Array.isArray(body.input)) return;
   const ids = new Map<string, { callId: string; itemId?: string; customInput?: string }>();
   const results = new Map(messages.filter(message => message.role === 'tool').map(message => [message.toolCallId ?? message.id, message]));
