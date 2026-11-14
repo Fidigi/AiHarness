@@ -16,12 +16,16 @@ it.each(['print', 'json', 'rpc', 'tty'] as const)('uses OpenRouter PKCE permanen
   let endpoint = '', failure: unknown, challenge = '', turns = 0; const calls: string[] = [];
   const server = createServer(await createLocalTLSFixture(root), async (request, response) => {
     try {
-      let text = ''; for await (const chunk of request) { text += chunk; expect(Buffer.byteLength(text)).toBeLessThan(2000000); } const body = JSON.parse(text); calls.push(request.url!);
+      let text = ''; for await (const chunk of request) { text += chunk; expect(Buffer.byteLength(text)).toBeLessThan(2000000); } const body = text ? JSON.parse(text) : undefined; calls.push(request.url!);
+      if (request.url === '/inference/v1/models/user') {
+        expect(request.method).toBe('GET'); expect(request.headers.authorization).toBe(`Bearer ${key}`); response.setHeader('content-type', 'application/json');
+        response.end(JSON.stringify({ data: [{ id: 'openai/gpt-4o', top_provider: { context_length: 64000, max_completion_tokens: 9000 }, pricing: { prompt: '0.000005', completion: '0.000020' } }] })); return;
+      }
       if (request.url === '/api/v1/auth/keys') {
         expect(request.headers.authorization).toBeUndefined(); expect(body).toMatchObject({ code: 'synthetic-router-code', code_challenge_method: 'S256' }); expect(Object.keys(body).sort()).toEqual(['code', 'code_challenge_method', 'code_verifier']);
         expect(createHash('sha256').update(body.code_verifier).digest('base64url')).toBe(challenge); response.setHeader('content-type', 'application/json'); response.end(JSON.stringify({ key })); return;
       }
-      expect(request.url).toBe('/inference/v1/chat/completions'); expect(request.headers.authorization).toBe(`Bearer ${key}`); expect(body.model).toBe('openai/gpt-4o'); expect(body.messages.filter((message: { role: string }) => message.role === 'assistant')).toHaveLength(turns); turns++;
+      expect(request.url).toBe('/inference/v1/chat/completions'); expect(request.headers.authorization).toBe(`Bearer ${key}`); expect(body.model).toBe('openai/gpt-4o'); expect(body.max_completion_tokens).toBe(9000); expect(body.messages.filter((message: { role: string }) => message.role === 'assistant')).toHaveLength(turns); turns++;
       response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ id: 'synthetic-router', choices: [{ delta: { content: 'router-native-cli-ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 8, completion_tokens: 2, total_tokens: 10 } }) + '\n\ndata: [DONE]\n\n');
     } catch (error) { failure = error; response.statusCode = 500; response.end('Invalid synthetic OpenRouter fixture'); }
   });
@@ -55,11 +59,12 @@ it.each(['print', 'json', 'rpc', 'tty'] as const)('uses OpenRouter PKCE permanen
   try {
     const login = await launch(['auth', 'login', 'openrouter', '--issuer', 'openrouter', ...(mode === 'print' ? ['--method', 'browser'] : []), '--timeout', '5'], '', true); expect(login, login.stderr).toMatchObject({ code: 0, signal: null }); if (mode === 'tty') expect(login.stdout).toContain('Provider credentials encrypted and saved.'); else expect(login.stdout).toBe('Provider credentials encrypted and saved.\n');
     const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(agent + '/credentials.enc', master) }); await credentials.load(); expect((await credentials.resolve('openrouter', { env: {} }))?.credential).toEqual({ version: 1, type: 'api-key', apiKey: key }); expect(credentials.list()).toMatchObject([{ refreshable: false }]);
+    if (mode === 'print') { const listing = await launch(['--no-extensions', '--no-context-files', '--list-models', 'openrouter']); expect(listing, listing.stderr).toMatchObject({ code: 0, signal: null }); expect(listing.stdout).toContain('openai/gpt-4o'); expect(calls).toEqual(['/api/v1/auth/keys']); }
     const run = () => launch(['--approve', '--no-extensions', '--no-context-files', '--session-dir', sessions, '--session-id', 'native-router', '--model', 'openrouter/openai/gpt-4o', ...(mode === 'print' || mode === 'tty' ? ['--print', 'probe'] : ['--mode', mode, ...(mode === 'rpc' ? [] : ['probe'])])], mode === 'rpc' ? JSON.stringify({ type: 'prompt', id: 'probe', message: 'probe' }) + '\n' : '');
     const first = await run(), second = await run(); for (const result of [first, second]) { expect(result, result.stderr).toMatchObject({ code: 0, signal: null }); expect(result.stdout).toContain('router-native-cli-ok'); }
-    expect(calls).toEqual(['/api/v1/auth/keys', '/inference/v1/chat/completions', '/inference/v1/chat/completions']);
-    const journal = await readFile(sessions + '/native-router.jsonl', 'utf8'), assistants = journal.trim().split('\n').map(line => JSON.parse(line)).filter(message => message.role === 'assistant'); expect(assistants).toHaveLength(2); for (const message of assistants) expect(message).toMatchObject({ provider: 'openrouter', model: 'openai/gpt-4o', api: 'openai-completions', usage: { totalTokens: 10, costUsd: 0.00004 } }); expect((await stat(agent + '/credentials.enc')).mode & 0o777).toBe(0o600);
+    expect(calls).toEqual(['/api/v1/auth/keys', '/inference/v1/models/user', '/inference/v1/chat/completions', '/inference/v1/models/user', '/inference/v1/chat/completions']);
+    const journal = await readFile(sessions + '/native-router.jsonl', 'utf8'), assistants = journal.trim().split('\n').map(line => JSON.parse(line)).filter(message => message.role === 'assistant'); expect(assistants).toHaveLength(2); for (const message of assistants) expect(message).toMatchObject({ provider: 'openrouter', model: 'openai/gpt-4o', api: 'openai-completions', usage: { totalTokens: 10, costUsd: 0.00008 } }); expect((await stat(agent + '/credentials.enc')).mode & 0o777).toBe(0o600);
     for (const secret of [key, 'synthetic-router-code']) expect(login.stdout + login.stderr + first.stdout + first.stderr + second.stdout + second.stderr + journal + await readFile(agent + '/credentials.enc', 'utf8')).not.toContain(secret);
-    expect((await launch(['auth', 'logout', 'openrouter'])).code).toBe(0); const refused = await launch(['--approve', '--no-extensions', '--no-context-files', '--model', 'openrouter/openai/gpt-4o', '--print', 'refused']); expect(refused.code).not.toBe(0); expect(calls).toHaveLength(3); expect(failure).toBeUndefined();
+    expect((await launch(['auth', 'logout', 'openrouter'])).code).toBe(0); const refused = await launch(['--approve', '--no-extensions', '--no-context-files', '--model', 'openrouter/openai/gpt-4o', '--print', 'refused']); expect(refused.code).not.toBe(0); expect(calls).toHaveLength(5); expect(failure).toBeUndefined();
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); }
 }, 30000);

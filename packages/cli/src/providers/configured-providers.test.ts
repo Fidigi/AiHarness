@@ -233,10 +233,15 @@ describe('configured CLI providers', () => {
     expect(provider?.getPublishedModels?.()?.length).toBeGreaterThan(0);
     const model = provider!.getConfiguredModel()!;
     await expect(resolveStartupProvider(providers, { provider: name, model, offline: true }, {})).resolves.toMatchObject({ providerName: name, model });
-    const override = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'ephemeral' }, {});
-    expect(override.provider).toBeInstanceOf(Adapter);
-    expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'ephemeral' });
-    expect(ProviderFactory.has(name)).toBe(false);
+    const fetch = name === 'openrouter' ? vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      expect(String(url)).toBe('http://127.0.0.1/owned/v1/models/user'); expect(new Headers(init?.headers).get('authorization')).toBe('Bearer ephemeral'); return new Response('', { status: 404 });
+    }) : undefined;
+    try {
+      const override = await resolveStartupProvider(providers, { provider: name, model, apiKey: 'ephemeral' }, {});
+      expect(override.provider).toBeInstanceOf(Adapter);
+      expect((override.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'ephemeral' });
+      expect(ProviderFactory.has(name)).toBe(false); if (fetch) expect(fetch).toHaveBeenCalledOnce();
+    } finally { fetch?.mockRestore(); }
   });
 
   it('requires explicit Workers AI account or endpoint and preserves account configuration with an ephemeral key', async () => {

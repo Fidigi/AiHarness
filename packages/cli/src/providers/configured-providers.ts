@@ -30,6 +30,7 @@ import {
   OpenCodeProvider,
   OpenCodeGoProvider,
   OpenRouterProvider,
+  OPENROUTER_COMPLETION_MODELS, OPENROUTER_MESSAGE_MODELS,
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
   RadiusProvider,
@@ -327,8 +328,13 @@ export async function resolveStartupProvider(
   // These native scopes must start with the invocation key, not a cached account or missing static source.
   let scopedKeyProvider: AiProvider | undefined;
   const scopedNames = [...new Set(selection.models?.map(pattern => pattern.trim().split('/')[0]!.toLowerCase()) ?? [])];
-  const scopedKeyName = requestedProvider ?? (scopedNames.length === 1 ? scopedNames[0] : undefined);
-  if (selection.apiKey && selection.models?.length && scopedKeyName && ['radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway'].includes(scopedKeyName)) {
+  let scopedKeyName = requestedProvider ?? (scopedNames.length === 1 ? scopedNames[0] : undefined);
+  if (selection.apiKey && scopedKeyName && /[*?[\]]/u.test(scopedKeyName)) {
+    const names = [...new Set([...Object.keys(NATIVE_PROVIDERS), ...providers.keys()])];
+    const matched = resolveModelScope([`${scopedKeyName}/*`], names.map(provider => ({ provider, id: '_scope_' }))).models;
+    const unique = [...new Set(matched.map(item => item.model.provider))]; scopedKeyName = unique.length === 1 ? unique[0] : undefined;
+  }
+  if (selection.apiKey && selection.models?.length && scopedKeyName && (['radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'openrouter'].includes(scopedKeyName) || providers.get(scopedKeyName) instanceof OpenRouterProvider)) {
     const previous = providers.get(scopedKeyName);
     scopedKeyProvider = createProvider({ ...(previous ? providerConfig(previous) : {
       ...networkConfig(nativeOptions.network), ...nativeEnvironmentHints(scopedKeyName, env, nativeOptions.radiusCatalogueDirectory),
@@ -341,7 +347,15 @@ export async function resolveStartupProvider(
   let thinkingLevel: ThinkingLevel | undefined;
   let scopeDiagnostics: ModelScopeDiagnostic[] = [];
 
+  const personalized = new Set<AiProvider>();
   if (requestedModel || selection.models?.length) {
+    if (selection.models?.length && !selection.offline) for (const [name, instance] of providers) {
+      if (requestedProvider && name !== requestedProvider || !(instance instanceof OpenRouterProvider) || !instance.validateConfig()) continue;
+      if (selection.apiKey && instance !== scopedKeyProvider) continue; // Never resolve the invocation's catalogue with a stored key.
+      const declarations = [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].map(profile => ({ provider: name, id: profile.id, name: profile.name }));
+      if (!resolveModelScope(selection.models, declarations).models.length) continue;
+      await instance.refreshUserModels({ signal: nativeOptions.signal }); personalized.add(instance);
+    }
     const catalog = flattenModelCatalog((catalog => virtualModels?.overlayCatalog(catalog) ?? catalog)(requestedModel
       ? buildProviderModelCatalog([
           ...[...providers].map(([provider, instance]) => ({
@@ -356,7 +370,7 @@ export async function resolveStartupProvider(
             .filter(provider => !providers.has(provider))
             .map(provider => ({ provider, configured: false })),
         ])
-      : await collectProviderModelCatalog(scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider
+      : await collectProviderModelCatalog(scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider || scopedKeyProvider instanceof OpenRouterProvider
         ? new Map([[scopedKeyName!, scopedKeyProvider]]) : providers, {
           includePublishedProviders: true,
           discover: selection.offline !== true,
@@ -456,6 +470,7 @@ export async function resolveStartupProvider(
   if (provider instanceof RadiusProvider && !selection.offline && (!selection.models?.length || selection.apiKey && provider !== scopedKeyProvider)) {
     await discoverProviderModelIds(provider, { timeoutMs: 2_000, retries: 0, signal: nativeOptions.signal });
   }
+  if (provider instanceof OpenRouterProvider && !selection.offline && !personalized.has(provider)) await provider.refreshUserModels({ signal: nativeOptions.signal });
   if (model) provider.setConfiguredModel(model);
   return {
     provider,
