@@ -136,6 +136,7 @@ export {
   KimiCodingOAuthProvider,
   KIMI_CODING_MODELS,
   MetaProvider,
+  MetaOAuthProvider,
   META_MODELS,
   XaiProvider,
   XAI_MODELS,

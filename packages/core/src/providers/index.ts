@@ -74,6 +74,8 @@ import { anthropicOAuthHistory, sealAnthropicOAuthCall, sealAnthropicOAuthRespon
 import { getKimiCodingOAuthConfig, validKimiCodingOAuthIdentity, type KimiCodingOAuthCredential, type KimiCodingOAuthCredentialSource } from './kimi-coding-oauth.js';
 import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimiOAuthReplay } from './kimi-coding-replay.js';
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
+import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
+import { metaOAuthHistory, sealMetaOAuthCall, sealMetaOAuthResponse, withoutMetaOAuthReplay } from './meta-oauth-replay.js';
 export { META_MODELS } from './meta.js';
 import { XAI_MODELS, xaiProfile, xaiBase, prepareXaiResponse, xaiUsage } from './xai.js';
 export { XAI_MODELS } from './xai.js';
@@ -3456,6 +3458,7 @@ export class OpenAiResponsesProvider extends AiProvider {
   protected responseUrl(): string { return `${this.baseUrl}/responses`; }
 
   protected requestBody(messages: Message[], options?: ChatOptions, nativeToolImages = false): ResponsesRequest {
+    messages = withoutMetaOAuthReplay(messages);
     if (!nativeToolImages) messages = toolImageMessages(messages);
     const input: ResponsesInput = [];
     for (const message of messages) {
@@ -4067,6 +4070,7 @@ class ReviewedMetaResponsesProvider extends OpenAiResponsesProvider {
   protected override responseTransport(): ProviderConfig['transport'] { return 'sse'; }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
+    messages = withoutMetaOAuthReplay(messages);
     if (!nativeMetaResponses.has(this)) { const body = super.requestBody(messages, options); prepareMetaResponse(body, options); return body; }
     // Preserve Meta's existing user/tool-image preparation while aligning rich slots with that same history.
     const history = toolImageMessages(messages), body = super.requestBody(history, options, true);
@@ -4128,6 +4132,7 @@ export class MetaProvider extends AiProvider {
     metaProfile(String(model));
     const delegate = new ReviewedMetaResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
     if (nativeMetaResponses.has(this)) nativeMetaResponses.add(delegate);
+    if (nativeSubscriptionStreamConsumers.has(this)) nativeSubscriptionStreamConsumers.add(delegate);
     return delegate;
   }
   override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
@@ -4140,6 +4145,68 @@ export class MetaProvider extends AiProvider {
     try { delegate = this.conversation(options?.model ?? this.getConfiguredModel(), options); }
     catch { const error = new Error('Meta response model is not supported.'); if (onError) { onError(error); return; } throw error; }
     await delegate.streamChat(messages, onChunk, onComplete, onError, options);
+  }
+}
+
+const nativeMetaOAuthProviders = new WeakSet<AiProvider>();
+
+/** Live Muse identity/key lifecycle; physical inference always uses a fresh exact native Meta adapter. */
+export class MetaOAuthProvider extends MetaProvider {
+  private readonly oauthHeaders: Readonly<Record<string, string>>;
+  private readonly oauthBase: string;
+  constructor(config: ProviderConfig, private readonly credentialSource: MetaOAuthCredentialSource) {
+    if (typeof credentialSource !== 'function') throw new Error('Meta OAuth source is required.');
+    super({ ...config, apiKey: undefined });
+    const headers = new Headers(configuredHeaders(this.config)); headers.delete('authorization'); headers.delete('x-api-key');
+    this.oauthHeaders = Object.freeze(Object.fromEntries(headers)); this.oauthBase = metaBase(this.config.baseUrl);
+    this.config = { ...this.config, baseUrl: this.oauthBase, customHeaders: this.oauthHeaders };
+    if (new.target === MetaOAuthProvider) nativeMetaOAuthProviders.add(this);
+  }
+  override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
+  private async currentCredential(signal: AbortSignal, allowRefresh = true): Promise<MetaOAuthCredential> {
+    let abort!: () => void; const canceled = new Promise<never>((_, reject) => { abort = () => reject(new Error('Meta OAuth request cancelled.')); });
+    void canceled.catch(() => undefined); signal.addEventListener('abort', abort, { once: true });
+    try {
+      signal.throwIfAborted(); const value = structuredClone(await Promise.race([this.credentialSource(signal, allowRefresh), canceled])); signal.throwIfAborted();
+      if (!value || value.version !== 1 || value.type !== 'oauth' || !validMetaOAuthIdentity(value.subscription) || !Number.isSafeInteger(value.expiresAt) || value.expiresAt! <= Date.now()
+        || value.tokenType !== undefined && value.tokenType.toLowerCase() !== 'bearer') throw new Error('Meta OAuth credential is unavailable.');
+      for (const token of [value.accessToken, value.refreshToken]) if (typeof token !== 'string' || !token || Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0020\u007f-\u009f]/u.test(token) || Buffer.from(token, 'utf8').toString('utf8') !== token) throw new Error('Meta OAuth credential is unavailable.');
+      new Headers({ authorization: `Bearer ${value.accessToken}` }); new Headers({ authorization: `Bearer ${value.refreshToken}` });
+      return { accessToken: value.accessToken, refreshToken: value.refreshToken!, expiresAt: value.expiresAt!, tokenType: 'Bearer', subscription: { ...value.subscription } };
+    } finally { signal.removeEventListener('abort', abort); }
+  }
+  override async getAvailableModels(options: { signal?: AbortSignal; allowNetwork?: boolean } = {}): Promise<string[]> {
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options.signal ? [options.signal] : [])]);
+    try { await this.currentCredential(signal, options.allowNetwork !== false); return META_MODELS.map(profile => profile.id); }
+    catch { if (signal.aborted) throw new Error('Meta OAuth catalogue cancelled.'); return []; }
+  }
+  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> { return this.runOAuth(messages, options); }
+  override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    try { await this.runOAuth(messages, options, onChunk, onComplete); } catch (error) { if (onError) await onError(error as Error); else throw error; }
+  }
+  private async runOAuth(messages: Message[], options?: ChatOptions, onChunk?: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void): Promise<ChatResponse> {
+    const network = providerNetworkSettings(this.config), config = { ...this.config }, provider = this.getProviderType(), model = options?.model ?? this.getConfiguredModel()!, endpoint = this.oauthBase + '/responses';
+    const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(options?.signal ? [options.signal] : []), ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
+    let abort!: () => void, response: ChatResponse | undefined; const canceled = new Promise<never>((_, reject) => { abort = () => reject(new Error('Meta OAuth request cancelled.')); });
+    void canceled.catch(() => undefined); signal.addEventListener('abort', abort, { once: true }); const active = () => signal.throwIfAborted();
+    try {
+      active(); const input = structuredClone(messages), owned = { ...options, model, signal, ...(options?.tools ? { tools: structuredClone(options.tools) } : {}) };
+      prepareMetaResponse({ model, input: [] }, owned);
+      const credential = await Promise.race([this.currentCredential(signal), canceled]); active();
+      const scope = nativeMetaOAuthProviders.has(this) ? gatewayReplayScope(provider, 'openai-responses', model, endpoint, JSON.stringify(['meta-native-grant-v1', credential.subscription.grantId]), this.oauthHeaders) : undefined;
+      const history = metaOAuthHistory(input, scope), delegate = new MetaProvider({ ...config, type: provider, model, apiKey: credential.accessToken, baseUrl: this.oauthBase, customHeaders: this.oauthHeaders }); nativeSubscriptionStreamConsumers.add(delegate);
+      if (onChunk) await Promise.race([delegate.streamChat(history, async (text, event) => {
+        active(); const visible = event?.type === 'tool_call' ? { type: 'tool_call' as const, data: sealMetaOAuthCall(event.data as ToolCall, scope) }
+          : event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text } : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
+        await Promise.race([Promise.resolve(onChunk(text, visible)), canceled]); active();
+      }, value => { response = value; }, error => { throw error; }, owned), canceled]);
+      else response = await Promise.race([delegate.chat(history, owned), canceled]);
+      active(); if (!response) throw new Error('Meta OAuth response is incomplete.');
+      const current = await Promise.race([this.currentCredential(signal), canceled]); active(); if (current.subscription.grantId !== credential.subscription.grantId) throw new Error('Meta OAuth credential changed.');
+      const result = sealMetaOAuthResponse({ ...response, provider, api: 'openai-responses', model }, scope); await Promise.race([Promise.resolve(onComplete?.(result)), canceled]); active(); return result;
+    } catch (error) {
+      throw error instanceof ProviderContextOverflowError ? error : new SpecializedModelError(signal.aborted ? 'Meta OAuth request cancelled.' : 'Meta OAuth request failed.', error instanceof SpecializedModelError ? error.usage : normalizeProviderUsage(response?.usage));
+    } finally { signal.removeEventListener('abort', abort); }
   }
 }
 
