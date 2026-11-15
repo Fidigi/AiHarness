@@ -1874,7 +1874,7 @@ it('validates installed public provider discovery declarations and keyless based
           if (!stream) result = await provider.chat([message], options);
           else { await provider.streamChat([message], async () => { await Promise.resolve(); }, value => { result = value; }, error => { failure = error; }, options); if (failure) throw failure; }
           const body = toolBodies.at(-1);
-          assert.deepEqual(body.tools ?? null, vector.callerDeclarations); assert.equal(body.tool_choice, undefined);
+          assert.deepEqual(body.tools ?? null, vector.capturedRequestTools); assert.equal(body.tool_choice, undefined);
           assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
           assert.equal(result.content, 'ok'); assert.equal(result.api, 'anthropic-messages'); assert.equal(result.model, vector.model);
         }
@@ -1896,7 +1896,7 @@ it('validates installed public provider discovery declarations and keyless based
             assert.equal(failure?.message, 'Anthropic tool requires unsupported constrained sampling.'); assert.equal(result, undefined); assert.equal(paths.length, count); refusals++;
           } else {
             if (failure) throw failure; const body = toolBodies.at(-1);
-            assert.deepEqual(body.tools ?? null, vector.callerDeclarations); assert.deepEqual(body.tool_choice ?? null, vector.toolChoiceWire);
+            assert.deepEqual(body.tools ?? null, vector.capturedRequestTools); assert.deepEqual(body.tool_choice ?? null, vector.toolChoiceWire);
             assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
             assert.equal(result.content, 'ok'); assert.equal(result.api, 'anthropic-messages'); assert.equal(result.model, vector.model);
           }
@@ -1927,8 +1927,8 @@ it('validates installed public provider discovery declarations and keyless based
         }))], before = structuredClone({ history, options });
         provided = undefined; const second = await call(history), body = toolBodies.at(-1);
         assert.deepEqual(body.messages, vector.expectedReplayMessages); // Complete array: no filtered-away extra image user turn.
-        assert.deepEqual(body.tools, vector.tools.map(tool => ({ name: tool.name, description: tool.description, eager_input_streaming: true,
-          input_schema: { type: 'object', properties: tool.parameters.properties, required: tool.parameters.required } })));
+        assert.deepEqual(body.tools, [...vector.tools.map(tool => ({ name: tool.name, description: tool.description, eager_input_streaming: true,
+          input_schema: { type: 'object', properties: tool.parameters.properties, required: tool.parameters.required } })), ...vector.capturedDeferredDeclarations[1]]);
         assert.equal(body.model, vector.model); assert.equal(body.stream, stream);
         assert.equal(second.content, 'ok'); assert.equal(second.model, vector.model); assert.equal(second.api, vector.api);
         assert.deepEqual(second.toolCalls ?? [], []); assert.deepEqual({ history, options }, before);

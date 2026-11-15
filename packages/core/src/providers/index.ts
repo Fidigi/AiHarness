@@ -110,7 +110,7 @@ import { radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type Ra
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
-import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, applyAnthropicSystemHistory, applyAnthropicToolHistory } from './anthropic-profiles.js';
+import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, anthropicInlineTools, applyAnthropicSystemHistory, applyAnthropicToolHistory } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
 import { projectAssistantReplay } from './message-replay.js';
 import { googleResponseBlocks, appendGoogleResponseBlocks, googleReplayParts, type GoogleResponsePart } from './google-replay.js';
@@ -5460,7 +5460,8 @@ export class AnthropicProvider extends AiProvider {
     const headers = { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
     const betas = this.#ownsNativeProfiles ? [...anthropicThinkingBetas(model ?? '', _options),
-      ...(anthropicFallbackModels(model ?? '').length ? ['server-side-fallback-2026-07-01'] : [])] : [];
+      ...(anthropicFallbackModels(model ?? '').length ? ['server-side-fallback-2026-07-01'] : []),
+      ...(anthropicInlineTools(model ?? '', _options?.tools?.length ?? 0) ? ['inline-tools-2026-09-15'] : [])] : [];
     if (this.oauthMode) return anthropicOAuthHeaders(headers, String(this.config.apiKey), betas);
     if (!betas.length) return headers;
     const merged = new Headers(headers);

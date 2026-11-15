@@ -80,7 +80,7 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
     } else invalid();
   }
   if (!Array.isArray(body.tools)) return;
-  body.tools = body.tools.map((tool, index) => {
+  const declarations = body.tools.map((tool, index) => {
     let parameters = tool.input_schema, strict = false;
     const sampling = options?.tools?.[index]?.constrainedSampling;
     if (sampling !== undefined && sampling !== false) {
@@ -98,12 +98,20 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
     return { ...tool, eager_input_streaming: true, ...(strict ? { strict: true } : {}),
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
+  if (admitted && anthropicInlineTools(String(body.model), declarations.length)) {
+    if (declarations.some(tool => tool.name === '__pi_deferred_placeholder__')) invalid();
+    declarations.push({ name: '__pi_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.',
+      input_schema: { type: 'object', properties: {}, required: [] }, defer_loading: true });
+  }
+  body.tools = declarations;
 }
-const systemUpdateModels = new Set(['claude-fable-5', 'claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-4-8',
+// These seven pinned declarations support both native system and tool updates.
+const inlineContextModels = new Set(['claude-fable-5', 'claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-4-8',
   'claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']);
+export function anthropicInlineTools(model: string, toolCount: number): boolean { return inlineContextModels.has(model) && toolCount > 0; }
 /** Plain Core system messages only; preserve updates before the next assistant, never inside a tool pair. */
 export function applyAnthropicSystemHistory(body: Record<string, unknown>, messages: readonly Message[], systemPrompt?: string): void {
-  if (!systemUpdateModels.has(String(body.model)) || !Array.isArray(body.messages)) return;
+  if (!inlineContextModels.has(String(body.model)) || !Array.isArray(body.messages)) return;
   const converted = body.messages, result: unknown[] = [], pending: unknown[] = [], initial = [systemPrompt];
   let index = 0;
   for (const message of messages) {

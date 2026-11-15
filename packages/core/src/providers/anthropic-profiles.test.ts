@@ -222,8 +222,8 @@ describe('owned Anthropic response authority', () => {
       ]);
       const second = await f.call(stream, 'none', options, history), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
       expect(body.messages, vector.case).toEqual(vector.expectedReplayMessages); // Whole array, including managed controls and any extra attributed image turn.
-      expect(body.tools).toEqual(vector.tools.map(tool => ({ name: tool.name, description: tool.description, eager_input_streaming: true,
-        input_schema: { type: 'object', properties: tool.parameters.properties, required: tool.parameters.required } })));
+      expect(body.tools).toEqual([...vector.tools.map(tool => ({ name: tool.name, description: tool.description, eager_input_streaming: true,
+        input_schema: { type: 'object', properties: tool.parameters.properties, required: tool.parameters.required } })), ...vector.capturedDeferredDeclarations[1]]);
       expect(body.model).toBe(vector.model); expect(second).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
       expect(second.toolCalls ?? []).toEqual([]); expect({ history, options }).toEqual(before);
     }
@@ -431,12 +431,12 @@ describe('owned Anthropic response authority', () => {
     for (const stream of [false, true]) {
       const options = { model: vector.model, tools: vector.tools }, before = structuredClone(options);
       expect((await f.call(stream, 'none', options)).model).toBe(vector.model);
-      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).tools).toEqual(vector.callerDeclarations);
+      expect(JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body)).tools).toEqual(vector.capturedRequestTools);
       expect(options).toEqual(before);
       const strict = policyVectors.find(row => row.model === vector.model && row.case === 'require-named')!;
       await f.call(stream, 'none', { model: strict.model, tools: strict.tools, toolChoice: strict.toolChoice } as AnthropicChatOptions);
       const body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
-      expect(body.tools).toEqual(strict.callerDeclarations); expect(body.tool_choice ?? null).toEqual(strict.toolChoiceWire);
+      expect(body.tools).toEqual(strict.capturedRequestTools); expect(body.tool_choice ?? null).toEqual(strict.toolChoiceWire);
     }
     // Native result projection cannot be borrowed by derived/unknown/forged public metadata.
     for (const [model, Provider, override] of [[profiles[0]!.id, Compatible, undefined], ['unknown-model', AnthropicProvider, undefined],
@@ -523,7 +523,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       ['no-tools', 'required-object', 'optional-union', 'optional-only'].map(name => [profile.id, name])));
     for (const vector of toolFixture.rows) expect(vector.capturedRequestTools ?? []).toEqual([
       ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations,
-    ]); // Deferred SDK declarations stay visible but outside this bounded caller-declaration projection.
+    ]); // Whole pinned request arrays bind caller and deferred declarations together.
     expect(policyFixtures.map(fixture => createHash('sha256').update(fixture.bytes).digest('hex'))).toEqual([
       '905454a70d75291e56a6d4be82f0c7609085329085f4606c06569ce2b7075d86', 'a66743b54cfb3fad04463f11dc70943f5a5ee2f474415b1839cbbaa2dafba966',
     ]);
@@ -536,7 +536,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       expect(fixture.data.rows.filter(row => row.refused)).toHaveLength(fixture.data.refusals);
       for (const vector of fixture.data.rows.filter(row => !row.refused)) expect(vector.capturedRequestTools ?? []).toEqual([
         ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations!,
-      ]); // Retain all191 SDK deferred placeholders; compare the whole Core array separately below.
+      ]); // Whole pinned arrays, including all191 captured deferred placeholders, remain authoritative.
     }
   });
   for (const profile of profiles) it(profile.id, async () => {
@@ -559,7 +559,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       for (const stream of [false, true]) {
         const result = await f.call(stream, 'none', options), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
         // Compare the whole Core tools array; never filter unexpected Core tools away.
-        expect(body.tools ?? null).toEqual(vector.callerDeclarations); expect(body.tool_choice).toBeUndefined();
+        expect(body.tools ?? null).toEqual(vector.capturedRequestTools); expect(body.tool_choice).toBeUndefined();
         expect(body.model).toBe(profile.id); expect(result).toMatchObject({ content: 'ok', model: profile.id, api: 'anthropic-messages' });
       }
       expect({ options, input }).toEqual(before);
@@ -574,7 +574,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
           expect(f.fetch).toHaveBeenCalledTimes(count);
         } else {
           const result = await f.call(stream, 'none', options), body = JSON.parse(String(f.fetch.mock.calls.at(-1)?.[1]?.body));
-          expect(body.tools ?? null, vector.case).toEqual(vector.callerDeclarations); expect(body.tool_choice ?? null, vector.case).toEqual(vector.toolChoiceWire);
+          expect(body.tools ?? null, vector.case).toEqual(vector.capturedRequestTools); expect(body.tool_choice ?? null, vector.case).toEqual(vector.toolChoiceWire);
           expect(body.model).toBe(vector.model); expect(result).toMatchObject({ content: 'ok', model: profile.id, api: 'anthropic-messages' });
         }
       }
