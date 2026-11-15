@@ -5080,6 +5080,7 @@ export class BedrockProvider extends AiProvider {
 
   private readonly region: string;
   private readonly configuredRegion?: string;
+  private readonly endpointRegion?: string;
   private readonly ownsNativeProfiles: boolean;
   private readonly profile?: BedrockProfile | BedrockEcsCredentials | BedrockWebIdentityCredentials;
 
@@ -5098,6 +5099,10 @@ export class BedrockProvider extends AiProvider {
     this.configuredRegion = String(config.region || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || '') || undefined;
     this.region = this.configuredRegion || 'us-east-1';
     this.ownsNativeProfiles = new.target === BedrockProvider;
+    if (this.ownsNativeProfiles && config.baseUrl) {
+      try { this.endpointRegion = /^bedrock-runtime(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/u.exec(new URL(String(config.baseUrl)).hostname)?.[1]; }
+      catch { /* Endpoint validation remains at dispatch. */ }
+    }
     if (this.ownsNativeProfiles && (config.bedrockProfile || config.bedrockEcs || config.bedrockWebIdentity) && config.apiKey === undefined && config.accessKeyId === undefined
       && config.secretAccessKey === undefined && config.sessionToken === undefined
       && !hasBedrockAuthHeaders(config)) {
@@ -5126,9 +5131,14 @@ export class BedrockProvider extends AiProvider {
 
   override canDiscoverModels(): boolean { return this.profile ? false : super.canDiscoverModels(); }
 
+  /** ARN routing is not admission to a native model's budgets, pricing or private replay. */
+  private modelArnRegion(model: string): string | undefined {
+    return this.ownsNativeProfiles ? /^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9]+(?:-[a-z0-9]+)+-\d+):/u.exec(model)?.[1] : undefined;
+  }
+
   private streamEndpoint(model: string, region = this.region): URL {
     let url: URL;
-    if (this.profile && !this.config.baseUrl && /(?:-iso|^eusc-)/u.test(region)) throw new Error('An explicit Bedrock endpoint is required for this partition.');
+    if ((this.profile || this.modelArnRegion(model)) && !this.config.baseUrl && /(?:-iso|^eusc-)/u.test(region)) throw new Error('An explicit Bedrock endpoint is required for this partition.');
     try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${region}.amazonaws.com${region.startsWith('cn-') ? '.cn' : ''}`)); }
     catch { throw new Error('Invalid Bedrock endpoint.'); }
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -5229,13 +5239,13 @@ export class BedrockProvider extends AiProvider {
     if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, requestedModel, messages, this.region);
     const toolConfig = prepareBedrockTools(native ? requestedModel : undefined, options);
     const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
-    const region = this.configuredRegion ?? authentication?.region ?? this.region;
+    const arnRegion = this.modelArnRegion(requestedModel), region = arnRegion ?? this.configuredRegion ?? this.endpointRegion ?? authentication?.region ?? this.region;
     const model = encodeURIComponent(requestedModel);
     let url: URL;
     try {
-      url = native ? this.streamEndpoint(requestedModel, region)
+      url = native || arnRegion ? this.streamEndpoint(requestedModel, region)
         : new URL(String(this.config.baseUrl || `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/converse`));
-      if (native) url.pathname = url.pathname.replace(/-stream$/u, '');
+      if (native || arnRegion) url.pathname = url.pathname.replace(/-stream$/u, '');
     } catch { throw new Error('Invalid Bedrock endpoint.'); }
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
@@ -5307,7 +5317,7 @@ export class BedrockProvider extends AiProvider {
       if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, model, messages, this.region);
       const toolConfig = prepareBedrockTools(native ? model : undefined, options);
       const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
-      const region = this.configuredRegion ?? authentication?.region ?? this.region;
+      const region = this.modelArnRegion(model) ?? this.configuredRegion ?? this.endpointRegion ?? authentication?.region ?? this.region;
       const url = this.streamEndpoint(model, region);
       const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined, toolConfig);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, region);
