@@ -31,10 +31,10 @@ export async function resolveVertexAdcEnvironment(env: NodeJS.ProcessEnv, signal
 }
 
 /** Trusted host configuration; existing access-token consumers retain Bearer priority. */
-export function vertexEnvironmentConfig(env: NodeJS.ProcessEnv, credential?: string): ProviderConfig | undefined {
+export function vertexEnvironmentConfig(env: NodeJS.ProcessEnv, credential?: string, resolvedMode?: ProviderConfig['vertexAuthMode']): ProviderConfig | undefined {
   const apiKey = credential ?? (env.GOOGLE_VERTEX_ACCESS_TOKEN || env.GOOGLE_CLOUD_API_KEY);
   if (!apiKey) return undefined;
-  const vertexAuthMode = env.GOOGLE_VERTEX_ACCESS_TOKEN || !env.GOOGLE_CLOUD_API_KEY ? 'bearer' : 'api-key';
+  const vertexAuthMode = resolvedMode ?? (env.GOOGLE_VERTEX_ACCESS_TOKEN || !env.GOOGLE_CLOUD_API_KEY ? 'bearer' : 'api-key');
   const project = env.GOOGLE_CLOUD_PROJECT || env.GCLOUD_PROJECT;
   if (vertexAuthMode === 'bearer' && !project && !env.VERTEX_BASE_URL) return undefined;
   return { type: 'vertex', apiKey, vertexAuthMode, project, location: env.GOOGLE_CLOUD_LOCATION,

@@ -1296,7 +1296,7 @@ function sanitizedProxySummaryMessages(messages: Message[]): Message[] {
 export function createProxyRoutes(
   proxy: AiProxyServer,
   options: {
-    persistApiKey?: (provider: string, apiKey: string) => Promise<void>;
+    persistApiKey?: (provider: string, apiKey: string, vertexAuthMode?: 'api-key' | 'bearer') => Promise<void>;
     /** Host-owned policy only: HTTP bodies and provider cache IDs select no scope. */
     resolveThinkingBudgets?: () => Promise<ChatOptions['thinkingBudgets']>;
   } = {},
@@ -1411,11 +1411,12 @@ export function createProxyRoutes(
   /** POST /api/config - Set API keys dynamically */
   const configHandler = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { type, apiKey, baseUrl, model } = (req.body ?? {}) as {
+      const { type, apiKey, baseUrl, model, vertexAuthMode } = (req.body ?? {}) as {
         type: string;
         apiKey?: string;
         baseUrl?: string;
         model?: string;
+        vertexAuthMode?: 'api-key' | 'bearer';
       };
 
       if (typeof type !== 'string' || (type !== 'local' && (typeof apiKey !== 'string' || !apiKey))
@@ -1429,6 +1430,9 @@ export function createProxyRoutes(
       }
 
       const providerType = (['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local'] as const).find(candidate => candidate === type) ?? null;
+      if (vertexAuthMode !== undefined && (providerType !== 'vertex' || vertexAuthMode !== 'api-key' && vertexAuthMode !== 'bearer')) {
+        res.status(400).json({ error: 'Invalid Vertex authentication mode' }); return;
+      }
       if (!providerType) {
         res.status(400).json({ error: 'Invalid provider type' });
         return;
@@ -1458,9 +1462,9 @@ export function createProxyRoutes(
 
       if (apiKey) {
         if (!options.persistApiKey) throw new Error('Credential storage is unavailable.');
-        await options.persistApiKey(providerType, apiKey);
+        await options.persistApiKey(providerType, apiKey, vertexAuthMode);
       }
-      proxy.setApiKey(providerType, apiKey || '', normalizedBaseUrl, model?.trim());
+      proxy.setApiKey(providerType, apiKey || '', normalizedBaseUrl, model?.trim(), 'api-key', vertexAuthMode);
 
       res.json({ success: true, message: `Provider "${type}" configured` });
     } catch {

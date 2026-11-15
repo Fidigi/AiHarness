@@ -266,7 +266,8 @@ function initializeCredentials(
         proxy.setApiKey(type, resolved.descriptor.source === 'environment' ? JSON.stringify({ bearerToken: value }) : value,
           credentialEnvironment.BEDROCK_BASE_URL, credentialEnvironment.BEDROCK_MODEL);
       } else if (type === 'vertex') {
-        const mode = resolved.descriptor.source === 'environment' && !credentialEnvironment.GOOGLE_VERTEX_ACCESS_TOKEN && credentialEnvironment.GOOGLE_CLOUD_API_KEY ? 'api-key' : 'bearer';
+        const mode = resolved.descriptor.source === 'environment' && !credentialEnvironment.GOOGLE_VERTEX_ACCESS_TOKEN && credentialEnvironment.GOOGLE_CLOUD_API_KEY ? 'api-key'
+          : resolved.credential.type === 'api-key' ? resolved.credential.vertexAuthMode ?? 'bearer' : 'bearer';
         proxy.setApiKey(type, value, credentialEnvironment.VERTEX_BASE_URL, credentialEnvironment.VERTEX_MODEL, 'api-key', mode);
       } else proxy.setApiKey(type, value);
     }
@@ -555,11 +556,11 @@ export function createApp(config?: ServerConfig): express.Application {
   applicationThinkingBudgets = resolveThinkingBudgets;
   const routes = createProxyRoutes(applicationProxy, {
     resolveThinkingBudgets,
-    persistApiKey: async (provider, apiKey) => {
+    persistApiKey: async (provider, apiKey, vertexAuthMode) => {
       const credentials = credentialRuntime.service;
       if (!(credentials as (ProviderCredentialService & { hasPersistentStore?: () => boolean }) | undefined)
         ?.hasPersistentStore?.()) throw new Error('Credential storage is unavailable.');
-      await credentials!.setApiKey(provider, apiKey);
+      await credentials!.setApiKey(provider, apiKey, true, vertexAuthMode);
     },
   });
 

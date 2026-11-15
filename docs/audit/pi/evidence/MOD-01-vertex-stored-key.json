@@ -1,0 +1,74 @@
+{
+  "schema": "ai-harness.mod-01.vertex-stored-key.v1",
+  "date": "2026-11-15",
+  "baseline": "9b8caca",
+  "status": "DELIVERED explicit stored Vertex Cloud-key provenance/native CLI-Server-Settings;02e PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "matrix": [
+    { "requirement": "Stored Vertex Cloud API key is usable without reinterpreting legacy Bearer records", "before": "Native transport/environment mode exists, generic stored secrets have no transport provenance and both hosts treat them as Bearer", "gap": "Functional absence confirmed against pinned login/resolve", "action": "Optional explicit encrypted Vertex credential metadata, retained by credential normalization and captured separately from key values in native hosts", "proof": "Core persistence/default/source-priority test plus native CLI/HTTP and Settings proofs" },
+    { "requirement": "Honest native host composition/operator selection", "before": "Ordinary key UI/API has no explicit Vertex mode selector", "gap": "Functional absence and distinct boundary evidence", "action": "Validated Vertex-only API mode and existing Settings key-save selector, preserving old default and requiring newly entered key", "proof": "Actual JSON CLI cold restart20tokens; real HTTP private restart/explicit mode/return to legacy30tokens; one actual Chromium Settings-to-header journey10tokens" },
+    { "requirement": "Remaining cloud/final qualification", "gap": "Independent cloud scope/decision/proof work", "action": "Do not redeliver this mode or infer stored ADC/AWS source choices from it; keep unanswered standalone IMDS decision and SSO CLI HOLD separate", "proof": "Exact23 statuses/counts and exactly three historical acceptances unchanged" }
+  ],
+  "implementation": {
+    "policy": "ProviderApiKeyCredential.vertexAuthMode?:api-key|bearer is explicit non-secret transport provenance carried inside the existing encrypted version1 record; absent remains legacy Bearer. Public setApiKey(provider,key,persist=true,vertexAuthMode?) accepts the fourth slot only for canonical vertex and validates before mutation. No key-prefix/JSON-text guess, new credential file/namespace or migration. Environment/command records do not inherit stored provenance. CLI captures resolved Vertex mode outside values and forwards it through all three native creation/reload sites; vertexEnvironmentConfig accepts optional resolved mode while its prior two-slot behavior remains. Server startup honors only the selected resolved record's mode, preserving environment priority. Existing credentials-capability POST /api/config accepts bounded Vertex-only vertexAuthMode, persists before mounting and rejects invalid/non-Vertex/null values before mutation; omission retains original Bearer behavior and clears prior explicit mode on replacement. Settings EN/FR has an explicit credential-type-to-save selector, legacy Bearer by default, applied only with a newly entered key; no retagging by toggling alone. Existing public descriptor stays secret-free and does not expose internal record data. Native Vertex key/Bearer wire/API/model/replay/default policy and ADC/current-source/lifetime gates unchanged.",
+    "reference": { "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff", "path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/providers/google-vertex.ts", "sha256": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878", "meaning": "Read-only pinned login offers api-key/ADC/service-account; resolve distinguishes stored key from scoped environment. Confirms real stored-key absence, not all foreign scoped-env/profile ABI. No source/reference SDK acquisition/import/execution." }
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-vertex-stored-key-owned",
+    "imageId": "sha256:672dc6bdbcee2bb44c6679d90f06638c6b61225fe3832533f10f4d7434a040ae",
+    "candidateImageId": "sha256:11a9488f6cd5cd56af4694c10bd4ebb6bdeae98edec4a583e204094006fd538f",
+    "predecessorImageId": "sha256:07dc5283409a9ab7e27ab70043618b8ca51ee62b1f01822c9ef34b5aa6588ab1",
+    "runtime": "Makefile Docker build/workspace-parity types; network none/CI=true/node --no-maglev. Canonical run-typescript retains --no-maglev/--no-turbofan. Tar-stdin /app/strict.json only on final image. Synthetic accounts/secrets/disposable HOME/profile/encrypted stores, mocked vendor or loopback native CLI/API/browser transports only. No personal credential input/store, live mode/account, protected container, dependency/generated checkout edit or assertion/deadline/retry relaxation. New stored CLI case uses --no-maglev directly on Node from its initial RED; earlier three mode branches retain their flags and are unselected, not modified for green.",
+    "regularRuntimePassed": 154,
+    "newCases": 4,
+    "regularReusedCases": 150,
+    "browserPassed": 1,
+    "newBrowserCases": 1,
+    "strictChangedRoots": 5,
+    "unselectedCases": 3,
+    "coverage": "New Core record test proves encrypted reload/explicit mode, unchanged opaque-secret legacy default, higher environment source without borrowed mode and invalid/non-Vertex refusal with unchanged encrypted bytes. New CLI unit binds stored mode outside values/native global-key header/scoped invocation override, environment Bearer precedence and unchanged legacy key default. New actual stored-json CLI variant uses compiled public Core persistence/real CLI, no project/env key, passive0wire listing, two cold native SSE turns/private signed journal reload20tokens/privacy. New real HTTP case binds credentials authorization/invalid mode/non-Vertex rejection before mutation, explicit stored key native G, fresh Server admission/private continuation, invalid replacement byte equality and omission returning the same secret to legacy Bearer;30 observed tokens.153 regular cases across eight Core/CLI/API/Web-client files plus one selected actual CLI=154; four new+150 reused. Existing Core credentials20/Vertex5/CLI Vertex2/ADC11/configured50/Server proxy30/Vertex HTTP3/Web API29 reused. Separate new Chromium EN Settings journey selects Cloud mode from legacy default, enters key, checks actual API payload/zero discovery/native global publisher header/no Authorization/no project, secret redaction/browser reload/encrypted store/browser storage privacy and one10-token assistant. No French browser claim, browser Server-restart claim or fresh print/RPC stored-mode claim.",
+    "sourceWitness": {
+      "packages/cli/src/index.ts": "fda1c79be673cc07cb16a46ef438572280a53e5d594c4d6f1db3b40f26b6775a",
+      "packages/cli/src/providers/configured-providers.ts": "fb1fa2077304c19d512e7325b826b414d22fa3302ae835a52cd32c5a343cc41a",
+      "packages/cli/src/providers/provider-runtime.ts": "160e6432cbc5ece3e6639f71322e8ab2debdc13beb1a59ad952584df9addec43",
+      "packages/core/src/providers/credentials.ts": "6c4f09e6861035b3fc6e7b67c981813bc1aa4af4e826546bb2dc1f7e8514e495",
+      "packages/core/src/providers/vertex-config.ts": "7d4621ab9bcbd95659208d46e0ee39ee79ec949c03dbcd418d881133704d132b",
+      "packages/server/src/api/proxy.ts": "9e9f2fe46c05c651e589ded946aff1eebe0bd31be13175797c0d540d16a7a6cf",
+      "packages/server/src/index.ts": "98984104a1759783e5c972fbe130061d373f0a7307e2a816477d1d632d9896a5",
+      "packages/web/src/components/SettingsView.tsx": "0766bd22f557109f06e6b29cba4dc957102b8b88f57d8ece6baa9002e2b5a56d",
+      "packages/web/src/components/settings-locale-en.ts": "9a1fe0d31ead048f4d89c81a235c2a59d4026a3a1b864efc630ac43d0b9f42bc",
+      "packages/web/src/components/settings-locale-fr.ts": "98b0cfb7951baf3aa040484c25ee9e9d0bdb39723a7cea7239c89c5610e5b45a",
+      "packages/web/src/services/api.ts": "246ea00439ed463f1b51e54190681298d43b2980a1dc75aace3e6997ab3c7c65"
+    },
+    "tests": {
+      "packages/core/src/providers/credentials.test.ts": "a3847d100c858a1854b50a790ed9829fa44c7a5969a8a9ee01a5573ddd132e1f",
+      "packages/cli/src/providers/vertex-auth.test.ts": "98793a5e982e8fef90e655da74e4a9bd9b5d89e6d5f8a7b38c72cb42cfc3b36e",
+      "packages/cli/src/cli/vertex-auth-process.test.ts": "fb73c61aaa020217628f3bf630f5c688215801ddfe4cdb07d5450948f7e9dbd8",
+      "packages/server/src/api/vertex-auth-http.test.ts": "db9e041a9dab757f9b55ebb14770d524693d6120884ecdbeaafd2fda88eb2dce",
+      "e2e/native-dialects-live.spec.ts": "80a77a80940f409212244f7a9fa75dddaa117ea21f45a1f17fb95451d77383c6"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-vertex-stored-key/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-vertex-stored-key/red.log (two genuine missing-metadata/native-mode failures;22 unselected)",
+      "hostsRed": "/tmp/mod01-vertex-stored-key/hosts-red.log (two genuine CLI/API failures;six unselected)",
+      "firstBuild": "/tmp/mod01-vertex-stored-key/build-owned.log (build/types PASS before Settings addition)",
+      "fixtureFailure": "/tmp/mod01-vertex-stored-key/focused.log (27PASS/one new CLI unit failure: default local discovery entered a Vertex-only mock before scoped override;strict not reached)",
+      "build": "/tmp/mod01-vertex-stored-key/build-owned-r2.log (final source/test/Settings build/types PASS)",
+      "focused": "/tmp/mod01-vertex-stored-key/focused-r2.log (28+1 PASS/five strict roots;three other CLI variants unselected)",
+      "owned": "/tmp/mod01-vertex-stored-key/owned.log (153+1=154 distinct regular PASS/five strict roots;three unselected)",
+      "browser": "/tmp/mod01-vertex-stored-key/browser.log (official runner/Chromium/workers1/retries0/new Settings case1 PASS)",
+      "review": "/tmp/mod01-vertex-stored-key/review-check.json",
+      "docs": "/tmp/mod01-vertex-stored-key/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-vertex-stored-key-owned",
+      "tar -C /tmp/mod01-vertex-stored-key -cf - strict.json | docker run --rm -i --network none -e CI=true ai-harness:mod01-vertex-stored-key-owned sh -c 'tar -xf - -C /app && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/credentials.test.ts packages/core/src/providers/vertex-auth.test.ts packages/cli/src/providers/vertex-auth.test.ts packages/cli/src/providers/vertex-adc.test.ts packages/cli/src/providers/configured-providers.test.ts packages/server/src/api/vertex-auth-http.test.ts packages/server/src/api/proxy.test.ts packages/web/src/services/api.test.ts --maxWorkers=1 && node --no-maglev node_modules/vitest/vitest.mjs run packages/cli/src/cli/vertex-auth-process.test.ts --maxWorkers=1 -t stored-json && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json'",
+      "docker run --rm --network none -e CI=true --shm-size=1g ai-harness:mod01-vertex-stored-key-owned node --no-maglev .docker/run-e2e.mjs e2e/native-dialects-live.spec.ts --project=chromium --workers=1 --retries=0 --grep 'explicitly saves a Vertex' --reporter=line",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "No new auth CLI command, provider-label inference, implicit old-key reinterpretation, SDK dependency/reference execution or credential-file/profile/source picker via HTTP. Existing custom endpoint/model preferences retain their prior persistence contract; explicit key transport provenance alone is added to the credential record. External stored/scoped ADC/AWS file/environment choices remain separate.",
+    "No new installed/production/global/model-host campaign or MOD-03/01b/04a/04b redelivery. Pending standalone IMDS operator decision is not answered by generic continuation; implementation unchanged. Prior SSO CLI SIGSEGV and Vertex runtime134 remain OPEN/nonaccepted with no rerun/repair or fourth acceptance.02e PARTIAL/06c OPEN/exact23/19DELIVERED+04bDONE/one historical/two unresolved/38-of43/active goal unchanged."
+  ]
+}

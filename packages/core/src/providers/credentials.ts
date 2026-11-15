@@ -41,6 +41,8 @@ export interface ProviderApiKeyCredential {
   version: 1;
   type: 'api-key';
   apiKey: string;
+  /** Explicit Vertex transport provenance; absence preserves legacy Bearer semantics. */
+  vertexAuthMode?: 'api-key' | 'bearer';
 }
 
 export interface ProviderOAuthCredential {
@@ -168,7 +170,8 @@ function validateCredential(value: unknown): ProviderCredential {
   const record = value as Partial<ProviderCredential>;
   if (record.version !== 1) throw new ProviderCredentialError('invalid-credential', 'The provider credential is invalid.');
   if (record.type === 'api-key') {
-    return { version: 1, type: 'api-key', apiKey: secret(record.apiKey) };
+    if (record.vertexAuthMode !== undefined && record.vertexAuthMode !== 'api-key' && record.vertexAuthMode !== 'bearer') throw new ProviderCredentialError('invalid-credential', 'The provider credential is invalid.');
+    return { version: 1, type: 'api-key', apiKey: secret(record.apiKey), ...(record.vertexAuthMode === undefined ? {} : { vertexAuthMode: record.vertexAuthMode }) };
   }
   if (record.type !== 'oauth') throw new ProviderCredentialError('invalid-credential', 'The provider credential is invalid.');
   const credential: ProviderOAuthCredential = {
@@ -825,9 +828,10 @@ export class ProviderCredentialService {
     return structuredClone(credential);
   }
 
-  async setApiKey(provider: string, apiKey: string, persist = true): Promise<ProviderCredentialDescriptor> {
+  async setApiKey(provider: string, apiKey: string, persist = true, vertexAuthMode?: ProviderApiKeyCredential['vertexAuthMode']): Promise<ProviderCredentialDescriptor> {
     const id = providerId(provider);
-    const credential: ProviderApiKeyCredential = { version: 1, type: 'api-key', apiKey: secret(apiKey) };
+    if (vertexAuthMode !== undefined && (id !== 'vertex' || vertexAuthMode !== 'api-key' && vertexAuthMode !== 'bearer')) throw new ProviderCredentialError('invalid-credential', 'The provider credential is invalid.');
+    const credential: ProviderApiKeyCredential = { version: 1, type: 'api-key', apiKey: secret(apiKey), ...(vertexAuthMode === undefined ? {} : { vertexAuthMode }) };
     await this.save(id, credential, persist);
     return descriptor(id, credential, persist && this.options.store ? 'encrypted-store' : 'memory');
   }

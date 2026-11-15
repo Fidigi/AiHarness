@@ -2247,12 +2247,13 @@ export async function setProviderApiKey(
   type: string,
   apiKey: string,
   baseUrl?: string,
+  vertexAuthMode?: 'api-key' | 'bearer',
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   try {
     const response = await apiFetch(`${API_BASE}/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, apiKey, baseUrl }),
+      body: JSON.stringify({ type, apiKey, baseUrl, vertexAuthMode }),
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

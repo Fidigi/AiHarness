@@ -161,6 +161,7 @@ export interface CreateConfiguredProvidersOptions {
   anthropicOAuth?: CliAnthropicOAuth;
   anthropicFederation?: CliProviderRuntime['anthropicFederation'];
   vertexAdc?: CliProviderRuntime['vertexAdc'];
+  vertexAuthMode?: CliProviderRuntime['vertexAuthMode'];
   bedrockProfile?: CliProviderRuntime['bedrockProfile'];
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
@@ -296,7 +297,7 @@ export function createConfiguredProviders(
   }
   const azure = azureEnvironmentConfig(env, azureKey);
   attempt(providers, 'azure', azure ? { ...network, ...azure } : undefined);
-  const vertex = vertexEnvironmentConfig(env, vertexKey);
+  const vertex = vertexEnvironmentConfig(env, vertexKey, options.vertexAuthMode);
   attempt(providers, 'vertex', vertex ? { ...network, ...vertex } : options.vertexAdc ? { ...network, ...options.vertexAdc } : undefined);
   attempt(providers, 'bedrock', bedrockCredential
     ? { ...network, ...bedrockCredential, ...nativeEnvironmentHints('bedrock', env), type: 'bedrock' }

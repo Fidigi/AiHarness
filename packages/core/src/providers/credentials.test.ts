@@ -30,6 +30,15 @@ afterEach(async () => {
 });
 
 describe('ProviderCredentialService', () => {
+  it('persists explicit Vertex Cloud-key provenance without migrating legacy secrets or lending mode to higher-priority sources', async () => {
+    const { service: credentials, filePath } = await service();
+    await credentials.setApiKey('vertex', 'same-opaque-secret', true, 'api-key');
+    const reloaded = new ProviderCredentialService({ store: new EncryptedCredentialStore(filePath, 'correct horse battery staple') }); await reloaded.load();
+    expect(reloaded.readStoredCredential('vertex')).toEqual({ version: 1, type: 'api-key', apiKey: 'same-opaque-secret', vertexAuthMode: 'api-key' });
+    expect((await reloaded.resolve('vertex', { env: { GOOGLE_VERTEX_ACCESS_TOKEN: 'override-token' } }))?.credential).toEqual({ version: 1, type: 'api-key', apiKey: 'override-token' });
+    const before = await readFile(filePath); await expect(credentials.setApiKey('openai', 'must-not-save', true, 'api-key')).rejects.toThrow(); await expect(credentials.setApiKey('vertex', 'must-not-save', true, 'invalid' as never)).rejects.toThrow(); expect(await readFile(filePath)).toEqual(before);
+    await credentials.setApiKey('vertex', 'same-opaque-secret'); await reloaded.load(); expect(reloaded.readStoredCredential('vertex')).toEqual({ version: 1, type: 'api-key', apiKey: 'same-opaque-secret' }); expect(JSON.stringify(reloaded.list())).not.toContain('same-opaque-secret'); expect((await readFile(filePath)).includes(Buffer.from('same-opaque-secret'))).toBe(false);
+  });
   it('copies expired stored administration snapshots without environment, commands, refresh or availability authority', async () => {
     const { service: credentials, filePath } = await service();
     await credentials.setOAuth('radius-admin', { accessToken: 'private-expired-radius', refreshToken: 'private-radius-refresh', expiresAt: 1,

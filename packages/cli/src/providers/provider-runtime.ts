@@ -73,6 +73,7 @@ export interface CliProviderRuntime {
   anthropicOAuth?: CliAnthropicOAuth;
   anthropicFederation?: AnthropicFederationConfig;
   vertexAdc?: VertexProviderConfig;
+  vertexAuthMode?: 'api-key' | 'bearer';
   bedrockProfile?: BedrockProviderConfig;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
@@ -168,6 +169,7 @@ export async function createCliProviderRuntime(
   const values = new Map<string, string>();
   let kimiCodingAuthMode: CliProviderRuntime['kimiCodingAuthMode'];
   let anthropicAuthMode: CliProviderRuntime['anthropicAuthMode'];
+  let vertexAuthMode: CliProviderRuntime['vertexAuthMode'];
   const present = new Set(credentials.list().map(item => item.provider));
   const providers = new Set<string>([
     ...CLI_CREDENTIAL_PROVIDERS,
@@ -195,6 +197,8 @@ export async function createCliProviderRuntime(
       if (config) redactor.addAll(Object.values(config));
     }
     values.set(provider, value);
+    if (provider === 'vertex') vertexAuthMode = resolved.descriptor.source === 'environment' && !commandEnv.GOOGLE_VERTEX_ACCESS_TOKEN && commandEnv.GOOGLE_CLOUD_API_KEY ? 'api-key'
+      : resolved.credential.type === 'api-key' ? resolved.credential.vertexAuthMode ?? 'bearer' : 'bearer';
     if (provider === 'kimi-coding') kimiCodingAuthMode = resolved.credential.type;
     if (provider === 'anthropic') anthropicAuthMode = resolved.credential.type === 'oauth'
       || resolved.descriptor.source === 'environment' && !commandEnv.ANTHROPIC_API_KEY
@@ -240,6 +244,7 @@ export async function createCliProviderRuntime(
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),
     ...(anthropic ? { anthropicOAuth: { credential: anthropic, credentialSource: anthropicSource } } : {}),
     ...(anthropicAuthMode ? { anthropicAuthMode } : {}),
+    ...(vertexAuthMode ? { vertexAuthMode } : {}),
     ...(!offline && !values.has('anthropic') && !present.has('anthropic') && !commandEnv[commandVariable('anthropic')]
       && env.ANTHROPIC_FEDERATION_RULE_ID && env.ANTHROPIC_ORGANIZATION_ID && env.ANTHROPIC_IDENTITY_TOKEN_FILE
       ? { anthropicFederation: { federationRuleId: env.ANTHROPIC_FEDERATION_RULE_ID, organizationId: env.ANTHROPIC_ORGANIZATION_ID,

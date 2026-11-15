@@ -165,10 +165,11 @@ function SettingsView({ entryRelease, entryEpoch }: {
       : t('settings.push.inactive'));
   };
 
+  const [vertexCredentialMode, setVertexCredentialMode] = useState<'api-key' | 'bearer'>('bearer');
   const saveApiKey = async (type: string) => {
     const key = apiKeyInputs[type];
     if (key && !key.includes('•')) {
-      const result = await setProviderApiKey(type, key);
+      const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
       if (result.success) {
         updateApiKey(type as ProviderType, 'configured');
         setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
@@ -239,10 +240,15 @@ function SettingsView({ entryRelease, entryEpoch }: {
           ].includes(type)).map(type => {
             const providerType = type as ProviderType;
             const providerLabel = getTypeLabel(providerType, t);
-            const environmentVariable = getTypeEnvVar(providerType);
+            const environmentVariable = type === 'vertex' && vertexCredentialMode === 'api-key' ? 'GOOGLE_CLOUD_API_KEY' : getTypeEnvVar(providerType);
             return (
               <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
                 <label>{providerLabel}</label>
+                {type === 'vertex' && <select aria-label={t('settings.vertexCredentialMode')} value={vertexCredentialMode}
+                  onChange={event => setVertexCredentialMode(event.target.value === 'api-key' ? 'api-key' : 'bearer')}>
+                  <option value="bearer">{t('settings.vertexBearerCredential')}</option>
+                  <option value="api-key">{t('settings.vertexCloudCredential')}</option>
+                </select>}
                 <div className="api-key-input-group">
                   <input
                     type="password"
