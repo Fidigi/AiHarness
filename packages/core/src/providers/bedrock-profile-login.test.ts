@@ -1,0 +1,78 @@
+import { createHash, generateKeyPairSync, verify } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it, vi } from 'vitest';
+import { BedrockProvider, CredentialRedactor, resolveBedrockProfileEnvironment, type BedrockProfileConfig, type Message } from '../../dist/index.js';
+import { bedrockFrame } from '../../../../tests/fixtures/bedrock-event-stream.js';
+import { syntheticAssumeRoleXml } from '../../../../tests/fixtures/sts-web-identity.js';
+const roots: string[] = [], model = 'anthropic.claude-opus-4-6-v1', issuer = 'https://eu-west-1.signin.aws.amazon.com/v1/token';
+const messages: Message[] = [{ id: 'u', role: 'user', content: 'synthetic login', timestamp: new Date(0) }];
+const native = (url: unknown) => String(url).endsWith('/converse-stream') ? new Response(Buffer.concat([bedrockFrame('messageStart', { role: 'assistant' }), bedrockFrame('contentBlockDelta', { contentBlockIndex: 0, delta: { text: 'login-ready' } }), bedrockFrame('contentBlockStop', { contentBlockIndex: 0 }), bedrockFrame('messageStop', { stopReason: 'end_turn' }), bedrockFrame('metadata', { usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 } })]), { headers: { 'content-type': 'application/vnd.amazon.eventstream' } }) : Response.json({ output: { message: { role: 'assistant', content: [{ text: 'login-ready' }] } }, stopReason: 'end_turn', usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 } });
+const renewed = (key = 'LOGINNEW', refreshToken = 'LoginRotatedRefresh') => Response.json({ accessToken: { accessKeyId: key, secretAccessKey: 'LoginNewSecret', sessionToken: 'LoginNewSession' }, refreshToken, expiresIn: 3600 });
+afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+async function fixture(leaf = false) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-profile-login-')); roots.push(root); vi.stubEnv('HOME', root); vi.stubEnv('AWS_REGION', ''); vi.stubEnv('AWS_DEFAULT_REGION', '');
+  const configFile = path.join(root, 'config'), credentialsFile = path.join(root, 'credentials'), cacheDirectory = path.join(root, 'private-login-cache'); await mkdir(cacheDirectory);
+  const recipe = (leaf ? '[profile chosen]\nrole_arn=arn:aws:iam::123456789012:role/LoginTarget\nsource_profile=base\nregion=us-east-1\n' : '') + '[profile ' + (leaf ? 'base' : 'chosen') + ']\nlogin_session=synthetic-login-session\nregion=eu-west-1\n';
+  await writeFile(configFile, recipe); await writeFile(credentialsFile, '[unused]\n');
+  const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }), dpopKey = keys.privateKey.export({ type: 'sec1', format: 'pem' }).toString(), cache = path.join(cacheDirectory, createHash('sha256').update('synthetic-login-session').digest('hex') + '.json');
+  const document = (expiresAt = Date.now() + 3600000) => ({ accessToken: { accessKeyId: 'LOGINCACHED', secretAccessKey: 'LoginCacheSecret', sessionToken: 'LoginCacheSession', accountId: '123456789012', expiresAt: new Date(expiresAt).toISOString() }, clientId: 'LoginPrivateClient', refreshToken: 'LoginPrivateRefresh', dpopKey });
+  const save = (expiresAt?: number) => writeFile(cache, JSON.stringify(document(expiresAt))); await save(); const redactor = new CredentialRedactor();
+  const create = (extra: Partial<BedrockProfileConfig> = {}) => new BedrockProvider({ type: 'bedrock', model, region: 'us-west-2', customHeaders: { 'x-inference-only': 'private-native' }, bedrockProfile: { profile: 'chosen', credentialsFile, configFile, loginCacheDirectory: cacheDirectory, redactor, ...extra } });
+  return { root, configFile, credentialsFile, cacheDirectory, cache, recipe, keys, dpopKey, document, save, redactor, create };
+}
+it('uses selected login cached keys and native JSON/binary, then refreshes with independently verified ES256 DPoP and source-bound readonly rotation', async () => {
+  const f = await fixture(), provider = f.create(), before = await readFile(f.cache), now = Date.now(), bodies: unknown[] = [], jtis = new Set<string>(); let key = 'LOGINCACHED';
+  vi.stubGlobal('fetch', vi.fn(async (url, init) => { const headers = new Headers(init?.headers); if (String(url) === issuer) {
+    expect(init?.method).toBe('POST'); expect(init?.redirect).toBe('manual'); expect(headers.get('content-type')).toBe('application/json'); for (const name of ['authorization', 'x-amz-security-token', 'x-inference-only']) expect(headers.has(name)).toBe(false);
+    const parts = headers.get('dpop')!.split('.'), header = JSON.parse(Buffer.from(parts[0], 'base64url').toString()), payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+    expect(header).toEqual({ alg: 'ES256', typ: 'dpop+jwt', jwk: f.keys.publicKey.export({ format: 'jwk' }) }); expect(Object.keys(payload).sort()).toEqual(['htm', 'htu', 'iat', 'jti']); expect(payload).toMatchObject({ htm: 'POST', htu: issuer, iat: Math.floor(Date.now() / 1000) }); expect(payload.jti).toMatch(/^[0-9a-f-]{36}$/u); expect(jtis.has(payload.jti)).toBe(false); jtis.add(payload.jti); expect(verify('sha256', Buffer.from(parts[0] + '.' + parts[1]), { key: f.keys.publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(parts[2], 'base64url'))).toBe(true);
+    bodies.push(JSON.parse(String(init?.body))); key = 'LOGINNEW'; const response = await renewed().json() as Record<string, unknown>; if (bodies.length === 1) delete response.expiresIn; return Response.json(response); }
+    expect(String(url)).toContain('bedrock-runtime.us-west-2.amazonaws.com/'); expect(headers.get('authorization')).toContain('Credential=' + key + '/'); expect(headers.get('x-inference-only')).toBe('private-native'); expect(headers.has('dpop')).toBe(false); return native(url); }));
+  expect(provider.validateConfig()).toBe(true); expect(await provider.getAvailableModels()).toEqual([]); expect((await provider.chat(messages)).usage?.totalTokens).toBe(10); await provider.streamChat(messages, () => {}, () => {}, error => { throw error; }); expect(bodies).toHaveLength(0);
+  for (const hours of [1, 2]) { vi.spyOn(Date, 'now').mockReturnValue(now + hours * 3600000); await provider.chat(messages); }
+  expect(bodies).toEqual(['LoginPrivateRefresh', 'LoginRotatedRefresh'].map(refreshToken => ({ clientId: 'LoginPrivateClient', grantType: 'refresh_token', refreshToken }))); expect(await readFile(f.cache)).toEqual(before);
+  expect(f.redactor.redact(['LoginPrivateClient', 'LoginPrivateRefresh', 'LoginRotatedRefresh', 'LoginNewSecret', 'LoginNewSession', f.dpopKey].join('|'))).toBe(Array(6).fill('[REDACTED]').join('|'));
+  await rm(f.cache); await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+});
+it('keeps a persistent login role leaf, rotated refresh through STS denial, final-only native keys and valid final-role cache beyond source expiry', async () => {
+  const f = await fixture(true); await f.save(Date.now() - 1000); const now = Date.now(), refreshes: string[] = []; let denied = true, stsCalls = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url, init) => { if (String(url) === issuer) { refreshes.push(JSON.parse(String(init?.body)).refreshToken); return renewed(); } const headers = new Headers(init?.headers); if (String(url) === 'https://sts.us-east-1.amazonaws.com/') { stsCalls++; expect(headers.get('authorization')).toContain('Credential=LOGINNEW/'); expect(headers.has('dpop')).toBe(false); if (denied) return new Response('', { status: 503 }); return new Response(syntheticAssumeRoleXml('LOGINFINAL')); } expect(headers.get('authorization')).toContain('Credential=LOGINFINAL/'); return native(url); }));
+  const provider = f.create(); await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); denied = false; vi.spyOn(Date, 'now').mockReturnValue(now + 3600000); await provider.chat(messages); await provider.chat(messages); expect(stsCalls).toBe(2); expect(refreshes).toEqual(['LoginPrivateRefresh', 'LoginRotatedRefresh']);
+  await rm(f.cache); await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+  await writeFile(f.credentialsFile, '[base]\naws_access_key_id=LOGINNEW\naws_secret_access_key=LoginNewSecret\naws_session_token=LoginNewSession\n'); await provider.chat(messages); expect(stsCalls).toBe(3); expect(refreshes).toHaveLength(2);
+});
+it('refuses invalid/mixed/offline login sources and malformed/expired refresh replies without execution or cross-source fallback; captures only trusted native paths', async () => {
+  const f = await fixture(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  for (const entry of ['credential_process=must-not-run', 'aws_access_key_id=MIXED\naws_secret_access_key=MixedSecret', 'sso_session=mixed', 'source_profile=mixed', 'credential_source=Ec2InstanceMetadata']) { await writeFile(f.configFile, f.recipe + entry + '\n'); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
+  await writeFile(f.configFile, f.recipe); await expect(f.create({ allowNetwork: false }).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+  for (const value of ['{}', '[]', '{', Buffer.from([0xff]), Buffer.alloc(256 * 1024 + 1), JSON.stringify({ ...f.document(), clientId: '' }), JSON.stringify({ ...f.document(0), dpopKey: 'not-a-private-key' }), JSON.stringify({ ...f.document(), accessToken: { ...f.document().accessToken, accountId: 'bad' } })]) { await writeFile(f.cache, value); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
+  expect(fetch).not.toHaveBeenCalled(); await f.save(Date.now() - 1000);
+  for (const response of [new Response('', { status: 302 }), new Response('', { status: 403 }), new Response(Buffer.from([0xff])), new Response('x'.repeat(256 * 1024 + 1)), Response.json({}), ...[{ expiresIn: 0 }, { expiresIn: '900' }, { expiresIn: 43201 }, { refreshToken: '' }, { accessToken: { accessKeyId: 'BAD', secretAccessKey: 'bad\nsecret', sessionToken: 'Bad' } }].map(extra => Response.json({ accessToken: { accessKeyId: 'BAD', secretAccessKey: 'BadSecret', sessionToken: 'BadSession' }, refreshToken: 'BadRefresh', expiresIn: 900, ...extra }))]) { fetch.mockResolvedValueOnce(response); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
+  expect(fetch).toHaveBeenCalledTimes(10);
+  const admitted = await resolveBedrockProfileEnvironment({ HOME: f.root, AWS_PROFILE: 'chosen', AWS_CONFIG_FILE: f.configFile, AWS_SHARED_CREDENTIALS_FILE: f.credentialsFile, AWS_LOGIN_CACHE_DIRECTORY: f.cacheDirectory }); expect(admitted?.bedrockProfile?.loginCacheDirectory).toBe(f.cacheDirectory);
+  const defaulted = await resolveBedrockProfileEnvironment({ HOME: f.root, AWS_PROFILE: 'chosen', AWS_CONFIG_FILE: f.configFile, AWS_SHARED_CREDENTIALS_FILE: f.credentialsFile }); expect(defaulted?.bedrockProfile?.loginCacheDirectory).toBe(path.join(f.root, '.aws', 'login', 'cache'));
+});
+it('fences private-key enrollment/issuer publication/current native authority, forces exact401 refresh and only falls back to unexpired non-rejected keys', async () => {
+  const f = await fixture(); await f.save(Date.now() + 120000); let calls = 0, deny = false, issuerStatus = 503;
+  vi.stubGlobal('fetch', vi.fn(async (url) => { if (String(url) === issuer) { calls++; return issuerStatus === 200 ? renewed() : new Response('', { status: issuerStatus }); } return deny ? new Response('', { status: 401 }) : native(url); }));
+  let withdrawn = false; const stale = f.create({ redactor: { add(value) { if (!withdrawn && value === f.dpopKey) { withdrawn = true; writeFileSync(f.configFile, '[withdrawn]\n'); } } } }); await expect(stale.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(calls).toBe(0); await writeFile(f.configFile, f.recipe);
+  const provider = f.create(); await provider.chat(messages); deny = true; await expect(provider.chat(messages, { maxRetries: 0 })).rejects.toThrow(); deny = false; await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); issuerStatus = 200; await provider.chat(messages); expect(calls).toBe(4);
+  issuerStatus = 403; await f.save(Date.now() + 120000); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(calls).toBe(5);
+  await f.save(Date.now() - 1000); const fetch = vi.fn(async url => { expect(String(url)).toBe(issuer); await writeFile(f.cache, '{}'); return renewed(); }); vi.stubGlobal('fetch', fetch); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(fetch).toHaveBeenCalledTimes(1);
+});
+it('keeps newest successful login rotation when an older issuer returns later, including old-auth rejection without evicting the new keys', async () => {
+  const f = await fixture(); await f.save(Date.now() - 1000); let entered!: () => void, release!: (response: Response) => void, denyNewest = false; const ready = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<Response>(resolve => { release = resolve; }), refreshes: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+    if (String(url) === issuer) { refreshes.push(JSON.parse(String(init?.body)).refreshToken); if (refreshes.length === 1) { entered(); return held; } return renewed('LOGINNEWEST', 'NewestLoginRefresh'); }
+    const auth = new Headers(init?.headers).get('authorization'); if (auth?.includes('Credential=LOGINOLDER/') || denyNewest) return new Response('', { status: 401 }); expect(auth).toContain('Credential=LOGINNEWEST/'); return native(url);
+  }));
+  const provider = f.create(), older = provider.chat(messages, { maxRetries: 0 }).then(() => 'unexpected', () => 'refused'); await ready; await provider.chat(messages); release(renewed('LOGINOLDER', 'OlderLoginRefresh')); expect(await older).toBe('refused'); await provider.chat(messages); expect(refreshes).toHaveLength(2);
+  denyNewest = true; await expect(provider.chat(messages, { maxRetries: 0 })).rejects.toThrow(); denyNewest = false; await provider.chat(messages); expect(refreshes).toEqual(['LoginPrivateRefresh', 'LoginPrivateRefresh', 'NewestLoginRefresh']);
+});
+it('cancels held DPoP issuer bodies with independent caller success, no abandoned rotation and owner retirement', async () => {
+  const f = await fixture(); await f.save(Date.now() - 1000); const caller = new AbortController(), owner = new AbortController(); let entered!: () => void, cancelled = 0, hold = true, issuerCalls = 0; const ready = new Promise<void>(resolve => { entered = resolve; });
+  vi.stubGlobal('fetch', vi.fn(async url => { if (String(url) !== issuer) return native(url); issuerCalls++; if (!hold) return renewed(); entered(); return new Response(new ReadableStream({ cancel() { cancelled++; return new Promise(() => {}); } })); })); const provider = f.create({ signal: owner.signal }), pending = provider.chat(messages, { signal: caller.signal }).then(() => 'unexpected', error => error.message); await ready; hold = false; await provider.chat(messages); caller.abort(); expect(await pending).toBe('Bedrock profile authentication failed.'); expect(cancelled).toBe(1); await provider.chat(messages); expect(issuerCalls).toBe(2); owner.abort(); await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+});
