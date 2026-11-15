@@ -7,7 +7,10 @@ import type { BedrockProviderConfig } from './index.js';
 /** Trusted host selection only: explicit profile intent never silently changes identity to a container source. */
 export async function resolveBedrockCredentialsEnvironment(env: NodeJS.ProcessEnv, signal?: AbortSignal, allowNetwork = true): Promise<BedrockProviderConfig | undefined> {
   signal?.throwIfAborted();
-  if (env.AWS_PROFILE) return resolveBedrockProfileEnvironment(env, signal);
+  if (env.AWS_PROFILE) {
+    const profile = await resolveBedrockProfileEnvironment(env, signal);
+    return profile ? { ...profile, bedrockProfile: { ...profile.bedrockProfile!, allowNetwork } } : undefined;
+  }
   if (!allowNetwork || env.AWS_BEARER_TOKEN_BEDROCK || env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) return undefined;
   if (env.AWS_WEB_IDENTITY_TOKEN_FILE) {
     const bedrockWebIdentity: BedrockWebIdentityConfig = { roleArn: env.AWS_ROLE_ARN || '', tokenFile: path.resolve(env.AWS_WEB_IDENTITY_TOKEN_FILE), roleSessionName: env.AWS_ROLE_SESSION_NAME || undefined, signal };

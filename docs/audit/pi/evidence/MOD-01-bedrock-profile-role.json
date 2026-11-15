@@ -1,0 +1,111 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "db8121e",
+  "criterion": "MOD-01.02e / MOD-01.03a / MOD-01.05",
+  "status": "PARTIAL",
+  "scope": "Bounded INI role_arn/source_profile AssumeRole over static sources in Core and native existing named-profile CLI/Server path; not all profile providers/MFA/scoped profile login",
+  "reference": [
+    {
+      "name": "@aws-sdk/credential-provider-ini",
+      "version": "3.973.19",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-ini/dist-cjs/index.js",
+      "sha256": "2d975f8114b17e1e96eea2735c7271f735f08bab35dc922384cd15735bbdd085"
+    },
+    {
+      "name": "@aws-sdk/nested-clients",
+      "version": "3.997.48",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js",
+      "sha256": "e4282c29a35883794b9d1644c9243b2631fb40aa5cae6398458cbd2e86279b77"
+    }
+  ],
+  "implementation": "Selected named profile may now use role_arn + source_profile, bounded four role steps ending in validated static credentials from same bounded config/credentials INI files. Preserve file merge and exact profile isolation. Bottom-up signed AssumeRole, role/session/duration900..43200/external ID recipe validation, cycles/unknown/ambiguous source/MFA/process/credential-scope refusal before I/O. Recursive source with explicit static keys wins its unused role recipe, including self-source, as installed SDK; no inferred Environment/ECS/SSO/process/web source. Selected top role profile region config precedes parent region for STS and is reused through nested role steps, source-child region does not retarget it; inference still explicit config/AWS_REGION/AWS_DEFAULT_REGION before returned top profile region/default. Endpoint and role ARN validation/XML reader extracted only for real WebIdentity+AssumeRole reuse, exact operation/namespace parser unchanged. Existing SigV4 moved into a two-service private primitive, preserving Bedrock bytes and double encoding, STS signed by source credentials; next role uses previous minted credentials, native inference uses final credentials only. No inference custom/auth headers to STS; existing native network proxy/scope, manual/exact200/no auth retry, whole-chain15s/256KiB XML/finite future≤12h. Existing private current-file/newest cache wraps final credentials only, source reread between authorities/after final/before dispatch, no intermediate shared/disk cache/store/background. Role cache exact401/403 next-call invalidation forwarded through profile wrapper. Static-file path unchanged/stateless. New captured BedrockProfileConfig.allowNetwork carries trusted host admission: composite env helper preserves named-profile metadata offline but marks auth vending disallowed; role acquire refuses before STS while static signing stays useful. Existing native envelope/readonly AWS_PROFILE/owner/key/default/cold/RPC paths reuse this same profile descriptor, no new auth marker/HTTP field/UI authority.",
+  "qualification": {
+    "environment": "Makefile Docker builds/types, --network none/CI=true/node --no-maglev. Synthetic source/vended credentials/role account IDs/INI/HOME/stores and mocked or verified-CA loopback services only; no account/live mode/personal stores/protected containers/SDK acquisition/execution/generated output edits/new dependency.",
+    "image": "ai-harness:mod01-bedrock-profile-role-owned",
+    "imageId": "sha256:1d23a4cb06ddc30c810a7a2362991fad1499a567eeebc3fca6dbd3f752c4be8d",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-profile-role-owned",
+    "buildLog": "/tmp/mod01-bedrock-profile-role/build-owned-r2.log",
+    "strict": {
+      "passed": true,
+      "roots": 4,
+      "config": "/tmp/mod01-bedrock-profile-role/strict.json",
+      "log": "/tmp/mod01-bedrock-profile-role/owned.log"
+    },
+    "runtime": {
+      "passed": 194,
+      "failed": 0,
+      "new": 11,
+      "reused": 183,
+      "log": "/tmp/mod01-bedrock-profile-role/owned.log",
+      "newFiles": [
+        "packages/core/src/providers/bedrock-profile-role.test.ts",
+        "packages/cli/src/cli/bedrock-profile-role-process.test.ts",
+        "packages/server/src/api/bedrock-profile-role-http.test.ts"
+      ],
+      "strengthenedFile": "packages/cli/src/providers/bedrock-profile.test.ts",
+      "filteredControl": {
+        "file": "packages/core/src/providers/bedrock-converse-stream.test.ts",
+        "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4",
+        "passed": 4,
+        "unselected": 643,
+        "runtimeOnly": true
+      },
+      "meaning": "Eight public compiled-Core role cases: exact independent HMAC/query/body vector plus sourceSTS->finalNative credentials, separate STS/inference region/header scope, JSON/binary/private immutable replay/usage10; nested chain/recursive static/self; cache/file-key rotation/exact403 next-call/removal; cycle/depth/MFA/source/process/duration/external/schema refusals; between-authority withdrawal/wrong XML op; new offline role-deny/static positive; old explicit auth/header/derived/preflight boundaries; caller/owner/scope hostile XML abandonment/recovery. One new CLI resolver case proves actual offline named descriptor carries allowNetwork=false/no acquisition, passive model metadata remains. One real emitted JSON/TLS case uses native env named-profile/full files, unsigned metadata/list0 then signed STS->binary/private new OS-process source-key/vended-key rotation, separate EU STS versus US inference, offline zero-STS/refused acquisition/default retries and cold offline Bearer override after source-file removal,30 once-only tokens/0600/privacy/no credentials store. One real authenticated API case uses passive readonly AWS_PROFILE/Test409/Disconnect409, one cached STS for two native private runs then new-runtime source rotation, second STS/private third request/30tokens, old source retired/file withdrawal/privacy/no source persisted. CLI five main requests (two STS/three native including override), API five main requests (two STS/three native); each main ledger30. Existing unchanged print/RPC/other issuer/readonly/lifetime boundaries reused, no new browser/installed/production/model-host campaign. Reused183 = all previously owned AWS SDK/static/ECS/web/native host/CLI-runtime/proxy/Vertex-key/signature cases, not a model completion percentage."
+    },
+    "signatureVector": {
+      "artifact": "/tmp/mod01-bedrock-profile-role/expected-vector.json",
+      "meaning": "Docker pure Node crypto manual SigV4 canonical input computes fixed STS HMAC independently of product signer, no SDK execution. Frozen synthetic source/session/time/query pinned in public SDK assertion. Existing independent Bedrock double-escaped vector kept unchanged."
+    },
+    "counterfactual": [
+      {
+        "image": "ai-harness:mod01-bedrock-web-identity-hosts-owned",
+        "failed": 5,
+        "passed": 2,
+        "log": "/tmp/mod01-bedrock-profile-role/red.log",
+        "meaning": "Initial seven role cases; five missing-role behaviors fail, unsupported recipe/explicit-auth controls already pass. Not seven fresh accepted bugs."
+      },
+      {
+        "image": "ai-harness:mod01-bedrock-profile-role-owned (initial SDK-only stage)",
+        "failed": 2,
+        "unselected": 16,
+        "log": "/tmp/mod01-bedrock-profile-role/offline-red.log",
+        "meaning": "New SDK and CLI resolver controls expose role vending inherited from the online-only profile assumption despite native offline. Capture allowNetwork at admission and enforce in role acquisition; keep static offline positive, no flags/deadlines/retries/assertions weakened."
+      },
+      {
+        "image": "ai-harness:mod01-bedrock-web-identity-hosts-owned",
+        "failed": 2,
+        "log": "/tmp/mod01-bedrock-profile-role/hosts-red.log",
+        "meaning": "Actual JSON CLI/native HTTP require missing role mechanism, not SDK/factory-only host credit."
+      }
+    ],
+    "retainedFailures": [],
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 6,
+      "imageWitness": "/tmp/mod01-bedrock-profile-role/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-bedrock-profile-role/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-bedrock-profile-role/runtime-witness.diff",
+      "meaning": "Six changed production sources image-identical, final tests built/baked, strict config only tar-injected. Prior stage/predecessor overlays and exact fixed-STS verified-loopback mapper test-only; no product issuer override/global image authority."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-bedrock-profile-role/docs.log"
+    }
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/aws-sigv4.ts": "86f227c1b2ee7ca34c22e8721b2b2f2a1e8eb79855fafab3a0560867185aabde",
+    "packages/core/src/providers/aws-sts.ts": "0edc610a4b8891454c08fbbf3cf5594abb916ae3b2aa7e50ef942fa67cd8dbdf",
+    "packages/core/src/providers/bedrock-profile.ts": "42b35040ec69add1b3d5f278dfbc406f17a1c7c6b7ec9f5e26b07f462f5e4f53",
+    "packages/core/src/providers/bedrock-web-identity.ts": "0cc8858b8bf6655773c29a6c462362b911f5dbfe7e170b22596b644860db7784",
+    "packages/core/src/providers/bedrock-config.ts": "593ce67c9e7b01626a8a10d5ab3366cde83c9ad596de41b64dc5864fc6c7122e",
+    "packages/core/src/providers/index.ts": "d7951ec3d237e2c5655d42539b903a6fb16e3adf911836e274249721a8045c2a"
+  },
+  "remaining": [
+    "Profile credential_source Environment/ECS/web leaves, SSO/process and explicit stored/scoped profile choices plus meaningful remaining ARN/endpoint/region/request policies; bounded source_profile/static Role path is not full SDK chain",
+    "Other ADC/effective default-tool/catalogue requirements and final23-row MOD-01 audit"
+  ],
+  "limits": "Four role steps/static INI leaves only. No MFA callback/token prompt, credential_source, SSO/process/web leaves or arbitrary STS URL; unsupported scopes refuse, not synthetic authority. Default session name stable random instance-local rather than SDK Date.now string; no persisted identity/entitlement/account certificate. Role chaining duration/service permissions ultimately AWS-owned, mock suffix/role/key tests not real-account acceptance. Existing files rechecked at admission/dispatch, not watched; restore identical source may reuse still-valid cache, no remote revocation polling or JS/OS filesystem-memory certificate. New offline profile metadata remains configured but required mint fails without network; static/direct-key semantics separate. CLI mode JSON is the one distinct new role-source process boundary, existing print/RPC/Server generic lifetime/readonly proof reused unchanged. No new dependency/SDK/browser/installed/production/global/MOD-03 redelivery or historical repair.",
+  "auditState": "Bounded source-profile AssumeRole and native existing named-profile paths delivered. MOD-01.02e PARTIAL/MOD-01 IN PROGRESS/04b DONE/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged, goal active/not completed."
+}
