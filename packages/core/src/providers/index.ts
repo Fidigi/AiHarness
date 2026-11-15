@@ -621,6 +621,12 @@ export interface AnthropicChatOptions extends ChatOptions {
   toolChoice?: 'auto' | 'none' | 'any' | { type: 'tool'; name: string };
 }
 
+/** Scoped native Azure C caller tools; named choice uses C's nested wire function shape, unlike Responses. */
+export interface AzureCompletionsChatOptions extends ChatOptions {
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  toolChoice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
+}
+
 /** Caller JSON-schema/choice controls for exact original Bedrock profiles, not automatic host-tool strictness. */
 export interface BedrockChatOptions extends ChatOptions {
   tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
@@ -3997,10 +4003,14 @@ export class AzureCompletionsProvider extends OpenAiProvider {
     for (const name of Object.keys(headers)) if (['authorization', 'api-key'].includes(name.toLowerCase())) delete headers[name];
     return { ...headers, Authorization: `Bearer ${String(this.config.apiKey)}` };
   }
-  protected override prepareChatBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
+  protected override prepareChatBody(body: Record<string, unknown>, options?: AzureCompletionsChatOptions, messages: Message[] = []): Record<string, unknown> {
     const model = String(body.model), native = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
     if (this.ownsNativeProfiles || native) prepareAzureCompletion(body, options, messages, native ? this.logicalProvider : this.getProviderType(), native);
-    if (native) applyCompletionHistory(body, messages, this.logicalProvider, true, false);
+    if (native) {
+      applyCompletionHistory(body, messages, this.logicalProvider, true, false);
+      // History normalization omits the implicit default, not an explicit caller choice.
+      if (options?.toolChoice === 'auto') body.tool_choice = 'auto';
+    }
     body.model = typeof this.config.deployment === 'string' ? this.config.deployment : this.deployments.get(String(body.model)) ?? body.model;
     // Azure's actual SDK wrapper rewrites the posted deployment,not the prepared catalogue provenance.
     if (native) nativeCompletionsOwners.set(body, { provider: this.logicalProvider, api: 'openai-completions', model, normalizeReasoningMarker: false, invalidResponse: 'Invalid Azure chat response.' });
@@ -4016,10 +4026,10 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   private nativeFailure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Azure request aborted.');
     if (error instanceof ProviderContextOverflowError) return new ProviderContextOverflowError();
-    const fixed = ['OpenAI API key is required', 'Invalid Azure thinking level.', 'Invalid Azure output limit.', 'Azure completion model does not support images.', 'Invalid Azure chat response.'];
+    const fixed = ['OpenAI API key is required', 'Invalid Azure thinking level.', 'Invalid Azure output limit.', 'Azure completion model does not support images.', 'Invalid Azure chat response.', 'Invalid Azure completion tool policy.', 'Azure completion tool requires unsupported constrained sampling.'];
     return new Error(error instanceof Error && fixed.includes(error.message) ? error.message : 'Azure completion request failed.');
   }
-  override async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  override async chat(messages: Message[], options?: AzureCompletionsChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
     const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
     try {
@@ -4028,7 +4038,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
     } catch (error) { if (replay) throw this.nativeFailure(error, options?.signal); throw error; }
   }
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
-    onError?: (error: Error) => void, options?: ChatOptions): Promise<void> {
+    onError?: (error: Error) => void, options?: AzureCompletionsChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
     const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
     const report = (error: Error) => { const safe = this.nativeFailure(error, options?.signal); if (onError) onError(safe); else throw safe; };

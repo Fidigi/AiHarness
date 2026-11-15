@@ -225,6 +225,7 @@ export type {
   AnthropicChatOptions,
   GoogleChatOptions,
   BedrockChatOptions,
+  AzureCompletionsChatOptions,
   ChatToolDefinition,
   ThinkingLevel,
   ThinkingBudgets,

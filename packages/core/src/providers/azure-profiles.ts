@@ -1,5 +1,6 @@
 import type { Message } from '../types/index.js';
-import type { ChatOptions, ChatResponse } from './index.js';
+import type { AzureCompletionsChatOptions, ChatOptions, ChatResponse } from './index.js';
+import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS, type PublishedModelMetadata, type PublishedThinkingLevel } from './model-metadata.js';
 import { nativeResponsesUsage, prepareNativeResponses, type NativeResponsesProfile } from './openai-responses.js';
 
@@ -84,6 +85,25 @@ export function prepareAzureResponses(body: Record<string, unknown>, options?: C
   // Azure's SDK uses affinity independently of retention. This does not observe a cache hit or make a warming request.
   if (options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
 }
+/** Called only after exact original Azure C admission; not shared C/model-name authority. */
+function prepareAzureCompletionTools(body: Record<string, unknown>, options?: AzureCompletionsChatOptions): void {
+  const choice = options?.toolChoice, tools = options?.tools;
+  const invalid = (): never => { throw new Error('Invalid Azure completion tool policy.'); };
+  const unsupported = (): never => { throw new Error('Azure completion tool requires unsupported constrained sampling.'); };
+  const named = choice && typeof choice === 'object' && choice.type === 'function' && typeof choice.function?.name === 'string'
+    && choice.function.name.length > 0 && tools?.some(tool => tool.name === choice.function.name);
+  if (choice !== undefined && choice !== 'auto' && choice !== 'none' && choice !== 'required' && !named) invalid();
+  if (tools?.length) body.tools = tools.map(tool => {
+    let parameters = tool.parameters, strict = false; const sampling = tool.constrainedSampling;
+    if (sampling !== undefined && sampling !== false) {
+      if (!sampling || sampling.type !== 'json_schema' || !['prefer', 'require'].includes(sampling.strict)) return invalid();
+      try { parameters = makeStrictToolSchema(parameters); strict = true; }
+      catch (error) { if (!(error instanceof UnsupportedStrictToolSchema)) return invalid(); if (sampling.strict === 'require') unsupported(); }
+    }
+    return { type: 'function', function: { name: tool.name, description: tool.description, parameters, strict } };
+  });
+  if (choice !== undefined) body.tool_choice = typeof choice === 'object' ? { type: 'function', function: { name: choice.function.name } } : choice;
+}
 export function prepareAzureCompletion(body: Record<string, unknown>, options: ChatOptions | undefined, messages: Message[], provider: string, nativeReplay = false): void {
   const profile = profiles.get(String(body.model)); if (profile?.api !== 'openai-completions') return;
   const requested = options?.thinking;
@@ -99,7 +119,8 @@ export function prepareAzureCompletion(body: Record<string, unknown>, options: C
   }
   body.store = false;
   if (body.stream) body.stream_options = { include_usage: true };
-  if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = false;
+  if (nativeReplay) prepareAzureCompletionTools(body, options);
+  else if (Array.isArray(body.tools)) for (const tool of body.tools) if (record(tool) && record(tool.function)) tool.function.strict = false;
   const history = messages.filter(message => message.role === 'assistant'); let assistant = 0;
   if (Array.isArray(body.messages)) for (const message of body.messages) {
     if (!record(message)) continue;

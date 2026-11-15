@@ -1,0 +1,45 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "9d2f44a",
+  "criterion": "MOD-01.01b / MOD-01.04a",
+  "status": "PARTIAL",
+  "scope": "Caller JSON-schema strictness/tool choice on the single exact original Azure C profile, not Azure R/legacy C or generic completions authority",
+  "reference": {
+    "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "sources": ["packages/ai/src/api/openai-completions.ts:convertTools/buildParams", "packages/ai/src/api/constrained-sampling.ts:resolveJsonSchemaStrictSampling", "data/azure.json"],
+    "catalogueSha256": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727",
+    "meaning": "Only Azure deepseek-v4-pro is C and explicitly supportsStrictMode=true. Its scoped defaults/authority are not borrowed from same-ID DeepSeek/OpenRouter. Raw C choice is auto/none/required or nested function{name}. None keeps tool declarations; default strict is false. No reference SDK acquisition/execution.",
+    "fieldReview": "/tmp/mod01-effective-policy-review/declaration-fields.json",
+    "fieldReviewMeaning": "Static six-original-owner data audit finds no samplingParams/samplingParamsByThinkingLevel defaults across335 typed declarations (334 chat plus one D). This avoids inventing a missing per-model sampling-default table; remaining effective adapter policies still require review, not a full runtime certificate."
+  },
+  "implementation": "Add public-root AzureCompletionsChatOptions and direct concrete method types for JSON-schema prefer/require/false and raw C auto/none/required/nested named function choice. Existing private original direct/mixed C grant plus exact catalogue model gates conversion, before deployment rewrite; derived mixed delegates cannot gain authority from their fresh direct constructor or mutable public metadata. Reuse strict-tool-schema.ts, no schema engine/table/framework. Omitted/false strict:false preserved, bad prefer schema raw/false, bad require and malformed scoped controls fixed pretransport errors; named must reference a declared tool. None retains declarations, including validation, unlike Bedrock. No-tools explicit none remains a wire choice. Existing C history normalization strips implicit auto, so an explicit caller auto is restored only on exact native C after that unchanged helper. No common MOD-03 helper/default/budget/replay/auth/cache/usage mutation. Native safe-error allowlist adds only the two new fixed diagnostics. Unknown/derived paths remain legacy, no generic constrained-sampling promise or private authority.",
+  "qualification": {
+    "environment": "Makefile Docker build/workspace-parity types, --network none/CI=true/node --no-maglev. Synthetic keys/deployments and mocked JSON/SSE only, no account/personal stores/live mode/reference SDK/protected containers/generated output edits/new dependency.",
+    "image": "ai-harness:mod01-azure-c-tools-owned",
+    "imageId": "sha256:9753b4c683cdecd19f17532948a45887a1a1e17b47605158fcf08d570aabd901",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-azure-c-tools-owned",
+    "buildLog": "/tmp/mod01-azure-c-tools/build-owned-r2.log",
+    "strict": { "passed": true, "roots": 1, "config": "/tmp/mod01-azure-c-tools/strict.json", "containerPath": "/app/strict.json", "command": "node scripts/run-typescript.mjs --project /app/strict.json", "meaning": "New test imports compiled public Core/declarations and scoped type; unchanged reused tests runtime-only." },
+    "runtime": {
+      "passed": 11, "failed": 0, "new": 3, "reused": 8, "log": "/tmp/mod01-azure-c-tools/owned.log",
+      "newFile": "packages/core/src/providers/azure-completions-tools.test.ts",
+      "newMeaning": "Direct/mixed JSON/SSE strict payload, immutable schema, nested named choice, logical identity versus posted deployment and once-only10-token usage. Default/false/prefer bad schema, require refusal; auto/none/required including no-tools none, none retains tools; malformed flat/named/grammar controls, streamed single error/no chunks/completion and derived/mixed/unknown/public-metadata nonpromotion.14 successful mocked requests and six pretransport refusals, not20 tests.",
+      "reusedFile": "packages/core/src/providers/azure-completions.test.ts",
+      "reuseMeaning": "Seven unchanged independently bound C body/private replay/deployment/price/withdrawal controls pass, no MOD-03 redelivery/new reference capture or new installed proof.",
+      "filteredControl": { "file": "packages/core/src/providers/azure-responses.test.ts", "filter": "dispatches native v1 per turn", "passed": 1, "unselected": 74, "runtimeOnly": true, "meaning": "Existing native R/C selectors/legacy separation, not all75 or all44 R profiles." }
+    },
+    "counterfactual": { "image": "ai-harness:mod01-bedrock-tool-policy-owned", "failed": 3, "passed": 0, "log": "/tmp/mod01-azure-c-tools/red.log", "overlay": "Only new test tar-injected, unchanged predecessor compiled Core.", "meaning": "Strict/nested choice absent, C choices ignored, malformed controls accepted. Early failing assertions give no separate predecessor credit for later require/legacy branches; final candidate covers them." },
+    "retainedCandidateFailure": { "log": "/tmp/mod01-azure-c-tools/focused.log", "passed": 2, "failed": 1, "meaning": "First candidate still drops explicit auto in existing native history normalization. Fix only owner-local restoration after unchanged helper; no oracle/timeout/flags/retry/assertion relaxation. Initial build/types/strict passed, source changed then rebuilt under final receipt." },
+    "runtimeBinding": { "passed": true, "inputs": 3, "imageWitness": "/tmp/mod01-azure-c-tools/runtime-witness-image.txt", "worktreeWitness": "/tmp/mod01-azure-c-tools/runtime-witness-worktree.txt", "diff": "/tmp/mod01-azure-c-tools/runtime-witness.diff", "meaning": "Three changed production inputs equal image. Tests baked, strict config only tar-injected, no exhaustive hashes/global-image certificate." },
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-azure-c-tools/docs.log" }
+  },
+  "sourceSha256": {
+    "packages/core/src/index.ts": "deddd95c1b97b86de2049c58b7e56383d6f8f4db520a683ed024d11026d18b7e",
+    "packages/core/src/providers/index.ts": "9b068af08249a85de33f5c46c13d3f7800d7d379fd61a1870444fd12b73f991a",
+    "packages/core/src/providers/azure-profiles.ts": "d401b25b7b8789a531ceb676104e609b7fca1476297d54a8e85629496d5c7c37"
+  },
+  "limits": "Exact private native C caller option only; other models/derived/legacy retain existing non-strict behavior, not interpreted scoped require guarantees. No automatic host-tool strictness, CLI flag/HTTP field, grammar/schema fulfilment/vendor deployment access, account/installed/browser/production/full-root/all-model-host qualification or historical repair. R controls remain their separately delivered scoped contract. Pure declaration audit is not raw arbitrary sampling-parameter ABI completion.",
+  "remaining": ["Other meaningful original-owner effective policies/default/capability exceptions under01b/04a", "Cloud02e/security disposition, offline05b/package06a/final23 audit06c"],
+  "auditState": "Concrete Azure C caller-tool gap delivered;01b/04a remain PARTIAL, exact23 counts unchanged after05a:16 functionally delivered/one historical/six unresolved rows. MOD-01 IN PROGRESS/MOD-03 DONE/04b DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged, goal active/not complete."
+}

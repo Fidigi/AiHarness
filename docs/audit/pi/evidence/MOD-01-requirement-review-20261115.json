@@ -5,7 +5,7 @@
   "initialBaseline": "7e0e8ba",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
-  "method": "Initial documentary review preserved canonical task statements verbatim. Later Bedrock caller strict/choice delivery remains scoped01b/04a evidence. Catalogue05a review now specifies current source mechanisms and closes one composed proof gap without product changes:33 Docker runtime cases/one strict changed root under its separate receipt, not fresh runtime credit for all23 rows. Existing delivered results reused, every referenced path exists. A delivered row does not assert every model-host/method/vendor outcome; its mechanism has bounded evidence. Six unresolved/review rows remain,00b historical outcomes retained; no reference SDK/account/global campaign.",
+  "method": "Initial documentary review preserved canonical task statements verbatim. Later Bedrock/Azure C caller strict/choice deliveries remain scoped01b/04a evidence, not closure of those rows. Catalogue05a review now specifies current source mechanisms and closes one composed proof gap without product changes:33 Docker runtime cases/one strict changed root under its separate receipt, not fresh runtime credit for all23 rows. Existing delivered results reused, every referenced path exists. A delivered row does not assert every model-host/method/vendor outcome; its mechanism has bounded evidence. Six unresolved/review rows remain,00b historical outcomes retained; no reference SDK/account/global campaign.",
   "counts": {
     "DELIVERED": 15,
     "HISTORICAL": 1,
@@ -81,12 +81,13 @@
       "id": "MOD-01.01b",
       "requirement": "Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock.",
       "status": "PARTIAL",
-      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock caller strict/choice now delivered.",
+      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock/Azure C caller strict/choice now delivered.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
-        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json"
+        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json",
+        "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -318,13 +319,14 @@
       "id": "MOD-01.04a",
       "requirement": "Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors.",
       "status": "PARTIAL",
-      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and scoped caller strict/choice gaps fixed, physical media policy proven.",
+      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and Bedrock/Azure C scoped caller strict/choice gaps fixed, physical media policy proven.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-sdk.json",
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
-        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json"
+        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json",
+        "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -451,6 +453,7 @@
       "minimumAction": "After02e/04a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
     }
   ],
+  "followUps": [{ "baseline": "9d2f44a", "requirements": ["MOD-01.01b", "MOD-01.04a"], "receipt": "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json", "meaning": "Three new cases/11 runtime/one strict root close Azure C caller controls only, both parent rows PARTIAL/counts unchanged; no other row gains runtime credit." }],
   "importantCorrections": [
     "MOD-03 and image04b closed, not work to redeliver; 1649 typed entries are not1649 distinct usable models",
     "Kimi helper-only/native supplied-key/Radius/gateway missing statements in old table obsolete after native deliveries",
