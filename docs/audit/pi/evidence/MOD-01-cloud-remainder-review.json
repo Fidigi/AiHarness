@@ -1,0 +1,86 @@
+{
+  "schema": "ai-harness.mod-01.cloud-remainder-review.v1",
+  "date": "2026-11-15",
+  "baseline": "08104be",
+  "requirements": ["MOD-01.02e", "MOD-01.06c"],
+  "status": "SOURCE REVIEW ONLY;02e PARTIAL/06c OPEN;no functional delivery or fresh runtime credit",
+  "method": "Read the actual pinned factory admission/login and client-construction paths, then only the installed protocol branches they can activate. Distinguish missing working mechanisms from a transitive loader's optional or unconfigured ABI. No import, SDK execution/acquisition, account/store access, product/test change, build or runtime campaign. This does not close cloud authentication or the final qualification audit.",
+  "matrix": [
+    {
+      "mechanism": "Already delivered sources and Vertex stored-key mode",
+      "classification": "Delivered, not backlog",
+      "implementationAndProof": "Current canonical02e row/committed receipts own standard user/RSA/files/URL/executable/AWS-env/STS/IAM/Workforce/native hosts, AWS profile/static/process/SSO/web/role/ECS/explicit IMDSv2 role sources and regions, plus explicit encrypted Vertex Cloud-key mode/native CLI/API/Settings. No new runtime is assigned by this review.",
+      "minimumAction": "Preserve source-local evidence; do not repeat those deliveries. Native SSO CLI renewal attempt remains its own OPEN/nonaccepted passive-listing SIGSEGV, not fresh CLI renewal evidence or a fourth acceptance."
+    },
+    {
+      "mechanism": "AWS profile login_session",
+      "classification": "Functional absence confirmed",
+      "activation": "Pinned Bedrock factory admits explicit AWS_PROFILE. credential-provider-ini resolveProfileData tests isLoginProfile and calls fromLoginCredentials; no separate caller flag is needed.",
+      "implementationAndProof": "Core selected profile supports static/process/SSO/web/roles, not login_session. The read-only login provider selects SHA256(login_session).json from AWS_LOGIN_CACHE_DIRECTORY or home/.aws/login/cache, reads temporary AWS keys/account/client/refresh/DPoP private key, refreshes near expiry with regional Signin CreateOAuth2Token and ES256 DPoP.",
+      "minimumAction": "Next concrete functional batch: bounded selected-profile login cache/explicit source/expiry/refresher with current INI+cache and caller-owner fences, using existing AWS foreground cache/role mechanisms. No interactive aws login command, real account, executable permission inference, external-store mutation or entire SDK ABI is implied. Root/leaf applicability and readonly rotation semantics must be explicit."
+    },
+    {
+      "mechanism": "ADC certificate/mTLS external-account source",
+      "classification": "Functional absence confirmed",
+      "activation": "Pinned Vertex forwards the explicit keyFilename to GenAI NodeAuth/GoogleAuth. external_account identity-pool constructor selects credential_source.certificate, reads cert configuration/private-key/chain files and creates the mTLS agent automatically before STS; this is not gated by an optional Pi caller surface.",
+      "implementationAndProof": "Core rejects certificate source/type and has no credential-private TLS request authority. Existing file/URL/executable source tests and general TLS/HTTP proxy are not client-certificate proof.",
+      "minimumAction": "Implement a bounded readonly certificate-config/key/chain source and issuer-scoped mTLS while preserving proxy, current authority, lifetime and certificate privacy. Reuse existing ADC STS/IAM/cache paths; never treat a PEM string/header or source supplier alone as working mTLS. Do not claim every optional GoogleAuth transport/agent ABI."
+    },
+    {
+      "mechanism": "ADC non-default universe",
+      "classification": "Automatic behavior confirmed; functional/policy work remains",
+      "activation": "For service_account JSON, JWT.fromJSON captures universe_domain and getRequestMetadataAsync chooses JWTAccess automatically when it is non-default. With GenAI's required cloud-platform scope, JWTAccess signs iss/sub/scope/iat/exp and optional key ID, without ordinary OAuth exchange. Other external-account clients derive STS/resource realms from universeDomain.",
+      "implementationAndProof": "Core currently rejects every non-googleapis.com universe. It is incorrect to label the service-account branch optional solely because a caller could omit universe_domain. The pinned GenAI client does not automatically change its inference base from this field.",
+      "minimumAction": "Reconcile the service-account signed-access-JWT branch separately from alternative issuer/inference realms; support required automatic behavior or obtain a real trust/target contract decision. Do not silently waive it or forward private-universe credentials to an unrelated endpoint by label."
+    },
+    {
+      "mechanism": "GDCH service-account loader",
+      "classification": "Transitive SDK availability is not a demonstrated usable pinned-factory path",
+      "activation": "GoogleAuth.fromJSON constructs GdchClient, but refreshTokenNoCache requires apiAudience. Its fromJSON does not read an audience from the credential file. GoogleAuth.getClient sets one only from clientOptions.apiEndpoint/servicePath; the pinned Vertex buildGoogleAuthOptions supplies keyFilename only, GenAI adds scopes and passes that object unchanged to NodeAuth. Model httpOptions.baseUrl is not copied into those auth options.",
+      "implementationAndProof": "No current Core GDCH client. No read path was found that supplies the required GDCH audience through the pinned native Vertex factory/API constructor. Arbitrary raw SDK instantiation could supply it; that is a separate caller/trust surface, not native usability established by catalogue or loader presence.",
+      "minimumAction": "Do not add a GDCH issuer/custom CA/audience integration solely because GoogleAuth lists the type. Preserve this source-bounded inactive-path disposition and unknown external service acceptance; revisit only if a real pinned activation or explicit product requirement is identified. Not a claim of GDCH support."
+    },
+    {
+      "mechanism": "Standalone/default-machine AWS IMDS and metadata-only Google admission",
+      "classification": "Admission/policy distinction, not automatic required work from SDK fallback",
+      "activation": "Pinned Bedrock resolve admits stored Bearer/scoped-or-ambient AWS_PROFILE/complete keys/ECS URI/web-token file; otherwise returns undefined. There is no bare IMDS-only positive condition. Root credential_source without role is not selected by fromIni's ordinary root isAssumeRoleProfile check; it is recognized as a recursive role source, already implemented in Core. Pinned Vertex ADC resolve requires existing credentials file plus project/location.",
+      "implementationAndProof": "Core explicit profile IMDSv2 role source is delivered, no ambient v1 probe/downgrade or new machine-only admission. A raw AWS SDK default chain can try remote metadata after other failures, which does not establish another native factory admission condition and can change failed-source identity.",
+      "minimumAction": "Do not infer permission from generic continuation. Keep the unanswered standalone-IMDS opt-in question as a possible product/security extension, not an automatically mandatory default probe. Existing sticky explicit-source refusal remains. Explicit file-admitted AWS ADC metadata is a different missing source from the env-only delivery and still needs a deliberate bounded supplier contract."
+    },
+    {
+      "mechanism": "Stored/scoped cloud profile and file-choice UX",
+      "classification": "Separate caller/storage surface, not a new store requirement inferred from working auth",
+      "activation": "Pinned login can persist scoped env choices; Core already has explicit SDK/trusted Server source descriptors and native operator environment admission with immutable copied source identity, not profile-as-key strings. Native sources are usable without extension factories.",
+      "minimumAction": "Audit the required selection/identity boundaries against existing scoped constructors/environment/host evidence. Do not introduce an arbitrary env map/file picker through the key HTTP DTO, second credential framework or copied foreign login ABI merely to match presentation. Keep any genuinely required additional source-choice contract explicit rather than declaring it implemented."
+    },
+    {
+      "mechanism": "credentialScope metadata",
+      "classification": "Requires actual consumer tracing, not a new signing algorithm inferred from the property name",
+      "implementationAndProof": "The ordinary Smithy SigV4 request signer reads access key/secret/session token and creates its normal signing scope. Generic endpoint support reads credentialScope only when an endpoint parameter requests it; no such parameter use was found in the inspected Bedrock-runtime JavaScript. Current Core's unsupported-scope refusal remains unchanged by this review.",
+      "minimumAction": "Do not equate credentialScope with SigV4a or invent a protocol from the name. Reconcile concrete supported credential shapes/endpoint policy before changing the fail-closed assertions; no metadata acceptance or new algorithm is delivered here."
+    },
+    {
+      "mechanism": "Final23 gates and SSO CLI HOLD",
+      "classification": "06c required scoped sufficiency review;failure preserved",
+      "minimumAction": "After actual functional gaps, map all23 statements to current implementation and sufficient distinct evidence. Reuse unchanged native admission/public-package/browser receipts without fresh credit; assess the failed SSO CLI boundary explicitly, with no identical replay/unknown-cause repair/fourth acceptance or automatic platform campaign. This review does not decide its sufficiency, close02e/06c or promote MOD-01/QUA."
+    }
+  ],
+  "sourceWitnesses": {
+    "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/providers/amazon-bedrock.ts": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
+    "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/providers/google-vertex.ts": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878",
+    "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/google-vertex.ts": "774b28c7c6c38d07bdbbdb8aceecdca1dfe8a1df79915eeee96c48694d08ce63",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@google/genai/dist/node/index.mjs": "a5775355f9271057cd1e089dd2bce71c5996a88d49da9cd0ed6f183e5905cdb8",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/googleauth.js": "441af154f9fbbdfa47429e5fd3ec535b8cfad837976914a660b9913b579a32bd",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/gdchclient.js": "17d8eeba046346d89566265dc2d84664abcd641633a23edcddecf1fe9bb88bd9",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/jwtclient.js": "db4bc49b3fb65db1acf759c5c2a52f57f1d8bc3023df102b39102b9eeae44c03",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/jwtaccess.js": "89cbce21e846dc8103b2217c8cfda62a33f30003a4f5ba73fa916e04e1cecbb8",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@smithy/signature-v4/dist-es/SignatureV4.js": "634af3e93dc5f4b2bcac3189ae6a95bf1b16f5d94702fdd3811cafd6848b34e9",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@smithy/core/dist-es/submodules/endpoints/middleware-endpoint/adaptors/createConfigValueProvider.js": "33b30756ca8300b37e5365e41e0b6f5fcf7b43d52fcf98df76a5a36d052fde9d",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/identitypoolclient.js": "4a0f123357c45e1b5186afc432b7f2128ffe49cebefca9434b00f9d502d282b0",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/certificatesubjecttokensupplier.js": "e29f8fb8464dc88f91eff319df7661f215b50be955c9e50588c0605b5f261553",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-ini/dist-cjs/index.js": "2d975f8114b17e1e96eea2735c7271f735f08bab35dc922384cd15735bbdd085",
+    "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-login/dist-cjs/index.js": "3ada1d4c0fbc6d888cee050b741348fc66ba455b5624203816e408ab5470e910"
+  },
+  "validation": { "kind": "Read-only source/document analysis only", "newRuntimeTests": 0, "newBuilds": 0, "newTypechecks": 0, "referenceExecutions": 0, "sources": "Pinned Pi1.2.0 revision06a466935536f8c9bcacb2d5efc0fc021be1bdff; already installed GenAI2.21.0/GoogleAuth10.9.1/INI3.973.19/Login3.972.81 read only", "checks": "/tmp/mod01-cloud-remainder/review-check.json", "docs": "/tmp/mod01-cloud-remainder/docs.log" },
+  "auditState": "MOD-01 IN PROGRESS;02e PARTIAL/06c OPEN;exact23/statuses/counts/19DELIVERED+04bDONE/one historical/two unresolved/38-of43/MOD-03 DONE/SSO CLI and Vertex134 OPEN/exactly three historical acceptances/goal active unchanged."
+}
