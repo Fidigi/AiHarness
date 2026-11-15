@@ -3986,18 +3986,18 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   private readonly azureBaseUrl: string;
   private readonly logicalProvider: string;
   private readonly deployments: ReadonlyMap<string, string>;
-  private readonly ownsNativeProfiles: boolean;
+  readonly #ownsNativeProfiles: boolean;
   constructor(config: ProviderConfig) {
     const baseUrl = normalizeAzureResponsesBaseUrl(config.baseUrl);
     super({ ...config, type: ProviderType.AZURE, model: config.model || 'deepseek-v4-pro', baseUrl });
     this.azureBaseUrl = baseUrl; this.logicalProvider = String(config.type || ProviderType.AZURE); this.deployments = azureDeployments(config);
-    this.ownsNativeProfiles = new.target === AzureCompletionsProvider;
+    this.#ownsNativeProfiles = new.target === AzureCompletionsProvider;
     if (new.target === AzureCompletionsProvider) nativeAzureCompletions.add(this);
   }
   override getProviderType(): string { return this.logicalProvider; }
   override getModelApi(): string { return 'openai-completions'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
-    return this.ownsNativeProfiles ? azurePublishedProfiles('openai-completions') : undefined;
+    return this.#ownsNativeProfiles ? azurePublishedProfiles('openai-completions') : undefined;
   }
   override canDiscoverModels(): boolean { return false; }
   protected override getChatUrl(): string { return `${this.azureBaseUrl}/chat/completions`; }
@@ -4008,7 +4008,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   }
   protected override prepareChatBody(body: Record<string, unknown>, options?: AzureCompletionsChatOptions, messages: Message[] = []): Record<string, unknown> {
     const model = String(body.model), native = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
-    if (this.ownsNativeProfiles || native) prepareAzureCompletion(body, options, messages, native ? this.logicalProvider : this.getProviderType(), native);
+    if (this.#ownsNativeProfiles || native) prepareAzureCompletion(body, options, messages, native ? this.logicalProvider : this.getProviderType(), native);
     if (native) {
       applyCompletionHistory(body, messages, this.logicalProvider, true, false);
       // History normalization omits the implicit default, not an explicit caller choice.
@@ -4024,7 +4024,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   protected override createStreamValidator(body?: Record<string, unknown>): (value?: unknown) => void { return this.hasNativeBody(body) ? azureCompletionStreamValidator() : super.createStreamValidator(body); }
   protected override responseReasoning(value: unknown, stream = false, body?: Record<string, unknown>): string | undefined { return this.hasNativeBody(body) ? azureCompletionReasoning(value) : super.responseReasoning(value, stream, body); }
   protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] {
-    return (this.ownsNativeProfiles || nativeAzureCompletions.has(this)) && azureProfileApi(model) === 'openai-completions' ? azureProfileUsage(value, model, nativeAzureCompletions.has(this)) : super.responseUsage(value as NonNullable<OpenAiResponse['usage']>, model);
+    return (this.#ownsNativeProfiles || nativeAzureCompletions.has(this)) && azureProfileApi(model) === 'openai-completions' ? azureProfileUsage(value, model, nativeAzureCompletions.has(this)) : super.responseUsage(value as NonNullable<OpenAiResponse['usage']>, model);
   }
   private nativeFailure(error: unknown, signal?: AbortSignal): Error {
     if (signal?.aborted) return new Error('Azure request aborted.');
@@ -4034,7 +4034,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   }
   override async chat(messages: Message[], options?: AzureCompletionsChatOptions): Promise<ChatResponse> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    const native = this.#ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
     try {
       const result = await super.chat(messages, azureRequestOptions(options, model));
       return replay ? result : native ? { ...result, provider, model, api: 'openai-completions' } : result;
@@ -4043,7 +4043,7 @@ export class AzureCompletionsProvider extends OpenAiProvider {
   override async streamChat(messages: Message[], onChunk: StreamChunkCallback, onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void, options?: AzureCompletionsChatOptions): Promise<void> {
     const model = options?.model || this.getConfiguredModel() || 'deepseek-v4-pro', provider = this.getProviderType();
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
+    const native = this.#ownsNativeProfiles && azureProfileApi(model) === 'openai-completions', replay = nativeAzureCompletions.has(this) && azureProfileApi(model) === 'openai-completions';
     const report = (error: Error) => { const safe = this.nativeFailure(error, options?.signal); if (onError) onError(safe); else throw safe; };
     try {
       await super.streamChat(messages, native || replay ? azureNativeChunk(onChunk, options?.signal) : onChunk,
@@ -4055,17 +4055,17 @@ export class AzureCompletionsProvider extends OpenAiProvider {
 
 /** Native Azure v1 composition; explicit single-API selectors and unversioned legacy C stay separate. */
 export class AzureProvider extends AiProvider {
-  private readonly ownsNativeProfiles: boolean;
+  readonly #ownsNativeProfiles: boolean;
   constructor(config: ProviderConfig) {
     super({ ...config, model: config.model || 'gpt-4o', baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
-    azureDeployments(config); this.ownsNativeProfiles = new.target === AzureProvider;
+    azureDeployments(config); this.#ownsNativeProfiles = new.target === AzureProvider;
     if (new.target === AzureProvider) nativeAzureCompletions.add(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
   override async getAvailableModels(): Promise<string[]> { return []; }
   override getModelApi(model = this.getConfiguredModel() ?? 'gpt-4o'): string { return azureProfileApi(model) ?? 'azure-openai-responses'; }
-  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined { return this.ownsNativeProfiles ? azurePublishedProfiles() : undefined; }
+  override getPublishedModels(): readonly PublishedModelMetadata[] | undefined { return this.#ownsNativeProfiles ? azurePublishedProfiles() : undefined; }
   private conversation(model: string, provider: string): AiProvider {
     const config = { ...this.config, type: provider, model };
     azureResponsesOwnerNames.set(config, provider);

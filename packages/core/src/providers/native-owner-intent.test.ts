@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { GeminiProvider, VertexGeminiProvider, BedrockProvider, type AiProvider, type ChatResponse, type GoogleChatOptions, type BedrockChatOptions, type Message } from '../../dist/index.js';
+import { GeminiProvider, VertexGeminiProvider, BedrockProvider, AzureCompletionsProvider, AzureProvider, type AiProvider, type ChatResponse, type GoogleChatOptions, type BedrockChatOptions, type Message } from '../../dist/index.js';
 import { bedrockFrame } from '../../../../tests/fixtures/bedrock-event-stream.js';
 const messages: Message[] = [{ id: 'intent-user', role: 'user', content: 'intent probe', timestamp: new Date(0) }], tool = { name: 'lookup', description: 'Synthetic lookup', parameters: { type: 'object', properties: { x: { type: 'string' } }, required: ['x'] } };
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -30,4 +30,20 @@ it('keeps Bedrock native tool/budget/region intent private rather than reading a
   for (const stream of [false, true]) await expect(call(derived, options, stream)).rejects.toThrow('Invalid Bedrock tool policy.'); expect(fetch).not.toHaveBeenCalled(); expect(forged).not.toHaveBeenCalled();
   const original = new BedrockProvider(config), downgrade = vi.fn(() => false); Object.defineProperty(original, 'ownsNativeProfiles', { configurable: true, get: downgrade });
   for (const stream of [false, true]) expect((await call(original, options, stream)).usage?.totalTokens).toBe(10); expect(downgrade).not.toHaveBeenCalled(); expect(fetch).toHaveBeenCalledTimes(2); expect(options).toEqual(before);
+});
+it('keeps Azure C prepared defaults and catalogue intent independent of a forged own getter on both methods', async () => {
+  class Derived extends AzureCompletionsProvider {}
+  const model = 'deepseek-v4-pro', config = { type: 'azure-intent', model, apiKey: 'synthetic-azure-intent', baseUrl: 'https://azure.synthetic/openai/v1', azureDeploymentMap: { [model]: 'deployment' } }, options = { maxTokens: 64, thinking: 'off' as const }, before = structuredClone(options);
+  for (const genuine of [false, true]) {
+    const provider = genuine ? new AzureCompletionsProvider(config) : new Derived(config), getter = vi.fn(() => !genuine), bodies: Array<Record<string, any>> = []; Object.defineProperty(provider, 'ownsNativeProfiles', { configurable: true, get: getter });
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => { const body = JSON.parse(String(init.body)); bodies.push(body); const usage = { prompt_tokens: 8, completion_tokens: 2, total_tokens: 10 }, choice = { index: 0, finish_reason: 'stop' }; return body.stream ? new Response('data: ' + JSON.stringify({ choices: [{ ...choice, delta: { content: 'intent-ready' } }], usage }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } }) : Response.json({ choices: [{ ...choice, message: { role: 'assistant', content: 'intent-ready' } }], usage }); });
+    for (const stream of [false, true]) { expect((await call(provider, options, stream)).usage?.totalTokens).toBe(10); const body = bodies.at(-1)!; expect(body.max_completion_tokens).toBe(genuine ? 64 : undefined); expect(body.max_tokens).toBe(genuine ? undefined : 64); expect(body.model).toBe('deployment'); }
+    expect(provider.getPublishedModels()?.map(row => row.id)).toEqual(genuine ? [model] : undefined); expect(getter).not.toHaveBeenCalled(); expect(options).toEqual(before);
+  }
+});
+it('keeps mixed Azure catalogue construction intent private without changing its separate delegate/runtime authority', () => {
+  class Derived extends AzureProvider {}
+  for (const genuine of [false, true]) {
+    const provider = genuine ? new AzureProvider({ type: 'azure', apiKey: 'synthetic-key', model: 'gpt-4o', baseUrl: 'https://azure.synthetic/openai/v1' }) : new Derived({ type: 'azure', apiKey: 'synthetic-key', model: 'gpt-4o', baseUrl: 'https://azure.synthetic/openai/v1' }), getter = vi.fn(() => !genuine); Object.defineProperty(provider, 'ownsNativeProfiles', { configurable: true, get: getter }); expect(provider.getPublishedModels()?.length).toBe(genuine ? 45 : undefined); expect(getter).not.toHaveBeenCalled();
+  }
 });

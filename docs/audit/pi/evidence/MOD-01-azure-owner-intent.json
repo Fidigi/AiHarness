@@ -1,0 +1,45 @@
+{
+  "schema": "ai-harness.mod-01.azure-owner-intent.v1",
+  "date": "2026-11-15",
+  "baseline": "6d8da97",
+  "status": "DELIVERED Azure C/default and mixed-catalogue private intent",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "gap": "The remaining TS-private Azure C ownsNativeProfiles property could be replaced by a getter, promoting a derived request from legacy max_tokens to native max_completion_tokens and published profiles. The mixed facade's same-named field could falsely publish or hide its independently declared45-model catalogue. Its delegate/runtime grants are separate and must not change.",
+  "implementation": {
+    "files": ["packages/core/src/providers/index.ts"],
+    "policy": "Replace only these last two construction-intent fields/reads with readonly ECMAScript-private values. Keep nativeAzureCompletions WeakSet admission, direct/mixed C delegation, legacy paths, schema/choice/replay, endpoints, price tables and credential handling unchanged. No new public/host field, default value, dependency/format or runtime flag. Mixed catalogue intent is not claimed as new runtime authority."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-azure-owner-owned",
+    "imageId": "sha256:0575b5bcae3399c095c721f1a7c037580a150d54a553c7e5e93bad984ea9a74c",
+    "predecessorImageId": "sha256:2437b1ddc4e2ea0c1db649a5f5288b79c8fe7bc87014b929d0616c62772f67a0",
+    "runtime": "Makefile Docker build/workspace types, network none/CI=true/node --no-maglev; strict.json via tar stdin under /app, canonical scripts/run-typescript.mjs retains --no-maglev/--no-turbofan. One compiled source witness equals image/worktree. Synthetic credentials and mock transports only; no personal source/account or SDK execution.",
+    "newCases": 2,
+    "regularRuntimePassed": 21,
+    "regularReusedCases": 19,
+    "strictChangedRoots": 1,
+    "unselectedCases": 68,
+    "coverage": "Two added cases in existing compiled-public-Core native-owner-intent.test.ts: genuine/derived direct C JSON/SSE preserves explicit caps/prepared logical-deployment behavior and catalogue selection without reading the forged getter; genuine/derived mixed catalogue remains45/undefined without getter evaluation. Existing three Google/Vertex/Bedrock intent cases, C strict/choice3, Responses system6 and selected Azure7 conserve private schemas, legacy/independent declarations, per-turn dispatch, physical identity, callback cancellation and native C replay admission.",
+    "sourceWitness": { "packages/core/src/providers/index.ts": "c0350188d6e528ba80ffb24e4aa98047cd43cc0cda0d8edff738533ca5f8a84a" },
+    "tests": { "packages/core/src/providers/native-owner-intent.test.ts": "59900362fd7ee1df24a712d4e48c7aa743107e0997105d3a2bd81ede8b39f9b4" },
+    "sourceWitnessDiff": "/tmp/mod01-azure-owner/runtime-witness.diff (empty)",
+    "logs": {
+      "initial": "/tmp/mod01-azure-owner/red.log (one genuine C promotion failure plus one fixture missing-baseUrl refusal, three unselected)",
+      "red": "/tmp/mod01-azure-owner/red-r2.log (corrected synthetic endpoint:two genuine promotion/publication failures, three unselected)",
+      "build": "/tmp/mod01-azure-owner/build-owned.log (first candidate build/types PASS)",
+      "owned": "/tmp/mod01-azure-owner/owned.log (14+7=21 PASS/one strict root;68 unselected)",
+      "review": "/tmp/mod01-azure-owner/review-check.json",
+      "docs": "/tmp/mod01-azure-owner/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-azure-owner-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-azure-owner-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/native-owner-intent.test.ts packages/core/src/providers/azure-completions-tools.test.ts packages/core/src/providers/responses-system-history.test.ts --maxWorkers=1'",
+      "same isolated image: node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/azure-responses.test.ts --maxWorkers=1 -t 'deepseek-v4-pro:|dispatches native|pins native identity|45 independent|native C replay|callback cancellation'",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "limits": [
+    "No changed authentication chain or opaque replay grant, hosted caller API, independent original declarations or price/default values. Reused host/package evidence is not fresh CLI/API/browser/installed/production qualification; no model-host campaign or general sandbox claim.",
+    "This receipt delivers only the confirmed Azure-field gaps. The separate six-family policy audit owns any01b/04a status disposition. MOD-01/MOD-03/global counts and exactly three historical acceptances are not changed by this runtime slice; no old failure is repaired or reclassified."
+  ]
+}
