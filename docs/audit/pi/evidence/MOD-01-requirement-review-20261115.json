@@ -1,16 +1,17 @@
 {
   "schema": "ai-harness.mod-01.requirement-review.v1",
   "date": "2026-11-15",
-  "baseline": "7e0e8ba",
+  "baseline": "7f5d625",
+  "initialBaseline": "7e0e8ba",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
-  "method": "Read canonical register/current matrix and own scoped source-bound receipts. Requirement statements captured verbatim. Existing delivered results reused, every referenced artifact exists, no SDK/account/test/global campaign or speculative feature added by this review. A delivered row does not assert every model-host/method/vendor outcome; its required mechanism has concrete bounded evidence. Seven unresolved/review rows remain,00b historical outcomes retained.",
+  "method": "Initial documentary review preserved canonical task statements verbatim. Later Bedrock caller strict/choice delivery remains scoped01b/04a evidence. Catalogue05a review now specifies current source mechanisms and closes one composed proof gap without product changes:33 Docker runtime cases/one strict changed root under its separate receipt, not fresh runtime credit for all23 rows. Existing delivered results reused, every referenced path exists. A delivered row does not assert every model-host/method/vendor outcome; its mechanism has bounded evidence. Six unresolved/review rows remain,00b historical outcomes retained; no reference SDK/account/global campaign.",
   "counts": {
-    "DELIVERED": 14,
+    "DELIVERED": 15,
     "HISTORICAL": 1,
     "PARTIAL": 3,
     "DONE": 1,
-    "REVIEW": 3,
+    "REVIEW": 2,
     "OPEN": 1
   },
   "requirements": [
@@ -80,11 +81,12 @@
       "id": "MOD-01.01b",
       "requirement": "Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock.",
       "status": "PARTIAL",
-      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b now DONE, blockImages effective.",
+      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock caller strict/choice now delivered.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
-        "docs/audit/pi/evidence/MOD-01-block-images-policy.json"
+        "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -316,12 +318,13 @@
       "id": "MOD-01.04a",
       "requirement": "Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors.",
       "status": "PARTIAL",
-      "current": "Budget/reasoning/continuation closed, effective blockImages before routing/after hooks, native Bedrock custom-header/signing gap fixed, physical media policy proven.",
+      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and scoped caller strict/choice gaps fixed, physical media policy proven.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-sdk.json",
-        "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json"
+        "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -352,9 +355,10 @@
     {
       "id": "MOD-01.05a",
       "requirement": "Specify static/discovered/operator catalogue precedence, freshness and invalidation for all admitted integrations, including account-filtered rows.",
-      "status": "REVIEW",
-      "current": "Passive/static/discovered/account-owned sources and scope-current caches implemented. OpenRouter foreground SDK/CLI personalization separate from Server operator models.",
+      "status": "DELIVERED",
+      "current": "Source mechanisms now specified: static/configured/discovered/operator precedence, ordinary TTL/failure cache versus authoritative current-source availability, lifecycle invalidation and import snapshots. OpenRouter SDK/CLI foreground remains explicit; Server import/refresh does not silently acquire it. New composed service proof shows current personalization/empty/scope withdrawal cannot be overridden by operator availability, and replacement cannot borrow old account data.",
       "evidence": [
+        "docs/audit/pi/evidence/MOD-01-catalogue-contract-review.json",
         "docs/audit/pi/evidence/MOD-01-static-discovery-refusal.json",
         "docs/audit/pi/evidence/MOD-01-radius-catalogue.json",
         "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
@@ -363,12 +367,15 @@
         "docs/audit/pi/evidence/MOD-03-closure.json"
       ],
       "files": [
+        "packages/core/src/providers/model-catalog.ts",
         "packages/server/src/runtime/model-catalog.ts",
+        "packages/server/src/runtime/model-catalog.test.ts",
+        "packages/server/src/runtime/provider-registry.ts",
         "packages/core/src/providers/openrouter-user-models.ts",
         "packages/core/src/providers/radius-catalogue.ts"
       ],
-      "gapClass": "targeted catalogue contract review",
-      "minimumAction": "Inspect actual Server import/operator/default/native constructor paths before calling missing personalization a functional bug; document precedence/freshness/invalidation with precise proof. No replacement cache framework."
+      "gapClass": "none",
+      "minimumAction": "Keep defined source-specific passive/foreground/TTL/operator/account contracts. No hidden Server models/user acquisition, replacement catalogue framework or all-model host campaign required; future source changes recheck affected mechanism only."
     },
     {
       "id": "MOD-01.05b",
@@ -441,7 +448,7 @@
       ],
       "files": [],
       "gapClass": "final audit",
-      "minimumAction": "After02e/04a/05a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
+      "minimumAction": "After02e/04a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
     }
   ],
   "importantCorrections": [
@@ -453,11 +460,12 @@
     "Current unresolved executable auth-file mechanisms require a deliberate security/trust decision, not automatic execution merely because a transitive SDK supports it"
   ],
   "validation": {
-    "type": "Source/document reconciliation only",
-    "runtimeTests": "No new runtime/type/SDK/browser/installed/production test execution in this review; scoped deliveries cite their own gates",
+    "type": "Initial source/document reconciliation plus targeted05a contract/proof follow-up",
+    "runtimeTests": "Separate catalogue receipt owns33 Docker runtime cases (one new)/one changed strict root; no product change or whole23-row runtime certificate. Bedrock tool and all other deliveries retain their own scoped gates, no reference SDK/browser/installed/production/global campaign.",
     "lintDocs": "PASS",
     "diffCheck": "PASS",
-    "log": "/tmp/mod01-requirement-review/docs.log"
+    "log": "/tmp/mod01-catalogue-contract/docs.log",
+    "initialLog": "/tmp/mod01-requirement-review/docs.log"
   },
   "auditState": "MOD-01 IN PROGRESS;04b DONE;MOD-03 DONE;38/43;runtime134 OPEN;exactly three historical acceptances unchanged;goal active/not completed."
 }

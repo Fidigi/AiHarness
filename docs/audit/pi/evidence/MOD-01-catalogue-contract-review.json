@@ -1,0 +1,59 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "7f5d625",
+  "criterion": "MOD-01.05a",
+  "status": "DELIVERED",
+  "scope": "Catalogue precedence/freshness/invalidation specification for admitted source mechanisms; one missing composed proof, no product change or new Server personalization contract",
+  "contract": [
+    {
+      "mechanism": "Static native declarations / configured fallback / protocol discovery",
+      "implementation": "Core buildProviderModelCatalog uses live adapter-owned publications when provided (including authoritative empty), otherwise static metadata; configured unknown ID augments only when absent. Live discovered IDs retain published fields or conservative inferred fields. Custom operator rows overlay names/caps/windows/output/prices; actual adapter getModelApi owns the API, labels cannot borrow a native dialect.",
+      "freshness": "Server memory discovery TTL five minutes, explicit refresh, source-object change, and authoritative sources on each read. Same-source ordinary failures retain last successful discovery, not another adapter's result; ordinary discovery bounded max500 IDs/eight seconds/default two retries. Replacement/removal/rename/invalidation disowns pending old results. API sends no-store.",
+      "files": ["packages/core/src/providers/model-catalog.ts", "packages/server/src/runtime/model-catalog.ts", "packages/server/src/api/model-routes.ts"],
+      "proof": ["packages/core/src/providers/model-catalog.test.ts", "packages/server/src/runtime/model-catalog.test.ts", "docs/audit/pi/evidence/MOD-01-static-discovery-refusal.json"]
+    },
+    {
+      "mechanism": "Operator definitions / native import",
+      "implementation": "ProviderRegistry imports current SDK model IDs and native metadata; existing operator rows are unchanged, not silently refreshed. New rows snapshot published defaults and become operator definitions. A provider replacement during discovery rejects409. Operator overlay changes metadata, not account availability, private native ceilings/replay authority or entitlement.",
+      "files": ["packages/server/src/runtime/provider-registry.ts", "packages/server/src/api/provider-registry-routes.ts"],
+      "proof": ["packages/server/src/runtime/provider-registry.test.ts", "packages/server/src/runtime/provider-lifecycle.test.ts", "docs/audit/pi/evidence/MOD-01-server-native-dialects.json", "docs/audit/pi/evidence/MOD-01-token-plan-hosts.json"]
+    },
+    {
+      "mechanism": "Subscription / Radius live account catalogues",
+      "implementation": "Authoritative discovered IDs filter availability after operator overlay. Empty, logout or failed authoritative discovery cannot fall back to configured/published/operator availability. Copilot/Codex current grants and Radius current account/config/cache owners retain distinct existing authority/lifetime policies. A persisted Radius cache requires its explicit policy/identity/schema, not generic disk fallback.",
+      "proof": ["packages/server/src/runtime/model-catalog.test.ts", "docs/audit/pi/evidence/MOD-03-closure.json", "docs/audit/pi/evidence/MOD-01-radius-catalogue.json", "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json"]
+    },
+    {
+      "mechanism": "OpenRouter explicit foreground personalization",
+      "implementation": "SDK refreshUserModels is explicit and key/base/effective-header/generation scoped; known-chat intersection, empty authoritative,401/403/404 declaration fallback, malformed/other failure retains prior good scope. It snapshots effective per-operation caps/prices; I/T remain separate. Native CLI foreground selection already invokes it after scoped credentials. Passive/offline getters never acquire it. SDK snapshot lasts until explicit refresh/scope withdrawal/owner replacement, not Server TTL or remote-revocation polling.",
+      "serverDisposition": "Native Server/Settings import is deliberately a static393-chat snapshot, Test409/no fabricated connection certificate, preserving operator definitions. ModelCatalog refresh refreshes admitted discovery, not every optional remote source; it does not implicitly call /models/user. A trusted original SDK instance explicitly personalized before/in the embedded Server is immediately authoritative through the existing service. No canonical05a requirement mandates a new HTTP personalization action, hidden background acquisition or reinterpretation of import. Pinned model-runtime.ts itself defaults allowModelNetwork=false and only enables create-time refresh explicitly. Preserve this existing contract, rather than silently adding network/credential work. Configured/static available is selection metadata, never proof of vendor entitlement.",
+      "proof": ["docs/audit/pi/evidence/MOD-01-openrouter-user-models-sdk.json", "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json", "packages/core/src/providers/openrouter-user-models.test.ts", "packages/server/src/runtime/model-catalog.test.ts", "packages/server/src/runtime/provider-registry.test.ts"]
+    },
+    {
+      "mechanism": "Cloud/static auth sources / specialized operations",
+      "implementation": "Named-profile/ECS/web/ADC/WIF native metadata is passive configured state, not file-content/token/entitlement validation. Missing/expired credentials refuse selected inference under own source policy, not fake network discovery. Finite classifier/image services retain their own operation descriptors rather than appearing as extra chat rows.",
+      "proof": ["docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json", "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json", "docs/audit/pi/evidence/MOD-01-vertex-adc-server.json", "docs/audit/pi/evidence/MOD-01-typesafe-hosts.json", "docs/audit/pi/evidence/MOD-01-auxiliary-services.json"]
+    }
+  ],
+  "qualification": {
+    "environment": "Docker only, --network none/CI=true/node --no-maglev; synthetic credentials/mocked catalogue data/disposable existing registry fixture. No account/reference SDK acquisition/execution/personal store/protected container/production changes.",
+    "image": "ai-harness:mod01-bedrock-tool-policy-owned",
+    "imageId": "sha256:35a61f3a34f0b5c12b88eff5ffdef72283ab88d9b7f94fad9b0add12951dfe26",
+    "buildReused": "/tmp/mod01-bedrock-tool-policy/build-owned-r2.log",
+    "binding": "All production sources unchanged from7f5d625 and its previously owned Makefile image. Only changed model-catalog.test.ts and strict.json tar-injected into /app; not a freshly baked test/image claim. No exhaustive hash inventory.",
+    "strict": { "passed": true, "roots": 1, "config": "/tmp/mod01-catalogue-contract/strict.json", "containerPath": "/app/strict.json", "command": "node scripts/run-typescript.mjs --project /app/strict.json" },
+    "runtime": {
+      "passed": 33, "failed": 0, "new": 1, "reused": 32, "log": "/tmp/mod01-catalogue-contract/owned.log",
+      "files": ["packages/core/src/providers/model-catalog.test.ts", "packages/server/src/runtime/model-catalog.test.ts", "packages/core/src/providers/openrouter-user-models.test.ts"],
+      "filteredControl": { "file": "packages/server/src/runtime/provider-registry.test.ts", "filter": "restores explicit OpenRouter composition", "passed": 1, "unselected": 40, "runtimeOnly": true },
+      "newProof": "One composed missing-proof scenario passes existing product unchanged: Server refresh static393/no network, explicit SDK personalization/64000-context9000-cap/current pricing, operator metadata priority, header-scope withdrawal and known-empty both mark retained operator row unavailable, replacement cannot borrow old account data and restores static configured declarations without acquisition. Exactly two explicit models/user calls; secret not in catalogue. Not an HTTP/UI personalization action or evidence of genuine entitlement.",
+      "counterfactual": "None required: precise proof gap, not a demonstrated product defect. Do not manufacture RED or claim a functional correction. Existing TTL/join/replacement/pending invalidation/account logout/failure/unknown pricing/native import/crypto-store controls reused."
+    },
+    "documentation": { "lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-catalogue-contract/docs.log" }
+  },
+  "testSha256": { "packages/server/src/runtime/model-catalog.test.ts": "0d4c44632f24204e2a04cb7f690b90312478e4927b4dca51dc3e9e741e50ab48" },
+  "requirementReviewCheck": "/tmp/mod01-catalogue-contract/review-check.json",
+  "limits": "Source-mechanism qualification, not all-provider/model/host operations, remote service/account acceptance, continuous revocation/freshness, new SDK captures or platform/installed/browser/full-root/production qualification. Operator-import snapshots are intentionally not auto-repriced; configured/static availability is not an entitlement claim. The separate historical lifecycle strict-root error and all failed gates remain unchanged; no flags/assertions/deadlines/retries weakened. No new cache/catalogue framework or HTTP/network semantics.",
+  "auditState": "05a delivered under specified current contracts. Current23 audit becomes15 DELIVERED +04b DONE +one HISTORICAL +six unresolved/review rows; not parent acceptance/model percentage.01b/02e/04a/05b/06a/06c remain. MOD-01 IN PROGRESS/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged, goal active/not complete."
+}

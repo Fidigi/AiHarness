@@ -160,6 +160,32 @@ describe('ModelCatalogService', () => {
     expect(fetch).not.toHaveBeenCalled(); expect(JSON.stringify(models)).not.toContain('private-profile-token');
   });
 
+  it('keeps OpenRouter refresh explicit and operator metadata independent from current personalized availability', async () => {
+    const id = 'openai/gpt-4o', headers = { 'x-tenant': 'synthetic-original' };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ data: [{ id, top_provider: { context_length: 64000, max_completion_tokens: 9000 }, pricing: { prompt: '0.000003', completion: '0.000015' } }] }))
+      .mockResolvedValueOnce(Response.json({ data: [] })); vi.stubGlobal('fetch', fetch);
+    const proxy = new AiProxyServer(), provider = new OpenRouterProvider({ type: 'router-review', apiKey: 'synthetic-catalogue-key', customHeaders: headers });
+    proxy.setCustomProvider('router-review', provider);
+    const custom: CustomModelDefinition[] = [], catalog = new ModelCatalogService(proxy, () => custom);
+    const models = async (refresh = false) => (await catalog.getCatalog(refresh)).find(row => row.provider === 'router-review')!.models;
+    expect(await models(true)).toHaveLength(393); expect(fetch).not.toHaveBeenCalled();
+    await provider.refreshUserModels();
+    expect(await models()).toMatchObject([{ id, available: true, contextWindow: 64000, maxOutputTokens: 9000, pricing: { inputPerMillion: 3, outputPerMillion: 15 } }]);
+    custom.push({ key: `router-review:${id}`, provider: 'router-review', id, name: 'Operator metadata', contextWindow: 777,
+      capabilities: { reasoning: false, imageInput: false, toolCalls: false }, pricing: { inputPerMillion: 999 }, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() });
+    expect(await models()).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: true, contextWindow: 777, pricing: { inputPerMillion: 999 } }]);
+    headers['x-tenant'] = 'synthetic-other';
+    expect(await models()).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: false }]);
+    headers['x-tenant'] = 'synthetic-original'; await provider.refreshUserModels();
+    expect(await models(true)).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: false }]);
+    expect(catalog.getCapabilities('router-review', id)).toEqual(custom[0]!.capabilities); expect(catalog.getPricing('router-review', id)).toEqual(custom[0]!.pricing);
+    expect(fetch).toHaveBeenCalledTimes(2); expect(fetch.mock.calls.every(([url]) => String(url) === 'https://openrouter.ai/api/v1/models/user')).toBe(true);
+    expect(JSON.stringify(await models())).not.toContain('synthetic-catalogue-key');
+    proxy.setCustomProvider('router-review', new OpenRouterProvider({ type: 'router-review', apiKey: 'synthetic-replacement' }));
+    expect(await models()).toHaveLength(393); expect(fetch).toHaveBeenCalledTimes(2);
+    expect((await models()).find(row => row.id === id)).toMatchObject({ source: 'custom', name: 'Operator metadata', available: true, contextWindow: 777 });
+  });
+
   it('marks published models unavailable when their provider is not configured', async () => {
     const catalog = new ModelCatalogService(new AiProxyServer());
     const providers = await catalog.getCatalog();
