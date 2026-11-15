@@ -6,6 +6,8 @@
 
 **Reading order and authority:** §§2–3 own current criterion status and completion requirements; §5 owns audit-level decisions. The [MOD-01 delivery board](./MOD-01-tracking.md) owns the next functional batch and delivered versus isolated results; [MOD-01](./MOD-01.md) owns its 23-task register, detailed decisions and receipts. Historical blocks below preserve source-specific evidence, not another work queue. Fresh application qualification is credited only by its dated source-bound delivery receipt, not by a documentary cleanup.
 
+**MOD-01 Google/Vertex/Bedrock native intent — 2026-11-15:** [receipt](./evidence/MOD-01-native-owner-intent.json), baseline `b7a1af9`. Three actual forged own-getter promotions fixed with true private construction values; original and derived schema/header/routing/source admission stay independent of public fields. First candidate build/types/one strict root/85 runtime (three new+82 reused)/one equal product witness PASS,832 unselected. Native source/default/auth algorithms unchanged; no new DTO/schema/dependency/account/paid warming/host campaign or historical/global/MOD-03 acceptance.01b/04a PARTIAL for remaining Azure C/owner/default review; exact23/18 functional/one historical/four unresolved/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged.
+
 **MOD-01 OpenAI additive tool history — 2026-11-15:** [receipt](./evidence/MOD-01-responses-tool-history.json), baseline `0a714ed`. Eleven original OpenAI models now anchor additive definitions to initial tools/context; initial-empty, grammar/opaque replay and non-additive current-flat fallback retain actual execution authority. Shared pure v2 reconstruction extracted from Anthropic, private family/owner maps and host cancellation/budget fences conserved. Two REDs/three controls retained; first build/types/117 runtime (eight new+109 reused)/three strict roots (two changed)/six equal product inputs PASS,368 unselected. Actual builtin JSON CLI restart/offline40 once-only tokens/$0.0002/privacy0600; no new caller/DTO/schema/loader/dependency/search-only executable/paid warming/global or MOD-03 credit. Native owner/default reconciliation stays01b/04a PARTIAL; exact23/18 functional/one historical/four unresolved/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged.
 
 **MOD-01 Responses plain-system capability policy — 2026-11-15:** [receipt](./evidence/MOD-01-responses-system-policy.json), baseline `f8dd0e6`. Eleven OpenAI inline versus33 OpenAI/44 Azure R collapsing contexts now follow independent source/model policy before deployment; empty systems omitted and forged direct Azure intent cannot promote derived transports. Five REDs/TS18046 retained;46 scoped Docker cases (six new+40 reused)/one strict root/build/types/three source witnesses PASS,432 unselected. Automatic additive-only `additional_tools` histories on eleven OpenAI models remain a concrete default gap, not merely optional caller ABI; no original search-only branch. No new public/host/schema/dependency/paid warming or global/MOD-03 claim. Exact23/18 functional/one historical/four unresolved/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged.
@@ -572,6 +574,12 @@ Remaining delivery and qualification concern the six open criteria in §3: CLI-0
 Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, approving source and re-examination trigger. None is recorded by this session.
 
 ## 6. Delivery Journal
+
+### MOD-01 — Google/Vertex/Bedrock construction intent
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-15 | MOD-01.01b; MOD-01.04a | PARTIAL → PARTIAL | [Native intent receipt](./evidence/MOD-01-native-owner-intent.json), baseline `b7a1af9`; two private captured values in Core | Make build/types; one canonical strict root;85 scoped Docker cases (three new);one equal product witness; `make lint-docs`; `git diff --check` | Three genuine forgery REDs; no public getter promotion/native downgrade, changed defaults/auth sources, new host/account campaign or historical/global acceptance extension |
 
 ### MOD-01 — OpenAI additive tool history
 

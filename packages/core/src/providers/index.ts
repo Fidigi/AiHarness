@@ -4651,19 +4651,19 @@ interface GeminiResponse {
 export class GeminiProvider extends AiProvider {
   override getModelApi(): string { return 'google-generative-ai'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
-    if (!this.nativeScope) return super.getPublishedModels?.();
-    const legacy = getPublishedModels(this.nativeScope === 'google' ? 'google' : 'vertex');
-    return [...googlePublishedProfiles(this.nativeScope), ...legacy.filter(profile => !hasGoogleProfile(this.nativeScope!, profile.id))
-      .map(profile => ({ ...profile, api: this.nativeScope === 'google' ? 'google-generative-ai' : 'google-vertex' }))];
+    if (!this.#nativeScope) return super.getPublishedModels?.();
+    const legacy = getPublishedModels(this.#nativeScope === 'google' ? 'google' : 'vertex');
+    return [...googlePublishedProfiles(this.#nativeScope), ...legacy.filter(profile => !hasGoogleProfile(this.#nativeScope!, profile.id))
+      .map(profile => ({ ...profile, api: this.#nativeScope === 'google' ? 'google-generative-ai' : 'google-vertex' }))];
   }
 
-  private readonly nativeScope: GoogleNativeScope | undefined;
+  readonly #nativeScope: GoogleNativeScope | undefined;
   static readonly DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
   private readonly baseUrl: string;
 
   constructor(config: ProviderConfig) {
     super({ ...config, type: ProviderType.GOOGLE, model: config.model || 'gemini-2.0-flash' });
-    this.nativeScope = new.target === GeminiProvider ? 'google' : new.target === VertexGeminiProvider ? 'google-vertex' : undefined;
+    this.#nativeScope = new.target === GeminiProvider ? 'google' : new.target === VertexGeminiProvider ? 'google-vertex' : undefined;
     this.baseUrl = (config.baseUrl || GeminiProvider.DEFAULT_BASE_URL).replace(/\/$/, '');
   }
 
@@ -4690,7 +4690,7 @@ export class GeminiProvider extends AiProvider {
 
   protected endpoint(method: 'generateContent' | 'streamGenerateContent', requestedModel?: string): string {
     const model = String(requestedModel || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
-    if (this.nativeScope === 'google' && hasGoogleProfile(this.nativeScope, model)) {
+    if (this.#nativeScope === 'google' && hasGoogleProfile(this.#nativeScope, model)) {
       return `${this.baseUrl}/models/${encodeURIComponent(model)}:${method}${method === 'streamGenerateContent' ? '?alt=sse' : ''}`;
     }
     const suffix = method === 'streamGenerateContent' ? '?alt=sse&' : '?';
@@ -4698,11 +4698,11 @@ export class GeminiProvider extends AiProvider {
   }
 
   protected nativeRequestHeaders(model?: string): Record<string, string> | undefined {
-    if (!this.nativeScope || !model || !hasGoogleProfile(this.nativeScope, model)) return undefined;
+    if (!this.#nativeScope || !model || !hasGoogleProfile(this.#nativeScope, model)) return undefined;
     const headers = new Headers(configuredHeaders(this.config));
     headers.set('Content-Type', 'application/json');
-    headers.set(this.nativeScope === 'google' ? 'x-goog-api-key' : 'Authorization',
-      this.nativeScope === 'google' ? String(this.config.apiKey) : `Bearer ${this.config.apiKey}`);
+    headers.set(this.#nativeScope === 'google' ? 'x-goog-api-key' : 'Authorization',
+      this.#nativeScope === 'google' ? String(this.config.apiKey) : `Bearer ${this.config.apiKey}`);
     return Object.fromEntries(headers.entries());
   }
   protected requestHeaders(model?: string): Record<string, string> {
@@ -4711,7 +4711,7 @@ export class GeminiProvider extends AiProvider {
 
   private buildBody(messages: Message[], options?: GoogleChatOptions): Record<string, unknown> {
     const thinkingModel = String(options?.model ?? this.config.model ?? '');
-    const native = this.nativeScope && hasGoogleProfile(this.nativeScope, thinkingModel) ? this.nativeScope : undefined;
+    const native = this.#nativeScope && hasGoogleProfile(this.#nativeScope, thinkingModel) ? this.#nativeScope : undefined;
     if (!native) messages = toolImageMessages(messages);
     else messages = messages.filter(message => message.role !== 'assistant' || !message.metadata?.outputError)
       .map(message => projectAssistantReplay(message, native === 'google' ? 'google' : 'vertex', thinkingModel,
@@ -4779,7 +4779,7 @@ export class GeminiProvider extends AiProvider {
   }
 
   private normalize(response: GeminiResponse, model: string, complete = false): ChatResponse {
-    const scope = this.nativeScope && hasGoogleProfile(this.nativeScope, model) ? this.nativeScope : undefined;
+    const scope = this.#nativeScope && hasGoogleProfile(this.#nativeScope, model) ? this.#nativeScope : undefined;
     if (scope) {
       if (!response || typeof response !== 'object' || Array.isArray(response) || Object.hasOwn(response, 'error')) throw new Error('Invalid Google response.');
       const candidates = response.candidates;
@@ -4872,7 +4872,7 @@ export class GeminiProvider extends AiProvider {
     try {
       if (!this.validateConfig()) throw new Error('Gemini API key is required');
       const model = String(options?.model || this.config.model || 'gemini-2.0-flash').replace(/^models\//, '');
-      const scope = this.nativeScope && hasGoogleProfile(this.nativeScope, model) ? this.nativeScope : undefined;
+      const scope = this.#nativeScope && hasGoogleProfile(this.#nativeScope, model) ? this.#nativeScope : undefined;
       const response = await this.request(this.endpoint('streamGenerateContent', model), {
         method: 'POST',
         headers: this.requestHeaders(model),
@@ -5081,13 +5081,13 @@ export interface BedrockProviderConfig extends ProviderConfig { bedrockProfile?:
 export class BedrockProvider extends AiProvider {
   override getModelApi(): string { return 'bedrock-converse-stream'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
-    return this.ownsNativeProfiles ? [...bedrockPublishedProfiles(), ...getPublishedModels('bedrock')] : undefined;
+    return this.#ownsNativeProfiles ? [...bedrockPublishedProfiles(), ...getPublishedModels('bedrock')] : undefined;
   }
 
   private readonly region: string;
   private readonly configuredRegion?: string;
   private readonly endpointRegion?: string;
-  private readonly ownsNativeProfiles: boolean;
+  readonly #ownsNativeProfiles: boolean;
   private readonly profile?: BedrockProfile | BedrockEcsCredentials | BedrockWebIdentityCredentials;
 
   constructor(config: BedrockProviderConfig) {
@@ -5104,12 +5104,12 @@ export class BedrockProvider extends AiProvider {
     });
     this.configuredRegion = String(config.region || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || '') || undefined;
     this.region = this.configuredRegion || 'us-east-1';
-    this.ownsNativeProfiles = new.target === BedrockProvider;
-    if (this.ownsNativeProfiles && config.baseUrl) {
+    this.#ownsNativeProfiles = new.target === BedrockProvider;
+    if (this.#ownsNativeProfiles && config.baseUrl) {
       try { this.endpointRegion = /^bedrock-runtime(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/u.exec(new URL(String(config.baseUrl)).hostname)?.[1]; }
       catch { /* Endpoint validation remains at dispatch. */ }
     }
-    if (this.ownsNativeProfiles && (config.bedrockProfile || config.bedrockEcs || config.bedrockWebIdentity) && config.apiKey === undefined && config.accessKeyId === undefined
+    if (this.#ownsNativeProfiles && (config.bedrockProfile || config.bedrockEcs || config.bedrockWebIdentity) && config.apiKey === undefined && config.accessKeyId === undefined
       && config.secretAccessKey === undefined && config.sessionToken === undefined
       && !hasBedrockAuthHeaders(config)) {
       if ([config.bedrockProfile, config.bedrockEcs, config.bedrockWebIdentity].filter(Boolean).length > 1) throw new Error('Only one Bedrock credential source is allowed.');
@@ -5121,7 +5121,7 @@ export class BedrockProvider extends AiProvider {
         : new BedrockWebIdentityCredentials(config.bedrockWebIdentity!, this.configuredRegion, (url, init) => super.request(url, init));
       nativeSubscriptionStreamConsumers.add(this);
     }
-    if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
+    if (this.#ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, 'anthropic.claude-3-haiku-20240307-v1:0'), region = this.region;
       return (options, messages) => prepareBedrockOutputBudget(options, model, messages, region);
     });
@@ -5143,7 +5143,7 @@ export class BedrockProvider extends AiProvider {
 
   /** ARN routing is not admission to a native model's budgets, pricing or private replay. */
   private modelArnRegion(model: string): string | undefined {
-    return this.ownsNativeProfiles ? /^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9]+(?:-[a-z0-9]+)+-\d+):/u.exec(model)?.[1] : undefined;
+    return this.#ownsNativeProfiles ? /^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9]+(?:-[a-z0-9]+)+-\d+):/u.exec(model)?.[1] : undefined;
   }
 
   private streamEndpoint(model: string, region = this.region): URL {
@@ -5243,8 +5243,8 @@ export class BedrockProvider extends AiProvider {
 
   async chat(messages: Message[], options?: BedrockChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
-    const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
-    const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
+    const requestedModel = this.#ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
+    const native = this.#ownsNativeProfiles && hasBedrockProfile(requestedModel);
     const signed = native, owner = this.config.type;
     if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, requestedModel, messages, this.region);
     const toolConfig = prepareBedrockTools(native ? requestedModel : undefined, options);
@@ -5260,7 +5260,7 @@ export class BedrockProvider extends AiProvider {
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
     }
-    const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? requestedModel : undefined, toolConfig);
+    const prepared = this.requestBody(messages, options, this.#ownsNativeProfiles ? requestedModel : undefined, toolConfig);
     if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, region);
     const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
     await authentication?.assertCurrent();
@@ -5294,7 +5294,7 @@ export class BedrockProvider extends AiProvider {
       ...(signed ? { provider: owner } : {}),
       ...lengthStop(data.stopReason),
       ...(native ? { api: 'bedrock-converse-stream' } : {}),
-      model: this.ownsNativeProfiles ? requestedModel : String(this.config.model),
+      model: this.#ownsNativeProfiles ? requestedModel : String(this.config.model),
       usage: native ? bedrockProfileUsage(data.usage, requestedModel) : data.usage ? (() => {
         const prompt = token(data.usage?.inputTokens);
         const completion = token(data.usage?.outputTokens);
@@ -5322,14 +5322,14 @@ export class BedrockProvider extends AiProvider {
       if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
       if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
       const model = options?.model || String(this.config.model);
-      const native = this.ownsNativeProfiles && hasBedrockProfile(model);
+      const native = this.#ownsNativeProfiles && hasBedrockProfile(model);
       const signed = native, owner = this.config.type;
       if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, model, messages, this.region);
       const toolConfig = prepareBedrockTools(native ? model : undefined, options);
       const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
       const region = this.modelArnRegion(model) ?? this.configuredRegion ?? this.endpointRegion ?? authentication?.region ?? this.region;
       const url = this.streamEndpoint(model, region);
-      const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined, toolConfig);
+      const prepared = this.requestBody(messages, options, this.#ownsNativeProfiles ? model : undefined, toolConfig);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, region);
       const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
       await authentication?.assertCurrent();
