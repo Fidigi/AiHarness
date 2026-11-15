@@ -12,6 +12,7 @@ import { toolSearchActivationMetadata } from '../tools/tool-search.js';
 import { ToolProgressChannel, type ToolProgressSnapshot } from './tool-progress.js';
 import { ProviderContextOverflowError } from '../providers/context-overflow.js';
 import { ProviderRequestContextError } from './provider-request-estimate.js';
+import { prepareMessageImages } from '../media/message-images.js';
 import { ownToolResult } from './tool-result.js';
 import { nestedToolScope } from './nested-tools.js';
 import { copyAgentRunTrigger, copyExtensionResult, type AgentRunTrigger, type ExtensionCustomTrigger } from '../extensions/execution-hooks.js';
@@ -70,6 +71,8 @@ export interface ToolLoopOptions {
   maxToolResultLength?: number;
   signal?: AbortSignal;
   provider?: string;
+  /** Trusted host image policy for new post-hook tool results only. */
+  imageAutoResize?: boolean;
   trigger?: AgentRunTrigger;
   /** Process-local scrubber applied before extension/tool output is persisted or emitted. */
   redactText?(value: string): string;
@@ -358,8 +361,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         });
         if (resultHook.cancelled) throw new Error('Extension tool result cancelled.');
         const owned = ownToolResult(resultHook.data.result, options.redactText);
-        content = owned.content;
-        blocks = owned.blocks.filter((block): block is Extract<MessageContentBlock, { type: 'image' }> => block.type === 'image');
+        const images = options.toolContext.provider && !response.selection
+          ? await prepareMessageImages(options.toolContext.provider, response.model, owned.content, owned.blocks, 'tool',
+            { autoResize: options.imageAutoResize }, options.signal) : owned;
+        content = images.content;
+        blocks = (images.blocks ?? []).filter((block): block is Extract<MessageContentBlock, { type: 'image' }> => block.type === 'image');
         structuredContent = owned.structuredContent;
         isError = owned.isError;
         if (!isError) activatedTools = options.getActivatedTools?.(call.name, result);

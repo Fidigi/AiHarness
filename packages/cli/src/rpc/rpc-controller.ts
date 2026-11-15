@@ -27,6 +27,7 @@ import {
   getProviderPublishedModel,
   getProviderPublishedModels,
   getSupportedThinkingLevels,
+  prepareMessageImages,
   normalizeProviderUsage,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
@@ -1296,10 +1297,12 @@ export class RpcController {
 
         while (prompt) {
           if (signal.aborted) throw Object.assign(new Error("Exécution de l'agent interrompue."), { name: 'AbortError' });
+          const prepared = this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model) ? prompt
+            : await prepareMessageImages(this.context.provider, this.model, prompt.content, prompt.blocks, 'prompt', this.context.agentSettings?.().images, signal);
           await this.context.sessionManager.addMessage(this.currentSessionId, {
             role: 'user',
-            content: prompt.content,
-            blocks: prompt.blocks,
+            content: prepared.content,
+            blocks: prepared.blocks,
           }, { signal });
 
           let activeToolCall: ToolCall | undefined;
@@ -1309,6 +1312,7 @@ export class RpcController {
             sessionManager: this.context.sessionManager,
             sessionId: this.currentSessionId,
             extensionRegistry: this.context.extensionRegistry,
+            imageAutoResize: this.context.agentSettings?.().images?.autoResize,
             tools: resolveTools(),
             resolveTools,
             executeTool: (name, input, context, executionSignal) => {
@@ -1436,11 +1440,13 @@ export class RpcController {
             beforeNextTurn: async () => {
               const steering = this.takeNextSteering();
               if (!steering) return;
-              await this.events.continueAgent(steering.content, steering.blocks);
+              const prepared = this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model) ? steering
+                : await prepareMessageImages(this.context.provider, this.model, steering.content, steering.blocks, 'prompt', this.context.agentSettings?.().images, signal);
+              await this.events.continueAgent(prepared.content, prepared.blocks);
               await this.context.sessionManager.addMessage(this.currentSessionId, {
                 role: 'user',
-                content: steering.content,
-                blocks: steering.blocks,
+                content: prepared.content,
+                blocks: prepared.blocks,
               }, { signal });
             },
             signal,

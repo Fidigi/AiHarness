@@ -1,4 +1,5 @@
 import type { AiProvider, ChatResponse, ChatToolDefinition, ThinkingBudgets } from '../providers/index.js';
+import { prepareMessageImages } from '../media/message-images.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import type { SpecializedProviderSource } from '../providers/specialized-models.js';
@@ -85,6 +86,8 @@ export interface AgentRuntimeOptions {
   specializedProviders?: SpecializedProviderSource;
   /** Resolve live reasoning immediately before each model turn; never mutates an in-flight request. */
   resolveThinking?(session: Session, initial: Session['thinking']): Session['thinking'];
+  /** Trusted host settings for new image input; no journal/body option authority. */
+  resolveImageOptions?(cwd: string): { autoResize?: boolean } | Promise<{ autoResize?: boolean }>;
   journal?: AgentEventJournal;
   isProjectTrusted?(cwd: string): boolean | Promise<boolean>;
   onUsage?(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
@@ -243,6 +246,7 @@ export class AgentRuntime {
   private readonly resolveProvider: AgentRuntimeOptions['resolveProvider'];
   private readonly specializedProviders?: SpecializedProviderSource;
   private readonly resolveThinking: NonNullable<AgentRuntimeOptions['resolveThinking']>;
+  private readonly resolveImageOptions?: AgentRuntimeOptions['resolveImageOptions'];
   private readonly isProjectTrusted: NonNullable<AgentRuntimeOptions['isProjectTrusted']>;
   private readonly onUsage?: AgentRuntimeOptions['onUsage'];
   private readonly onNotification?: AgentRuntimeOptions['onNotification'];
@@ -256,6 +260,7 @@ export class AgentRuntime {
     this.extensionRegistry = options.extensionRegistry;
     this.resolveProvider = options.resolveProvider;
     this.specializedProviders = options.specializedProviders;
+    this.resolveImageOptions = options.resolveImageOptions;
     this.resolveThinking = options.resolveThinking ?? ((session, initial) => session.thinking ?? initial);
     this.journal = options.journal ?? new AgentEventJournal();
     this.isProjectTrusted = options.isProjectTrusted ?? (() => false);
@@ -651,6 +656,7 @@ export class AgentRuntime {
       extensionRegistry: this.extensionRegistry,
       toolContext: await this.toolContext(run, provider, request),
       provider: run.snapshot.provider,
+      imageAutoResize: (await awaitAgentAdmission(() => Promise.resolve(this.resolveImageOptions?.(run.snapshot.cwd)), run.controller.signal))?.autoResize,
       trigger: request.trigger,
       tools: preparedTools.definitions(),
       resolveTools: () => preparedTools.definitions(),
@@ -836,10 +842,11 @@ export class AgentRuntime {
         { display: true }, { signal: run.controller.signal });
       return;
     }
+    const prepared = await this.prepareUserImages(run, request, request.input, request.blocks);
     await this.sessionManager.addMessage(run.snapshot.sessionId, {
       role: 'user',
-      content: request.input,
-      blocks: request.blocks?.length ? request.blocks : [{ type: 'text', text: request.input }],
+      content: prepared.content,
+      blocks: prepared.blocks?.length ? prepared.blocks : [{ type: 'text', text: prepared.content }],
       agentId: request.agentId ?? run.snapshot.id,
       metadata: { queueKind: 'initial' },
     }, { signal: run.controller.signal });
@@ -851,14 +858,24 @@ export class AgentRuntime {
     queued: QueuedAgentMessage[],
   ): Promise<void> {
     for (const message of queued) {
+      const prepared = await this.prepareUserImages(run, request, message.content, message.blocks);
       await this.sessionManager.addMessage(run.snapshot.sessionId, {
         role: 'user',
-        content: message.content,
-        blocks: message.blocks?.length ? message.blocks : [{ type: 'text', text: message.content }],
+        content: prepared.content,
+        blocks: prepared.blocks?.length ? prepared.blocks : [{ type: 'text', text: prepared.content }],
         agentId: request.agentId ?? run.snapshot.id,
         metadata: { queueKind: message.kind },
       }, { signal: run.controller.signal });
     }
+  }
+
+  private async prepareUserImages(run: ActiveRun, request: StartAgentRunRequest, content: string, blocks?: MessageContentBlock[]) {
+    if (!blocks?.some(block => block.type === 'image')) return { content, blocks };
+    const provider = await awaitAgentAdmission(() => Promise.resolve(this.resolveProvider(run.snapshot.provider)), run.controller.signal);
+    const model = request.model ?? provider?.getConfiguredModel();
+    if (!provider || this.extensionRegistry.virtualModels.get(run.snapshot.provider, model)) return { content, blocks };
+    const options = await awaitAgentAdmission(() => Promise.resolve(this.resolveImageOptions?.(run.snapshot.cwd)), run.controller.signal);
+    return prepareMessageImages(provider, model, content, blocks, 'prompt', options, run.controller.signal);
   }
 
   private takeQueued(run: ActiveRun, kind: AgentMessageQueueKind): QueuedAgentMessage[] {

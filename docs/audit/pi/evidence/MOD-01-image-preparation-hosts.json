@@ -1,0 +1,63 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "a8f9d7f",
+  "criterion": "MOD-01.04b",
+  "status": "PARTIAL",
+  "scope": "Native physical data-image prompt/queue and post-hook tool append composition, trusted settings and durable prepared-byte retention; not virtual routing/managed-attachment/04b completion",
+  "implementation": "Public prepareMessageImages reuses the real model-owned codec only for new image blocks. Core runtime initial/queued user append, CLI interactive/print/JSON and RPC initial/steering append prepare before journal publication. Shared tool loop prepares owned post-hook results using the physical response model/provider, excluding virtual selections. Successful bytes/MIME/dimensions and coordinate hints persist once; prompt failures omit images with hints, tool failures preserve originals. Hint insertion explicitly retains compatibility content for image-only incoming blocks. Trusted host resolveImageOptions callback is cancellation-aware; Server loads admitted agent/trusted-project image settings, no HTTP-body authority. CLI/RPC pass existing images.autoResize, while images.blockImages remains unsupported. Model switch/reload retains old prepared bytes, not whole-journal reprocessing. Source TypeScript resolves the compiled worker asset; emitted package resolves adjacent worker. No new dependencies or generated-output edits.",
+  "qualification": {
+    "environment": "Docker Makefile build/types; runtime --network none/CI=true/node --no-maglev. Synthetic independent Node PNG fixtures, synthetic credentials/temporary HOME/stores and bounded loopback or mocked transports only. No account/live switch/personal store/reference SDK acquisition/protected-container operations.",
+    "image": "ai-harness:mod01-image-hosts-owned",
+    "imageId": "sha256:597f0f096588bfcc6345505ff58d8b3acc869e25b0da484979d1f0f4c792566c",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-image-hosts-owned; product build/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-image-hosts/build-owned-r4.log",
+    "strict": {
+      "passed": true,
+      "roots": 5,
+      "config": "/tmp/mod01-image-hosts/strict.json",
+      "containerConfig": "/app/strict.json",
+      "log": "/tmp/mod01-image-hosts/owned-r4.log",
+      "files": ["packages/core/src/agent/image-append.test.ts", "packages/core/src/media/image-preparation.test.ts", "packages/cli/src/cli/image-preparation-process.test.ts", "packages/cli/src/tui/terminal-settings.test.ts", "packages/server/src/api/image-preparation-http.test.ts"]
+    },
+    "runtime": {
+      "passed": 97,
+      "failed": 0,
+      "new": 11,
+      "reused": 86,
+      "files": ["packages/core/src/agent/image-append.test.ts", "packages/core/src/media/image-preparation.test.ts", "packages/core/src/agent/tool-results.test.ts", "packages/core/src/agent/runtime.test.ts", "packages/cli/src/cli/image-preparation-process.test.ts", "packages/cli/src/tui/terminal-settings.test.ts", "packages/cli/src/rpc/rpc-controller.test.ts", "packages/server/src/api/image-preparation-http.test.ts"],
+      "log": "/tmp/mod01-image-hosts/owned-r4.log",
+      "meaning": "Five new Core append cases cover actual prepared journal bytes, post-hook image replacement, failure asymmetry/tool usage, trusted false, queued append, preserved compatibility text, model-specific 64-to16 switch without historical rewrite, reload and cancellation while settings are pending. Three actual emitted print/JSON/RPC native MiniMax M3 cases capture real TLS prompt/tool 2000x1000 wire images from 2400x1200/2600x1300 inputs, new-process restart with exact prepared images and immutable original entries; three vendor calls and30 tokens per mode, no false snapshot-freeze oracle. Two actual Server HTTP cases exercise trusted on/off, tool/final/restart with preserved prompt and exactly-once result text, new runtime and30 tokens each; three mocked vendor calls per case. One new setting-projection case keeps blockImages unsupported. Reused86 cover compiled codec/worker7, tool results23, runtime18, RPC36 and terminal2. Shared independent PNG generator extracted byte-for-byte from the existing codec test, assertions unchanged. No new provider/model/host campaign or MOD-03 redelivery. Server restart is a new application runtime, CLI restart is a new OS process. HTTP provider embedding is explicit, not new credential/dialect/Settings UI qualification. Counts are distinct, repeated focused/overlay passes not added."
+    },
+    "counterfactual": {
+      "image": "ai-harness:mod01-image-core-owned",
+      "failed": 8,
+      "alreadyPassing": 2,
+      "logs": ["/tmp/mod01-image-hosts/red-r2.log", "/tmp/mod01-image-hosts/red-queue.log"],
+      "meaning": "Seven failures/two controls in the final corrected nine-case predecessor selection, plus one separately added queued-image RED. Predecessor contains the image engine but no host composition. Initial red.log retains invalid-fixture results, not additional behavior credit. CLI retries/deadlines/flags unchanged; expected raw oversized image makes synthetic vendor refuse."
+    },
+    "retainedFailures": [
+      {"log": "/tmp/mod01-image-hosts/focused.log", "passed": 3, "failed": 6, "meaning": "First fixtures returned forbidden extra hook-patch fields, used invalid coding tool preset, and compared whole journal metadata snapshots across restart. Corrected to result-only hook/configured preset/exact immutable entries by ID, retaining byte/dimension/text/lifetime assertions, deadlines and CLI flags."},
+      {"log": "/tmp/mod01-image-hosts/focused-r2.log", "passed": 8, "failed": 1, "meaning": "Remaining hook fixture failure, diagnosed without weakening the execution-hook allowlist; core-debug.log exposes Extension execution hook failed. Final result-only patch keeps post-hook image replacement mandatory."},
+      {"log": "/tmp/mod01-image-hosts/owned.log", "exit": 2, "meaning": "Strict config extracted under /tmp cannot resolve node type definitions (TS2688), before Vitest. Same config under /app resolves repository dependencies, not a product or compiler incident waiver."},
+      {"log": "/tmp/mod01-image-hosts/compat-text-red.log", "passed": 5, "failed": 2, "meaning": "Actual candidate defect: added image-hint text suppressed compatibility-content fallback when incoming blocks had images but no text. Strengthened existing queued/API assertions reproduce it; shared helper now inserts the original content before its new hint. API also checks exactly-once tool result text. No new distinct cases, relaxed assertions/deadlines/flags or historical repair."}
+    ],
+    "intermediatePasses": ["/tmp/mod01-image-hosts/focused-r3.log", "/tmp/mod01-image-hosts/owned-r2.log", "/tmp/mod01-image-hosts/owned-r3.log"],
+    "runtimeBinding": {"passed": true, "inputs": 9, "imageWitness": "/tmp/mod01-image-hosts/runtime-witness-image.txt", "worktreeWitness": "/tmp/mod01-image-hosts/runtime-witness-worktree.txt", "diff": "/tmp/mod01-image-hosts/runtime-witness.diff", "meaning": "Nine changed production inputs image-identical; final tests baked into source-built image, strict config only injected by tar stdin. Earlier focused/predecessor test-only tar overlays are not runtime changes or final-image authority."},
+    "documentation": {"lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-image-hosts/docs.log"},
+    "limits": "04b remains PARTIAL. Virtual routes deliberately bypass preparation because physical routing follows initial append; tool virtual selection also bypassed, no alias/default authority claim. Data-only engine does not resolve Server-managed attachment URLs or arbitrary remote/file images: failed prompt omitted, failed tool original retained. Remaining model-limit exceptions and affected routing/attachment host evidence remain mandatory. No browser, installed, production, full format, vendor/account, SDK codec-equivalence, private-replay/MOD-03, global qualification or historical incident repair. Existing runtime134 and other open outcomes/exactly three historical acceptances unchanged."
+  },
+  "sourceSha256": {
+    "packages/core/src/agent/runtime.ts": "e9388ad32fdc29c86c73963f39ced3100187121853eefec1f337778bd34ae7e3",
+    "packages/core/src/agent/tool-loop.ts": "426fece75f31f498e04977dddb46f500b74c8c0353545107ad27225c4620fbd4",
+    "packages/core/src/index.ts": "cb256dfb3454160a6286202ebaf53b84255817693181c917d882c11edb9fdbf5",
+    "packages/core/src/media/image-preparation.ts": "7111d9e713eb8d5d5fb1f2400843ca45f1218f5f7a14b86b08ea6955c03ea5d1",
+    "packages/core/src/media/message-images.ts": "c74eee4485f56d0e045ca2fa4a30709e0487c73a1fda5102d62155cd673c548d",
+    "packages/cli/src/index.ts": "50416da99b3baa9e2a11cf2dc93a3701b9756bbb77f01d1ac5af3c82f5bf2fbc",
+    "packages/cli/src/rpc/rpc-controller.ts": "ed0271f4aa7a745bc01d0701c5fc919438161edd51742569d45b1abae61224df",
+    "packages/cli/src/tui/terminal-settings.ts": "5720532b762d5f3724ce8644595d70ee8bf04ec4d46dcba90f80a71573a5822e",
+    "packages/server/src/runtime/services.ts": "f97c41942f11f8ff6870682c61404cc328a6f632aa59d0a2a2097d3af41e2d85"
+  },
+  "remaining": ["Virtual routed physical policy before new prompt/tool append, without duplicate route invocation or whole-history rewrite", "Server-managed attachment resolution without arbitrary URL/file fetch, remaining distinct model-limit projection and bounded affected-host checks", "Other ADC/AWS/default-tool-media/OpenRouter Server catalogue requirements and final requirement-to-proof audit"],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

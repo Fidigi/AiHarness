@@ -275,6 +275,8 @@ export async function createRuntimeServices(
         const adapter = proxy.getAgentProvider(provider.id);
         return adapter ? [[provider.id, adapter] as const] : [];
       })),
+    resolveImageOptions: async cwd => (await loadAgentSettings({ cwd, agentDir: providerSettings.agentDir,
+      agentDirTrusted: true, projectTrusted: await trustManager.isTrusted(cwd) })).settings.images ?? {},
     resolveThinking: session => resolveEffectiveConfiguration({ configurationStore }, {
       projectId: session.workspaceId, sessionId: session.id, session,
     }).values.thinking,

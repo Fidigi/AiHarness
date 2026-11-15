@@ -23,6 +23,7 @@ import {
   inspectMcpConfig,
   JsonlSessionStore,
   loadAgentSettings,
+  prepareMessageImages,
   loadPromptFiles,
   McpOAuthCredentialManager,
   McpSessionHost,
@@ -1643,11 +1644,13 @@ async function main(): Promise<void> {
               (queued.imageBlocks ?? []).filter(block => block.type !== 'text'),
             ),
           ];
-          if (announceJson) await jsonOutput?.events.startAgent(userInput, userBlocks);
+          const prepared = extensionRegistry.virtualModels.get(providerName, providerModel) ? { content: userInput, blocks: userBlocks }
+            : await prepareMessageImages(provider, providerModel, userInput, userBlocks, 'prompt', settingsResolution.settings.images, operationController.signal);
+          if (announceJson) await jsonOutput?.events.startAgent(prepared.content, prepared.blocks);
           await sessionManager.addMessage(currentSessionId, {
             role: 'user',
-            content: userInput,
-            blocks: userBlocks,
+            content: prepared.content,
+            blocks: prepared.blocks,
             ...(queueKind ? { metadata: { queueKind } } : {}),
           }, { signal: operationController.signal });
           if (!printMode) {
@@ -1755,6 +1758,7 @@ async function main(): Promise<void> {
         sessionManager,
         sessionId: currentSessionId,
         extensionRegistry,
+        imageAutoResize: settingsResolution.settings.images?.autoResize,
         tools: toChatToolDefinitions(toolLoadout.getTools()),
         resolveTools: () => toChatToolDefinitions(toolLoadout.getTools()),
         executeTool: executeSelectedTool,

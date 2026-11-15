@@ -5,10 +5,11 @@ export const UNSUPPORTED_CLI_SETTINGS = [
   'lastChangelogVersion', 'hideThinkingBlock',
   'doubleEscapeAction', 'treeFilterMode', 'fullscreenExitOutput', 'fullscreenScrollbar',
   'fullscreenCopyOnSelect', 'fullscreenWheelScrollLines', 'editorPaddingX', 'outputPad',
-  'autocompleteMaxVisible', 'showHardwareCursor', 'terminal', 'images', 'markdown',
+  'autocompleteMaxVisible', 'showHardwareCursor', 'terminal', 'markdown',
   'collapseChangelog', 'enableInstallTelemetry', 'enableAnalytics', 'trackingId', 'deviceId', 'warnings',
 ] as const satisfies readonly (keyof AgentSettings)[];
 
 export function unsupportedCliSettings(settings: AgentSettings): string[] {
-  return UNSUPPORTED_CLI_SETTINGS.filter(field => settings[field] !== undefined);
+  return [...UNSUPPORTED_CLI_SETTINGS.filter(field => settings[field] !== undefined),
+    ...(settings.images?.blockImages !== undefined ? ['images.blockImages'] : [])];
 }

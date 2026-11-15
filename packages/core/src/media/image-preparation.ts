@@ -24,7 +24,7 @@ async function acquire(signal: AbortSignal): Promise<() => void> {
 async function process(input: ImageProcessingInput, signal: AbortSignal): Promise<ProcessedImage | null> {
   const release = await acquire(signal); let worker: Worker | undefined;
   try {
-    signal.throwIfAborted(); worker = new Worker(new URL('./image-worker.js', import.meta.url), { workerData: input, resourceLimits: { maxOldGenerationSizeMb: 64 } });
+    signal.throwIfAborted(); worker = new Worker(new URL(import.meta.url.endsWith('.ts') ? '../../dist/media/image-worker.js' : './image-worker.js', import.meta.url), { workerData: input, resourceLimits: { maxOldGenerationSizeMb: 64 } });
     return await new Promise<ProcessedImage | null>((resolve, reject) => {
       const abort = () => reject(signal.reason), done = () => signal.removeEventListener('abort', abort);
       signal.addEventListener('abort', abort, { once: true });
