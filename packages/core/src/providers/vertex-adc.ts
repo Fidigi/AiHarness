@@ -1,6 +1,8 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { createHash, createPrivateKey, sign } from 'node:crypto';
+import { Agent, ProxyAgent, type Dispatcher } from 'undici';
+import { vertexCertificate, vertexCertificateEnvironment } from './vertex-adc-certificate.js';
 import { readOAuthJson } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
 import type { CredentialRedactor } from './credentials.js';
@@ -16,8 +18,8 @@ export interface VertexAdcConfig {
   signal?: AbortSignal;
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
-type Send = (url: string | URL, init: RequestInit) => Promise<Response>;
-const TOKEN = 'https://oauth2.googleapis.com/token', STS = 'https://sts.googleapis.com/v1/token', WORKFORCE = 'https://sts.googleapis.com/v1/oauthtoken', SCOPE = 'https://www.googleapis.com/auth/cloud-platform', MAX_FILE = 256 * 1024;
+type Send = (url: string | URL, init: RequestInit, dispatcher?: Dispatcher) => Promise<Response>;
+const TOKEN = 'https://oauth2.googleapis.com/token', STS = 'https://sts.googleapis.com/v1/token', MTLS_STS = 'https://sts.mtls.googleapis.com/v1/token', WORKFORCE = 'https://sts.googleapis.com/v1/oauthtoken', SCOPE = 'https://www.googleapis.com/auth/cloud-platform', MAX_FILE = 256 * 1024;
 const failure = () => new Error('Vertex ADC authentication failed.');
 const text = (value: unknown, max = 64 * 1024): value is string => typeof value === 'string' && !!value && Buffer.byteLength(value) <= max
   && !/[\s\u0000-\u001f\u007f-\u009f]/u.test(value) && Buffer.from(value, 'utf8').toString('utf8') === value;
@@ -104,6 +106,7 @@ export class VertexAdc {
   private readonly quota?: string;
   private readonly allowExecutable: boolean;
   private readonly awsEnvironment = vertexAwsEnvironment(process.env);
+  private readonly certificateEnvironment = vertexCertificateEnvironment(process.env);
   private cached?: { fingerprint: string; token: string; expiresAt: number };
   private sequence = 0;
   private published = 0;
@@ -133,18 +136,23 @@ export class VertexAdc {
     }
     else if (data.type === 'service_account') { if (!text(data.client_email, 4096) || typeof data.private_key !== 'string' || !data.private_key || Buffer.byteLength(data.private_key) > 128 * 1024) throw failure(); }
     else if (data.type === 'external_account') {
-      if (data.token_url !== undefined && data.token_url !== STS || data.service_account_impersonation !== undefined && data.service_account_impersonation_url === undefined
+      if (data.token_url !== undefined && data.token_url !== STS && !(data.subject_token_type === 'urn:ietf:params:oauth:token-type:mtls' && data.token_url === MTLS_STS) || data.service_account_impersonation !== undefined && data.service_account_impersonation_url === undefined
         || !text(data.audience, 4096) || !/^\/\/iam\.googleapis\.com\/(?:projects\/[^/?#]+\/locations\/[^/?#]+\/workloadIdentityPools|locations\/[^/?#]+\/workforcePools)\/[^/?#]+\/providers\/[^/?#]+$/u.test(data.audience)
-        || !['urn:ietf:params:oauth:token-type:jwt', 'urn:ietf:params:oauth:token-type:id_token', 'urn:ietf:params:oauth:token-type:saml2', 'urn:ietf:params:aws:token-type:aws4_request'].includes(data.subject_token_type as string)
+        || !['urn:ietf:params:oauth:token-type:jwt', 'urn:ietf:params:oauth:token-type:id_token', 'urn:ietf:params:oauth:token-type:saml2', 'urn:ietf:params:aws:token-type:aws4_request', 'urn:ietf:params:oauth:token-type:mtls'].includes(data.subject_token_type as string)
         || data.client_id !== undefined && (!text(data.client_id, 4096) || data.client_secret !== undefined && !text(data.client_secret))
         || data.client_secret !== undefined && data.client_id === undefined
         || data.workforce_pool_user_project !== undefined && (!text(data.workforce_pool_user_project, 500) || !data.audience.startsWith('//iam.googleapis.com/locations/'))) throw failure();
     }
     else throw failure();
-    let aws: VertexAwsSource | undefined;
+    let aws: VertexAwsSource | undefined, certificate: Awaited<ReturnType<typeof vertexCertificate>> | undefined;
     let subject: string | undefined, subjectBytes: Buffer | undefined, executable: VertexExecutable | undefined, executableBytes: Buffer | undefined, remote: { url: string; headers: Headers; format?: Record<string, unknown> } | undefined;
     if (data.type === 'external_account' && data.subject_token_type === 'urn:ietf:params:aws:token-type:aws4_request') aws = vertexAwsSource(data.credential_source, this.awsEnvironment, this.redactor);
-    if (data.type === 'external_account' && !aws) {
+    if (data.type === 'external_account' && data.subject_token_type === 'urn:ietf:params:oauth:token-type:mtls') {
+      const source = data.credential_source;
+      if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).length !== 1 || !Object.hasOwn(source, 'certificate')) throw failure();
+      certificate = await vertexCertificate((source as Record<string, unknown>).certificate, this.certificateEnvironment, signal, fileBytes, this.redactor);
+    }
+    if (data.type === 'external_account' && !aws && !certificate) {
       const source = data.credential_source as Record<string, unknown> | undefined;
       if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).some(key => !['file', 'url', 'headers', 'format', 'executable'].includes(key))
         || [source.file, source.url, source.executable].filter(value => value !== undefined).length !== 1) throw failure();
@@ -175,15 +183,23 @@ export class VertexAdc {
     }
     const quota = this.quota ?? root.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
     const authFingerprint = createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(executable ? process.cwd() : '').digest('hex');
-    const fingerprint = createHash('sha256').update(authFingerprint).update(subjectBytes ?? Buffer.alloc(0)).update(executable?.outputFile ?? '').update(executableBytes ?? Buffer.alloc(0)).digest('hex');
-    return { data, iam, subject, remote, executable, executableBytes, aws, authFingerprint, fingerprint, quota };
+    const fingerprint = createHash('sha256').update(authFingerprint).update(subjectBytes ?? Buffer.alloc(0)).update(executable?.outputFile ?? '').update(executableBytes ?? Buffer.alloc(0)).update(certificate?.fingerprint ?? '').digest('hex');
+    return { data, iam, subject, remote, executable, executableBytes, aws, certificate, authFingerprint, fingerprint, quota };
   }
-  private async credential(send: Send, parent: AbortSignal) {
+  private async credential(send: Send, parent: AbortSignal, proxy?: string) {
     const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]); disableProviderNetworkRetries(signal);
-    return observed(async () => {
+    let dispatcher: Dispatcher | undefined; const dispose = () => { void dispatcher?.destroy().catch(() => undefined); };
+    signal.addEventListener('abort', dispose, { once: true });
+    try { return await observed(async () => {
       let document = await this.document(signal); const sequence = ++this.sequence;
       if (this.cached?.fingerprint === document.fingerprint && this.cached.expiresAt > Date.now() + 300_000) return { ...document, token: this.cached.token };
-      let subject = document.subject;
+      if (document.certificate) {
+        signal.throwIfAborted(); if (document.certificate.validFrom > Date.now() || document.certificate.validTo <= Date.now()) throw failure();
+        const tls = { cert: document.certificate.cert, key: document.certificate.key };
+        dispatcher = proxy ? new ProxyAgent({ uri: proxy, requestTls: tls }) : new Agent({ connect: tls });
+        if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+      }
+      let subject = document.certificate?.subject ?? document.subject;
       if (document.aws) {
         const source = await resolveVertexAwsSource(document.aws, signal, async currentSignal => { if ((await this.document(currentSignal)).fingerprint !== document.fingerprint) throw failure(); currentSignal.throwIfAborted(); }, this.redactor);
         subject = vertexAwsSubject(source, document.data.audience as string, this.redactor);
@@ -227,8 +243,8 @@ export class VertexAdc {
         const assertion = `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), key).toString('base64url')}`; this.redactor?.add(assertion);
         fields = { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion };
       }
-      if (document.aws && (await this.document(signal)).fingerprint !== document.fingerprint) throw failure();
-      signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? STS : data.type === 'external_account_authorized_user' ? WORKFORCE : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) });
+      if ((document.aws || document.certificate) && (await this.document(signal)).fingerprint !== document.fingerprint) throw failure();
+      signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? (document.certificate ? (data.token_url as string | undefined) ?? STS : STS) : data.type === 'external_account_authorized_user' ? WORKFORCE : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) }, dispatcher);
       if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); } const body = await readOAuthJson(response, signal);
       this.redactor?.add(typeof body.access_token === 'string' ? body.access_token : undefined);
       if (!text(body.access_token) || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000
@@ -245,7 +261,7 @@ export class VertexAdc {
       let token = body.access_token, expiresAt = Date.now() + body.expires_in * 1000;
       for (const step of document.iam) {
         new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
-        const response = await send(step.url, { method: 'POST', redirect: 'manual', signal, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json', ...(step.sourceQuota ? { 'x-goog-user-project': step.sourceQuota } : {}) }, body: JSON.stringify(step.body) });
+        const response = await send(step.url, { method: 'POST', redirect: 'manual', signal, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json', ...(step.sourceQuota ? { 'x-goog-user-project': step.sourceQuota } : {}) }, body: JSON.stringify(step.body) }, dispatcher);
         if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); }
         const result = await readOAuthJson(response, signal); this.redactor?.add(typeof result.accessToken === 'string' ? result.accessToken : undefined);
         const expiry = typeof result.expireTime === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(result.expireTime) ? Date.parse(result.expireTime) : NaN;
@@ -255,14 +271,14 @@ export class VertexAdc {
       new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
       if (sequence > this.published) { this.published = sequence; this.cached = { fingerprint: document.fingerprint, token, expiresAt }; }
       return { ...document, token };
-    }, signal);
+    }, signal); } finally { signal.removeEventListener('abort', dispose); dispose(); }
   }
-  async request(url: string | URL, init: RequestInit, parent: AbortSignal, send: Send): Promise<Response> {
+  async request(url: string | URL, init: RequestInit, parent: AbortSignal, send: Send, proxy?: string): Promise<Response> {
     const signal = this.lifetime ? AbortSignal.any([parent, this.lifetime]) : parent;
     try {
-      const credential = await this.credential(send, signal); signal.throwIfAborted(); const headers = new Headers(init.headers); headers.delete('x-goog-api-key'); headers.set('authorization', `Bearer ${credential.token}`);
+      const credential = await this.credential(send, signal, proxy); signal.throwIfAborted(); const headers = new Headers(init.headers); headers.delete('x-goog-api-key'); headers.set('authorization', `Bearer ${credential.token}`);
       if (credential.quota && !headers.has('x-goog-user-project')) headers.set('x-goog-user-project', credential.quota);
-      if ((credential.executable || credential.aws) && (await this.document(signal)).fingerprint !== credential.fingerprint) throw failure(); signal.throwIfAborted();
+      if ((credential.executable || credential.aws || credential.certificate) && (await this.document(signal)).fingerprint !== credential.fingerprint) throw failure(); signal.throwIfAborted();
       const response = await send(url, { ...init, headers, signal, redirect: 'manual' }); signal.throwIfAborted();
       if (response.status === 401 && this.cached?.token === credential.token) this.cached = undefined;
       return response;

@@ -67,6 +67,8 @@ const WEBSOCKET_MAX_AGE_MS = 55 * 60_000;
 
 export interface ProviderFetchOptions {
   fetcher?: typeof fetch;
+  /** Trusted per-acquisition TLS lease; caller owns disposal, never shared/cache/config authority. */
+  dispatcher?: Dispatcher;
   scope?: ProviderNetworkScope;
   /** Native routes may exclude specific HTTP failures without disabling other retries. */
   noRetryStatuses?: readonly number[];
@@ -517,7 +519,7 @@ export async function fetchProviderResponse(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? wait;
   const proxy = policy.httpProxy;
-  const fetcher = options.fetcher ?? (proxy ? undiciFetch as unknown as typeof fetch : fetch);
+  const fetcher = options.fetcher ?? (options.dispatcher || proxy ? undiciFetch as unknown as typeof fetch : fetch);
 
   const maxRetries = init.signal && nonRetryableSignals.has(init.signal) ? 0 : policy.maxRetries;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -528,7 +530,7 @@ export async function fetchProviderResponse(
         // Never forward provider credentials across an implicit cross-origin redirect.
         redirect: 'manual' as const,
         ...(timeout.signal ? { signal: timeout.signal } : {}),
-        ...(proxy ? { dispatcher: proxyDispatcher(proxy, scope) as Dispatcher } : {}),
+        ...(options.dispatcher ? { dispatcher: options.dispatcher } : proxy ? { dispatcher: proxyDispatcher(proxy, scope) as Dispatcher } : {}),
       } as RequestInit;
       const response = await abortable(fetcher(endpoint.toString(), requestInit), timeout.signal);
       if (options.noRetryStatuses?.includes(response.status) || !RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries) {

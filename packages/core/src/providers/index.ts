@@ -5016,7 +5016,9 @@ export class VertexGeminiProvider extends GeminiProvider {
     const network = providerNetworkSettings(this.config);
     const signal = AbortSignal.any([providerNetworkScopeSignal(providerNetworkScope(this.config)), ...(init.signal ? [init.signal] : []),
       ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]);
-    return this.adc.request(url, init, signal, (target, request) => super.request(target, request, noRetryStatuses));
+    return this.adc.request(url, init, signal, (target, request, dispatcher) => dispatcher
+      ? fetchProviderResponse(target, request, network, { scope: providerNetworkScope(this.config), noRetryStatuses, dispatcher })
+      : super.request(target, request, noRetryStatuses), network.httpProxy);
   }
 
   override canDiscoverModels(): boolean { return false; }
