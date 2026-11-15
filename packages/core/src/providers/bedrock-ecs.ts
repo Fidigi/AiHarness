@@ -14,6 +14,14 @@ export interface BedrockEcsConfig {
   signal?: AbortSignal;
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
+/** Pure captured descriptor shared by direct hosts and explicit role-profile leaves. */
+export function bedrockEcsEnvironment(env: NodeJS.ProcessEnv, signal?: AbortSignal): BedrockEcsConfig | undefined {
+  return env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || env.AWS_CONTAINER_CREDENTIALS_FULL_URI ? {
+    relativeUri: env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || undefined, fullUri: env.AWS_CONTAINER_CREDENTIALS_FULL_URI || undefined,
+    authorizationToken: env.AWS_CONTAINER_AUTHORIZATION_TOKEN || undefined,
+    authorizationTokenFile: env.AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE ? path.resolve(env.AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE) : undefined, signal,
+  } : undefined;
+}
 const failure = () => new Error('Bedrock container authentication failed.');
 const safe = (value: unknown, max: number): value is string => typeof value === 'string' && !!value && Buffer.byteLength(value) <= max && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
 function endpoint(config: BedrockEcsConfig): string {
@@ -31,7 +39,7 @@ export class BedrockEcsCredentials extends BedrockRefreshingCredentials<Identity
   private readonly url: string;
   private readonly token?: string;
   private readonly tokenFile?: string;
-  constructor(config: BedrockEcsConfig) {
+  constructor(config: BedrockEcsConfig, private readonly assertParent?: (signal: AbortSignal) => Promise<void>) {
     super('Bedrock container authentication failed.', config.signal, config.redactor);
     this.url = endpoint(config);
     if (config.authorizationTokenFile !== undefined) {
@@ -52,7 +60,7 @@ export class BedrockEcsCredentials extends BedrockRefreshingCredentials<Identity
     signal.throwIfAborted(); return { fingerprint: hash.digest('hex'), ...(authorization !== undefined ? { authorization } : {}) };
   }
   protected async acquire(identity: Identity, signal: AbortSignal): Promise<BedrockVendedCredentials> {
-    const response = await fetchOAuthResponse(this.url, { method: 'GET', redirect: 'manual', signal, headers: { accept: 'application/json', ...(identity.authorization !== undefined ? { authorization: identity.authorization } : {}) } }, signal, (url, init) => Promise.resolve().then(() => fetch(url, init)));
+    const response = await fetchOAuthResponse(this.url, { method: 'GET', redirect: 'manual', signal, headers: { accept: 'application/json', ...(identity.authorization !== undefined ? { authorization: identity.authorization } : {}) } }, signal, (url, init) => Promise.resolve().then(async () => { await this.assertParent?.(signal); signal.throwIfAborted(); return fetch(url, init); }));
     if (response.status !== 200) { void response.body?.cancel().catch(() => undefined); throw failure(); }
     return bedrockVendedCredentials(await readOAuthJson(response, signal), this.redactor);
   }

@@ -77,7 +77,7 @@ import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } fr
 import { vertexApiKeyBase } from './vertex-config.js';
 import { VertexAdc, hasVertexAuthHeaders, type VertexAdcConfig } from './vertex-adc.js';
 import { BedrockProfile, hasBedrockAuthHeaders, type BedrockProfileConfig, type BedrockProfileCredentials } from './bedrock-profile.js';
-import { BedrockEcsCredentials, type BedrockEcsConfig } from './bedrock-ecs.js';
+import { BedrockEcsCredentials, bedrockEcsEnvironment, type BedrockEcsConfig } from './bedrock-ecs.js';
 import { BedrockWebIdentityCredentials, type BedrockWebIdentityConfig } from './bedrock-web-identity.js';
 import { signAwsRequest } from './aws-sigv4.js';
 import { prepareBedrockTools } from './bedrock-tools.js';
@@ -5110,7 +5110,7 @@ export class BedrockProvider extends AiProvider {
       this.profile = config.bedrockProfile ? new BedrockProfile(config.bedrockProfile, this.configuredRegion, (url, init) => super.request(url, init), {
         accessKeyId: String(this.config.accessKeyId ?? ''), secretAccessKey: String(this.config.secretAccessKey ?? ''),
         sessionToken: this.config.sessionToken ? String(this.config.sessionToken) : undefined,
-        expiration: process.env.AWS_CREDENTIAL_EXPIRATION, credentialScope: process.env.AWS_CREDENTIAL_SCOPE,
+        expiration: process.env.AWS_CREDENTIAL_EXPIRATION, credentialScope: process.env.AWS_CREDENTIAL_SCOPE, ecs: bedrockEcsEnvironment(process.env),
       }) : config.bedrockEcs ? new BedrockEcsCredentials(config.bedrockEcs)
         : new BedrockWebIdentityCredentials(config.bedrockWebIdentity!, this.configuredRegion, (url, init) => super.request(url, init));
       nativeSubscriptionStreamConsumers.add(this);
