@@ -1,0 +1,64 @@
+{
+  "schema": "ai-harness.mod-01.vertex-adc-aws.v1",
+  "date": "2026-11-15",
+  "baseline": "2327789",
+  "status": "DELIVERED explicit ADC AWS environment-sourced signed subject;metadata sources remain02e PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "matrix": [
+    { "requirement": "AWS external-account ADC subject exchange", "before": "Core rejected aws4_request/environment_id despite existing Google STS/IAM and AWS SigV4 engines", "gap": "Functional absence", "action": "Admit aws1 with complete original-constructor AWS environment snapshot, sign/serialize GetCallerIdentity locally and reuse fixed Google STS/optional IAM/native G", "proof": "Two Core positive/fence REDs/one refusal control; one actual JSON CLI RED; final three Core plus one CLI cases" },
+    { "requirement": "Issuer/credentials/current-source isolation", "before": "Existing file-bound ADC cache/lifetimes/Google STS/IAM and shared signer", "gap": "Specific signed query/audience/current snapshot proof missing", "action": "Independent fixed HMAC vector, signed target-resource/header schema, strict verification authority and no AWS/metadata send, current-file boundaries", "proof": "Compiled public Core vector/JSON-SSE/cache/expiry/auth eviction/withdrawal/cancellation, actual CLI verified-CA Google-only restart/privacy/offline; existing unchanged API admission/retirement reused" },
+    { "requirement": "Remaining cloud scope", "gap": "AWS metadata ADC and other methods/policies/decisions still separate", "action": "Do not infer automatic IMDS or full supplier chain; continue explicit remaining02e/06c reconciliation", "proof": "Exact23/status counts/three historical acceptances unchanged" }
+  ],
+  "implementation": {
+    "files": ["packages/core/src/providers/vertex-adc.ts", "packages/core/src/providers/vertex-adc-aws.ts"],
+    "policy": "Existing original-constructor file-backed ADC only. external_account subject_token_type urn:ietf:params:aws:token-type:aws4_request with credential_source environment_id=aws1, known fields and fixed regional GetCallerIdentity verification URL. Capture only AWS access/secret/session/region(default-region)/expiration/credential-scope at constructor; enroll secrets only when selected. Complete keys and region required, invalid/scoped source refuses without AWS profile/SSO/process/ECS/IMDS fallback. Unused metadata descriptors may be present but are never fetched. Verify exact HTTPS regional STS origin/root path/only Action=GetCallerIdentity and Version=2011-06-15, no userinfo/fragment or alternate action. Reuse unchanged signAwsRequest with empty POST payload and signed x-goog-cloud-target-resource; lowercase serialized headers/URI-encoded JSON is the Google subject. No actual AWS STS call. Google fixed STS receives the proof without inference credentials/headers; only Google or final IAM token reaches native Vertex. Existing quota/IAM/final-token cache/eager expiry/exact401-next-call/whole15s/caller-owner mechanisms remain; current ADC file is fenced immediately before Google STS and before inference, including cached hits. Original immutable environment context requires provider reconstruction for retargeting; valid final Google cache may outlive source expiry but fresh acquisition cannot. No new public config/DTO/flag/file execution/dependency or model policy.",
+    "reference": [
+      { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/awsclient.js", "version": "10.9.1", "sha256": "35477058671800c806001ab911460108c022f009b78de387fe674f48b011f65a", "readOnly": true },
+      { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js", "version": "10.9.1", "sha256": "789b0f0de4e8c89e3170484d589b82cbac7f79ac8e1ebff4624d7123af2860f4", "readOnly": true }
+    ],
+    "referenceLimits": "Read-only source confirms AWS region/env priority, serialized GetCallerIdentity proof and distinct optional metadata supplier; no SDK acquisition/import/execution. Core deliberately signs target-resource as the reference's comment recommends rather than adding it after signing, and retains explicit content hash. This is an independently valid scoped SigV4 proof, not byte-identical foreign SDK serialization or account/service fulfilment. No full AWS SDK credential chain is implied by the Google supplier, whose source is env or its own metadata recipe."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-vertex-adc-aws-owned",
+    "imageId": "sha256:551c3d993a89f968f5c8d8f5e03e0bc89ae8351e49b6f413bf860d178946df71",
+    "candidateImageId": "sha256:77fd108e89a46b787dfdda81499211fdae8c1f17544005db57ff218613fb8489",
+    "predecessorImageId": "sha256:672dc6bdbcee2bb44c6679d90f06638c6b61225fe3832533f10f4d7434a040ae",
+    "runtime": "Makefile Docker build/workspace-parity types; network none/CI=true/node --no-maglev. Canonical run-typescript retains --no-maglev/--no-turbofan; strict.json via tar stdin under /app. Synthetic secrets/accounts/disposable HOME/ADC stores and mocked or verified-CA loopback only; no personal credential/store, protected container, live account or reference SDK execution. Final image has exact source/tests, only strict config injected; no generated/dependency overlay or deadline/retry/old-mode flag change. New CLI AWS branch uses --no-maglev from its first RED.",
+    "regularRuntimePassed": 71,
+    "newCases": 4,
+    "regularReusedCases": 67,
+    "strictChangedRoots": 2,
+    "unselectedCases": 9,
+    "coverage": "Three new compiled-public-Core cases: fixed independent audience-signed HMAC vector/exact AWS4 form, zero AWS calls/native project-global JSON-SSE/quota/header isolation/passive listing/current-file equality, immutable constructor env despite later process changes; valid final Google cache after AWS source expiry/exact401 forcing failed expired-source reacquisition/removal/privacy; incomplete/scoped/expired/wrong-authority/action/version/mixed source refusal without ambient fallback; redactor-driven pre-STS file withdrawal, optional STS->IAM->final-only native token, held STS caller cancellation despite hostile reader. New existing-fixture actual JSON CLI AWS variant uses complete explicit synthetic env+ADC, verified-CA Google STS/native G only, passive0wire, two cold native private-signed continuations20tokens, source-secret echo redaction, offline/removal0extra wire/no helper or AWS probe.70 Core/API/CLI-unit plus1 new actual CLI=71; four new+67 reused. Standard ADC8/external6/IAM8/Workforce5/URL6/executable7/key5/CLI admission11/current API11 reused, not new AWS-specific HTTP proof; no changed API/browser source contract justifies another campaign.",
+    "independentVector": { "path": "/tmp/mod01-vertex-adc-aws/independent-vector.json", "sha256": "bf3a834ce18a586a56f7724c69744df5b8fbc096e4edc099e29ccbbac640031b", "meaning": "Separate static Node crypto calculation, no product signer or reference SDK execution:2026-11-15T00:00:00Z/eu-west-1/STS/empty POST/sorted Action-Version query/five signed headers including target audience. Expected signature540090fa0aac565be077f9bd0146d51cb4ff93172481ea63b329bc6edd84785a is literal in compiled-public-Core test; not vendor verification." },
+    "sourceWitness": {
+      "packages/core/src/providers/vertex-adc.ts": "14307d876c5c9fcce3c49c8ea70c3ba483ffa8da6c37e323d805cd289a56bcea",
+      "packages/core/src/providers/vertex-adc-aws.ts": "be4d61e7c2e07c2bdd32ae87697d8bffa12c28343192cbc77049cc3f4ad4f1ff"
+    },
+    "tests": {
+      "packages/core/src/providers/vertex-adc-aws.test.ts": "1dd4e3fd5f455b14d84b0558d9fda80bd715f0004e99bad17a8fab1ab0083dd5",
+      "packages/cli/src/cli/vertex-adc-process.test.ts": "268c4f5bc05451beced1be593e7e78f329974db34891bfbcbe14d8e0bb3f2b60"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-vertex-adc-aws/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-vertex-adc-aws/red.log (two genuine unsupported AWS-subject failures;one refusal control PASS)",
+      "cliRed": "/tmp/mod01-vertex-adc-aws/cli-red.log (one genuine actual JSON CLI failure;nine unselected)",
+      "firstBuild": "/tmp/mod01-vertex-adc-aws/build-owned.log (build/types PASS)",
+      "fixtureFailure": "/tmp/mod01-vertex-adc-aws/focused.log (two Core PASS/one fixture error: API-key global URL oracle instead of ADC project/global resource path;strict not reached)",
+      "focused": "/tmp/mod01-vertex-adc-aws/focused-r2.log (corrected native ADC path3 Core+1 CLI PASS/two strict roots;test-only overlay)",
+      "build": "/tmp/mod01-vertex-adc-aws/build-owned-r2.log (final strengthened expiry/pre-send fences/source/tests build/types PASS)",
+      "owned": "/tmp/mod01-vertex-adc-aws/owned.log (70+1=71 distinct PASS/two strict roots;nine unselected)",
+      "review": "/tmp/mod01-vertex-adc-aws/review-check.json",
+      "docs": "/tmp/mod01-vertex-adc-aws/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-vertex-adc-aws-owned",
+      "tar -C /tmp/mod01-vertex-adc-aws -cf - strict.json | docker run --rm -i --network none -e CI=true ai-harness:mod01-vertex-adc-aws-owned sh -c 'tar -xf - -C /app && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/vertex-adc-aws.test.ts packages/core/src/providers/vertex-adc.test.ts packages/core/src/providers/vertex-adc-external.test.ts packages/core/src/providers/vertex-adc-iam.test.ts packages/core/src/providers/vertex-adc-workforce.test.ts packages/core/src/providers/vertex-adc-url.test.ts packages/core/src/providers/vertex-adc-executable.test.ts packages/core/src/providers/vertex-auth.test.ts packages/cli/src/providers/vertex-adc.test.ts packages/server/src/api/vertex-adc-http.test.ts --maxWorkers=1 && node --no-maglev node_modules/vitest/vitest.mjs run packages/cli/src/cli/vertex-adc-process.test.ts --maxWorkers=1 -t json-aws && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "Environment-sourced AWS proof only. Missing credentials/region fail even if metadata URLs are present; no automatic IMDS, v1 fallback, profile/SSO/process/ECS supplier, stored ADC profile, new HTTP source authority or native login. Original captured AWS values retarget only on reconstruction. Metadata-backed AWS ADC remains a separate functional source; pending standalone no-profile IMDS question is not answered or implemented by this lot.",
+    "No new API/browser/installed/production/model-host/reference SDK/account/global/MOD-03 campaign, no historical SSO CLI SIGSEGV or Vertex134 replay/repair/acceptance extension. Remaining certificate/universe/metadata/scoped choices and final06c stay explicit02e PARTIAL/exact23/19DELIVERED+04bDONE/one historical/two unresolved/38-of43/exactly three historical acceptances/goal active."
+  ]
+}
