@@ -10,6 +10,7 @@
   "anthropicSystemUpdateBaseline": "7e57302",
   "anthropicDeferredScaffoldBaseline": "881dc96",
   "anthropicToolHistoryBaseline": "c12bef8",
+  "responsesSystemPolicyBaseline": "f8dd0e6",
   "bedrockRegionBaseline": "abe9323",
   "bedrockEnvironmentBaseline": "ed796a4",
   "bedrockEcsProfileBaseline": "532b230",
@@ -92,7 +93,7 @@
       "id": "MOD-01.01b",
       "requirement": "Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock.",
       "status": "PARTIAL",
-      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock/Azure C caller strict/choice now delivered. Corrected Anthropic review: all17-zero conclusion was erroneous; Haiku rejected experiment/negative proof retained. Original Fable5 now implements its actual two-target/beta default, prefix-only transitions/logical replay/observed iteration pricing and unknown-cost warming guard;51 runtime/six new/one strict root, no automatic warming/full beta claim. Native seven-ID plain-system chronology and known-profile assistant-ending cache policy now delivered with effort/tool/cache alignment:56 runtime/five new/one strict root. Conditional initial seven-model deferred scaffold/beta now delivered with whole captured Core/installed arrays:82 regular cases/one strict root/two prerequisite+consumer installed cases; Core-owned historical tool-loadout additions/removals/redefinitions now delivered from existing v2 active ancestry, including initial-empty/all-removed, compaction, OAuth names/signed adjacency, unobserved-attempt recovery and cancellable/stale reads.163 runtime (12 new)/two strict roots/four equal source witnesses; actual builtin JSON CLI restart/offline refuses removed executable tools and bills six physical requests once. Current string systemPrompt semantics and full optional transcript ABI remain distinct.",
+      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock/Azure C caller strict/choice now delivered. Corrected Anthropic review: all17-zero conclusion was erroneous; Haiku rejected experiment/negative proof retained. Original Fable5 now implements its actual two-target/beta default, prefix-only transitions/logical replay/observed iteration pricing and unknown-cost warming guard;51 runtime/six new/one strict root, no automatic warming/full beta claim. Native seven-ID plain-system chronology and known-profile assistant-ending cache policy now delivered with effort/tool/cache alignment:56 runtime/five new/one strict root. Conditional initial seven-model deferred scaffold/beta now delivered with whole captured Core/installed arrays:82 regular cases/one strict root/two prerequisite+consumer installed cases; Core-owned historical tool-loadout additions/removals/redefinitions now delivered from existing v2 active ancestry, including initial-empty/all-removed, compaction, OAuth names/signed adjacency, unobserved-attempt recovery and cancellable/stale reads.163 runtime (12 new)/two strict roots/four equal source witnesses; actual builtin JSON CLI restart/offline refuses removed executable tools and bills six physical requests once. Current string systemPrompt semantics and full optional transcript ABI remain distinct. Native Responses plain-system selection now delivered:33 OpenAI/44 Azure R collapse, eleven OpenAI preserve inline order, independent Azure identity and non-forgeable direct-owner intent;46 runtime/six new/one strict root/three source witnesses. Source review identifies eleven OpenAI automatic additive additional_tools histories as a concrete remaining default gap, not merely optional caller ABI.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
@@ -103,7 +104,8 @@
         "docs/audit/pi/evidence/MOD-01-anthropic-fable-fallback.json",
         "docs/audit/pi/evidence/MOD-01-anthropic-system-updates.json",
         "docs/audit/pi/evidence/MOD-01-anthropic-deferred-tools.json",
-        "docs/audit/pi/evidence/MOD-01-anthropic-tool-history.json"
+        "docs/audit/pi/evidence/MOD-01-anthropic-tool-history.json",
+        "docs/audit/pi/evidence/MOD-01-responses-system-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -112,10 +114,12 @@
         "packages/core/src/providers/bedrock-profiles.ts",
         "packages/core/src/providers/anthropic-thinking.ts",
         "packages/core/src/providers/anthropic-tool-history.ts",
-        "packages/core/src/agent/provider-turn.ts"
+        "packages/core/src/agent/provider-turn.ts",
+        "packages/core/src/providers/openai-responses.ts",
+        "packages/core/src/providers/azure-profiles.ts"
       ],
       "gapClass": "effective-policy review",
-      "minimumAction": "Reconcile remaining meaningful native context/default/capability exceptions and optional additional-tool/search/named-section transcript ABI against approved Core callers under04a. Historical tool-loadout chronology is delivered, not backlog; current systemPrompt and executable authority remain Core-owned. No MOD-03 redelivery or automatic stale-placeholder backlog."
+      "minimumAction": "Deliver the eleven OpenAI automatic additive additional_tools history path from existing Core loadouts; retain flat current tools for removals/redefinitions and current execution authority. No original OpenAI/Azure R declaration selects search-only fallback, so do not invent optional hosted/search-only caller ABI. Finish remaining meaningful defaults/sampling/context review; Anthropic historical tools and native Responses plain-system policy are delivered, not backlog. No MOD-03 redelivery."
     },
     {
       "id": "MOD-01.01c",
@@ -348,7 +352,7 @@
       "id": "MOD-01.04a",
       "requirement": "Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors.",
       "status": "PARTIAL",
-      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and Bedrock/Azure C scoped caller strict/choice gaps fixed, physical media policy proven. Corrected prior all17-zero review error; original Fable5 nominated default/beta, prefix transition validation and exact observed/consistent iteration pricing now delivered, with unknown costs retained through agent/explicit warming. Haiku/Sonnet negative proof stays valid; no unowned aliases/metadata/derived policy promotion. Seven-model native plain-system chronology and known-profile assistant-ending cache corrected, with managed effort/source alignment preserved;56 runtime/five new/one strict root, not complete inline-tool transcript/default equivalence. Initial seven-model deferred scaffold/beta/full saved-array proof now delivered,82 regular/one strict root/two installed prerequisite+consumer cases; Core-owned historical tool chronology now delivered,163 runtime (12 new)/two strict roots/four source witnesses: original declarations stay fixed, current definitions are native deltas, initial-empty/all-removed/branch/model/compaction/budget/cancellation are bounded. Actual builtin JSON CLI private restart/offline proves old schemas do not restore removed executables,60 physical tokens/$0.00054 once. Current string systemPrompt semantics and optional full transcript ABI remain distinct.",
+      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and Bedrock/Azure C scoped caller strict/choice gaps fixed, physical media policy proven. Corrected prior all17-zero review error; original Fable5 nominated default/beta, prefix transition validation and exact observed/consistent iteration pricing now delivered, with unknown costs retained through agent/explicit warming. Haiku/Sonnet negative proof stays valid; no unowned aliases/metadata/derived policy promotion. Seven-model native plain-system chronology and known-profile assistant-ending cache corrected, with managed effort/source alignment preserved;56 runtime/five new/one strict root, not complete inline-tool transcript/default equivalence. Initial seven-model deferred scaffold/beta/full saved-array proof now delivered,82 regular/one strict root/two installed prerequisite+consumer cases; Core-owned historical tool chronology now delivered,163 runtime (12 new)/two strict roots/four source witnesses: original declarations stay fixed, current definitions are native deltas, initial-empty/all-removed/branch/model/compaction/budget/cancellation are bounded. Actual builtin JSON CLI private restart/offline proves old schemas do not restore removed executables,60 physical tokens/$0.00054 once. Current string systemPrompt semantics and optional full transcript ABI remain distinct. Native Responses now selects collapse versus inline from the independent model/source policy, including empty-system omission and non-forgeable direct Azure intent:46 runtime/six new/one strict root/three source witnesses. The eleven OpenAI additive additional_tools histories are automatic defaults still to deliver; no original search-only model branch.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
@@ -360,7 +364,8 @@
         "docs/audit/pi/evidence/MOD-01-anthropic-fable-fallback.json",
         "docs/audit/pi/evidence/MOD-01-anthropic-system-updates.json",
         "docs/audit/pi/evidence/MOD-01-anthropic-deferred-tools.json",
-        "docs/audit/pi/evidence/MOD-01-anthropic-tool-history.json"
+        "docs/audit/pi/evidence/MOD-01-anthropic-tool-history.json",
+        "docs/audit/pi/evidence/MOD-01-responses-system-policy.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -368,10 +373,12 @@
         "packages/core/src/providers/anthropic-thinking.ts",
         "packages/core/src/providers/cache-warmer.ts",
         "packages/core/src/agent/provider-turn.ts",
-        "packages/core/src/providers/anthropic-tool-history.ts"
+        "packages/core/src/providers/anthropic-tool-history.ts",
+        "packages/core/src/providers/openai-responses.ts",
+        "packages/core/src/providers/azure-profiles.ts"
       ],
       "gapClass": "effective-policy review",
-      "minimumAction": "Finish remaining meaningful sampling/default/capability review and distinguish optional additional-tool/search/named-section transcript ABI from approved Core callers. Native Core-owned historical tool changes now delivered; current systemPrompt/executable authority is unchanged, not a complete foreign transcript contract. Count source exceptions, not every model/host; no stale placeholder/history backlog."
+      "minimumAction": "Implement the eleven OpenAI native additive-only transcript tool defaults using existing private loadouts, with removal/redefinition flat fallback and no execution-authority restoration. Search-only fallback has zero original declarations; broader hosted/search/named-section caller ABI is not implicitly required. Finish other meaningful sampling/default/capability review without model-host campaigns or stale Anthropic/Responses-system backlog."
     },
     {
       "id": "MOD-01.04b",

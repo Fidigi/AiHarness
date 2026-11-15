@@ -3902,18 +3902,18 @@ function azureNativeChunk(onChunk: StreamChunkCallback, signal?: AbortSignal): S
 export class AzureResponsesProvider extends OpenAiResponsesProvider {
   override getModelApi(): string { return 'azure-openai-responses'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
-    return this.ownsNativeProfiles ? azurePublishedProfiles('azure-openai-responses') : undefined;
+    return this.#ownsNativeProfiles ? azurePublishedProfiles('azure-openai-responses') : undefined;
   }
 
   private readonly deployments: ReadonlyMap<string, string>;
-  private readonly ownsNativeProfiles: boolean;
+  readonly #ownsNativeProfiles: boolean;
   private readonly requestedModels = new WeakMap<ResponsesRequest, string>();
   private readonly replayProvider: string;
 
   constructor(config: ProviderConfig) {
     super({ ...config, baseUrl: normalizeAzureResponsesBaseUrl(config.baseUrl) });
     this.deployments = azureDeployments(config);
-    this.ownsNativeProfiles = new.target === AzureResponsesProvider;
+    this.#ownsNativeProfiles = new.target === AzureResponsesProvider;
     this.replayProvider = azureResponsesOwnerNames.get(config) ?? 'azure';
   }
 
@@ -3926,7 +3926,7 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
     onComplete?: (response?: ChatResponse) => void, onError?: (error: Error) => void, options?: ResponsesChatOptions,
   ): Promise<void> {
     const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
+    const native = this.#ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
     await super.streamChat(messages, native ? azureNativeChunk(onChunk, options?.signal) : onChunk,
       response => onComplete?.(response ? { ...response, provider: native ? response.provider ?? 'azure' : 'azure',
         ...(native ? { model: response.model ?? model, api: 'azure-openai-responses' } : {}) } : response),
@@ -3964,7 +3964,7 @@ export class AzureResponsesProvider extends OpenAiResponsesProvider {
 
   protected override requestBody(messages: Message[], options?: ChatOptions): ResponsesRequest {
     const model = options?.model ?? this.getConfiguredModel() ?? 'gpt-4o';
-    const native = this.ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
+    const native = this.#ownsNativeProfiles && azureProfileApi(model) === 'azure-openai-responses';
     const body = super.requestBody(messages, options, native);
     if (native) {
       const owner = { provider: this.replayProvider, api: 'azure-openai-responses', model };

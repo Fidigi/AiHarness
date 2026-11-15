@@ -138,7 +138,7 @@ export function applyNativeResponsesToolPolicy(body: Record<string, unknown>, op
 
 /** Shared R protocol, with private profile authority supplied by the owning adapter. */
 export function prepareNativeResponses(body: Record<string, unknown>, options: ChatOptions | undefined,
-  profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure', supportsGrammar = false): void {
+  profile: NativeResponsesProfile, provider: 'OpenAI' | 'Azure', supportsGrammar = false, inlineSystems?: boolean): void {
   imageInputBodies.set(body, profile.declaredInput.includes('image'));
   const requested = options?.thinking;
   if (requested !== undefined && !PUBLISHED_THINKING_LEVELS.includes(requested)) throw new Error(`Invalid ${provider} thinking level.`);
@@ -164,6 +164,17 @@ export function prepareNativeResponses(body: Record<string, unknown>, options: C
         && item.content.some(part => record(part) && part.type === 'input_image')) throw new Error(`${provider} response model does not support images.`);
     }
     if (typeof body.instructions === 'string') { body.input.unshift({ role: systemRole, content: body.instructions }); delete body.instructions; }
+    if (inlineSystems !== undefined) {
+      const instruction = (item: unknown): item is Record<string, unknown> & { content: string } => record(item)
+        && (item.role === 'system' || item.role === 'developer') && typeof item.content === 'string';
+      if (inlineSystems) body.input = body.input.filter(item => !instruction(item) || item.content.length > 0);
+      else {
+        const text = body.input.filter(instruction).map(item => item.content).filter(text => text.length > 0).join('\n\n');
+        const input = body.input.filter(item => !instruction(item));
+        if (text) input.unshift({ role: systemRole, content: text });
+        body.input = input;
+      }
+    }
   }
   applyNativeResponsesToolPolicy(body, options, supportsGrammar);
   if (options?.maxTokens !== undefined) {
@@ -174,7 +185,7 @@ export function prepareNativeResponses(body: Record<string, unknown>, options: C
 
 export function prepareOpenAiResponse(body: Record<string, unknown>, options?: ChatOptions): void {
   const profile = openAiResponseProfile(String(body.model));
-  prepareNativeResponses(body, options, profile, 'OpenAI', profile.compat.supportsOpenAIGrammarTools === true);
+  prepareNativeResponses(body, options, profile, 'OpenAI', profile.compat.supportsOpenAIGrammarTools === true, profile.compat.supportsMidConvoSystemMessages === true);
   if (options?.cacheRetention !== 'none' && options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
   if (profile.compat.supportsExplicitPromptCacheMode) {
     if (options?.cacheRetention === 'none') body.prompt_cache_options = { mode: 'explicit' };

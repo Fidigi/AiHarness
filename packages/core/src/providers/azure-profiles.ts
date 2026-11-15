@@ -81,7 +81,7 @@ export function azurePublishedProfiles(api?: Api): PublishedModelMetadata[] {
 }
 export function prepareAzureResponses(body: Record<string, unknown>, options?: ChatOptions): void {
   const profile = profiles.get(String(body.model)); if (profile?.api !== 'azure-openai-responses') return;
-  prepareNativeResponses(body, options, profile, 'Azure', grammarModels.has(profile.id));
+  prepareNativeResponses(body, options, profile, 'Azure', grammarModels.has(profile.id), false);
   // Azure's SDK uses affinity independently of retention. This does not observe a cache hit or make a warming request.
   if (options?.sessionId) body.prompt_cache_key = Array.from(options.sessionId).slice(0, 64).join('');
 }

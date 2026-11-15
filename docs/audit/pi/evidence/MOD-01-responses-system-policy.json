@@ -1,0 +1,73 @@
+{
+  "schema": "ai-harness.mod-01.responses-system-policy.v1",
+  "date": "2026-11-15",
+  "baseline": "f8dd0e6",
+  "status": "DELIVERED original Responses plain-system capability policy;01b/04a PARTIAL",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "gap": "Core native R preserved every system message inline, ignoring the pinned selective supportsMidConvoSystemMessages policy. OpenAI has eleven inline models and33 collapsing models; all44 original Azure R declarations default to collapse, including same-ID models that are inline on OpenAI. A forged TS-private AzureResponsesProvider.ownsNativeProfiles field could additionally admit derived transports to native policy.",
+  "reference": {
+    "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "codec": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/openai-responses.ts:82-94,130-133,312-325",
+    "codecSha256": "0e9b9b4bae4265803cd1c6a203492065d6fcbec5cf86b57c614c3b75e7a0a554",
+    "shared": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/openai-responses-shared.ts:179-238",
+    "sharedSha256": "09100e0bfe8fa4ad212312956930f4a9e70cd29ca823d2e1f1c97f87b4541afe",
+    "transcript": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/utils/transcript.ts:77-123,233-246",
+    "transcriptSha256": "e0814f35bdcc93b017fa45589a6920e46b5480b88fba01ef93e5d2d4e815f0f2",
+    "openaiData": "/tmp/aih-mod-delivery/pinned-reference/data/openai.json",
+    "openaiDataSha256": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+    "azureData": "/tmp/aih-mod-delivery/pinned-reference/data/azure.json",
+    "azureDataSha256": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727",
+    "inlineOpenaiModels": ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-pro", "gpt-5.5", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"],
+    "scope": "Read-only pinned source/data review only, no reference SDK acquisition/import/execution or fixture regeneration. Core plain string messages, not foreign named sections or full SystemMessage ABI."
+  },
+  "implementation": {
+    "files": ["packages/core/src/providers/openai-responses.ts", "packages/core/src/providers/azure-profiles.ts", "packages/core/src/providers/index.ts"],
+    "policy": "Only original native OpenAI/Azure R preparation passes an explicit inline-system policy. OpenAI reads its already deeply frozen exact profile flag; Azure explicitly passes false from its independent declarations before deployment rewrite. Unsupported native contexts combine nonempty options/system text in ancestry order into one initial instruction, separated by two newlines, using developer for reasoning models and system otherwise. Eligible OpenAI keeps late instructions in place; empty system text is omitted. Other user/assistant/tool items and scalar/tool/usage/replay policy stay unchanged. The optional internal argument remains unspecified for the independently owned gateway helper, conserving its policy.",
+    "authority": "AzureResponsesProvider construction intent is now readonly #ownsNativeProfiles, not a forgeable TS-private string property. Its catalogue, request/stream admission and replay share that captured intent. Generic/derived transports remain legacy despite forged native/public capability fields. No new public option/host DTO/session format/dependency/tool registration/auth authority or paid warming. Inputs remain copied and unchanged."
+  },
+  "additionalToolsReview": {
+    "finding": "Previous current work registers called additional-tool/search ABI optional pending review; that was not a scope disposition. The pinned flags also select automatic transcript tool additions from ordinary toolsAdded history. Those histories are representable by existing Core v2 loadouts, so the default path must not be dismissed as an optional new caller interface.",
+    "automaticOpenaiGap": "All eleven inline OpenAI models also enable both supportsAdditionalTools and supportsToolSearch. resolveTranscriptTools anchors purely additive histories to the initial request tools; convertResponsesMessages prefers developer additional_tools items for later definitions. A removal or same-name redeclaration disables anchoring and sends the current flat tools. Core currently always sends current tools: the additive-history default remains a concrete01b/04a gap, distinct from this delivered system policy.",
+    "searchFallback": "The synthetic client tool_search_call/tool_search_output branch runs only when additional_tools is unavailable but tool search is enabled. None of the44 original OpenAI or44 Azure R declarations select that search-only branch. No new hosted-search/raw additional-tool caller API or synthetic search executable is implicitly required by this review. Azure has neither flag and retains current flat tool declarations.",
+    "minimumNextAction": "Reuse existing private post-hook session loadouts for the eleven original OpenAI additive-history path, retaining current flat tools on removals/redefinitions and current executable authority. Do not invent a public transcript schema or automatically implement optional SDK search-only/provider-hosted tools. Other meaningful per-family defaults/sampling exceptions and cloud02e remain under review."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-responses-system-owned",
+    "imageId": "sha256:bd9fbb6bb2e04ab18bd6eab987a6baf5f91fc419b4e062b9776eb1d09d5084bb",
+    "predecessorImageId": "sha256:88b11bbfb9218ffc489fd088d7ee37413533d6963d6ab11e2680bb39d9a7cefa",
+    "runtime": "Makefile Docker workspace build/types; network none/CI=true/node --no-maglev; strict.json tar stdin overlay under /app with canonical scripts/run-typescript.mjs retaining --no-maglev/--no-turbofan. Synthetic credentials and mocked fetch only, no personal stores or account access. Three production witnesses equal image/worktree.",
+    "newCases": 6,
+    "regularRuntimePassed": 46,
+    "regularReusedCases": 40,
+    "strictChangedRoots": 1,
+    "unselectedCases": 432,
+    "coverage": "Public compiled Core: exact eleven-ID/deeply-frozen declaration witness; nonreasoning OpenAI, reasoning/non-inline OpenAI and independent same-ID Azure collapse across both facade methods; full input/tool correlation, empty/system-free inputs, scalar fields/logical deployment identity/physical usage and input immutability; eligible inline plus non-inline per-call override on one instance; generic/forged-derived legacy controls. Existing selected Responses28/Azure11/gateway1 own schema/grammar/caps/usage/signed restart/export/clone/identity/cancellation and unchanged gateway helper policy. This is not all88-model or host/transport qualification.",
+    "sourceWitness": {
+      "packages/core/src/providers/openai-responses.ts": "d9f097cc656aaa3f7bbbe6074d9751af5075b6387a9f892a80e330ec08511636",
+      "packages/core/src/providers/azure-profiles.ts": "5876338e43b4d5e18a3834ba187dfe5472eafae2135d6971e2b9e129e8ad3461",
+      "packages/core/src/providers/index.ts": "0dc2b87cb577c4010dd45bd2f07a81bceb5988df38eadd9e5baa9d48fa910bd1"
+    },
+    "tests": { "packages/core/src/providers/responses-system-history.test.ts": "9de7bfd813dafea8f479bdcc47c4d433dee01c2751159c7d28d320281edfdc9a" },
+    "sourceWitnessDiff": "/tmp/mod01-responses-system/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-responses-system/red.log (five genuine missing-collapse/override/forged-admission failures;one declaration witness PASS)",
+      "initialBuildFailure": "/tmp/mod01-responses-system/build-owned.log (TS18046 after assignment to unknown body.input; use a narrowed local array, no cast/assertion/flag relaxation)",
+      "build": "/tmp/mod01-responses-system/build-owned-r2.log (final workspace build/types PASS)",
+      "focused": "/tmp/mod01-responses-system/focused-r2.log (six PASS/one strict root)",
+      "owned": "/tmp/mod01-responses-system/owned.log (6+28+11+1=46 distinct PASS/one strict root;348+64+20=432 unselected)",
+      "review": "/tmp/mod01-responses-system/review-check.json",
+      "docs": "/tmp/mod01-responses-system/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-responses-system-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-responses-system-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/responses-system-history.test.ts --maxWorkers=1'",
+      "same isolated image: openai-responses.test.ts -t 'gpt-5:|gpt-5[.]4:|bounds opaque capture|preserves tool/final signatures|independent catalogue|malformed defined|legacy prefer'; azure-responses.test.ts -t '45 independent|dispatches native|pins native identity|callback cancellation|gpt-4o:|gpt-5:|gpt-5[.]4:|deployment per requested|truncated Azure|cancels an owned'; ai-gateways.test.ts -t 'shared codec'; each Vitest run uses node --no-maglev/--maxWorkers=1",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "limits": [
+    "Native plain-system policy delivered, not automatic additive additional_tools history or the complete foreign transcript ABI. Additional tools are now a concrete remaining default path, not silently scoped out as optional.",
+    "No new CLI/API/Settings/source DTO, installed/browser/production/reference-SDK/account campaign, global current-image certificate or MOD-03 redelivery. Existing unchanged host/package/source receipts reused without fresh boundary credit; raw chat() still consumes SSE, not a distinct upstream JSON operation.",
+    "All23 statements/status counts/18 functional rows/one historical/four unresolved unchanged. MOD-01 IN PROGRESS/01b-04a PARTIAL/02e PARTIAL/06c OPEN/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged; no goal completion."
+  ]
+}
