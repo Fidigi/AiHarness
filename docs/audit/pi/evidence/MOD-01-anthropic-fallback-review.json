@@ -1,0 +1,69 @@
+{
+  "schema": "ai-harness.mod-01.anthropic-fallback-review.v1",
+  "date": "2026-11-15",
+  "baseline": "05d15d4",
+  "status": "REVIEWED — no native default fallback gap; no product change",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "finding": {
+    "initialHypothesis": "The generic Anthropic fallback codec was incorrectly interpreted as evidence that native Haiku5.5 declares two fallback targets.",
+    "authoritativeResult": "All17 pinned original Anthropic declarations have zero nonempty compat.allowedFallbackModels. The optional reference codec does not nominate a target. Its compat schema explicitly says to omit fallbacks when this list is absent/empty; enabling it can cause service refusal and unauthorized routing/pricing changes.",
+    "disposition": "Reject and remove the experimental product changes. Keep original body/beta/requested-model pricing and replay authority. Add one negative regression proof, not a fabricated missing-feature delivery.",
+    "declaredRows": 17,
+    "rowsWithNominatedFallbacks": 0,
+    "newFunctionalCredit": 0
+  },
+  "reference": {
+    "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "execution": "Read-only existing source/data; no SDK import, acquisition or execution",
+    "declarations": {"path": "/tmp/aih-mod-delivery/pinned-reference/data/anthropic.json", "sha256": "327ea610aca64889902458243e9b6a440eb678671f5993b88ad32ac6e827b587"},
+    "codec": {"path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/anthropic-messages.ts", "sha256": "3ebb03abda8f2928f264e79bba9fb1d17a11b53b3818a3fd05d98d64a009dcad", "lines": [211, 704, 1317]},
+    "schema": {"path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/providers/compat-schema.ts", "sha256": "7cc0d438f21b565ede6a00f41a530fd660f040f5dce2a33a71789f29b6fe9e34", "lines": [485, 489]},
+    "localReview": "/tmp/mod01-anthropic-fallback/declaration-review.json"
+  },
+  "discardedExperiment": {
+    "image": "ai-harness:mod01-anthropic-fallback-owned",
+    "imageId": "sha256:625f20cc297102ea07251c2d2ad3773f2edacbc496c4532f5c231444cffbc666",
+    "notDeliveryImage": true,
+    "patch": "/tmp/mod01-anthropic-fallback/rejected-candidate.patch",
+    "outcomes": [
+      {"log": "/tmp/mod01-anthropic-fallback/red.log", "result": "Invocation error: Vitest5 rejects --minWorkers; no runtime evidence"},
+      {"log": "/tmp/mod01-anthropic-fallback/red-r2.log", "result": "Two failures/two controls for the erroneous hypothesis; header assertion inside mocked fetch became a fixed network error, not a vendor failure"},
+      {"log": "/tmp/mod01-anthropic-fallback/red-r3.log", "result": "Header assertion moved outside fetch without weakening it; same two failures/two controls, still not an approved source requirement"},
+      {"log": "/tmp/mod01-anthropic-fallback/build-owned.log", "result": "Experimental build/types pass, not qualification of final source"},
+      {"log": "/tmp/mod01-anthropic-fallback/focused.log", "result": "Four synthetic cases passed the erroneous contract; zero functional delivery credit"},
+      {"log": "/tmp/mod01-anthropic-fallback/rejected-counterfactual.log", "result": "The final correct negative test fails on the rejected image: known response alias incorrectly reprices Haiku as Opus (0.00009575 versus 0.000001915). Rejection confirmed, not accepted or waived."}
+    ],
+    "finalSource": "All changes to index.ts, anthropic-profiles.ts and anthropic-response.ts reverted to HEAD; final source matches the prior valid image. No product fallback request, beta, marker acceptance, new option or iteration repricing remains."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-package-boundary-owned",
+    "imageId": "sha256:83177637427516fb938afb1051c3c0c7575e068b0b575f53fa9049b7c46b5272",
+    "kind": "Unchanged valid production image; only final new test and /app/strict.json tar-stdin overlaid",
+    "runtime": "--network none, CI=true, node --no-maglev; synthetic key/mock fetch only",
+    "test": "packages/core/src/providers/anthropic-fallback.test.ts",
+    "testSha256": "0658002e8d5c6bba418884725a875dbee00050b8c773f94a764d321cbe678119",
+    "gapBeforeTest": "Existing requested-model usage/alias and metadata tests do not explicitly assert absent fallbacks and absent server-side-fallback beta against a different known original response model.",
+    "newProof": "One compiled public-Core test/four JSON-SSE requests on Haiku5.5 and Sonnet4.6; no automatic fallback targets/beta, requested identity and requested prices despite observed Opus5 model alias.",
+    "reused": "Five existing profile/catalogue-hash/gross-input-tier/nullable-snapshot/malformed-counter/defensive-metadata cases;249 other cases unselected, not fresh passes",
+    "runtimePassed": 6,
+    "newCases": 1,
+    "reusedCases": 5,
+    "strictChangedRoots": 1,
+    "log": "/tmp/mod01-anthropic-fallback/owned.log",
+    "command": "tar(final test + strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-package-boundary-owned sh -c 'tar -xf - -C /app && node --no-maglev node_modules/typescript/bin/tsc -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/anthropic-fallback.test.ts --maxWorkers=1 && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/anthropic-profiles.test.ts --maxWorkers=1 -t \"binds the independent seventeen-profile|uses gross input at|retains nullable SSE snapshots|does not manufacture complete usage|returns defensive owned rows\"'",
+    "sourceWitness": {
+      "packages/core/src/providers/index.ts": "9b068af08249a85de33f5c46c13d3f7800d7d379fd61a1870444fd12b73f991a",
+      "packages/core/src/providers/anthropic-profiles.ts": "1e0aef278e53f571ca5f2e515001cfa5c093ba8e707e4e30b50fce7c181ff735",
+      "packages/core/src/providers/anthropic-response.ts": "5258ba478f87aceabc5defe4f757651e23403eaf4e67e41713b05770aeb0cf5a"
+    },
+    "witnessDiff": "/tmp/mod01-anthropic-fallback/runtime-witness.diff (empty)",
+    "docs": "make lint-docs; git diff --check"
+  },
+  "limits": [
+    "No product/manifest/lock/declaration change; no new host interaction or transport boundary requires CLI/API/browser/installed requalification.",
+    "Optional caller-supplied Pi compatibility overrides are not a native model default or proof that a service permits an arbitrary target.",
+    "No fallback marker/iteration/repricing/default ABI or service/account acceptance delivered by this negative proof.",
+    "01b/04a remain PARTIAL;02e/05b/06c remain unresolved.17 functionally delivered rows/one historical/five unresolved unchanged.",
+    "MOD-01 IN PROGRESS; MOD-03 DONE;04b DONE;38-of43/runtime134 OPEN/exactly three historical acceptances unchanged. Rejected local experiment is not another acceptance."
+  ]
+}
