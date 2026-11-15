@@ -5,12 +5,13 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BedrockProvider, CredentialRedactor, resolveBedrockProfileEnvironment, type BedrockProfileConfig, type ChatResponse, type Message } from '../../dist/index.js';
 import { bedrockFrame } from '../../../../tests/fixtures/bedrock-event-stream.js';
+import { syntheticAssumeRoleXml, syntheticStsSession } from '../../../../tests/fixtures/sts-web-identity.js';
 const roots: string[] = [], model = 'anthropic.claude-opus-4-6-v1';
 const messages: Message[] = [{ id: 'u', role: 'user', content: 'synthetic executable profile', timestamp: new Date(0) }];
 const credentials = (key = 'PROCESSKEY') => ({ Version: 1, AccessKeyId: key, SecretAccessKey: 'ProcessSecret/+=', SessionToken: 'ProcessSession/+=', Expiration: new Date(Date.now() + 3600000).toISOString() });
 const json = () => Response.json({ output: { message: { role: 'assistant', content: [{ text: 'process-ready' }] } }, stopReason: 'end_turn', usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 } });
 const binary = () => new Response(Buffer.concat([bedrockFrame('messageStart', { role: 'assistant' }), bedrockFrame('contentBlockDelta', { contentBlockIndex: 0, delta: { text: 'process-ready' } }), bedrockFrame('contentBlockStop', { contentBlockIndex: 0 }), bedrockFrame('messageStop', { stopReason: 'end_turn' }), bedrockFrame('metadata', { usage: { inputTokens: 8, outputTokens: 2, totalTokens: 10 } })]), { headers: { 'content-type': 'application/vnd.amazon.eventstream' } });
-afterEach(async () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { force: true, recursive: true }))); });
+afterEach(async () => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { force: true, recursive: true }))); });
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-profile-process-')); roots.push(root); vi.stubEnv('HOME', root); vi.stubEnv('AWS_REGION', ''); vi.stubEnv('AWS_DEFAULT_REGION', '');
   const file = path.join(root, 'credentials'), script = path.join(root, 'helper.mjs'), output = path.join(root, 'output.json'), marker = path.join(root, 'executions');
@@ -79,4 +80,25 @@ it('cancels a held process independently of another successful caller and reject
   try { expect((await provider.chat(messages)).usage?.totalTokens).toBe(10); } finally { caller.abort(); }
   expect(await pending).toBe('Bedrock profile authentication failed.'); await provider.chat(messages); expect(await f.count()).toBe(2); expect(fetch).toHaveBeenCalledTimes(2);
   lifetime.abort(); await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+});
+it('uses a permitted process source_profile leaf only for signed role vending and caches only the final role for JSON/binary', async () => {
+  const f = await fixture(), role = 'arn:aws:iam::123456789012:role/SyntheticProcessRole', now = Date.now();
+  await writeFile(f.output, JSON.stringify({ ...credentials(), Expiration: new Date(now + 60000).toISOString() }));
+  await writeFile(f.file, '[chosen]\nrole_arn=' + role + '\nsource_profile=leaf\nrole_session_name=process-role-session\nregion=eu-west-1\n[leaf]\ncredential_process=' + f.command + '\nregion=ap-south-1\n');
+  let mints = 0; const fetch = vi.fn(async (url, init) => { const headers = new Headers(init?.headers); if (String(url) === 'https://sts.eu-west-1.amazonaws.com/') { mints++; expect(headers.get('authorization')).toContain('Credential=PROCESSKEY/'); expect(headers.get('authorization')).toContain('/eu-west-1/sts/aws4_request'); expect(headers.get('x-amz-security-token')).toBe('ProcessSession/+='); expect(new URLSearchParams(String(init?.body)).get('RoleArn')).toBe(role); return new Response(syntheticAssumeRoleXml('FINALPROCESSROLE')); } expect(headers.get('authorization')).toContain('Credential=FINALPROCESSROLE/'); expect(headers.get('x-amz-security-token')).toBe(syntheticStsSession); return String(url).endsWith('/converse-stream') ? binary() : json(); }); vi.stubGlobal('fetch', fetch);
+  const provider = f.create({ allowProcess: true }); expect((await provider.chat(messages)).usage?.totalTokens).toBe(10); vi.spyOn(Date, 'now').mockReturnValue(now + 120000); let streamed: ChatResponse | undefined; await provider.streamChat(messages, () => {}, value => { streamed = value; }, error => { throw error; }); expect(streamed?.usage?.totalTokens).toBe(10); expect(await f.count()).toBe(1); expect(mints).toBe(1); expect(fetch).toHaveBeenCalledTimes(3);
+  fetch.mockResolvedValueOnce(new Response('', { status: 401 })); await expect(provider.chat(messages, { maxRetries: 0 })).rejects.toThrow();
+  await expect(provider.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(await f.count()).toBe(2); expect(mints).toBe(1); expect(fetch).toHaveBeenCalledTimes(4);
+});
+it('keeps process role leaves opt-in/offline/mixed-source guarded and complete recursive static keys ahead of an unused process recipe', async () => {
+  const f = await fixture(), role = 'arn:aws:iam::123456789012:role/SyntheticProcessRole', recipe = '[chosen]\nrole_arn=' + role + '\nsource_profile=leaf\n[leaf]\ncredential_process=' + f.command + '\n'; await writeFile(f.file, recipe); const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  for (const options of [{}, { allowProcess: false }, { allowProcess: true, allowNetwork: false }]) await expect(f.create(options).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
+  await writeFile(f.file, recipe + 'sso_session=must-not-combine\n'); await expect(f.create({ allowProcess: true }).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(await f.count()).toBe(0); expect(fetch).not.toHaveBeenCalled();
+  await writeFile(f.file, recipe + 'aws_access_key_id=STATICROLELEAF\naws_secret_access_key=StaticRoleSecret\n'); fetch.mockImplementation(async (url, init) => { if (String(url).startsWith('https://sts.')) { expect(new Headers(init?.headers).get('authorization')).toContain('Credential=STATICROLELEAF/'); return new Response(syntheticAssumeRoleXml('STATICFINALROLE')); } return json(); }); await f.create().chat(messages); expect(await f.count()).toBe(0); expect(fetch).toHaveBeenCalledTimes(2);
+});
+it('fences process role-leaf command/current INI before spawn and after mint before STS without cached source credential fallback', async () => {
+  const f = await fixture(), recipe = '[chosen]\nrole_arn=arn:aws:iam::123456789012:role/SyntheticProcessRole\nsource_profile=leaf\n[leaf]\ncredential_process=' + f.command + '\n', fetch = vi.fn(); vi.stubGlobal('fetch', fetch); await writeFile(f.file, recipe); let changed = false;
+  const make = (trigger: string) => f.create({ allowProcess: true, redactor: { add(value) { if (!changed && value === trigger) { changed = true; writeFileSync(f.file, '[withdrawn]\n'); } } } });
+  await expect(make(f.command).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(await f.count()).toBe(0); await writeFile(f.file, recipe); changed = false;
+  await expect(make('PROCESSKEY').chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(await f.count()).toBe(1); expect(fetch).not.toHaveBeenCalled();
 });

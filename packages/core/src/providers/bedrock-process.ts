@@ -3,6 +3,7 @@ import type { CredentialRedactor } from './credentials.js';
 import type { BedrockVendedCredentials } from './bedrock-credentials.js';
 const failure = () => new Error('Bedrock profile authentication failed.');
 const MAX_OUTPUT = 128 * 1024;
+export const validBedrockProcessCommand = (value: unknown): value is string => typeof value === 'string' && !!value && Buffer.byteLength(value) <= 8192 && !/[\u0000-\u001f\u007f-\u009f]/u.test(value);
 /** Only an already-authorized profile caller may invoke this foreground helper. Never logs raw output. */
 export async function executeBedrockCredentialProcess(command: string, signal: AbortSignal, redactor?: Pick<CredentialRedactor, 'add'>): Promise<BedrockVendedCredentials> {
   let output = '', bytes = 0;

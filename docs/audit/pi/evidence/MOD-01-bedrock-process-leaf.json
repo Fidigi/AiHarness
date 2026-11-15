@@ -1,0 +1,53 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-process-leaf.v1",
+  "date": "2026-11-15",
+  "baseline": "fb146ab",
+  "status": "DELIVERED operator-gated process source_profile leaves;02e remains PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "decision": "Existing user-approved explicit/default-off executable-auth rule and captured BedrockProfileConfig.allowProcess/native operator environment apply to a selected role's recursive process leaf. No file-authored permission, new flag/command/DTO/store, new security consent or execution in passive/offline paths.",
+  "implementation": {
+    "files": ["packages/core/src/providers/bedrock-profile.ts", "packages/core/src/providers/bedrock-process.ts"],
+    "policy": "Pass the already-captured operator permission into the existing bounded role resolver. A dedicated recursive process leaf returns Version1 credentials through the same private process helper, then those credentials sign first STS only; existing intermediate steps/final-only inference remain. Complete recursive static keys still outrank unused recipes, mixed/invalid/unsupported sources refuse. Shared command predicate avoids divergent root/leaf limits. Whole current INI/profile/parent/session/CWD cache identity, immediate pre-spawn/post-result/pre-STS checks, source expiry before first STS, four-role/whole15s bounds and exact401/403 next-operation final-cache eviction remain owner-local. A valid final role cache does not rerun a process or depend on an expired source credential; remint still requires a valid current source.",
+    "reference": "Reuse read-only credential-provider-process3.972.74 and role-chain observations from MOD-01-bedrock-credential-process.json/MOD-01-bedrock-profile-role.json. No acquisition/import/reference SDK execution or account access. Existing dedicated root-process mixed-source refusal is unchanged; this is not the entire AWS SDK chain."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-process-leaf-owned",
+    "imageId": "sha256:38c1953811bcd3f5b1d3e1a38881941e4e601c63bb26b75b026a4fa2c2703442",
+    "predecessorImageId": "sha256:a6d2b50b473e5fbac493a56e641b72e0fd16311d986212311c7a6f786d4c5fef",
+    "runtime": "Makefile Docker build/workspace-parity types; network none/CI=true/node --no-maglev. Canonical run-typescript retains --no-maglev/--no-turbofan; tar-stdin strict.json under /app. Existing synthetic real helper scripts/disposable HOME/profile files/mock STS-JSON-binary and actual CLI verified-CA loopback only; no user credential/store, live account, protected container, dependency/generated overlay or relaxed existing assertion/deadline/retry.",
+    "regularRuntimePassed": 49,
+    "newCases": 4,
+    "regularReusedCases": 45,
+    "strictChangedRoots": 2,
+    "unselectedCases": 4,
+    "coverage": "Three added compiled-public-Core cases in existing process test: private source signs EU STS while only final credentials sign JSON/binary inference; final role remains usable after source expiry and exact401 forces new acquisition that rejects expired source; default-off/offline/mixed denial plus complete recursive static priority0exec; command/pre-spawn and output/post-mint INI withdrawal before STS. One added existing actual JSON CLI process-source variant binds selected role/profile, passive0exec, two cold process/STS/native turns/private replay and rotation, offline0extraexec0STS, cold offline Bearer override, privacy0600 and exactly30 observed tokens/three inference requests. Root process7, role8/static6/Environment5/ECS6/IMDS7/Web-leaf5 and actual role HTTP1 preserve existing sources/priority/cancellation/scope.48 Core/HTTP plus1 selected new CLI=49 distinct;the four other CLI source variants are unselected, not new passes.",
+    "sourceWitness": {
+      "packages/core/src/providers/bedrock-profile.ts": "9c56b13a6f00f794a5952f4bb5fbe0167697f91420e7bdcb37c6d2be73f97e7a",
+      "packages/core/src/providers/bedrock-process.ts": "b34f30ca8bf2a8198f2541421230530f58587c090f89a4f403252c9463399c1f"
+    },
+    "tests": {
+      "packages/core/src/providers/bedrock-profile-process.test.ts": "e0a33cedc28722d2f58468f11060d89d2478b783aadd701da1b37b64bca4c2b4",
+      "packages/cli/src/cli/bedrock-profile-role-process.test.ts": "dbfebd3d591070fede713cd7887a267d36be612a6f9f02d7f2efec881ff82466"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-bedrock-process-leaf/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-bedrock-process-leaf/red.log (two genuine missing-leaf execution/current-source failures,one static-priority/refusal control PASS;seven unselected)",
+      "cliRed": "/tmp/mod01-bedrock-process-leaf/cli-red.log (one genuine native JSON CLI failure,four unselected)",
+      "build": "/tmp/mod01-bedrock-process-leaf/build-owned.log (first candidate build/types PASS, exact final tests)",
+      "focused": "/tmp/mod01-bedrock-process-leaf/focused.log (nine selected PASS/two strict roots;six unselected)",
+      "owned": "/tmp/mod01-bedrock-process-leaf/owned.log (48+1=49 distinct PASS/two strict roots;four unselected)",
+      "review": "/tmp/mod01-bedrock-process-leaf/review-check.json",
+      "docs": "/tmp/mod01-bedrock-process-leaf/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-process-leaf-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-bedrock-process-leaf-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-profile-process.test.ts packages/core/src/providers/bedrock-profile-role.test.ts packages/core/src/providers/bedrock-profile.test.ts packages/core/src/providers/bedrock-profile-environment.test.ts packages/core/src/providers/bedrock-profile-ecs.test.ts packages/core/src/providers/bedrock-profile-imds.test.ts packages/core/src/providers/bedrock-profile-web-leaf.test.ts packages/server/src/api/bedrock-profile-role-http.test.ts --maxWorkers=1'",
+      "same isolated image: node --no-maglev node_modules/vitest/vitest.mjs run packages/cli/src/cli/bedrock-profile-role-process.test.ts --maxWorkers=1 -t 'JSON process'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "Current source recipe/INI/CWD rather than executable binary/private backing-file contents defines authority and cache invalidation, as in the selected-root process contract. No script-content watcher, cached source/intermediate credentials, interactive approval per spawn or sandbox claim. Existing process limits/filtered env/exact protocol and prior root/ADC execution proofs retain their source scope.",
+    "No new direct root credential_source, implicit metadata fallback, SSO/login/scoped profile store or remaining universe/signing-scope/auth method. No new browser/installed/production/account/global/reference SDK campaign, MOD-03/01b/04a redelivery or historical incident/runtime134 repair.02e PARTIAL/06c OPEN/exact23/current counts/exactly three acceptances unchanged."
+  ]
+}
