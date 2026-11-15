@@ -13,7 +13,7 @@ export interface VertexAdcConfig {
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
 type Send = (url: string | URL, init: RequestInit) => Promise<Response>;
-const TOKEN = 'https://oauth2.googleapis.com/token', STS = 'https://sts.googleapis.com/v1/token', SCOPE = 'https://www.googleapis.com/auth/cloud-platform', MAX_FILE = 256 * 1024;
+const TOKEN = 'https://oauth2.googleapis.com/token', STS = 'https://sts.googleapis.com/v1/token', WORKFORCE = 'https://sts.googleapis.com/v1/oauthtoken', SCOPE = 'https://www.googleapis.com/auth/cloud-platform', MAX_FILE = 256 * 1024;
 const failure = () => new Error('Vertex ADC authentication failed.');
 const text = (value: unknown, max = 64 * 1024): value is string => typeof value === 'string' && !!value && Buffer.byteLength(value) <= max
   && !/[\s\u0000-\u001f\u007f-\u009f]/u.test(value) && Buffer.from(value, 'utf8').toString('utf8') === value;
@@ -73,6 +73,7 @@ export class VertexAdc {
   private cached?: { fingerprint: string; token: string; expiresAt: number };
   private sequence = 0;
   private published = 0;
+  private workforceRefresh?: { fingerprint: string; token: string; sequence: number };
   constructor(config: VertexAdcConfig) {
     if (!config || typeof config.credentialsFile !== 'string' || !config.credentialsFile || Buffer.byteLength(config.credentialsFile) > 4096
       || /[\u0000-\u001f\u007f-\u009f]/u.test(config.credentialsFile) || config.quotaProjectId !== undefined && !text(config.quotaProjectId, 500)) throw failure();
@@ -92,7 +93,10 @@ export class VertexAdc {
     }
     for (const field of ['client_secret', 'refresh_token', 'private_key']) this.redactor?.add(typeof data[field] === 'string' ? data[field] as string : undefined);
     if (data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com') throw failure();
-    if (data.type === 'authorized_user') { if (!text(data.client_id, 4096) || !text(data.client_secret) || !text(data.refresh_token)) throw failure(); }
+    if (data.type === 'authorized_user' || data.type === 'external_account_authorized_user') {
+      if (!text(data.client_id, 4096) || !text(data.client_secret) || !text(data.refresh_token)
+        || data.type === 'external_account_authorized_user' && data.token_url !== undefined && data.token_url !== WORKFORCE) throw failure();
+    }
     else if (data.type === 'service_account') { if (!text(data.client_email, 4096) || typeof data.private_key !== 'string' || !data.private_key || Buffer.byteLength(data.private_key) > 128 * 1024) throw failure(); }
     else if (data.type === 'external_account') {
       if (data.token_url !== undefined && data.token_url !== STS || data.service_account_impersonation !== undefined && data.service_account_impersonation_url === undefined
@@ -129,8 +133,10 @@ export class VertexAdc {
       const document = await this.document(signal), sequence = ++this.sequence;
       if (this.cached?.fingerprint === document.fingerprint && this.cached.expiresAt > Date.now() + 300_000) return { ...document, token: this.cached.token };
       const data = document.data; let fields: Record<string, string>, authorization: string | undefined;
-      if (data.type === 'external_account') {
-        fields = { grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange', audience: data.audience as string, scope: SCOPE,
+      if (data.type === 'external_account' || data.type === 'external_account_authorized_user') {
+        fields = data.type === 'external_account_authorized_user'
+          ? { grant_type: 'refresh_token', refresh_token: this.workforceRefresh?.fingerprint === document.fingerprint ? this.workforceRefresh.token : data.refresh_token as string }
+          : { grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange', audience: data.audience as string, scope: SCOPE,
           requested_token_type: 'urn:ietf:params:oauth:token-type:access_token', subject_token: document.subject!, subject_token_type: data.subject_token_type as string };
         if (data.client_id) { const encoded = Buffer.from(`${data.client_id}:${data.client_secret ?? ''}`).toString('base64'); authorization = 'Basic ' + encoded; if (Buffer.byteLength(authorization) > 64 * 1024) throw failure(); this.redactor?.add(encoded); this.redactor?.add(authorization); }
         else if (data.workforce_pool_user_project) fields.options = JSON.stringify({ userProject: data.workforce_pool_user_project });
@@ -143,11 +149,20 @@ export class VertexAdc {
         const assertion = `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), key).toString('base64url')}`; this.redactor?.add(assertion);
         fields = { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion };
       }
-      signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? STS : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) });
+      signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? STS : data.type === 'external_account_authorized_user' ? WORKFORCE : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) });
       if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); } const body = await readOAuthJson(response, signal);
       this.redactor?.add(typeof body.access_token === 'string' ? body.access_token : undefined);
       if (!text(body.access_token) || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000
         || body.token_type !== undefined && (typeof body.token_type !== 'string' || body.token_type.toLowerCase() !== 'bearer')) throw failure();
+      if (data.type === 'external_account_authorized_user') {
+        this.redactor?.add(typeof body.refresh_token === 'string' ? body.refresh_token : undefined);
+        if (body.refresh_token !== undefined && !text(body.refresh_token)) throw failure();
+        new Headers({ authorization: `Bearer ${body.access_token}` });
+        if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+        if (body.refresh_token !== undefined && sequence > (this.workforceRefresh?.sequence ?? 0)) {
+          this.workforceRefresh = { fingerprint: document.fingerprint, token: body.refresh_token as string, sequence };
+        }
+      }
       let token = body.access_token, expiresAt = Date.now() + body.expires_in * 1000;
       for (const step of document.iam) {
         new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
