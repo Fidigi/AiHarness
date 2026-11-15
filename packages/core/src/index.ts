@@ -29,6 +29,7 @@ export type { AnthropicProviderConfig, VertexProviderConfig, BedrockProviderConf
 export type { VertexAdcConfig } from './providers/vertex-adc.js';
 export type { BedrockProfileConfig } from './providers/bedrock-profile.js';
 export type { BedrockEcsConfig } from './providers/bedrock-ecs.js';
+export type { BedrockWebIdentityConfig } from './providers/bedrock-web-identity.js';
 export { resolveBedrockProfileEnvironment } from './providers/bedrock-profile.js';
 export { resolveBedrockCredentialsEnvironment } from './providers/bedrock-config.js';
 export type { AnthropicFederationConfig } from './providers/anthropic-federation.js';

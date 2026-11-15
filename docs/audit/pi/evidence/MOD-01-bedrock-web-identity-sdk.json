@@ -1,0 +1,133 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "4163664",
+  "criterion": "MOD-01.02e",
+  "status": "PARTIAL",
+  "scope": "Explicit Core STS web-identity file source and shared vending safety, not native web-identity host admission or complete AWS chain",
+  "reference": [
+    {
+      "name": "@aws-sdk/credential-provider-web-identity",
+      "version": "3.972.80",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-web-identity/dist-cjs/index.js",
+      "sha256": "664792ccf95de183d35f270b09a5b4e1deb924c5d665e40d7a92dfd90c7c0af6"
+    },
+    {
+      "name": "@aws-sdk/credential-provider-node",
+      "version": "3.972.86",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-node/dist-cjs/index.js",
+      "sha256": "afd158eca6193ed8d8a469013790b9ffa3bdcdea7f6116efda93705f67c6335c"
+    },
+    {
+      "name": "@aws-sdk/nested-clients",
+      "version": "3.997.48",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/nested-clients/dist-cjs/submodules/sts/index.js",
+      "sha256": "e4282c29a35883794b9d1644c9243b2631fb40aa5cae6398458cbd2e86279b77"
+    },
+    {
+      "name": "@aws-sdk/core",
+      "version": "3.978.3",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/core/dist-cjs/submodules/client/index.js",
+      "sha256": "2513eb655db232b804f895e8b3b24e52dbc83b9d3a98ea84300b61e23b05f04b"
+    }
+  ],
+  "implementation": "Public BedrockWebIdentityConfig / BedrockProviderConfig.bedrockWebIdentity. Original constructor only, private source removed from common config; capture explicit IAM role ARN (including valid printable IAM paths), token file, optional session name/duration/STS region and parent lifetime/redactor. Stable instance-local UUID session name default, no copied JWT/key/store marker. Lazy regular O_NONBLOCK20,000-byte+1/fatal UTF8 token file/projected symlink, bounded opaque token, no local issuer/subject grant. Fixed regional STS partition-derived authority independent of inference URL/headers, unsigned form POST Action=AssumeRoleWithWebIdentity/Version2011-06-15/RoleArn/RoleSessionName/WebIdentityToken/optional Duration900..43200. Manual redirects/exact200/15s whole-auth/no auth retry, parent native network transport (proxy/scope/timeouts, never inference auth/custom headers). Streaming256KiB XML/Content-Length/fatalUTF8 using explicit product saxes6.0.0, namespace/root/result/credential cardinality, depth8/nodes2048, no DTD/processing instructions/entity declarations/external I/O, scalar-only required key/secret/session/expiration, finite future≤12h. Standard escaped XML scalar entities decode, never arbitrary XML fetch/DOM. Existing Ecs and new STS now share only actual duplicated bounded file reader/vended schema and private foreground refresh-cache/lifetime code; each retains its own endpoint/auth/body/schema/acquisition authority. Local framed source fingerprint before cache/after mint/before signed dispatch, five-minute eager expiry/newest success, immutable credentials, independent callers, exact401/403 next-call eviction/no background/disk/shared promises. Callback assertCurrent now wraps file/abort errors in fixed auth error, correcting reproduced ECS token-path disclosure when removal wins after acquisition. Existing explicit Bearer/SigV4/header intent/derived source suppression, native preflight/metadata/JSON-binary/private replay/usage and multiple-source refusal preserved.",
+  "qualification": {
+    "environment": "Makefile Docker build/types/lockfile; runtime --network none/CI=true/node --no-maglev. Synthetic role/account IDs/tokens/temp roots and mocked or verified-CA loopback transports only. Read-only installed AWS SDK source, no SDK acquisition/execution/dependency or account/live switch/personal store/protected container/generated output edits.",
+    "image": "ai-harness:mod01-bedrock-web-identity-owned",
+    "imageId": "sha256:c682b629ea6f3a9ecc5710fc41d6b952cbc79e23c74a4104d63d8e554f28dd50",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-web-identity-owned",
+    "buildLog": "/tmp/mod01-bedrock-web-identity/build-owned-r3.log",
+    "dependency": {
+      "name": "saxes",
+      "version": "6.0.0",
+      "kind": "Product XML utility, not AWS SDK/reference acquisition. Already locked/installed, declared direct Core dependency instead of relying on transitive availability; package-lock regenerated only by Docker make lockfile.",
+      "lockfileLog": "/tmp/mod01-bedrock-web-identity/lockfile.log",
+      "prodResolution": "npm ls saxes --omit=dev --workspace @ai-harness/core",
+      "log": "/tmp/mod01-bedrock-web-identity/owned-r3.log"
+    },
+    "strict": {
+      "passed": true,
+      "roots": 3,
+      "config": "/tmp/mod01-bedrock-web-identity/strict.json",
+      "log": "/tmp/mod01-bedrock-web-identity/owned-r3.log"
+    },
+    "runtime": {
+      "passed": 64,
+      "failed": 0,
+      "new": 9,
+      "reused": 55,
+      "log": "/tmp/mod01-bedrock-web-identity/owned-r3.log",
+      "files": [
+        "packages/core/src/providers/bedrock-web-identity.test.ts",
+        "packages/core/src/providers/bedrock-ecs.test.ts",
+        "packages/core/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/providers/bedrock-ecs.test.ts",
+        "packages/cli/src/cli/bedrock-ecs-process.test.ts",
+        "packages/server/src/api/bedrock-ecs-http.test.ts",
+        "packages/cli/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/cli/bedrock-profile-process.test.ts",
+        "packages/server/src/api/bedrock-profile-http.test.ts"
+      ],
+      "filteredControl": {
+        "file": "packages/core/src/providers/bedrock-converse-stream.test.ts",
+        "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4",
+        "passed": 4,
+        "unselected": 643,
+        "runtimeOnly": true
+      },
+      "meaning": "Eight new public compiled-Core STS cases: pure/passive0/fixed unsigned Query/XML then native JSON/binary/private signed replay/usage10/header isolation; captured role+projected-file identity/cache hit/token rotation/removal/mutable config cannot retarget; eight partition DNS suffix constructions/custom inference scope; eager expiry/exact403 next-call/503 single attempt; namespace/DTD/duplicate/nested/malformed/expired/oversized/UTF8/redirect XML refusals; invalid descriptors/token bytes/FIFO/missing/budget preflight before source; explicit-key/derived/header/ambiguous-source boundaries; independent caller recovery/owner/network hostile XML retirement/no late inference. New ninth case reproduces and fixes ECS post-mint pre-dispatch filename leak. Reused55 = ECS8+static-profile6 + native ECS host17 + native profile host20 + filtered signature4. Real emitted CLI/TLS and authenticated HTTP flows reused here are ECS/static-profile regressions, not native web-identity credit. Partition tests bind fixed suffix construction (with synthetic commercial role ARN), not valid accounts/principals/service/model availability in each partition. No new browser/installed/production/model-host/MOD-03 campaign."
+    },
+    "counterfactual": [
+      {
+        "image": "ai-harness:mod01-bedrock-ecs-hosts-owned",
+        "failed": 8,
+        "log": "/tmp/mod01-bedrock-web-identity/red.log",
+        "meaning": "Eight STS source cases fail before web-identity implementation; no host usability inferred."
+      },
+      {
+        "image": "ai-harness:mod01-bedrock-ecs-hosts-owned",
+        "failed": 1,
+        "unselected": 8,
+        "log": "/tmp/mod01-bedrock-web-identity/ecs-withdrawal-red.log",
+        "meaning": "ECS file removed by trusted test-only enrollment callback after post-acquisition read, before signed dispatch. Expected fixed auth error but real ENOENT exposes temporary token path. Shared assertCurrent wraps errors; constant failure/nofurther I/O assertion retained."
+      }
+    ],
+    "retainedFailures": [
+      {
+        "log": "/tmp/mod01-bedrock-web-identity/build-owned.log",
+        "exit": 2,
+        "meaning": "New narrow internal STS Send function incompatible with typeof fetch expected by shared abortable helper (TS2345). Bind fixed URL/request in a zero-argument adapter, no cast/compiler/transport weakening; image-less focused.log125 is no test credit."
+      }
+    ],
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 7,
+      "imageWitness": "/tmp/mod01-bedrock-web-identity/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-bedrock-web-identity/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-bedrock-web-identity/runtime-witness.diff",
+      "meaning": "Seven changed source/manifest/lock inputs image-identical; final tests built/baked; only strict config tar-injected. Counterfactual overlays test-only. Product dependency/schema code not SDK acquisition or global image authority."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-bedrock-web-identity/docs.log"
+    }
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/bedrock-web-identity.ts": "3bfe04182a935d77c14bece0cb7fe08ab6719f911731e8e175ba4d805a970e38",
+    "packages/core/src/providers/bedrock-credentials.ts": "fede5115a8cfb0d4ec66c5675953f9ffe26bc4a856cc05ab407af88bcae4e014",
+    "packages/core/src/providers/bedrock-ecs.ts": "58f4274b724480eca857c4dec157ee916928050cf4faaee20d32446a862acca4",
+    "packages/core/src/providers/index.ts": "1ef4bb2445b0ac23dd5293b69afb76861467fbd2a930d1120ca12bca366a9cbf",
+    "packages/core/src/index.ts": "69b354e07717fef9102bb7843b43157b48ed3f1dee3c809ed3713d3ea2d346e4",
+    "packages/core/package.json": "7f4f265990dff47b19a61bd01523ef1c5e0c2fa3492053080239efe0c373382d",
+    "package-lock.json": "478dda822d1d1e70748d84ce124cacb80f100d7a19988163de68705552dd5be2"
+  },
+  "remaining": [
+    "Native CLI/Server/Settings web-identity admission/source priorities/offline/lifetime/readonly proof; SDK config/factory alone is not native integration",
+    "Wider source-profile/AssumeRole/SSO/process/scoped profile choice and remaining meaningful AWS ARN/endpoint/region/request policies",
+    "Other ADC/default-tool/catalogue requirements and final23-row MOD-01 audit"
+  ],
+  "limits": "Explicit file/role STS web identity only, no native env scanner/login/profile choice or full AWS chain. Token treated as opaque safe bounded bytes; STS/vendor authenticates JWT/role, local file/fingerprint is not an entitlement/principal certificate. SDK region/client convention and partition DNS review do not prove every FIPS/dualstack/global endpoint/proxy/service/account behavior. Auth15s/source body caps code-bound and caller/owner/scope abandonment runtime-bound, not every deadline or XML variant certificate; no XML external expansion/network. saxes is minimal declared product parser, no AWS SDK dependency. Cache does not poll STS or observe remote revocation before expiry/identity change/next-call401-403; no watcher/disk/background/JS sandbox/OS filesystem-memory certificate. Existing profile/ECS native scope and 04b/MOD-03 proofs retain their limits, no historical failure repair or whole04a closure.",
+  "auditState": "STS web-identity SDK delivered and ECS post-acquisition path leak fixed. MOD-01.02e PARTIAL/MOD-01 IN PROGRESS/04b DONE/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged, goal active/not completed."
+}

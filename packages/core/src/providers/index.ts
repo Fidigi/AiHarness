@@ -78,6 +78,8 @@ import { vertexApiKeyBase } from './vertex-config.js';
 import { VertexAdc, hasVertexAuthHeaders, type VertexAdcConfig } from './vertex-adc.js';
 import { BedrockProfile, hasBedrockAuthHeaders, type BedrockProfileConfig, type BedrockProfileCredentials } from './bedrock-profile.js';
 import { BedrockEcsCredentials, type BedrockEcsConfig } from './bedrock-ecs.js';
+import { BedrockWebIdentityCredentials, type BedrockWebIdentityConfig } from './bedrock-web-identity.js';
+import { BedrockRefreshingCredentials } from './bedrock-credentials.js';
 import { validXaiOAuthIdentity, type XaiOAuthCredential, type XaiOAuthCredentialSource } from './xai-oauth.js';
 import { xaiOAuthHistory, sealXaiOAuthCall, sealXaiOAuthResponse, withoutXaiOAuthReplay } from './xai-oauth-replay.js';
 import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
@@ -5051,7 +5053,7 @@ export function bedrockCredentialConfig(value: unknown): { apiKey: string } | { 
   return validBearerApiKey(value) ? { apiKey: value } : undefined;
 }
 
-export interface BedrockProviderConfig extends ProviderConfig { bedrockProfile?: BedrockProfileConfig; bedrockEcs?: BedrockEcsConfig }
+export interface BedrockProviderConfig extends ProviderConfig { bedrockProfile?: BedrockProfileConfig; bedrockEcs?: BedrockEcsConfig; bedrockWebIdentity?: BedrockWebIdentityConfig }
 /** AWS Bedrock Converse provider with explicit Bearer or native SigV4 authentication. */
 export class BedrockProvider extends AiProvider {
   override getModelApi(): string { return 'bedrock-converse-stream'; }
@@ -5062,13 +5064,14 @@ export class BedrockProvider extends AiProvider {
   private readonly region: string;
   private readonly configuredRegion?: string;
   private readonly ownsNativeProfiles: boolean;
-  private readonly profile?: BedrockProfile | BedrockEcsCredentials;
+  private readonly profile?: BedrockProfile | BedrockEcsCredentials | BedrockWebIdentityCredentials;
 
   constructor(config: BedrockProviderConfig) {
     super({
       ...config,
       bedrockProfile: undefined,
       bedrockEcs: undefined,
+      bedrockWebIdentity: undefined,
       type: ProviderType.BEDROCK,
       model: config.model || 'anthropic.claude-3-haiku-20240307-v1:0',
       accessKeyId: config.accessKeyId || process.env.AWS_ACCESS_KEY_ID,
@@ -5078,11 +5081,12 @@ export class BedrockProvider extends AiProvider {
     this.configuredRegion = String(config.region || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || '') || undefined;
     this.region = this.configuredRegion || 'us-east-1';
     this.ownsNativeProfiles = new.target === BedrockProvider;
-    if (this.ownsNativeProfiles && (config.bedrockProfile || config.bedrockEcs) && config.apiKey === undefined && config.accessKeyId === undefined
+    if (this.ownsNativeProfiles && (config.bedrockProfile || config.bedrockEcs || config.bedrockWebIdentity) && config.apiKey === undefined && config.accessKeyId === undefined
       && config.secretAccessKey === undefined && config.sessionToken === undefined
       && !hasBedrockAuthHeaders(config)) {
-      if (config.bedrockProfile && config.bedrockEcs) throw new Error('Only one Bedrock credential source is allowed.');
-      this.profile = config.bedrockProfile ? new BedrockProfile(config.bedrockProfile) : new BedrockEcsCredentials(config.bedrockEcs!);
+      if ([config.bedrockProfile, config.bedrockEcs, config.bedrockWebIdentity].filter(Boolean).length > 1) throw new Error('Only one Bedrock credential source is allowed.');
+      this.profile = config.bedrockProfile ? new BedrockProfile(config.bedrockProfile) : config.bedrockEcs ? new BedrockEcsCredentials(config.bedrockEcs)
+        : new BedrockWebIdentityCredentials(config.bedrockWebIdentity!, this.configuredRegion, (url, init) => super.request(url, init));
       nativeSubscriptionStreamConsumers.add(this);
     }
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
@@ -5257,7 +5261,7 @@ export class BedrockProvider extends AiProvider {
       method: 'POST', headers, body, signal: authentication?.signal ?? options?.signal,
     });
     if (!response.ok) {
-      if (authentication && this.profile instanceof BedrockEcsCredentials) this.profile.invalidate(authentication.credentials, response.status);
+      if (authentication && this.profile instanceof BedrockRefreshingCredentials) this.profile.invalidate(authentication.credentials, response.status);
       await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
     }
     const data = await readProviderJson<BedrockResponse>(response);
@@ -5326,7 +5330,7 @@ export class BedrockProvider extends AiProvider {
         body, signal: authentication?.signal ?? options?.signal,
       });
       if (!response.ok) {
-        if (authentication && this.profile instanceof BedrockEcsCredentials) this.profile.invalidate(authentication.credentials, response.status);
+        if (authentication && this.profile instanceof BedrockRefreshingCredentials) this.profile.invalidate(authentication.credentials, response.status);
         await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
       }
       const result = await consumeBedrockStream(response, model, onChunk, authentication?.signal ?? options?.signal,
