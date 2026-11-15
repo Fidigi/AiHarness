@@ -1,0 +1,105 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "fcefbff",
+  "criterion": "MOD-01.02e",
+  "status": "PARTIAL",
+  "scope": "Explicit native Core ECS/EKS HTTP credential source and Bedrock header/signing isolation; not yet native ECS host admission or wider AWS chain completion",
+  "reference": {
+    "installedReadOnly": {
+      "name": "@aws-sdk/credential-provider-http",
+      "version": "3.972.76",
+      "source": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-http/dist-cjs/index.js",
+      "sha256": "ae4626cb8c8948c8c3f4deef29c4db037d2464adcfb88d63ed2eab39f21e9a29"
+    },
+    "pinnedApi": {
+      "source": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/bedrock-converse-stream.ts",
+      "sha256": "122b26fdcd1671cc885e37b5410a418b056cf43cc49856f6ae421017beff3097"
+    }
+  },
+  "implementation": "BedrockProviderConfig.bedrockEcs / public BedrockEcsConfig, original constructor only. Capture explicit relative URI (takes priority, fixed169.254.170.2 root) or HTTPS/full admitted loopback/ECS/EKS HTTP URL, reject userinfo/fragment/unsafe text. Token file takes priority over inline token, lazy regular O_NONBLOCK64KiB+1/fatalUTF8/projected symlink; raw Authorization header (no fabricated Bearer prefix), Header admission/secret enrollment. Foreground single GET/manual redirect/exact200/15s whole-auth/256KiB JSON via existing bounded abortable transport, without inference headers/proxy. Required bounded AccessKeyId/SecretAccessKey/Token and finite future RFC3339-shaped Expiration; final AWS key validation still vendor-owned. No SDK/env scan/store/disk cache/timer/shared cancellation/auth retries. Per-instance one-entry immutable credential cache, five-minute eager expiry, exact framed endpoint/auth/file-bytes identity checked before cache and after GET/before inference; newest successful sequence only publishes. Independent callers may use their own valid response, late aborted response cannot publish. Matching401/403 evicts only the credentials used, no same-call inference retry, late rejection cannot evict newer credentials. Private source signal binds caller/owner/network scope through native JSON/binary consumers, and native budget preflight precedes source I/O. Existing explicit Bearer/SigV4/auth-header intent suppresses fallback; derived class gets no source privilege, multiple profile/ECS sources refuse. Shared native signer/metadata/replay/usage retained. During source-header isolation reproduction found Bedrock dropped configured custom inference headers (pinned API explicitly applies them before signing). Fix that existing gap: lowercase safe configured header names, skip host/all x-amz-* (and shared protected auth), preserve native-owned fields, sign allowed custom headers with canonical whitespace; normal AWS unsignable transport/tracing headers excluded. Bearer receives nonreserved custom headers too. Stream default Accept uses the same lowercase key so a signed custom Accept is not case-duplicated/overwritten; strengthened first case verifies exact inference versus metadata Accept. Metadata GET receives only its own auth/accept, never inference headers.",
+  "qualification": {
+    "environment": "Makefile Docker build/types, --network none/CI=true/node --no-maglev; synthetic credentials/token files/temporary roots/mocked fetch only. Installed SDK source read-only, no acquisition/dependency/execution, account mode, personal stores, protected containers or generated output edits.",
+    "image": "ai-harness:mod01-bedrock-ecs-owned",
+    "imageId": "sha256:0fc96bbe07ac8e9c8b2ed6435ce827f02892025ae77d1c17a1036e24c801533b",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-ecs-owned",
+    "buildLog": "/tmp/mod01-bedrock-ecs/build-owned-r4.log",
+    "strict": {
+      "passed": true,
+      "roots": 2,
+      "config": "/tmp/mod01-bedrock-ecs/strict.json",
+      "log": "/tmp/mod01-bedrock-ecs/owned-r4.log"
+    },
+    "runtime": {
+      "passed": 38,
+      "failed": 0,
+      "new": 8,
+      "reused": 30,
+      "log": "/tmp/mod01-bedrock-ecs/owned-r4.log",
+      "files": [
+        "packages/core/src/providers/bedrock-ecs.test.ts",
+        "packages/core/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/cli/bedrock-profile-process.test.ts",
+        "packages/server/src/api/bedrock-profile-http.test.ts"
+      ],
+      "filteredControl": {
+        "file": "packages/core/src/providers/bedrock-converse-stream.test.ts",
+        "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4",
+        "passed": 4,
+        "unselected": 643,
+        "runtimeOnly": true
+      },
+      "meaning": "Eight public compiled-Core cases: passive0/native JSON+binary/private signed replay/usage10/isolated custom+reserved headers; projected token-file priority/cache-hit reread/rotation/removal/enrollment; five-minute expiry/current401/403 eviction versus late old403; newer successful acquisition and independent abort/nonabort races; post-GET source change/native preflight before any file/enrollment/network; endpoint/headers/schema/expired/non200/redirect/UTF8/size/FIFO refusals; relative precedence/admitted EKS+loopback endpoints and explicit-key/derived/header/mixed-source boundaries; held hostile metadata-body caller/owner/scope retirement with no inference/completion. Reused30 = profile SDK6 + native static-profile CLI resolver9/process3 and real Server8 + four filtered direct-key/signature controls, not ECS native host credit. No new browser/installed/production/model-host/MOD-03 campaign."
+    },
+    "counterfactual": {
+      "image": "ai-harness:mod01-bedrock-profile-hosts-owned",
+      "failed": 8,
+      "log": "/tmp/mod01-bedrock-ecs/red.log",
+      "meaning": "Initial eight ECS cases fail against static-profile-only SDK; later strengthening keeps same eight cases, no extra distinct credit."
+    },
+    "retainedFailures": [
+      {
+        "log": "/tmp/mod01-bedrock-ecs/focused.log",
+        "passed": 13,
+        "failed": 1,
+        "meaning": "New source works but first native inference lacks x-inference-only custom header. Assertion inside fetch mock is normalized by existing network error wrapper, not removed."
+      },
+      {
+        "log": "/tmp/mod01-bedrock-ecs/header-diagnostic.log",
+        "meaning": "Test-only logging overlay confirms header null. Pinned API lines258-260/460-493 explicitly requires nonreserved custom-header build middleware before signing. Diagnostic absent from final test/runtime."
+      },
+      {
+        "log": "/tmp/mod01-bedrock-ecs/header-red.log",
+        "failed": 1,
+        "unselected": 7,
+        "meaning": "Strengthened unchanged first case reproduces missing native inference header against pre-fix source-capable SDK. Fix native header/signing gap, retain exact expected header/reserved-owned fields and metadata isolation; no assertion/timeout/retry/flag relaxation."
+      }
+    ],
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 3,
+      "imageWitness": "/tmp/mod01-bedrock-ecs/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-bedrock-ecs/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-bedrock-ecs/runtime-witness.diff",
+      "meaning": "Three changed production inputs image-identical, final tests built/baked; only strict config tar-injected. Predecessor/header/diagnostic overlays test-only, not runtime or global image authority."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-bedrock-ecs/docs.log"
+    }
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/bedrock-ecs.ts": "4b336971eb2825d86489537f778841a4ef05ad591bcff268d56aca732fb1b03f",
+    "packages/core/src/providers/index.ts": "642c5586ee9a88644d224bf0f493da7bec67f23d829d0e8470b3f2485110a789",
+    "packages/core/src/index.ts": "e4b2b795baca7a53ecda28c21fce58cbd7fa78b69163cebe592cd5803a9b898d"
+  },
+  "remaining": [
+    "Compose trusted native ECS/EKS environment admission in CLI/Server outside key values with offline/priority/lifetime/readonly provenance; SDK config/factory alone is not host usability",
+    "Web identity/roles/source-profile/SSO/process/scoped profile selection and remaining AWS ARN/endpoint/ambient-profile region policy",
+    "Other ADC/default-tool-policy/catalogue requirements and final MOD-01 requirement-to-proof audit"
+  ],
+  "limits": "Explicit foreground HTTP source only. Installed HTTP provider endpoint/token/schema review is not SDK execution or equivalence: native single-attempt bounded15s policy is not its installed default retries3/timeout1s. Cache binds local configured endpoint/auth bytes, not remote identity/revocation or response/account entitlement; valid cache does not poll endpoint,401/403 refresh happens next operation. No file watcher/disk cache/background/JS sandbox/global transport/OS-memory/filesystem certificate. Auth15s deadline code-bound, caller/owner/scope abandonment runtime-bound, no claim every failure/clock/format/service/region/header is exercised. Header policy delivered for all existing Bedrock modes but no wholesale04a closure/global policy certificate. Main native CLI/Server evidence here reuses static profiles only; ECS host usability still mandatory. No account/vendor/production/installed/MOD-03 redelivery or historical failure repair.",
+  "auditState": "ECS/EKS HTTP SDK delivered, MOD-01.02e PARTIAL/MOD-01 IN PROGRESS/04b DONE/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged; active goal not completed."
+}
