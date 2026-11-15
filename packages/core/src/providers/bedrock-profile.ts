@@ -211,6 +211,7 @@ interface RoleIdentity extends BedrockCredentialIdentity { credentials?: Bedrock
 class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
   private readonly sessionName = 'ai-harness-' + randomUUID();
   private readonly webSessionName = 'ai-harness-' + randomUUID();
+  private sso?: { fingerprint: string; source: BedrockSsoCredentials };
   constructor(private readonly config: BedrockProfileConfig, private readonly parentRegion: string | undefined, private readonly send: AwsStsSend, private readonly environment?: ProfileEnvironment) {
     super('Bedrock profile authentication failed.', config.signal, config.redactor);
   }
@@ -303,9 +304,10 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
     }
     if (identity.web || identity.ecs || identity.imds || identity.sso) {
       const current = async (signal: AbortSignal) => { if ((await this.identity(signal)).fingerprint !== identity.fingerprint) throw failure(); };
+      if (identity.sso && this.sso?.fingerprint !== identity.fingerprint) this.sso = { fingerprint: identity.fingerprint, source: new BedrockSsoCredentials(identity.sso, current, this.send) };
       const child = identity.web ? new BedrockWebIdentityCredentials(identity.web, undefined, async (url, init) => {
         if (!init.signal) throw failure(); await current(init.signal); return this.send(url, init);
-      }) : identity.ecs ? new BedrockEcsCredentials(identity.ecs, current) : identity.sso ? new BedrockSsoCredentials(identity.sso, current, this.send) : new BedrockImdsCredentials(identity.imds!, current);
+      }) : identity.ecs ? new BedrockEcsCredentials(identity.ecs, current) : identity.sso ? this.sso!.source : new BedrockImdsCredentials(identity.imds!, current);
       const source = await child.resolve(signal); credentials = source.credentials; sourceCurrent = source.assertCurrent;
     }
     if (!credentials) throw failure();
