@@ -5,7 +5,7 @@ import { readOAuthJson } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
 import type { CredentialRedactor } from './credentials.js';
 import { vertexExecutable, vertexExecutableSubject, runVertexExecutable, type VertexExecutable } from './vertex-adc-executable.js';
-import { vertexAwsEnvironment, vertexAwsSource, vertexAwsSubject, type VertexAwsSource } from './vertex-adc-aws.js';
+import { vertexAwsEnvironment, vertexAwsSource, vertexAwsSubject, resolveVertexAwsSource, type VertexAwsSource } from './vertex-adc-aws.js';
 
 /** Explicit trusted file only; host admission owns standard-path/environment selection. */
 export interface VertexAdcConfig {
@@ -183,7 +183,11 @@ export class VertexAdc {
     return observed(async () => {
       let document = await this.document(signal); const sequence = ++this.sequence;
       if (this.cached?.fingerprint === document.fingerprint && this.cached.expiresAt > Date.now() + 300_000) return { ...document, token: this.cached.token };
-      let subject = document.aws ? vertexAwsSubject(document.aws, document.data.audience as string, this.redactor) : document.subject;
+      let subject = document.subject;
+      if (document.aws) {
+        const source = await resolveVertexAwsSource(document.aws, signal, async currentSignal => { if ((await this.document(currentSignal)).fingerprint !== document.fingerprint) throw failure(); currentSignal.throwIfAborted(); }, this.redactor);
+        subject = vertexAwsSubject(source, document.data.audience as string, this.redactor);
+      }
       if (document.executable) {
         const recipe = document.executable, type = document.data.subject_token_type as string;
         subject = document.executableBytes?.length ? vertexExecutableSubject(document.executableBytes, type, true, this.redactor, true) : undefined;

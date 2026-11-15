@@ -1,4 +1,5 @@
-import { fetchOAuthResponse, readOAuthJson } from './oauth-device.js';
+import { readOAuthJson } from './oauth-device.js';
+import { awsImdsV2Session, readAwsMetadataText } from './aws-metadata.js';
 import { BedrockRefreshingCredentials, bedrockVendedCredentials, type BedrockCredentialIdentity, type BedrockVendedCredentials } from './bedrock-credentials.js';
 import type { CredentialRedactor } from './credentials.js';
 
@@ -24,17 +25,6 @@ export function bedrockImdsEndpoint(config: BedrockImdsConfig): string {
     || !loopback && !['localhost', '[::1]', '169.254.169.254', '[fd00:ec2::254]'].includes(url.hostname))) throw failure();
   return url.toString().replace(/\/+$/u, '');
 }
-async function text(response: Response, signal: AbortSignal, maximum: number): Promise<string> {
-  const length = response.headers.get('content-length'), reader = response.body?.getReader();
-  if (!reader) throw failure();
-  const aborted = Symbol('aborted'); let onAbort!: () => void, complete = false, bytes = 0; const chunks: Uint8Array[] = [];
-  const cancellation = new Promise<typeof aborted>(resolve => { onAbort = () => resolve(aborted); if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); });
-  try {
-    if (length !== null && (!/^(?:0|[1-9]\d*)$/u.test(length) || Number(length) > maximum)) throw failure();
-    while (true) { const item = await Promise.race([reader.read(), cancellation]); if (item === aborted) throw failure(); if (item.done) break; bytes += item.value.byteLength; if (bytes > maximum) throw failure(); chunks.push(item.value); }
-    const value = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)); signal.throwIfAborted(); complete = true; return value;
-  } finally { signal.removeEventListener('abort', onAbort); if (!complete) void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* A hostile pending read need not settle. */ } }
-}
 /** IMDSv2 only, foreground/parent-bound; no inference headers/proxy, v1 downgrade, retries or persistent token. */
 export class BedrockImdsCredentials extends BedrockRefreshingCredentials<BedrockCredentialIdentity> {
   private readonly url: string;
@@ -43,17 +33,10 @@ export class BedrockImdsCredentials extends BedrockRefreshingCredentials<Bedrock
   }
   protected async identity(signal: AbortSignal): Promise<BedrockCredentialIdentity> { signal.throwIfAborted(); return { fingerprint: this.url }; }
   protected async acquire(_identity: BedrockCredentialIdentity, signal: AbortSignal): Promise<BedrockVendedCredentials> {
-    const request = async (suffix: string, method: string, headers: Record<string, string>): Promise<Response> => {
-      const init: RequestInit = { method, headers, redirect: 'manual', signal };
-      const response = await fetchOAuthResponse(this.url + suffix, init, signal, async (url, init) => { await this.assertParent(signal); signal.throwIfAborted(); return fetch(url, init); });
-      if (response.status !== 200) { void response.body?.cancel().catch(() => undefined); throw failure(); } return response;
-    };
-    const token = await text(await request('/latest/api/token', 'PUT', { 'x-aws-ec2-metadata-token-ttl-seconds': '21600' }), signal, 4096);
-    if (!/^[!-~]{1,4096}$/u.test(token)) throw failure(); this.redactor?.add(token);
-    const headers = { 'x-aws-ec2-metadata-token': token }, prefix = '/latest/meta-data/iam/security-credentials/';
-    const role = (await text(await request(prefix, 'GET', headers), signal, 1024)).trim();
+    const request = await awsImdsV2Session(this.url, 21600, signal, this.assertParent, this.redactor), prefix = '/latest/meta-data/iam/security-credentials/';
+    const role = (await readAwsMetadataText(await request(prefix), signal, 1024)).trim();
     if (!/^[A-Za-z0-9_+=,.@-]{1,64}$/u.test(role)) throw failure(); this.redactor?.add(role);
-    const body = await readOAuthJson(await request(prefix + encodeURIComponent(role), 'GET', headers), signal);
+    const body = await readOAuthJson(await request(prefix + encodeURIComponent(role)), signal);
     if (body.Code !== 'Success') throw failure(); return bedrockVendedCredentials(body, this.redactor);
   }
 }

@@ -1,0 +1,61 @@
+{
+  "schema": "ai-harness.mod-01.vertex-adc-aws-metadata.v1",
+  "date": "2026-11-15",
+  "baseline": "8209e48",
+  "requirement": "MOD-01.02e",
+  "status": "DELIVERED bounded file-admitted IMDSv2 AWS supplier;02e PARTIAL/06c OPEN",
+  "implementation": {
+    "owner": "packages/core/src/providers/{vertex-adc,vertex-adc-aws,aws-metadata,bedrock-imds}.ts",
+    "source": "Explicit original-constructor external_account/aws1 file only, never default-machine/profile/ECS/SSO discovery. Existing captured complete valid AWS keys/region independently win. Missing region/keys require an explicit valid imdsv2_session_token_url plus the corresponding region_url/url on the same admitted origin/prefix. Fixed placement availability-zone and role credential suffixes; HTTP only loopback/IMDS IPv4-IPv6, safe HTTPS prefixes. Known fields only/no custom source headers/mixed identities/alternative GetCallerIdentity action; incomplete or malformed explicit env-key intent refuses. No new public option, operator flag, credential-store/HTTP DTO or dependency.",
+    "metadata": "Reuse the existing explicit-role IMDSv2 bounded text reader/session primitive as aws-metadata.ts, not another chain framework. ADC TTL300/one foreground PUT token reused for needed region/role/credential GETs; existing Bedrock TTL21600/paths/caller fences unchanged. No inference headers/configured proxy/redirect/retry/persisted token or downgrade. Token4096/zone128/single role1024+safe role64/JSON256KiB/fatalUTF8/exact200, temporary credential trio/CodeSuccess/future ISO expiry<=12h/unsupported scope refusal. Captured AWS_EC2_METADATA_DISABLED=true vetoes metadata; no ambient endpoint override can retarget the explicit file.",
+    "assertion": "Resolved source keys and region feed the unchanged SigV4 proof serializer/signer: empty POST/audience-signed GetCallerIdentity subject, no actual AWS STS request. Regional verification target is validated before metadata I/O and again against the resolved region. Template validation now chooses matching commercial/China probe partition, not an unconditional us-east-1 probe. Google STS/optional existing IAM/native G retain fixed issuer and final-token-only cache/quota/lifetime.",
+    "authority": "Every metadata request borrows the caller/owner/whole15s ADC deadline and current root-byte fence, with another fence after secret enrollment/read and before Google STS/native dispatch/cached hits. Independent caller success cannot be poisoned by a cancelled hostile metadata reader. No raw AWS/metadata credential cache; only final Google token persists in owner memory, may outlive unchanged source key expiry, remints on exact401. File change/removal withdraws it. Existing standard file/URL/executable/Workforce/IAM/env-only behavior and private native sources remain separate.",
+    "reference": [
+      { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/defaultawssecuritycredentialssupplier.js", "sha256": "789b0f0de4e8c89e3170484d589b82cbac7f79ac8e1ebff4624d7123af2860f4", "use": "Read-only GoogleAuth10.9.1 source: env priority, explicit metadata URL roles/region, token TTL300; no import/execution/acquisition. Core's required-v2/same-authority/single-session/captured environment policy is explicit, not byte-identical or full optional supplier ABI." }
+    ]
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-vertex-aws-metadata-owned",
+    "imageId": "sha256:03680b803c325d6e81b4aecc4e4d1d809fb58094be8290a31f250ecdf3c80d83",
+    "candidateImageId": "sha256:da53a81407f6652eb13495534df160271f6892cf270c680f79385486f4ec2600",
+    "predecessorImageId": "sha256:1742be95232f170af7f50ac59e773fcee359241ed8e0991d983541860c88ee64",
+    "commands": "Makefile make build-test IMAGE_TEST=ai-harness:mod01-vertex-aws-metadata-owned; Docker --network none/CI=true/node --no-maglev Vitest5 --maxWorkers=1. Canonical scripts/run-typescript.mjs --project /app/strict.json; strict config only via tar stdin, no product/dependency/compiled overlay or daemon bind mounts. Native CLI selection -t 'ADC json-aws-metadata ' excludes ten other variants.",
+    "build": "First and final Make builds Core/CLI/Server/Web/build contracts PASS. First candidate78 PASS covered two commercial-region endpoints, not China. New strengthened China recipe fails on that image; one pure template-probe partition fix then final image/final78/three strict roots PASS, no oracle/flags/deadline/retry relaxation.",
+    "regularRuntimePassed": 78,
+    "newCases": 6,
+    "regularReusedCases": 72,
+    "strictRoots": 3,
+    "strictChangedRoots": 2,
+    "strictReusedRoots": 1,
+    "unselectedCliVariants": 10,
+    "accountActions": 0,
+    "core": "Five new compiled-public-Core cases: IPv4/commercial and HTTPS-prefix/China metadata with current root/native quota/cache/expiry/auth eviction/redaction; EU proof reuses the prior independent literal HMAC vector540090fa... (no new reference execution), CN binds requested signing partition/region. One partial-env scenario covers keys-only/region-only paths without unused metadata GETs; one refuses v1/crossover/disabled/mixed/wrong-target and malformed/bounded/redirect/expired outputs; one cuts current file at all four boundaries then hostile-body caller cancellation/independent success/owner retirement. Passive inventory sends0wire, constructor env snapshot cannot retarget, final token survives source expiry but not source withdrawal.",
+    "nativeCli": "One added existing-fixture json-aws-metadata variant: no AWS env keys/region, explicit synthetic ADC file, passive list/auth0wire; two actual cold processes perform four metadata requests each (verified-CA loopback broker preserving/asserting original logical URL/method/token headers) then Google STS/private native G, signed continuation/restart, readonly source/privacy20 physical tokens. Offline and removed ADC send0extra wire. --no-maglev present from new variant's first RED; no old branch flags/assertion/deadline changes or user-account inputs.",
+    "reuse": "All existing ADC source/unit/11 actual HTTP admission-retirement/CLI admission controls reused on final image; not new metadata-specific HTTP/browser/installed proof. Seven Bedrock explicit-role IMDSv2 tests and its existing strict root revalidate only affected extraction invariants, no MOD-03 redelivery/old CLI incident replay/platform campaign.",
+    "sourceWitness": {
+      "packages/core/src/providers/aws-metadata.ts": "3c315bc4502c9107fca6b0207fb5dcbc94948ad3419d724ebcffaf322a6f7807",
+      "packages/core/src/providers/bedrock-imds.ts": "a483d68bafc21a486210c00e457693b5371521bba46de3568d3f34176bac69b8",
+      "packages/core/src/providers/vertex-adc.ts": "16b4569b39e7af6876b4e32586a2d0a6b51a5e8234a4764b179a86ed4ac12592",
+      "packages/core/src/providers/vertex-adc-aws.ts": "ac6b007535d10fc0d8c8c7aa9999a78219b2a709ccf0ed012eb3a2d512935490"
+    },
+    "tests": {
+      "packages/core/src/providers/vertex-adc-aws-metadata.test.ts": "cb10c625587779a745fc878e797c4d16d2a6d15cc9fe2cf0a4e66c4d98b65f7d",
+      "packages/cli/src/cli/vertex-adc-process.test.ts": "10e688b3a0575bcf3f0ff4f9f9253a17f2ccb1f1dc9af32a4956689acd58f56f"
+    },
+    "logs": {
+      "coreRed": "/tmp/mod01-vertex-aws-metadata/red.log",
+      "cliRed": "/tmp/mod01-vertex-aws-metadata/cli-red.log",
+      "firstBuild": "/tmp/mod01-vertex-aws-metadata/build-owned.log",
+      "focused": "/tmp/mod01-vertex-aws-metadata/focused.log",
+      "candidate": "/tmp/mod01-vertex-aws-metadata/owned.log",
+      "chinaRed": "/tmp/mod01-vertex-aws-metadata/china-red.log",
+      "finalBuild": "/tmp/mod01-vertex-aws-metadata/build-owned-r2.log",
+      "final": "/tmp/mod01-vertex-aws-metadata/owned-final.log",
+      "runtimeEquality": "/tmp/mod01-vertex-aws-metadata/runtime-witness.diff",
+      "docs": "/tmp/mod01-vertex-aws-metadata/docs.log",
+      "review": "/tmp/mod01-vertex-aws-metadata/review-check.json"
+    }
+  },
+  "preservedFailures": "Five initial Core REDs (source absent, not timeout) and one actual metadata CLI RED/code1/fixed ADC error remain. Candidate China-template failure retained: the earlier second commercial endpoint scenario was strengthened to CN, not counted as another case; four other cases unselected in that RED. Final same five Core cases pass including CN; no extra case/count/SDK vector rewritten. Initial candidate78 and focused15 are not added to final78. No new native process incident, historical repair or fourth acceptance.",
+  "limits": "File-selected IMDSv2 only: imdsv2_session_token_url required when metadata is needed, v1-only/absent-v2 recipes explicitly fail before wire. No unannounced v1 authorization, ambient EC2/Google admission, metadata scan/profile/ECS fallback, arbitrary cross-origin HTTP/issuer/sampling ABI or full foreign supplier parity. V1-only compatibility remains explicit unsupported scope for final02e reconciliation, not silently covered. Cloud certificate/mTLS, automatic non-default-universe JWT/issuer/target and remaining cloud policy/final boundary sufficiency still require work. Native SSO CLI SIGSEGV/Vertex134/other historical outcomes remain OPEN/nonaccepted/unknown; no replay or result transfer. Exactly three historical acceptances/23 statements-order-statuses/19DELIVERED+04bDONE/02ePARTIAL/06cOPEN/38of43/MOD-03DONE/goal active unchanged."
+}
