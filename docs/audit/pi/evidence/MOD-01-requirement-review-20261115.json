@@ -1,0 +1,463 @@
+{
+  "schema": "ai-harness.mod-01.requirement-review.v1",
+  "date": "2026-11-15",
+  "baseline": "7e0e8ba",
+  "status": "IN PROGRESS",
+  "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
+  "method": "Read canonical register/current matrix and own scoped source-bound receipts. Requirement statements captured verbatim. Existing delivered results reused, every referenced artifact exists, no SDK/account/test/global campaign or speculative feature added by this review. A delivered row does not assert every model-host/method/vendor outcome; its required mechanism has concrete bounded evidence. Seven unresolved/review rows remain,00b historical outcomes retained.",
+  "counts": {
+    "DELIVERED": 14,
+    "HISTORICAL": 1,
+    "PARTIAL": 3,
+    "DONE": 1,
+    "REVIEW": 3,
+    "OPEN": 1
+  },
+  "requirements": [
+    {
+      "id": "MOD-01.00a",
+      "requirement": "Select the pending native adapters, shared metadata/API provenance, SDK/CLI/custom Server/Settings composition and their existing tests. Exclude unrelated audit changes. Capture an isolated source tree before validation.",
+      "status": "DELIVERED",
+      "current": "Frozen cec97e5 selection and later separately committed owned increments retain provenance; no pending selection task.",
+      "evidence": [
+        "docs/audit/pi/MOD-01.md",
+        "docs/audit/pi/MOD-01-tracking.md"
+      ],
+      "files": [
+        "packages/core/src/providers/index.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Keep existing scoped receipts, no re-selection campaign."
+    },
+    {
+      "id": "MOD-01.00b",
+      "requirement": "Run Docker typecheck, full root tests, independent public parity, browser suite and production build on that source. Diagnose concrete failures without loosening assertions, budgets or product safety controls.",
+      "status": "HISTORICAL",
+      "current": "Original standard gates were executed with retained failures, later owned work has its own bounded proofs.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01.01b-1109513-validation.json",
+        "docs/audit/pi/evidence/MOD-01.01b-1109513-e2e-failure.json",
+        "docs/audit/pi/evidence/MOD-03-closure.json"
+      ],
+      "files": [],
+      "gapClass": "historical/QUA",
+      "minimumAction": "Do not relabel old failures or turn them into an automatic full-root/browser/production prerequisite; final changed-scope coverage remains06c."
+    },
+    {
+      "id": "MOD-01.00c",
+      "requirement": "Commit the integrated implementation and documentation with actual gate outcomes and this remaining-work register. Do not mark the whole criterion DONE.",
+      "status": "DELIVERED",
+      "current": "Integrated implementation/register and actual failed/PASS outcomes committed in bounded increments; MOD-01 still open.",
+      "evidence": [
+        "docs/audit/pi/MOD-01.md",
+        "docs/audit/pi/MOD-01-tracking.md",
+        "docs/audit/pi/AUDIT-5.md"
+      ],
+      "files": [],
+      "gapClass": "none",
+      "minimumAction": "Commit each new verified increment, never mark whole criterion from a slice."
+    },
+    {
+      "id": "MOD-01.01a",
+      "requirement": "Reconcile every pinned `(provider, model, API, type)` row with the actual native adapter, supported operations, metadata and host admission. Start from the existing 42-row inventory and adapter declarations.",
+      "status": "DELIVERED",
+      "current": "Existing42-factory/1649 typed-row reconciliation plus later added physical adapters/aliases/API/media distinctions; declaration is not availability.",
+      "evidence": [
+        "docs/audit/pi/MOD-01.md",
+        "docs/audit/pi/evidence/MOD-01-token-plan-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-ai-gateways-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-radius-sdk.json"
+      ],
+      "files": [
+        "packages/core/src/providers/index.ts",
+        "packages/core/src/providers/token-plans.ts",
+        "packages/core/src/providers/ai-gateways.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Reuse mapping, update only changed bindings; no all-model wire matrix or1649-distinct-model claim."
+    },
+    {
+      "id": "MOD-01.01b",
+      "requirement": "Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock.",
+      "status": "PARTIAL",
+      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b now DONE, blockImages effective.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
+        "docs/audit/pi/evidence/MOD-01-block-images-policy.json"
+      ],
+      "files": [
+        "packages/core/src/providers/index.ts",
+        "packages/core/src/providers/bedrock-profiles.ts",
+        "packages/core/src/providers/anthropic-thinking.ts"
+      ],
+      "gapClass": "effective-policy review",
+      "minimumAction": "Audit remaining omitted/explicit defaults/tool/sampling/capability exceptions under04a; do not redeliver MOD-03 or dated held placeholders."
+    },
+    {
+      "id": "MOD-01.01c",
+      "requirement": "Implement native Radius/Pi Messages and Codex Responses paths.",
+      "status": "DELIVERED",
+      "current": "Dedicated Radius P and Codex CX framing/terminals/tools/accounting/cancellation/native host continuation exist, not compatible-label transport.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/evidence/MOD-01-radius-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-radius-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json"
+      ],
+      "files": [
+        "packages/core/src/providers/radius.ts",
+        "packages/core/src/providers/openai-codex-oauth.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Reuse existing protocol and distinct-host evidence."
+    },
+    {
+      "id": "MOD-01.01d",
+      "requirement": "Implement GitHub Copilot's per-model A/C/R dispatch and gateway dispatch for Cloudflare AI Gateway and Vercel AI Gateway.",
+      "status": "DELIVERED",
+      "current": "Copilot A/C/R operation-owned dispatch and CF/Vercel exact gateway transports/headers/native auxiliary T/hôtes delivered.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/evidence/MOD-01-ai-gateways-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-ai-gateways-hosts.json"
+      ],
+      "files": [
+        "packages/core/src/providers/github-copilot-oauth.ts",
+        "packages/core/src/providers/ai-gateways.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Reuse mixed dispatch and host proofs; no catalogue-only/full-WebSocket-success inference."
+    },
+    {
+      "id": "MOD-01.01e",
+      "requirement": "Implement the three Qwen token-plan variants, three Xiaomi regional token plans and Z.ai coding CN.",
+      "status": "DELIVERED",
+      "current": "Seven regional/plan identities65 declarations and native SDK/CLI/custom Server/Settings paths with independent keys/endpoints/real request policies.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-token-plan-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-token-plan-hosts.json"
+      ],
+      "files": [
+        "packages/core/src/providers/token-plans.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Retain honest unknown prices and region isolation; no new provider×model×host campaign."
+    },
+    {
+      "id": "MOD-01.02a",
+      "requirement": "Anthropic bearer/subscription OAuth and workload federation.",
+      "status": "DELIVERED",
+      "current": "Explicit raw/API-key/Bearer versus native grant and WIF admission, issuer/refresh/CAS/retirement/continuation and real CLI/API/Settings evidence. Pinned ambient Anthropic profile chain explicitly disabled.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-anthropic-oauth-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-oauth-live-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-oauth-cli-login.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-builtin-provenance.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-wif-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-wif-cli.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-wif-server.json"
+      ],
+      "files": [
+        "packages/core/src/providers/anthropic-oauth.ts",
+        "packages/core/src/providers/anthropic-federation.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Do not add a parser for disabled ambient Anthropic profiles; cloud ADC/AWS separate02e."
+    },
+    {
+      "id": "MOD-01.02b",
+      "requirement": "OpenAI ChatGPT/Codex and GitHub Copilot subscription exchange.",
+      "status": "DELIVERED",
+      "current": "Native subscription login/exchange/live account catalogue/refresh/lifetime/encrypted store/host transports and final MOD-03 audit delivered.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/MOD-03-subscription-acceptance.md"
+      ],
+      "files": [
+        "packages/core/src/providers/github-copilot-oauth.ts",
+        "packages/core/src/providers/openai-codex-oauth.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Reuse closed subscription scope; real accounts user-owned manual, never automated live modes."
+    },
+    {
+      "id": "MOD-01.02c",
+      "requirement": "OpenRouter and Radius OAuth.",
+      "status": "DELIVERED",
+      "current": "Distinct permanent-key PKCE/no fabricated OpenRouter refresh, Radius device/browser/live grant, native publication/store/host retirement and SDK/CLI account catalogue.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-openrouter-oauth-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-oauth-cli.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-oauth-manual.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-cli.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json"
+      ],
+      "files": [
+        "packages/core/src/providers/openrouter-oauth.ts",
+        "packages/core/src/providers/radius-oauth.ts"
+      ],
+      "gapClass": "none in authentication; catalogue review05a",
+      "minimumAction": "Reconcile OpenRouter Server operator/static/personalized catalogue under05a, not a new OAuth rewrite."
+    },
+    {
+      "id": "MOD-01.02d",
+      "requirement": "Complete Kimi Coding host composition, Meta Muse and xAI/Grok subscription flows.",
+      "status": "DELIVERED",
+      "current": "Kimi native issuer/live refresh/device-only hosts, Meta identity->key mint/remint, xAI refresh omission/expiry native sources and custom Settings/CLI/API scope delivered separately.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-kimi-oauth-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-kimi-oauth-live-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-kimi-oauth-cli.json",
+        "docs/audit/pi/evidence/MOD-01-kimi-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-meta-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-xai-oauth-server.json"
+      ],
+      "files": [
+        "packages/core/src/providers/kimi-coding-oauth.ts",
+        "packages/core/src/providers/meta-oauth.ts",
+        "packages/core/src/providers/xai-oauth.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Old Kimi helper-only table claim obsolete; reuse each issuer-specific evidence without cross-issuer authority."
+    },
+    {
+      "id": "MOD-01.02e",
+      "requirement": "Vertex API-key/ADC and the wider AWS profile, ECS and web-identity credential chain/region policy.",
+      "status": "PARTIAL",
+      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/web identity/static-leaf role chains now delivered, offline acquisition and region provenance covered.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-vertex-api-key.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-cli.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-server.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-sts.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-iam.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-workforce.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-url.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json"
+      ],
+      "files": [
+        "packages/core/src/providers/vertex-adc.ts",
+        "packages/core/src/providers/vertex-config.ts",
+        "packages/core/src/providers/bedrock-profile.ts",
+        "packages/core/src/providers/bedrock-config.ts"
+      ],
+      "gapClass": "functional/cloud-policy/security scope",
+      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, AWS profile leaves/SSO/process/scoped choice and meaningful ARN/endpoint policies; assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. Execution from mutable auth files needs explicit security disposition, not blind SDK inheritance."
+    },
+    {
+      "id": "MOD-01.03a",
+      "requirement": "Add native CLI credential/settings composition for Mistral and existing supplied-key SDK adapters that currently require trusted extension registration.",
+      "status": "DELIVERED",
+      "current": "Native factories/credentials/settings/scopes/network/offline/standalone modes delivered, including Mistral and originally SDK-only key families, Radius/gateways/plan identities and separate openai-native R/D.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01.03a-native-mistral-cli.json",
+        "docs/audit/pi/evidence/MOD-01-native-cli-c.json",
+        "docs/audit/pi/evidence/MOD-01-native-cli-a.json",
+        "docs/audit/pi/evidence/MOD-01-native-cli-cr.json",
+        "docs/audit/pi/evidence/MOD-01-native-cli-mixed.json",
+        "docs/audit/pi/evidence/MOD-01-token-plan-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-radius-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-ai-gateways-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-openai-native-cli.json"
+      ],
+      "files": [
+        "packages/cli/src/providers/provider-runtime.ts",
+        "packages/cli/src/providers/configured-providers.ts"
+      ],
+      "gapClass": "none for supplied-key composition",
+      "minimumAction": "Preserve bare extension names and defaults; later native receipts supersede old missing-adapter backlog, not its failed standard gates."
+    },
+    {
+      "id": "MOD-01.03b",
+      "requirement": "Add Server/Settings composition for SDK-only Ant Ling, Baseten, Fireworks, Hugging Face, Kimi Coding, Meta, MiniMax global/CN, OpenCode Go/Zen, Together, xAI and Xiaomi; expose intended built-in slots separately from custom dialects.",
+      "status": "DELIVERED",
+      "current": "Fourteen intended custom dialects/native constructors/encrypted CRUD/import/Test409/rotation/restart/real Settings evidence, original builtin slots separate.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-server-native-dialects.json",
+        "docs/audit/pi/evidence/MOD-01-static-discovery-refusal.json",
+        "docs/audit/pi/evidence/MOD-01-token-plan-hosts.json"
+      ],
+      "files": [
+        "packages/server/src/runtime/provider-registry.ts",
+        "packages/web/src/components/EcosystemSettings.tsx"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Reuse operator/native constructor and static-discovery honesty, no fabricated provider service readiness."
+    },
+    {
+      "id": "MOD-01.03c",
+      "requirement": "Complete specialized classifier/image host composition, including TypeSafe and mixed gateways.",
+      "status": "DELIVERED",
+      "current": "Explicit live auxiliary sources/guest error contracts/mixed image and classifier routes/native tools/accounting delivered; TypeSafe no fake chat rows.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-typesafe-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-auxiliary-services.json",
+        "docs/audit/pi/evidence/MOD-01-openai-native-cli.json",
+        "docs/audit/pi/evidence/MOD-01-ai-gateways-hosts.json"
+      ],
+      "files": [
+        "packages/core/src/providers/specialized-models.ts",
+        "packages/core/src/tools/codemode.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Keep scalar versus distribution/media/source privilege distinct; no label-derived native services."
+    },
+    {
+      "id": "MOD-01.04a",
+      "requirement": "Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors.",
+      "status": "PARTIAL",
+      "current": "Budget/reasoning/continuation closed, effective blockImages before routing/after hooks, native Bedrock custom-header/signing gap fixed, physical media policy proven.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-ecs-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json"
+      ],
+      "files": [
+        "packages/core/src/providers/index.ts",
+        "packages/core/src/agent/provider-turn.ts"
+      ],
+      "gapClass": "effective-policy review",
+      "minimumAction": "Compare remaining omitted/explicit sampling/tool/default/capability exceptions to pinned source and actual owners. Count source exceptions, not every model as new integration; no stale placeholder backlog."
+    },
+    {
+      "id": "MOD-01.04b",
+      "requirement": "Complete supported model-owned media preparation; preserve the now-closed MOD-03 reasoning/replay contract when adding or changing native owners.",
+      "status": "DONE",
+      "current": "Eight explicit requirements audited: bounded real codec/trusted policy/physical+routed new prompt-queue/post-hook tool prep/failure asymmetry/exact persist-switch-restart/cancellation/native data-only URL and prepared RPC event contract.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
+        "docs/audit/pi/evidence/MOD-01-image-preparation-core.json",
+        "docs/audit/pi/evidence/MOD-01-image-preparation-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-image-preparation-routed.json"
+      ],
+      "files": [
+        "packages/core/src/media/image-preparation.ts",
+        "packages/core/src/media/message-images.ts",
+        "packages/core/src/agent/runtime.ts"
+      ],
+      "gapClass": "none",
+      "minimumAction": "Do not redo or route speculatively; no arbitrary URL-fetch protocol/all-format/global certificate required."
+    },
+    {
+      "id": "MOD-01.05a",
+      "requirement": "Specify static/discovered/operator catalogue precedence, freshness and invalidation for all admitted integrations, including account-filtered rows.",
+      "status": "REVIEW",
+      "current": "Passive/static/discovered/account-owned sources and scope-current caches implemented. OpenRouter foreground SDK/CLI personalization separate from Server operator models.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-static-discovery-refusal.json",
+        "docs/audit/pi/evidence/MOD-01-radius-catalogue.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json",
+        "docs/audit/pi/evidence/MOD-03-closure.json"
+      ],
+      "files": [
+        "packages/server/src/runtime/model-catalog.ts",
+        "packages/core/src/providers/openrouter-user-models.ts",
+        "packages/core/src/providers/radius-catalogue.ts"
+      ],
+      "gapClass": "targeted catalogue contract review",
+      "minimumAction": "Inspect actual Server import/operator/default/native constructor paths before calling missing personalization a functional bug; document precedence/freshness/invalidation with precise proof. No replacement cache framework."
+    },
+    {
+      "id": "MOD-01.05b",
+      "requirement": "Complete offline startup/reload/selection and failure behaviour across CLI/RPC/Server/Settings.",
+      "status": "REVIEW",
+      "current": "Bounded native source-specific passive/offline/no-command/no-refresh/withdrawal proofs across old/new integrations, including new role-vending refusal with static-file positive.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-cli.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json",
+        "docs/audit/pi/evidence/MOD-03-closure.json"
+      ],
+      "files": [
+        "packages/cli/src/providers/provider-runtime.ts",
+        "packages/cli/src/rpc/rpc-server.ts",
+        "packages/server/src/runtime/model-catalog.ts"
+      ],
+      "gapClass": "final cross-source contract review",
+      "minimumAction": "Check only uncovered meaningful host/authority combinations; extend new cloud gates as delivered, not exhaustive provider-host matrix. Offline is not universal inference firewall."
+    },
+    {
+      "id": "MOD-01.06a",
+      "requirement": "Bind implemented rows to Core wire, installed public declarations/runtime, emitted CLI/RPC and authenticated HTTP evidence.",
+      "status": "REVIEW",
+      "current": "Compiled public API/strict declaration, emitted CLI/RPC/HTTP/native transport evidence and historical installed proofs exist; direct product XML dependency explicitly locked/resolved production graph.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-sdk.json",
+        "docs/audit/pi/evidence/MOD-01-typesafe-hosts.json",
+        "docs/audit/pi/evidence/MOD-03-closure.json"
+      ],
+      "files": [
+        "packages/core/package.json",
+        ".docker/Dockerfile.test"
+      ],
+      "gapClass": "final artifact/package-boundary review",
+      "minimumAction": "Check changed package/declaration boundary only if actual unresolved packaging risk; no automatic reinstall/SDK capture/full matrix. Reused evidence stays source-scoped."
+    },
+    {
+      "id": "MOD-01.06b",
+      "requirement": "Exercise Settings/configuration and real native conversation paths with loopback upstreams.",
+      "status": "DELIVERED",
+      "current": "Real Settings/native HTTP auth/import/inference/reload/navigation/disconnect with owned loopback, actual key/pointer interactions, preserved failures; new cloud modes reuse already-rendered readonly DTO shape without browser authority.",
+      "evidence": [
+        "docs/audit/pi/evidence/MOD-01-server-native-dialects.json",
+        "docs/audit/pi/evidence/MOD-01-openrouter-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-meta-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-xai-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json"
+      ],
+      "files": [
+        "packages/web/src/components/EcosystemSettings.tsx",
+        "packages/server/src/api/provider-registry-routes.ts"
+      ],
+      "gapClass": "none in delivered UI scope",
+      "minimumAction": "No force/offline/PWA workaround or browser replay for unchanged readonly layout; final evidence disposition06c."
+    },
+    {
+      "id": "MOD-01.06c",
+      "requirement": "Freeze final inputs and run the standard Docker gates; reconcile requirements, results and commits in AUDIT-5.",
+      "status": "OPEN",
+      "current": "Each delivered increment has frozen source/image/hash-bound bounded tests/types/docs/commit outcomes, but mandatory functional/policy/catalogue scope is not yet finished.",
+      "evidence": [
+        "docs/audit/pi/MOD-01-tracking.md",
+        "docs/audit/pi/AUDIT-5.md",
+        "docs/audit/pi/evidence/MOD-03-closure.json"
+      ],
+      "files": [],
+      "gapClass": "final audit",
+      "minimumAction": "After02e/04a/05a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
+    }
+  ],
+  "importantCorrections": [
+    "MOD-03 and image04b closed, not work to redeliver; 1649 typed entries are not1649 distinct usable models",
+    "Kimi helper-only/native supplied-key/Radius/gateway missing statements in old table obsolete after native deliveries",
+    "AWS_REGION-only/static-only profile and ECS/web missing descriptions superseded by current native source receipts; not all profile leaf/region policy completion",
+    "No automatic installed/root/browser/production or new SDK acquisition from old qualification rows; historical failures/exactly three acceptances preserved",
+    "SDK ambient Anthropic profiles deliberately disabled; no parser missing there",
+    "Current unresolved executable auth-file mechanisms require a deliberate security/trust decision, not automatic execution merely because a transitive SDK supports it"
+  ],
+  "validation": {
+    "type": "Source/document reconciliation only",
+    "runtimeTests": "No new runtime/type/SDK/browser/installed/production test execution in this review; scoped deliveries cite their own gates",
+    "lintDocs": "PASS",
+    "diffCheck": "PASS",
+    "log": "/tmp/mod01-requirement-review/docs.log"
+  },
+  "auditState": "MOD-01 IN PROGRESS;04b DONE;MOD-03 DONE;38/43;runtime134 OPEN;exactly three historical acceptances unchanged;goal active/not completed."
+}

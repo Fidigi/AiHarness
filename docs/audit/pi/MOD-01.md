@@ -561,6 +561,8 @@ Use disposable credentials and loopback/intercepted transports. OAuth controls m
 
 The register below preserves all 23 requirements and their acceptance boundaries; it is not a mandate to restart them in numerical order. Each task requires implementation, focused regression evidence, documentation and a bounded commit. Preserve old failed receipts; a new successful gate does not explain or erase them. Reuse existing Core/provider, emitted CLI, installed-package, HTTP and browser families rather than adding another test framework.
 
+**Current all23-row review — 2026-11-15:** [requirement-to-implementation/proof/gap/action audit](./evidence/MOD-01-requirement-review-20261115.json), baseline `7e0e8ba`, supersedes old missing-work interpretations below without changing their outcomes.14 delivered +04b DONE, one historical gate disposition, seven unresolved/review rows; no parent acceptance percentage or global current-image certificate. Cloud02e, effective policy01b/04a, catalogue05a/offline05b and final package/evidence06a/06c remain precise work, not another transport/OAuth/MOD-03/media rewrite. Mutable auth-file execution needs explicit security/trust disposition; QUA/manual accounts and exact historical acceptances stay separate. No runtime/SDK/global qualification campaign in this documentary review; MOD-01 IN PROGRESS.
+
 ### 0. Secure the existing implementation
 
 | Task | Work and acceptance | State |
