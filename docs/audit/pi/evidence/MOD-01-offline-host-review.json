@@ -1,0 +1,102 @@
+{
+  "schema": "ai-harness.mod-01.offline-host-review.v1",
+  "date": "2026-11-15",
+  "baseline": "2fcac44",
+  "status": "MOD-01.05b DELIVERED under current source-specific native contracts; MOD-01 IN PROGRESS",
+  "requirement": "Complete offline startup/reload/selection and failure behaviour across CLI/RPC/Server/Settings.",
+  "acceptance": "Zero unintended discovery/command/refresh requests, retained usable static metadata, honest unknown availability and rejected stale authority.",
+  "actualGaps": [
+    "Server cached a rejected cold credential-initialization promise permanently. Even after a synthetic issuer recovered, every subsequent authorized Settings/auth request returned500 without trying admission again.",
+    "Generic built-in cold credential resolution omitted the existing host AbortSignal. Shutdown aborted the host but not the held issuer request, leaving refresh publication outside that lifetime."
+  ],
+  "implementation": {
+    "file": "packages/server/src/index.ts",
+    "recovery": "Keep a shared in-flight/successful initialization promise. Clear only this failed promise on an active matching runtime. Original callers still fail; a later incoming authorized HTTP request can perform fresh admission. No timer, background/internal retry or transparent success.",
+    "lifetime": "Pass runtime.controller.signal into existing built-in credentials.resolve. Host shutdown/replacement owns the shared admission, not one caller; Core existing bounded fetch/CAS/store checks refuse late publication.",
+    "reAdmissionBoundary": "A new authorized request may re-run the existing trusted bootstrap, including configured operator credential commands. This is not an auth-only/background retry. Successful admission stays cached; closed runtime failure cannot reset or revive its owner.",
+    "unchanged": "Credential priority, fail-closed errors, redaction, store format/CAS, middleware authorization, passive route exemptions, issuer codecs, model selection, native replay and UI/HTTP shapes. No execution of auth-file credential_process/ADC commands."
+  },
+  "requirementReview": [
+    {
+      "clause": "Offline startup and zero unintended discovery/command/refresh",
+      "implementation": ["packages/cli/src/cli/offline-mode.ts", "packages/cli/src/providers/provider-runtime.ts", "packages/core/src/providers/offline-policy.test.ts"],
+      "proof": "Existing Core6 and actual CLI29 now pass. Flag/environment suppression covers print/JSON/RPC, commands/expired store bytes/model HTTP; online controls prove those mechanisms really run. Explicit extensions/tools/selected cloud-like inference remain allowed. No fallback to a lower-priority stored identity when a selected command is denied."
+    },
+    {
+      "clause": "Reload and selection",
+      "implementation": ["packages/cli/src/rpc/rpc-server.ts", "packages/cli/src/rpc/rpc-controller.ts", "packages/cli/src/commands/handler.ts"],
+      "proof": "Actual regular/fullscreen catalogue and /reload preserve startup-captured policy despite extension env mutation; RPC startup/index/cycle uses captured offline and exact physical selected models. Failed live discovery retains configured selection without remote-body disclosure. RPC reload_context_settings is compaction/branchSummary publication, not a new credential-network-policy action."
+    },
+    {
+      "clause": "New cloud source acquisition/current authority",
+      "implementation": ["packages/core/src/providers/bedrock-config.ts", "packages/core/src/providers/bedrock-profile.ts", "packages/core/src/providers/vertex-adc.ts", "packages/cli/src/providers/provider-runtime.ts"],
+      "proof": "Existing distinct source receipts below bind offline no ADC/WIF/ECS/web admission, captured allowNetwork=false refusing role/root/nested WebIdentity mint, static-file/direct-key inference retained, current local bytes before dispatch and retired owners. New ARN/endpoint inference policy does not retarget STS or change these gates. No new all-source host campaign."
+    },
+    {
+      "clause": "Server/Settings failure, passive reads and retirement",
+      "implementation": ["packages/server/src/index.ts", "packages/web/src/components/EcosystemSettings.tsx"],
+      "proof": "Two new actual HTTP cases use the Settings auth endpoint: denied caller/startup0 requests, first refresh503->HTTP500 with unchanged encrypted bytes/safe error, next authorized request recovers200 and caches success; held cold refresh aborts on shutdown and cannot write late credentials. Existing readiness3, passive MCP1, native Copilot admission/shutdown2, privacy1 and two public emitted Server probes pass. Existing scoped native Settings/API receipts preserve readonly source metadata/Test409/Disconnect409/ownership; no changed frontend presentation or browser authority needs new browser execution."
+    },
+    {
+      "clause": "Static metadata, honest availability and stale-authority refusal",
+      "implementation": ["packages/core/src/providers/model-catalog.ts", "packages/server/src/runtime/model-catalog.ts", "packages/server/src/runtime/provider-registry.ts"],
+      "proof": "Reuse delivered05a contracts/proof: published/configured declarations are not live account/credential validation; authoritative current account filtering follows operator metadata, empty/withdrawn/replaced sources cannot borrow previous availability. Same-source discovery failure retention, TTL and source invalidation remain scoped, not an entitlement certificate or hidden OpenRouter personalization."
+    }
+  ],
+  "sourceContractLimits": [
+    "CLI/RPC --offline suppresses automatic discovery, credential commands and refresh, not every inference/tool/extension network operation. Fresh explicit credentials and static file signing can remain usable.",
+    "Server remains its existing online backend: authorized protected HTTP admission can execute trusted configured commands/refresh. Browser connectivity is not backend credential revocation. No previously absent global Server offline switch, universal zero-network promise, PWA workaround or hidden refresh action is introduced.",
+    "Metadata-only cloud admission is not valid credentials/entitlement. Configured/static availability and current account grants remain distinct. Existing source-specific offline failures stay explicit, not factory/mock fallback.",
+    "Future02e source additions must retain these captured gates/current-authority/refusal contracts and add only their changed mechanism proof; this review does not qualify unimplemented cloud mechanisms. Final06c still audits all requirements."
+  ],
+  "reusedScopedReceipts": [
+    "docs/audit/pi/evidence/MOD-01-catalogue-contract-review.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
+    "docs/audit/pi/evidence/MOD-01-bedrock-arn-region.json",
+    "docs/audit/pi/evidence/MOD-01-vertex-adc-cli.json",
+    "docs/audit/pi/evidence/MOD-01-vertex-adc-server.json",
+    "docs/audit/pi/evidence/MOD-01-anthropic-wif-cli.json",
+    "docs/audit/pi/evidence/MOD-01-radius-oauth-cli.json",
+    "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json",
+    "docs/audit/pi/evidence/MOD-01-server-native-dialects.json",
+    "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
+    "docs/audit/pi/evidence/MOD-01-xai-oauth-server.json",
+    "docs/audit/pi/evidence/MOD-03-closure.json"
+  ],
+  "qualification": {
+    "image": "ai-harness:mod01-credential-recovery-owned",
+    "imageId": "sha256:5adb60ac6c5a86f7cd4848b58c1421348b77811346a40db6c570c7b045dc1ce3",
+    "runtime": "Docker --network none, CI=true, node --no-maglev; canonical TypeScript wrapper retains --no-maglev/--no-turbofan. Synthetic stores/HOME/credentials and mocked or loopback transports only.",
+    "newTest": {"file": "packages/server/src/api/provider-credential-recovery-http.test.ts", "sha256": "e35a93729c43dd795ee93efedc722def3de76b5f4252dd46c67badb0813dd3ff"},
+    "sourceWitness": {"packages/server/src/index.ts": "df5395b5de06559a0986fb74986e3ae9dd3e302eb2dbe96d0be17f9f6ecacac4"},
+    "sourceWitnessDiff": "/tmp/mod01-credential-recovery/runtime-witness.diff (empty)",
+    "strictChangedRoots": 1,
+    "runtimeCases": 44,
+    "newCases": 2,
+    "reusedCases": 42,
+    "separateCompiledProbes": 2,
+    "compiledProbe": {"file": "packages/server/src/api/session-provider-redaction.process.mjs", "sha256": "789db48daf3ce6aa2b0c90af23aacb414509929874caa732205b57b94866d321", "modes": ["cold", "boundary"], "result": "SESSION_PROVIDER_HTTP_OK cold/boundary; plain Node actual emitted Core/Server outside Vitest aliases"},
+    "subsets": "CLI offline29 + Core passive6 + readiness3 + privacy1 + newHTTP2 =41; passive MCP1/42 unselected; Copilot cold/native admission+shutdown2/6 unselected. Two separate compiled probes, not46 Vitest cases or fresh full MOD-03 credit.",
+    "logs": {
+      "red": "/tmp/mod01-credential-recovery/red.log (recovery1 RED, 500 after issuer recovery)",
+      "retirementRed": "/tmp/mod01-credential-recovery/retirement-red.log (retirement1 RED/one unselected, issuer signal remained live)",
+      "build": "/tmp/mod01-credential-recovery/build-owned.log (build/workspace types PASS)",
+      "focused": "/tmp/mod01-credential-recovery/focused.log (first candidate2 PASS)",
+      "final": "/tmp/mod01-credential-recovery/owned.log (44 PASS/one strict root/two compiled probes PASS)",
+      "docs": "/tmp/mod01-credential-recovery/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-credential-recovery-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-credential-recovery-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/server/src/api/provider-credential-recovery-http.test.ts packages/core/src/providers/offline-policy.test.ts packages/cli/src/cli/offline-mode-process.test.ts packages/server/src/start-readiness.test.ts packages/server/src/api/credential-privacy-http.test.ts --maxWorkers=1'",
+      "node --no-maglev node_modules/vitest/vitest.mjs run packages/server/src/web-server.test.ts --maxWorkers=1 -t 'initial MCP inventory GET' (same isolated image)",
+      "node --no-maglev node_modules/vitest/vitest.mjs run packages/server/src/api/github-copilot-http.test.ts --maxWorkers=1 -t 'logs in through HTTP|work on shutdown' (same isolated image)",
+      "node --no-maglev packages/server/src/api/session-provider-redaction.process.mjs cold; node --no-maglev packages/server/src/api/session-provider-redaction.process.mjs boundary (same isolated image)",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "outcome": "05b moves REVIEW->DELIVERED after concrete failure/lifetime fixes and clause-by-clause current-source review.17 DELIVERED +04b DONE =18 functional rows; one historical; four unresolved01b/02e/04a/06c. Canonical23 statements/order unchanged. No parent/model percentage/global current-image certificate. MOD-01 IN PROGRESS/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged; no new acceptance or incident repair."
+}

@@ -1,20 +1,21 @@
 {
   "schema": "ai-harness.mod-01.requirement-review.v1",
   "date": "2026-11-15",
-  "baseline": "66ed870",
+  "baseline": "2fcac44",
+  "packageBoundaryBaseline": "66ed870",
   "initialBaseline": "7e0e8ba",
   "catalogueBaseline": "7f5d625",
   "anthropicPolicyReviewBaseline": "05d15d4",
   "bedrockRegionBaseline": "abe9323",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
-  "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. Five unresolved/review rows remain;00b historical outcomes/exactly three acceptances unchanged.",
+  "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. 05b current source/host review and cold-admission recovery/lifetime fixes now delivered with44 Docker cases/two compiled probes/one strict root, not a global offline firewall or all-provider certificate. Four unresolved rows remain;00b historical outcomes/exactly three acceptances unchanged.",
   "counts": {
-    "DELIVERED": 16,
+    "DELIVERED": 17,
     "HISTORICAL": 1,
     "PARTIAL": 3,
     "DONE": 1,
-    "REVIEW": 1,
+    "REVIEW": 0,
     "OPEN": 1
   },
   "requirements": [
@@ -391,9 +392,10 @@
     {
       "id": "MOD-01.05b",
       "requirement": "Complete offline startup/reload/selection and failure behaviour across CLI/RPC/Server/Settings.",
-      "status": "REVIEW",
-      "current": "Bounded native source-specific passive/offline/no-command/no-refresh/withdrawal proofs across old/new integrations, including new role-vending refusal with static-file positive.",
+      "status": "DELIVERED",
+      "current": "Clause-by-clause current source/host contracts reviewed: captured CLI/RPC offline/no-command/no-refresh, actual reload/selection/failure, static/cloud/current authority and Server/Settings passive ownership. Two real cold Server defects fixed: poisoned failed initialization and missing host lifetime on generic refresh.44 runtime/two compiled probes/one strict root; no global Server offline switch or inference firewall.",
       "evidence": [
+        "docs/audit/pi/evidence/MOD-01-offline-host-review.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
@@ -404,10 +406,12 @@
       "files": [
         "packages/cli/src/providers/provider-runtime.ts",
         "packages/cli/src/rpc/rpc-server.ts",
-        "packages/server/src/runtime/model-catalog.ts"
+        "packages/server/src/index.ts",
+        "packages/server/src/runtime/model-catalog.ts",
+        "packages/web/src/components/EcosystemSettings.tsx"
       ],
-      "gapClass": "final cross-source contract review",
-      "minimumAction": "Check only uncovered meaningful host/authority combinations; extend new cloud gates as delivered, not exhaustive provider-host matrix. Offline is not universal inference firewall."
+      "gapClass": "none in current source/host contracts",
+      "minimumAction": "Preserve current per-source automatic-network/foreground/lifetime/availability contracts. Future02e sources must carry their affected gate proof; no hidden global Server offline switch, PWA workaround or all-provider host matrix. Final06c audits changed evidence."
     },
     {
       "id": "MOD-01.06a",

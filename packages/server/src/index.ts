@@ -203,7 +203,7 @@ function initializeCredentials(
   settings: AgentSettings,
 ): Promise<void> {
   if (runtime.initialization) return runtime.initialization;
-  runtime.initialization = (async () => {
+  const initialization = (async () => {
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
     const masterKey = process.env.AI_HARNESS_MASTER_KEY;
     const store = masterKey ? new EncryptedCredentialStore(runtime.filePath, masterKey) : undefined;
@@ -234,6 +234,7 @@ function initializeCredentials(
       }
       const resolved = await credentials.resolve(type, {
         env: credentialEnvironment,
+        signal: runtime.controller.signal,
         oauth: providerOAuthRefresh(type),
       });
       if (runtime.closed) throw new Error('Application runtime is no longer active.');
@@ -297,7 +298,12 @@ function initializeCredentials(
     runtime.mcpOAuth = mcpOAuth;
     runtime.mcpOAuthFlows = mcpOAuthFlows;
   })();
-  return runtime.initialization;
+  runtime.initialization = initialization;
+  // Preserve this request's failure; only a later explicit request can retry admission.
+  void initialization.catch(() => {
+    if (!runtime.closed && runtime.initialization === initialization) runtime.initialization = undefined;
+  });
+  return initialization;
 }
 
 /** Get or create the singleton proxy server */
