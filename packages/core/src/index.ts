@@ -12,7 +12,7 @@ export * from './types/resource-batches.js';
 export * from './sdk/index.js';
 
 // Explicit model-owned media preparation (hosts choose prompt/tool persistence policy).
-export { prepareMessageImages } from './media/message-images.js';
+export { prepareMessageImages, resolveRoutedImageTarget } from './media/message-images.js';
 export { prepareModelImage } from './media/image-preparation.js';
 export type { PreparedModelImage, ImageResizeLimits } from './media/image-preparation.js';
 

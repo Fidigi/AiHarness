@@ -1,4 +1,4 @@
-import type { ChatResponse, ChatToolDefinition } from '../providers/index.js';
+import type { AiProvider, ChatResponse, ChatToolDefinition } from '../providers/index.js';
 import { settleSessionCacheWarmer } from '../providers/cache-warmer.js';
 import type {
   ExtensionRegistry,
@@ -13,6 +13,7 @@ import { ToolProgressChannel, type ToolProgressSnapshot } from './tool-progress.
 import { ProviderContextOverflowError } from '../providers/context-overflow.js';
 import { ProviderRequestContextError } from './provider-request-estimate.js';
 import { prepareMessageImages } from '../media/message-images.js';
+import { awaitAgentAdmission } from './prestart-admission.js';
 import { ownToolResult } from './tool-result.js';
 import { nestedToolScope } from './nested-tools.js';
 import { copyAgentRunTrigger, copyExtensionResult, type AgentRunTrigger, type ExtensionCustomTrigger } from '../extensions/execution-hooks.js';
@@ -73,6 +74,8 @@ export interface ToolLoopOptions {
   provider?: string;
   /** Trusted host image policy for new post-hook tool results only. */
   imageAutoResize?: boolean;
+  /** Resolve the witnessed physical responder for routed tool-image policy, never invoke routing. */
+  resolveImageProvider?(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
   trigger?: AgentRunTrigger;
   /** Process-local scrubber applied before extension/tool output is persisted or emitted. */
   redactText?(value: string): string;
@@ -361,8 +364,12 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<string> {
         });
         if (resultHook.cancelled) throw new Error('Extension tool result cancelled.');
         const owned = ownToolResult(resultHook.data.result, options.redactText);
-        const images = options.toolContext.provider && !response.selection
-          ? await prepareMessageImages(options.toolContext.provider, response.model, owned.content, owned.blocks, 'tool',
+        const imageProvider = response.selection
+          ? response.provider && owned.blocks.some(block => block.type === 'image')
+            ? await awaitAgentAdmission(() => Promise.resolve(options.resolveImageProvider?.(response.provider!)), options.signal ?? new AbortController().signal) : undefined
+          : options.toolContext.provider;
+        const images = imageProvider
+          ? await prepareMessageImages(imageProvider, response.model, owned.content, owned.blocks, 'tool',
             { autoResize: options.imageAutoResize }, options.signal) : owned;
         content = images.content;
         blocks = (images.blocks ?? []).filter((block): block is Extract<MessageContentBlock, { type: 'image' }> => block.type === 'image');

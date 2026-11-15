@@ -28,6 +28,7 @@ import {
   getProviderPublishedModels,
   getSupportedThinkingLevels,
   prepareMessageImages,
+  resolveRoutedImageTarget,
   normalizeProviderUsage,
   resolveAgentCompactionContextWindow,
   resolveAgentCompactionSettings,
@@ -1297,8 +1298,9 @@ export class RpcController {
 
         while (prompt) {
           if (signal.aborted) throw Object.assign(new Error("Exécution de l'agent interrompue."), { name: 'AbortError' });
-          const prepared = this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model) ? prompt
-            : await prepareMessageImages(this.context.provider, this.model, prompt.content, prompt.blocks, 'prompt', this.context.agentSettings?.().images, signal);
+          const routed = prompt.blocks.some(block => block.type === 'image') && this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model)
+            ? await resolveRoutedImageTarget(this.context.sessionManager, this.currentSessionId, this.context.extensionRegistry.virtualModels, name => this.configuredProvider(name), signal) : undefined;
+          const prepared = await prepareMessageImages(routed?.provider ?? this.context.provider, routed?.model ?? this.model, prompt.content, prompt.blocks, 'prompt', this.context.agentSettings?.().images, signal);
           await this.context.sessionManager.addMessage(this.currentSessionId, {
             role: 'user',
             content: prepared.content,
@@ -1313,6 +1315,7 @@ export class RpcController {
             sessionId: this.currentSessionId,
             extensionRegistry: this.context.extensionRegistry,
             imageAutoResize: this.context.agentSettings?.().images?.autoResize,
+            resolveImageProvider: name => this.configuredProvider(name),
             tools: resolveTools(),
             resolveTools,
             executeTool: (name, input, context, executionSignal) => {
@@ -1440,8 +1443,9 @@ export class RpcController {
             beforeNextTurn: async () => {
               const steering = this.takeNextSteering();
               if (!steering) return;
-              const prepared = this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model) ? steering
-                : await prepareMessageImages(this.context.provider, this.model, steering.content, steering.blocks, 'prompt', this.context.agentSettings?.().images, signal);
+              const routed = steering.blocks.some(block => block.type === 'image') && this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model)
+                ? await resolveRoutedImageTarget(this.context.sessionManager, this.currentSessionId, this.context.extensionRegistry.virtualModels, name => this.configuredProvider(name), signal) : undefined;
+              const prepared = await prepareMessageImages(routed?.provider ?? this.context.provider, routed?.model ?? this.model, steering.content, steering.blocks, 'prompt', this.context.agentSettings?.().images, signal);
               await this.events.continueAgent(prepared.content, prepared.blocks);
               await this.context.sessionManager.addMessage(this.currentSessionId, {
                 role: 'user',

@@ -1,5 +1,5 @@
 import type { AiProvider, ChatResponse, ChatToolDefinition, ThinkingBudgets } from '../providers/index.js';
-import { prepareMessageImages } from '../media/message-images.js';
+import { prepareMessageImages, resolveRoutedImageTarget } from '../media/message-images.js';
 import { copyThinkingBudgets } from '../providers/thinking-budgets.js';
 import type { CredentialRedactionStream } from '../providers/credentials.js';
 import type { SpecializedProviderSource } from '../providers/specialized-models.js';
@@ -656,6 +656,7 @@ export class AgentRuntime {
       extensionRegistry: this.extensionRegistry,
       toolContext: await this.toolContext(run, provider, request),
       provider: run.snapshot.provider,
+      resolveImageProvider: name => this.resolveProvider(name),
       imageAutoResize: (await awaitAgentAdmission(() => Promise.resolve(this.resolveImageOptions?.(run.snapshot.cwd)), run.controller.signal))?.autoResize,
       trigger: request.trigger,
       tools: preparedTools.definitions(),
@@ -871,11 +872,15 @@ export class AgentRuntime {
 
   private async prepareUserImages(run: ActiveRun, request: StartAgentRunRequest, content: string, blocks?: MessageContentBlock[]) {
     if (!blocks?.some(block => block.type === 'image')) return { content, blocks };
-    const provider = await awaitAgentAdmission(() => Promise.resolve(this.resolveProvider(run.snapshot.provider)), run.controller.signal);
+    const provider = await awaitAgentAdmission(async () => await this.resolveProvider(run.snapshot.provider)
+      ?? this.extensionRegistry.getVirtualProvider(run.snapshot.provider), run.controller.signal);
     const model = request.model ?? provider?.getConfiguredModel();
-    if (!provider || this.extensionRegistry.virtualModels.get(run.snapshot.provider, model)) return { content, blocks };
+    if (!provider) return { content, blocks };
+    const routed = this.extensionRegistry.virtualModels.get(run.snapshot.provider, model)
+      ? await resolveRoutedImageTarget(this.sessionManager, run.snapshot.sessionId, this.extensionRegistry.virtualModels,
+        name => this.resolveProvider(name), run.controller.signal) : undefined;
     const options = await awaitAgentAdmission(() => Promise.resolve(this.resolveImageOptions?.(run.snapshot.cwd)), run.controller.signal);
-    return prepareMessageImages(provider, model, content, blocks, 'prompt', options, run.controller.signal);
+    return prepareMessageImages(routed?.provider ?? provider, routed?.model ?? model, content, blocks, 'prompt', options, run.controller.signal);
   }
 
   private takeQueued(run: ActiveRun, kind: AgentMessageQueueKind): QueuedAgentMessage[] {

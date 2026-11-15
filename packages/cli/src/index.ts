@@ -24,6 +24,7 @@ import {
   JsonlSessionStore,
   loadAgentSettings,
   prepareMessageImages,
+  resolveRoutedImageTarget,
   loadPromptFiles,
   McpOAuthCredentialManager,
   McpSessionHost,
@@ -1644,8 +1645,9 @@ async function main(): Promise<void> {
               (queued.imageBlocks ?? []).filter(block => block.type !== 'text'),
             ),
           ];
-          const prepared = extensionRegistry.virtualModels.get(providerName, providerModel) ? { content: userInput, blocks: userBlocks }
-            : await prepareMessageImages(provider, providerModel, userInput, userBlocks, 'prompt', settingsResolution.settings.images, operationController.signal);
+          const routed = userBlocks.some(block => block.type === 'image') && extensionRegistry.virtualModels.get(providerName, providerModel)
+            ? await resolveRoutedImageTarget(sessionManager, currentSessionId, extensionRegistry.virtualModels, name => ctx.providers.get(name), operationController.signal) : undefined;
+          const prepared = await prepareMessageImages(routed?.provider ?? provider, routed?.model ?? providerModel, userInput, userBlocks, 'prompt', settingsResolution.settings.images, operationController.signal);
           if (announceJson) await jsonOutput?.events.startAgent(prepared.content, prepared.blocks);
           await sessionManager.addMessage(currentSessionId, {
             role: 'user',
@@ -1759,6 +1761,7 @@ async function main(): Promise<void> {
         sessionId: currentSessionId,
         extensionRegistry,
         imageAutoResize: settingsResolution.settings.images?.autoResize,
+        resolveImageProvider: name => ctx.providers.get(name),
         tools: toChatToolDefinitions(toolLoadout.getTools()),
         resolveTools: () => toChatToolDefinitions(toolLoadout.getTools()),
         executeTool: executeSelectedTool,
