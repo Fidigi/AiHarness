@@ -1,0 +1,73 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-14",
+  "baseline": "6123bda",
+  "scope": "Standard-source and post-file-STS Vertex ADC IAM impersonation through existing trusted file descriptors; not all Google credential mechanisms or model/host matrix",
+  "implementation": "ADC document unwraps impersonated_service_account in bounded source order (max4 IAM steps including optional external-account IAM), keeps root quota for final inference and validates each source quota/target/delegates before mint. Fixed standard iamcredentials.googleapis.com/project -/serviceAccounts canonical authority only; safe encoded principal decodes/validates, native generateIdToken input alias normalizes to access-token request. Reject endpoint/universe retarget, malformed source, delegates beyond10/bounded text, noninteger/out-of-range lifetime. Standard step delegates default[] and source quota follow source-client policy; external optional IAM omits delegates/source-quota and uses service_account_impersonation.token_lifetime_seconds, default3600/max43200. Root/leaf source exchange reuses existing user/RSA/STS/bounded files/signals/headers. Each IAM step sends only previous source token to fixed authority with cloud-platform scope/requested lifetime. Distinct final accessToken and bounded RFC3339 expireTime drive cache/foreground refresh; initial/intermediate token never inference fallback. All tokens enroll, no auth retries/manual redirects/bounded replies/whole-chain15s; file fingerprint reread before every next IAM call and after last prevents withdrawal advancing or late publication. Latest-success sequencing/caller independence unchanged. No new store/SDK dependency/public config/host code/browser.",
+  "qualification": {
+    "environment": "Docker --network none/CI=true only, synthetic files/HOME/RSA/accounts/delegates/store material, mocked authorities and verified-loopback TLS process transport. No real/personal credentials/account switches/SDK acquisition/install/protected-container/local generated edits.",
+    "image": "ai-harness:mod01-vertex-iam-owned",
+    "imageId": "sha256:8d8dddfb83b63ea94c9bd708637102d9cf5d63987b53250dc57a0b7aba3e9ab5",
+    "build": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-vertex-iam-owned; four builds/workspace-parity types PASS",
+    "buildLog": "/tmp/mod01-vertex-iam/build-owned.log",
+    "strict": {
+      "passed": true,
+      "roots": 4,
+      "config": "/tmp/mod01-vertex-iam/strict.json",
+      "log": "/tmp/mod01-vertex-iam/owned.log"
+    },
+    "runtime": {
+      "passed": 27,
+      "failed": 0,
+      "new": 9,
+      "files": [
+        "packages/core/src/providers/vertex-adc-iam.test.ts",
+        "packages/core/src/providers/vertex-adc-external.test.ts",
+        "packages/core/src/providers/vertex-adc.test.ts",
+        "packages/cli/src/cli/vertex-adc-process.test.ts"
+      ],
+      "log": "/tmp/mod01-vertex-iam/owned.log",
+      "meaning": "Eight new SDK cases: user/RSA/post-STS IAM→G/cache/secrets/quota/scope/lifetime; nested source order/encoded ID URL alias/final-expiry refresh; authority/schema/depth/delegates/lifetime preflight; bounded invalid/denial/expiry/redirect without fallback or retry; file withdrawal after source/after IAM; hostile body cancellation and late older exchange cannot replace newer cache. One new emitted CLI case below;18 existing common reader/STS/user/RSA/key/lifetime/CLI cases reused once."
+    },
+    "actualCli": {
+      "newCases": 1,
+      "reusedCases": 4,
+      "includedInRuntime": true,
+      "file": "packages/cli/src/cli/vertex-adc-process.test.ts",
+      "meaning": "New json-iam fixture label invokes actual --mode json: passive listing/auth0 TLS, user source→IAM→G and separate-process source→IAM→signed G. Exact default delegates/cloud-platform/lifetime600/source quota, initial token source-only/final token inference-only, echoed initial/final secret expurgation from public/journal, offline/removed ADC file refusal. Six additional TLS requests (two OAuth/two IAM/two G), two main10-token assistants once. All five process cases23 vendor requests total (ten initial token/two IAM/ten main G/one key control), no aggregate billing/platform or new Server-IAM claim."
+    },
+    "counterfactual": {
+      "failed": 8,
+      "passed": 5,
+      "image": "ai-harness:mod01-vertex-sts-owned",
+      "log": "/tmp/mod01-vertex-iam/red.log",
+      "meaning": "Seven SDK useful/lifetime paths and new CLI IAM fail; malformed guard and four existing emitted cases already pass. Same new tests as candidate, test-only tar injection; later unreached assertions not additional REDs."
+    },
+    "earlierPasses": "Focused27 PASS; final owned27 only count. No failed candidate build/type/runtime gates. Historical runtime134/other incidents remain OPEN/nonaccepted, no historical repair.",
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 1,
+      "imageWitness": "/tmp/mod01-vertex-iam/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-vertex-iam/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-vertex-iam/runtime-witness.diff",
+      "meaning": "Only changed production file image-identical. Tests source-built; strict config only injected, no dependency/hash inventory/global certificate."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-vertex-iam/docs.log"
+    },
+    "limits": "At most four standard fixed-Google IAM steps; delegates bounded10 and lifetime1..43200s. No custom IAM authority/universe, URL/certificate/mTLS/AWS/executable source, external_account_authorized_user or GDCH support/waiver. No intermediate-token cache, disk store/background task or account identity/grant. Existing G continuation provider/API/model scope unchanged, not vendor subject/signature authentication. Native CLI/Server file descriptors unchanged; actual new CLI boundary qualified, no new Server-IAM/browser/installed/production/SDK-reference execution claim. Full defaults/tool/media/04b and final audit remain; MOD-03/global/historical acceptances unchanged."
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/vertex-adc.ts": "d93a66f4f56f8ae9af44d9398aba72227b464620f46b01b6004ae7a39c812ecc",
+    "packages/core/src/providers/vertex-adc-iam.test.ts": "18e37feb2fb4a9e2803dc35510e61f0b04c3eaefdafc81112bc60bf2d7f3aefc",
+    "packages/cli/src/cli/vertex-adc-process.test.ts": "137377a54951796181547c97c1e0bf37053bd7bc331d9a6bbe0cda846c4a6fe1"
+  },
+  "remaining": [
+    "Workforce external_account_authorized_user refresh and remaining reconciled non-file external/certificate/AWS/executable/GDCH-universe mechanisms; no broad ADC closure",
+    "AWS profile/ECS/web-identity/region/endpoint and explicit stored Cloud-key host assessment",
+    "Effective defaults/tool/media/MOD-01.04b/OpenRouter Server catalogue-freshness/final requirement-to-proof audit"
+  ],
+  "auditState": "MOD-01 IN PROGRESS; MOD-03 DONE;38/43; active goal; exactly three historical acceptances unchanged."
+}

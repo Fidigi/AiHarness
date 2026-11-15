@@ -36,6 +36,24 @@ async function observed<T>(work: () => Promise<T>, signal: AbortSignal): Promise
   finally { signal.removeEventListener('abort', abort); }
 }
 
+function impersonation(data: Record<string, unknown>, external = false) {
+  const url = data.service_account_impersonation_url;
+  const target = typeof url === 'string' ? /^https:\/\/iamcredentials\.googleapis\.com\/v1\/projects\/-\/serviceAccounts\/([A-Za-z0-9._@%-]+):(?:generateAccessToken|generateIdToken)$/u.exec(url) : null;
+  if (!text(url, 256) || !target
+    || data.endpoint !== undefined && data.endpoint !== 'https://iamcredentials.googleapis.com'
+    || data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com') throw failure();
+  const principal = decodeURIComponent(target[1]); if (!/^[A-Za-z0-9._@-]+$/u.test(principal)) throw failure();
+  const options = data.service_account_impersonation;
+  if (external && options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options))) throw failure();
+  const lifetime = (external ? (options as Record<string, unknown> | undefined)?.token_lifetime_seconds : data.lifetime) ?? 3600;
+  if (typeof lifetime !== 'number' || !Number.isInteger(lifetime) || lifetime < 1 || lifetime > 43200) throw failure();
+  const delegates = external ? undefined : data.delegates ?? [];
+  if (delegates !== undefined && (!Array.isArray(delegates) || delegates.length > 10 || !delegates.every(value => text(value, 256)))) throw failure();
+  const sourceQuota = external ? undefined : (data.source_credentials as Record<string, unknown> | undefined)?.quota_project_id;
+  if (sourceQuota !== undefined) { if (!text(sourceQuota, 500)) throw failure(); new Headers({ 'x-goog-user-project': sourceQuota }); }
+  return { sourceQuota, url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${principal}:generateAccessToken`, body: { scope: [SCOPE], lifetime: `${lifetime}s`, ...(delegates ? { delegates } : {}) } };
+}
+
 async function fileBytes(file: string, signal: AbortSignal): Promise<Buffer> {
   if (typeof file !== 'string' || !file || Buffer.byteLength(file) > 4096 || /[\u0000-\u001f\u007f-\u009f]/u.test(file)) throw failure();
   signal.throwIfAborted(); const handle = await open(file, constants.O_RDONLY | constants.O_NONBLOCK);
@@ -62,13 +80,22 @@ export class VertexAdc {
   }
   private async document(signal: AbortSignal) {
     const bytes = await fileBytes(this.file, signal), value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw failure(); const data = value as Record<string, unknown>;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw failure(); const root = value as Record<string, unknown>;
+    let data = root; const iam: ReturnType<typeof impersonation>[] = [];
+    while (data.type === 'impersonated_service_account') {
+      if (iam.length >= 4) throw failure(); iam.unshift(impersonation(data));
+      const source = data.source_credentials;
+      if (!source || typeof source !== 'object' || Array.isArray(source)) throw failure(); data = source as Record<string, unknown>;
+    }
+    if (data.type === 'external_account' && data.service_account_impersonation_url !== undefined) {
+      if (iam.length >= 4) throw failure(); iam.unshift(impersonation(data, true));
+    }
     for (const field of ['client_secret', 'refresh_token', 'private_key']) this.redactor?.add(typeof data[field] === 'string' ? data[field] as string : undefined);
     if (data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com') throw failure();
     if (data.type === 'authorized_user') { if (!text(data.client_id, 4096) || !text(data.client_secret) || !text(data.refresh_token)) throw failure(); }
     else if (data.type === 'service_account') { if (!text(data.client_email, 4096) || typeof data.private_key !== 'string' || !data.private_key || Buffer.byteLength(data.private_key) > 128 * 1024) throw failure(); }
     else if (data.type === 'external_account') {
-      if (data.token_url !== undefined && data.token_url !== STS || data.service_account_impersonation_url !== undefined || data.service_account_impersonation !== undefined
+      if (data.token_url !== undefined && data.token_url !== STS || data.service_account_impersonation !== undefined && data.service_account_impersonation_url === undefined
         || !text(data.audience, 4096) || !/^\/\/iam\.googleapis\.com\/(?:projects\/[^/?#]+\/locations\/[^/?#]+\/workloadIdentityPools|locations\/[^/?#]+\/workforcePools)\/[^/?#]+\/providers\/[^/?#]+$/u.test(data.audience)
         || !['urn:ietf:params:oauth:token-type:jwt', 'urn:ietf:params:oauth:token-type:id_token', 'urn:ietf:params:oauth:token-type:saml2'].includes(data.subject_token_type as string)
         || data.client_id !== undefined && (!text(data.client_id, 4096) || data.client_secret !== undefined && !text(data.client_secret))
@@ -93,8 +120,8 @@ export class VertexAdc {
       if (typeof token !== 'string' || !token.trim() || Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(token)) throw failure();
       subject = token; this.redactor?.add(subject); if (subject.trim() !== subject) this.redactor?.add(subject.trim());
     }
-    const quota = this.quota ?? data.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
-    return { data, subject, fingerprint: createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(subjectBytes ?? Buffer.alloc(0)).digest('hex'), quota };
+    const quota = this.quota ?? root.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
+    return { data, iam, subject, fingerprint: createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(subjectBytes ?? Buffer.alloc(0)).digest('hex'), quota };
   }
   private async credential(send: Send, parent: AbortSignal) {
     const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]); disableProviderNetworkRetries(signal);
@@ -121,9 +148,19 @@ export class VertexAdc {
       this.redactor?.add(typeof body.access_token === 'string' ? body.access_token : undefined);
       if (!text(body.access_token) || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000
         || body.token_type !== undefined && (typeof body.token_type !== 'string' || body.token_type.toLowerCase() !== 'bearer')) throw failure();
-      new Headers({ authorization: `Bearer ${body.access_token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
-      if (sequence > this.published) { this.published = sequence; this.cached = { fingerprint: document.fingerprint, token: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }; }
-      return { ...document, token: body.access_token };
+      let token = body.access_token, expiresAt = Date.now() + body.expires_in * 1000;
+      for (const step of document.iam) {
+        new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+        const response = await send(step.url, { method: 'POST', redirect: 'manual', signal, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json', ...(step.sourceQuota ? { 'x-goog-user-project': step.sourceQuota } : {}) }, body: JSON.stringify(step.body) });
+        if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); }
+        const result = await readOAuthJson(response, signal); this.redactor?.add(typeof result.accessToken === 'string' ? result.accessToken : undefined);
+        const expiry = typeof result.expireTime === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(result.expireTime) ? Date.parse(result.expireTime) : NaN;
+        if (!text(result.accessToken) || !Number.isFinite(expiry) || expiry <= Date.now() || expiry > Date.now() + 43200 * 1000) throw failure();
+        token = result.accessToken; expiresAt = expiry;
+      }
+      new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+      if (sequence > this.published) { this.published = sequence; this.cached = { fingerprint: document.fingerprint, token, expiresAt }; }
+      return { ...document, token };
     }, signal);
   }
   async request(url: string | URL, init: RequestInit, parent: AbortSignal, send: Send): Promise<Response> {
