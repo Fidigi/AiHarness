@@ -1,0 +1,44 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "d2f8659",
+  "criterion": "MOD-01.02e",
+  "status": "PARTIAL",
+  "scope": "Explicit original Bedrock SDK static INI-profile credentials/region, existing JSON and binary native transport/signing; not CLI/Server admission or wider AWS chain completion",
+  "implementation": "Public BedrockProviderConfig.bedrockProfile/BedrockProfileConfig captures explicit profile and credentials/config paths, optional parent signal/redactor. Only original BedrockProvider without explicit Bearer/SigV4 or protected auth-header intent acquires the source; explicit source wins ambient keys, derived adapters cannot acquire it. Constructor/validate/published models/listing are lazy; no ambient/default path scan or discovery. Bounded regular O_NONBLOCK files256KiB each/fatal UTF8, projected symlinks, selected-profile parsing and duplicate/malformed refusal. Static credentials merge credentials-file over config-file; region follows explicit config > AWS_REGION > AWS_DEFAULT_REGION > merged selected-file region > us-east-1. Credentials-file region wins when present, matching Smithy region preferredFile=credentials. China default endpoint suffix correct; private ISO/EUSC partitions require an explicit endpoint. Existing SigV4 signer takes per-call resolved credentials/region without changing persistent config; JSON/binary native profile/output/replay/usage stay with original owner. Existing scalar preflight runs before profile reads; current file bytes rechecked after signing before dispatch, so withdrawal/rotation cannot advance old prepared headers. No shared credential cache/disk write/store/background task or token-as-profile encoding. Caller/scope/profile lifetime reaches protected response body; callers independent. Role/source-profile/SSO/process/web-identity/credential-scope authorities explicitly refuse instead of falling back to static or ambient principal.",
+  "sourceReview": {
+    "pinned": "coding-agent/ai provider amazon-bedrock.ts admission and api/bedrock-converse-stream.ts optionsProfile/ambient-profile and region construction at revision06a466935536f8c9bcacb2d5efc0fc021be1bdff; previous cloud-scope reconciliation remains applicable",
+    "installedReadOnly": {"@aws-sdk/credential-provider-ini": "3.973.19", "@smithy/core": "3.36.0"},
+    "log": "/tmp/mod01-bedrock-profile/reference-info.json",
+    "sha256": {"credential-provider-ini/dist-cjs/index.js": "2d975f8114b17e1e96eea2735c7271f735f08bab35dc922384cd15735bbdd085", "smithy/core/dist-cjs/submodules/config/index.js": "9baacc5d01f356ac128466faec6878d298a5598212e1adad6a6e527048fbb480"},
+    "meaning": "Read only static profile/merge/region preference and unsupported authority dispatch, no SDK execution/acquisition or product dependency. Full SDK parser/chain/profile grammar not claimed."
+  },
+  "qualification": {
+    "environment": "Docker Makefile build/types; --network none/CI=true/node --no-maglev. Synthetic credentials/profile files/signatures, mocked transports and existing binary fixture only; no personal HOME/profile store/live-account switch/SDK acquisition/protected-container/generated-output edits.",
+    "image": "ai-harness:mod01-bedrock-profile-owned",
+    "imageId": "sha256:f600287d321574b0498bb88c2635b76f98b6bb1fd981e8b87e12fe69a5a27960",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-profile-owned",
+    "buildLog": "/tmp/mod01-bedrock-profile/build-owned-r3.log",
+    "strict": {"passed": true, "roots": 1, "config": "/tmp/mod01-bedrock-profile/strict.json", "log": "/tmp/mod01-bedrock-profile/owned-r3.log"},
+    "runtime": {
+      "passed": 10,
+      "failed": 0,
+      "new": 6,
+      "log": "/tmp/mod01-bedrock-profile/owned-r3.log",
+      "publicCompiledFile": "packages/core/src/providers/bedrock-profile.test.ts",
+      "filteredControl": {"file": "packages/core/src/providers/bedrock-converse-stream.test.ts", "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4", "passed": 4, "unselected": 643, "runtimeOnly": true},
+      "meaning": "Six tests import actual public compiled Core: passive source/readiness/no network, correct JSON/binary SigV4 key/token/region/native signed result/10-token usage; changed key/omitted session token/new operation and file withdrawal; profile/config isolation/explicit-env-file priorities/China endpoint; explicit Bearer/SigV4/derived/header controls; missing/UTF8/oversized/nonregular/duplicate/unsupported-authority refusal; projected-file mid-prepare mutation/preflight before reads; independent sibling/held body cancellation/one cancel/late suppression/parent retirement. Four existing Source controls retain exact independent SigV4 vector and legacy Bearer syntax/precedence/refusal. Filter-unselected643 not counted as passes or waived. No profile/model cross-product, new host/browser/installed/production/MOD-03 or account qualification."
+    },
+    "counterfactual": {"image": "ai-harness:mod01-image-block-owned", "failed": 5, "passed": 1, "log": "/tmp/mod01-bedrock-profile/red.log", "meaning": "Previous public compiled SDK ignores profile source; explicit legacy auth control already passes. Six cases unchanged, no new profile dependency acquired in predecessor."},
+    "retainedFailures": [
+      {"log": "/tmp/mod01-bedrock-profile/build-owned.log", "exit": 2, "meaning": "New preflight passed optional ChatOptions to required argument (two TS2345). Supply existing empty-option default; product/workspace types then pass. Following image-less Docker launch125 at focused.log has no runtime credit."},
+      {"log": "/tmp/mod01-bedrock-profile/region-red.log", "failed": 2, "unselected": 4, "meaning": "Strengthened existing cases confirm two candidate policy defects after installed-source review: region incorrectly preferred config over credentials file, and aws_credential_scope was silently ignored. Correct merge preference and refuse unsupported scoped credentials; same six tests, no altered deadlines/assertions/flags or historical repair."}
+    ],
+    "runtimeBinding": {"passed": true, "inputs": 3, "imageWitness": "/tmp/mod01-bedrock-profile/runtime-witness-image.txt", "worktreeWitness": "/tmp/mod01-bedrock-profile/runtime-witness-worktree.txt", "diff": "/tmp/mod01-bedrock-profile/runtime-witness.diff", "meaning": "Three changed production inputs image-identical; final tests baked into source-built image, strict config only injected by tar. Predecessor/stronger-red test-source overlays are not runtime changes/global image authority."},
+    "documentation": {"lintDocs": "PASS", "diffCheck": "PASS", "log": "/tmp/mod01-bedrock-profile/docs.log"}
+  },
+  "sourceSha256": {"packages/core/src/providers/bedrock-profile.ts": "9377b0272e53f1512c549265da13eb5072482730c600ad36340024ea9e1ae9ec", "packages/core/src/providers/index.ts": "14902e5dacf0651aa0c1b2f9cba4d66330c392641be0361f91de70c2bd29613f", "packages/core/src/index.ts": "0fff837b2f5c261be5ad13cc7486323c4904c29908e4a085dc03874a48e198a4"},
+  "remaining": ["Trusted native CLI/Server AWS_PROFILE/file admission, source outside credential values, passive admin/priority/retirement and actual native host requests; SDK source alone does not close host usability", "ECS/web identity/role/source-profile/SSO/process/scoped credential choices and remaining AWS ARN/standard endpoint/ambient-profile region policy; no full SDK-chain claim from static INI", "Other ADC/default-tool/catalogue requirements and final MOD-01 requirement-to-proof audit"],
+  "limits": "SDK static-profile subset only; explicit trusted files and matching selected profile, no standard-path/ambient AWS_PROFILE admission/store/login UI. Metadata readiness is not vendor access. Not full SDK INI grammar/role/SSO/executable/metadata/private partition discovery, per-call profile switching, ARN endpoint policy or entitlements. Missing/change detected before new dispatch, not a live watcher or cancellation of previously admitted retries/work. Native inference retries are unchanged. Original signed replay preserved structurally, not vendor signature/account authentication. Runtime134/other open gates/exactly three historical acceptances unchanged.",
+  "auditState": "MOD-01.02e PARTIAL; MOD-01 IN PROGRESS; MOD-01.04b DONE; MOD-03 DONE;38/43; active goal not completed."
+}

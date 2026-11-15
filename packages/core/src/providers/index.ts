@@ -76,6 +76,7 @@ import { kimiOAuthHistory, sealKimiOAuthCall, sealKimiOAuthResponse, withoutKimi
 import { META_MODELS, metaProfile, metaBase, prepareMetaResponse, metaUsage } from './meta.js';
 import { vertexApiKeyBase } from './vertex-config.js';
 import { VertexAdc, hasVertexAuthHeaders, type VertexAdcConfig } from './vertex-adc.js';
+import { BedrockProfile, hasBedrockAuthHeaders, type BedrockProfileConfig, type BedrockProfileCredentials } from './bedrock-profile.js';
 import { validXaiOAuthIdentity, type XaiOAuthCredential, type XaiOAuthCredentialSource } from './xai-oauth.js';
 import { xaiOAuthHistory, sealXaiOAuthCall, sealXaiOAuthResponse, withoutXaiOAuthReplay } from './xai-oauth-replay.js';
 import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
@@ -5049,6 +5050,7 @@ export function bedrockCredentialConfig(value: unknown): { apiKey: string } | { 
   return validBearerApiKey(value) ? { apiKey: value } : undefined;
 }
 
+export interface BedrockProviderConfig extends ProviderConfig { bedrockProfile?: BedrockProfileConfig }
 /** AWS Bedrock Converse provider with explicit Bearer or native SigV4 authentication. */
 export class BedrockProvider extends AiProvider {
   override getModelApi(): string { return 'bedrock-converse-stream'; }
@@ -5057,19 +5059,29 @@ export class BedrockProvider extends AiProvider {
   }
 
   private readonly region: string;
+  private readonly configuredRegion?: string;
   private readonly ownsNativeProfiles: boolean;
+  private readonly profile?: BedrockProfile;
 
-  constructor(config: ProviderConfig) {
+  constructor(config: BedrockProviderConfig) {
     super({
       ...config,
+      bedrockProfile: undefined,
       type: ProviderType.BEDROCK,
       model: config.model || 'anthropic.claude-3-haiku-20240307-v1:0',
       accessKeyId: config.accessKeyId || process.env.AWS_ACCESS_KEY_ID,
       secretAccessKey: config.secretAccessKey || process.env.AWS_SECRET_ACCESS_KEY,
       sessionToken: config.sessionToken || process.env.AWS_SESSION_TOKEN,
     });
-    this.region = String(config.region || process.env.AWS_REGION || 'us-east-1');
+    this.configuredRegion = String(config.region || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || '') || undefined;
+    this.region = this.configuredRegion || 'us-east-1';
     this.ownsNativeProfiles = new.target === BedrockProvider;
+    if (this.ownsNativeProfiles && config.bedrockProfile && config.apiKey === undefined && config.accessKeyId === undefined
+      && config.secretAccessKey === undefined && config.sessionToken === undefined
+      && !hasBedrockAuthHeaders(config)) {
+      this.profile = new BedrockProfile(config.bedrockProfile);
+      nativeSubscriptionStreamConsumers.add(this);
+    }
     if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, 'anthropic.claude-3-haiku-20240307-v1:0'), region = this.region;
       return (options, messages) => prepareBedrockOutputBudget(options, model, messages, region);
@@ -5078,6 +5090,7 @@ export class BedrockProvider extends AiProvider {
 
   validateConfig(): boolean {
     if (this.config.apiKey !== undefined) return validBearerApiKey(this.config.apiKey);
+    if (this.profile) return true;
     if (typeof this.config.accessKeyId !== 'string' || !this.config.accessKeyId.trim()
       || typeof this.config.secretAccessKey !== 'string' || !this.config.secretAccessKey.trim()) return false;
     try {
@@ -5087,9 +5100,12 @@ export class BedrockProvider extends AiProvider {
     } catch { return false; }
   }
 
-  private streamEndpoint(model: string): URL {
+  override canDiscoverModels(): boolean { return this.profile ? false : super.canDiscoverModels(); }
+
+  private streamEndpoint(model: string, region = this.region): URL {
     let url: URL;
-    try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com`)); }
+    if (this.profile && !this.config.baseUrl && /(?:-iso|^eusc-)/u.test(region)) throw new Error('An explicit Bedrock endpoint is required for this partition.');
+    try { url = new URL(String(this.config.baseUrl || `https://bedrock-runtime.${region}.amazonaws.com${region.startsWith('cn-') ? '.cn' : ''}`)); }
     catch { throw new Error('Invalid Bedrock endpoint.'); }
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
       throw new Error('Invalid Bedrock endpoint.');
@@ -5169,11 +5185,17 @@ export class BedrockProvider extends AiProvider {
     };
   }
 
-  private async requestHeaders(url: URL, body: string, now = new Date()): Promise<Record<string, string>> {
+  private async profileAuthentication(signal?: AbortSignal) {
+    if (!this.profile) return undefined;
+    const network = providerNetworkSettings(this.config), scope = providerNetworkScopeSignal(providerNetworkScope(this.config));
+    return this.profile.resolve(AbortSignal.any([scope, ...(signal ? [signal] : []), ...(network.requestTimeoutMs > 0 ? [AbortSignal.timeout(network.requestTimeoutMs)] : [])]));
+  }
+
+  private async requestHeaders(url: URL, body: string, now = new Date(), credentials?: BedrockProfileCredentials, region = this.region): Promise<Record<string, string>> {
     if (this.config.apiKey !== undefined) return { 'content-type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` };
     const { createHash, createHmac } = await import('node:crypto');
-    const accessKey = String(this.config.accessKeyId);
-    const secret = String(this.config.secretAccessKey);
+    const accessKey = String(credentials?.accessKeyId ?? this.config.accessKeyId);
+    const secret = String(credentials?.secretAccessKey ?? this.config.secretAccessKey);
     const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
     const date = amzDate.slice(0, 8);
     const payloadHash = createHash('sha256').update(body).digest('hex');
@@ -5183,7 +5205,8 @@ export class BedrockProvider extends AiProvider {
       'x-amz-content-sha256': payloadHash,
       'x-amz-date': amzDate,
     };
-    if (this.config.sessionToken) headers['x-amz-security-token'] = String(this.config.sessionToken);
+    const sessionToken = credentials?.sessionToken ?? (credentials ? undefined : this.config.sessionToken);
+    if (sessionToken) headers['x-amz-security-token'] = String(sessionToken);
     const names = Object.keys(headers).sort();
     const canonicalHeaders = names.map(name => `${name}:${headers[name].trim()}\n`).join('');
     // SigV4 (unlike S3) URI-escapes the already encoded HTTP path, including model ARN/colon escapes.
@@ -5193,10 +5216,10 @@ export class BedrockProvider extends AiProvider {
       .sort(([ak, av], [bk, bv]) => ak < bk ? -1 : ak > bk ? 1 : av < bv ? -1 : av > bv ? 1 : 0)
       .map(([key, value]) => `${key}=${value}`).join('&');
     const canonicalRequest = ['POST', canonicalPath, canonicalQuery, canonicalHeaders, names.join(';'), payloadHash].join('\n');
-    const scope = `${date}/${this.region}/bedrock/aws4_request`;
+    const scope = `${date}/${region}/bedrock/aws4_request`;
     const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
     const hmac = (key: Buffer | string, value: string): Buffer => createHmac('sha256', key).update(value).digest();
-    const signingKey = hmac(hmac(hmac(hmac(`AWS4${secret}`, date), this.region), 'bedrock'), 'aws4_request');
+    const signingKey = hmac(hmac(hmac(hmac(`AWS4${secret}`, date), region), 'bedrock'), 'aws4_request');
     const signature = createHmac('sha256', signingKey).update(stringToSign).digest('hex');
     headers.Authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}`;
     return headers;
@@ -5207,24 +5230,29 @@ export class BedrockProvider extends AiProvider {
     const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
     const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
     const signed = native, owner = this.config.type;
+    if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, requestedModel, messages, this.region);
+    const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
+    const region = this.configuredRegion ?? authentication?.region ?? this.region;
     const model = encodeURIComponent(requestedModel);
     let url: URL;
     try {
-      url = native ? this.streamEndpoint(requestedModel)
-        : new URL(String(this.config.baseUrl || `https://bedrock-runtime.${this.region}.amazonaws.com/model/${model}/converse`));
+      url = native ? this.streamEndpoint(requestedModel, region)
+        : new URL(String(this.config.baseUrl || `https://bedrock-runtime.${region}.amazonaws.com/model/${model}/converse`));
       if (native) url.pathname = url.pathname.replace(/-stream$/u, '');
     } catch { throw new Error('Invalid Bedrock endpoint.'); }
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
     }
     const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? requestedModel : undefined);
-    if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, this.region);
-    const body = serializeProviderBody(prepared);
+    if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, region);
+    const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
+    await authentication?.assertCurrent();
     const response = await this.request(url, {
-      method: 'POST', headers: await this.requestHeaders(url, body), body, signal: options?.signal,
+      method: 'POST', headers, body, signal: authentication?.signal ?? options?.signal,
     });
     if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
     const data = await readProviderJson<BedrockResponse>(response);
+    authentication?.signal.throwIfAborted();
     const token = (value: unknown): number => (
       typeof value === 'number' && Number.isFinite(value) && value > 0
         ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value))
@@ -5276,18 +5304,22 @@ export class BedrockProvider extends AiProvider {
       const model = options?.model || String(this.config.model);
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
       const signed = native, owner = this.config.type;
-      const url = this.streamEndpoint(model);
+      if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, model, messages, this.region);
+      const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
+      const region = this.configuredRegion ?? authentication?.region ?? this.region;
+      const url = this.streamEndpoint(model, region);
       const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined);
-      if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, this.region);
-      const body = serializeProviderBody(prepared);
+      if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, region);
+      const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
+      await authentication?.assertCurrent();
       const response = await this.request(url, {
-        method: 'POST', headers: { ...await this.requestHeaders(url, body), Accept: 'application/vnd.amazon.eventstream' },
-        body, signal: options?.signal,
+        method: 'POST', headers: { ...headers, Accept: 'application/vnd.amazon.eventstream' },
+        body, signal: authentication?.signal ?? options?.signal,
       });
       if (!response.ok) await rejectProviderHttpResponse(response, `Bedrock API error (${response.status}).`);
-      const result = await consumeBedrockStream(response, model, onChunk, options?.signal,
+      const result = await consumeBedrockStream(response, model, onChunk, authentication?.signal ?? options?.signal,
         native ? value => bedrockProfileUsage(value, model) : undefined, signed);
-      if (options?.signal?.aborted) throw new Error('Bedrock request aborted.');
+      if ((authentication?.signal ?? options?.signal)?.aborted) throw new Error('Bedrock request aborted.');
       onComplete?.(signed ? { ...result, provider: owner } : result);
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error(String(error));
