@@ -1,0 +1,63 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-sso-cache.v1",
+  "date": "2026-11-15",
+  "baseline": "e77e323",
+  "status": "DELIVERED selected-profile SSO cached-token acquisition/root and role leaf;02e remains PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "matrix": [
+    { "requirement": "Useful selected SSO profile authentication", "before": "Profile resolver explicitly rejected sso_session/sso_start_url", "gap": "Functional absence", "action": "Read the single standard SHA1-named cache file selected by legacy start URL or sso-session name; fixed regional GetRoleCredentials; direct native signing or source-only STS role leaf", "proof": "Two legacy/session public-Core cases, one role-leaf case and separate actual CLI/API paths" },
+    { "requirement": "Current authority, isolation and cancellation", "before": "Shared foreground AWS vending/current-INI/role/lifetime mechanisms exist", "gap": "Precise new source protocol and host-cache-path proof missing", "action": "Reuse those mechanisms with file-byte identity, fixed issuer/header/query, strict response schema and captured host HOME cache directory", "proof": "Core refusal/current-source/auth-eviction/held-body cases plus native CLI/API cache rotation/private restart/privacy" },
+    { "requirement": "Whole cloud chain/final qualification", "gap": "Remaining functional and contract reconciliation, not QUA or an implicit waiver", "action": "Modern SSO token refresh still separate; reconcile remaining ADC/AWS methods/policies, then06c", "proof": "Exact23 statuses and historical acceptance unchanged; no whole-chain closure claimed" }
+  ],
+  "implementation": {
+    "files": ["packages/core/src/providers/bedrock-profile.ts", "packages/core/src/providers/bedrock-sso.ts"],
+    "policy": "Original constructor only. Dedicated selected-root SSO profile or recursive SSO leaf; legacy inline four fields or profile sso_session plus selected config-file sso-session section. Reject conflicting/missing/mixed authorities; complete recursive static keys retain priority. Captured SDK ssoCacheDirectory or original home/.aws/sso/cache; native metadata gate captures supplied HOME without parsing profile/cache. No directory scan, ambient/default-profile fallback, auth-file execution, browser/login or file writes. Read one bounded regular256KiB/fatalUTF8 JSON cache via SHA1(sessionName or exact startUrl); validate current accessToken/ISO expiry and optional matching startUrl/region. Cache bytes/path/issuer/selected whole INI/profile identify authority. Token expiry blocks new vending, not a valid final role credential cache; deletion/rotation withdraws cached authority. Source cache/INI checked before send/after mint/before inference. Fixed HTTPS portal.sso region realm, exact GET federation/credentials account_id/role_name and x-amz-sso_bearer_token only, no inference auth/headers or redirects. Exact200/bounded JSON/lowercase role credential fields/numeric milliseconds/future<=12h/unsupported credentialScope refusal. Reuse bounded foreground cache/eager5min/newest-success/independent callers/exact401-403 eviction/whole15s/caller-owner lifetime and scoped native request transport. Root vended keys sign native JSON/binary; leaf vended keys sign first STS only, final role keys alone reach inference/cache.",
+    "reference": [
+      { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-sso/dist-cjs/index.js", "version": "3.973.18", "sha256": "cc75ada3cbe32e31cca407a81ee5f2c2e81a36134d4f8fec50c898110a60f772", "readOnly": true },
+      { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/token-providers/dist-es/fromSso.js", "version": "3.1127.0", "sha256": "a62c31d3b2da5b6fd698df6bff0fe4d9cb8a7fbbdb7305e2e196ea0a621b4322", "readOnly": true }
+    ]
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-sso-owned",
+    "imageId": "sha256:59161ff1a772d6b87a9d2027d4a334aa37c328a8d35ffa745b786ed8c5bb4a5a",
+    "candidateImageId": "sha256:4acd313c05101d87296952d8eb41214c4c06f25ef01944f42128a72594392a20",
+    "predecessorImageId": "sha256:38c1953811bcd3f5b1d3e1a38881941e4e601c63bb26b75b026a4fa2c2703442",
+    "runtime": "Makefile build/workspace-parity types; Docker network none/CI=true/node --no-maglev. Canonical run-typescript retains --no-maglev/--no-turbofan. Tar-stdin strict.json under /app, no source/generated/dependency overlay on final image. Synthetic accounts/disposable HOME/cache/profiles/mocked service or verified-CA loopback only; no personal store/account or reference SDK acquisition/import/execution. Protected containers untouched.",
+    "regularRuntimePassed": 77,
+    "newCases": 9,
+    "regularReusedCases": 68,
+    "strictChangedRoots": 3,
+    "unselectedCases": 4,
+    "coverage": "Seven compiled-public-Core cases: legacy/session2 direct native JSON/binary/passive0 acquisition/file equality/rotation/withdrawal/secret enrollment; SSO->signed STS->final-only inference/cache past source expiry; malformed/mixed/offline/expired cache and12 bounded role/status/body/schema refusals; INI/cache withdrawal before vending/after issuance plus exact403 eviction; held body cancellation/independent caller/owner retirement; captured native HOME metadata. One actual JSON CLI SSO role variant: passive0 acquisition, two cold cache-token rotations/SSO->EU STS->US binary private continuation, offline0extra requests, cold offline Bearer override after cache deletion, journal0600/no encrypted credential cache/30 observed tokens. One actual HTTP root SSO variant: passive readonly AWS_PROFILE/Test409/Disconnect409/file-source and cache-directory DTO400, shared source cache, private Server restart/rotation30tokens/old-owner retirement/current cache deletion/privacy0600/no encrypted source credentials.75 Core/HTTP/CLI-unit cases plus2 actual CLI variants (new SSO and existing process)=77 distinct; four other CLI variants unselected. Existing process10/role8/static6/Environment5/ECS6/IMDS7/Web-leaf5/roleHTTP1/profileHTTP9/CLI-unit10 reused, not new SSO profile permutations.",
+    "sourceWitness": {
+      "packages/core/src/providers/bedrock-profile.ts": "a02b6676976397900e054aa2444276d3fbe48c9c1479e5abd6f3c57fdfc48339",
+      "packages/core/src/providers/bedrock-sso.ts": "965cc3514c7431b4fb1d5df28c778a01f73dc282801a92286f9943a23bce455b"
+    },
+    "tests": {
+      "packages/core/src/providers/bedrock-profile-sso.test.ts": "1ec61a4c721aa5da9190f53e7982fb72b7fee04ab144a6d23f8697ea76685b51",
+      "packages/cli/src/cli/bedrock-profile-role-process.test.ts": "2884e2c7309791fe7b8d66e2934f6f97936d3a970eda7395430b8a8cc94d73b1",
+      "packages/server/src/api/bedrock-profile-http.test.ts": "bb9370b3da53cc20edf6d8d63b64287997b875b123cf80949577cd7ce71a7db8"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-bedrock-sso/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-bedrock-sso/red.log (five genuine missing-SSO/host-path failures,one refusal control PASS;one held-body case unselected)",
+      "hostsRed": "/tmp/mod01-bedrock-sso/hosts-red.log (two genuine CLI/API failures;14 unselected)",
+      "buildFailure": "/tmp/mod01-bedrock-sso/build-owned.log (TS2345 fetch callback union URL versus AwsStsSend string;no image/runtime)",
+      "firstBuild": "/tmp/mod01-bedrock-sso/build-owned-r2.log (build/types PASS)",
+      "focused": "/tmp/mod01-bedrock-sso/focused.log (seven Core PASS/three strict roots before additional refusal/DTO assertions)",
+      "build": "/tmp/mod01-bedrock-sso/build-owned-r3.log (final source/tests build/types PASS)",
+      "owned": "/tmp/mod01-bedrock-sso/owned.log (75+2=77 distinct PASS/three strict roots;four unselected)",
+      "review": "/tmp/mod01-bedrock-sso/review-check.json",
+      "docs": "/tmp/mod01-bedrock-sso/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-sso-owned",
+      "tar -C /tmp/mod01-bedrock-sso -cf - strict.json | docker run --rm -i --network none -e CI=true ai-harness:mod01-bedrock-sso-owned sh -c 'tar -xf - -C /app && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-profile-sso.test.ts packages/core/src/providers/bedrock-profile-process.test.ts packages/core/src/providers/bedrock-profile-role.test.ts packages/core/src/providers/bedrock-profile.test.ts packages/core/src/providers/bedrock-profile-environment.test.ts packages/core/src/providers/bedrock-profile-ecs.test.ts packages/core/src/providers/bedrock-profile-imds.test.ts packages/core/src/providers/bedrock-profile-web-leaf.test.ts packages/server/src/api/bedrock-profile-role-http.test.ts packages/server/src/api/bedrock-profile-http.test.ts packages/cli/src/providers/bedrock-profile.test.ts --maxWorkers=1 && node --no-maglev node_modules/vitest/vitest.mjs run packages/cli/src/cli/bedrock-profile-role-process.test.ts --maxWorkers=1 -t \"native JSON (sso|process)\" && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "Read-only cached-token acquisition only. Legacy expired tokens require user-owned external SSO login; modern sso-session OIDC refresh/registration/rotation/writeback semantics are not implemented or waived by this lot. No Core login command, browser flow, token-store scan, ambient default profile or file execution. Executable-auth opt-in remains answered and unchanged; SSO cache reading does not require process permission.",
+    "No new profile-choice/encrypted profile setting, standalone/ambient IMDS/v1 downgrade, signing credentialScope, nonstandard universe/issuer or remaining ADC mechanism. No reference SDK execution/new dependency, model-host matrix/browser/installed/production/account/global or MOD-03 redelivery.02e PARTIAL/06c OPEN/exact23/19DELIVERED+04bDONE/one historical disposition/two unresolved/38-of43/runtime134 OPEN/exactly three historical acceptances/active goal unchanged."
+  ]
+}

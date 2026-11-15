@@ -7,6 +7,7 @@ import { awsStsEndpoint, readAwsStsCredentials, validIamRoleArn, type AwsStsSend
 import { BedrockWebIdentityCredentials, type BedrockWebIdentityConfig } from './bedrock-web-identity.js';
 import { BedrockEcsCredentials, type BedrockEcsConfig } from './bedrock-ecs.js';
 import { BedrockImdsCredentials, bedrockImdsEndpoint, type BedrockImdsConfig } from './bedrock-imds.js';
+import { BedrockSsoCredentials, bedrockSsoCacheFile, type BedrockSsoConfig } from './bedrock-sso.js';
 import { BedrockRefreshingCredentials, bedrockCredentialFile, bedrockVendedCredentials, type BedrockCredentialIdentity, type BedrockVendedCredentials } from './bedrock-credentials.js';
 import { fetchOAuthResponse } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
@@ -20,6 +21,8 @@ export interface BedrockProfileConfig {
   profile: string;
   credentialsFile?: string;
   configFile?: string;
+  /** Read-only selected SSO token cache; defaults to captured HOME/.aws/sso/cache. */
+  ssoCacheDirectory?: string;
   allowNetwork?: boolean;
   /** Trusted operator permission, default false; INI files cannot enable execution. */
   allowProcess?: boolean;
@@ -69,6 +72,16 @@ function section(input: Buffer | undefined, name: string): Record<string, string
   return selected;
 }
 const same = (left: Buffer | undefined, right: Buffer | undefined) => left === undefined ? right === undefined : right !== undefined && left.equals(right);
+const ssoIntent = (data: Record<string, string>) => ['sso_session', 'sso_start_url', 'sso_region', 'sso_account_id', 'sso_role_name'].some(key => Object.hasOwn(data, key));
+function selectedSso(data: Record<string, string>, input: Buffer | undefined, cacheDirectory: string, signal?: AbortSignal, redactor?: Pick<CredentialRedactor, 'add'>): BedrockSsoConfig {
+  if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'credential_process', 'web_identity_token_file', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
+  const sessionName = data.sso_session;
+  if (sessionName !== undefined && (!sessionName || sessionName !== sessionName.trim() || Buffer.byteLength(sessionName) > 128 || /[\u0000-\u001f\u007f-\u009f\[\]]/u.test(sessionName))) throw failure();
+  const source = sessionName === undefined ? data : section(input, 'sso-session ' + sessionName);
+  if (sessionName !== undefined && ['sso_start_url', 'sso_region'].some(key => data[key] !== undefined && data[key] !== source[key])) throw failure();
+  const config: BedrockSsoConfig = { startUrl: source.sso_start_url, region: source.sso_region, accountId: data.sso_account_id, roleName: data.sso_role_name, cacheDirectory, sessionName, signal, redactor };
+  bedrockSsoCacheFile(config); return config;
+}
 
 /** Trusted native-host admission: named profile plus bounded existing INI metadata, never file contents. */
 export async function resolveBedrockProfileEnvironment(env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<BedrockProviderConfig | undefined> {
@@ -86,7 +99,7 @@ export async function resolveBedrockProfileEnvironment(env: NodeJS.ProcessEnv, s
     present = true;
   }
   return present ? { type: 'bedrock', model: env.BEDROCK_MODEL, baseUrl: env.BEDROCK_BASE_URL, region: env.AWS_REGION || env.AWS_DEFAULT_REGION,
-    bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], ...(env.AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION === '1' ? { allowProcess: true } : {}), signal } } : undefined;
+    bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], ssoCacheDirectory: path.resolve(home, '.aws', 'sso', 'cache'), ...(env.AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION === '1' ? { allowProcess: true } : {}), signal } } : undefined;
 }
 
 /** Static keys stay file-bound; selected-root WebIdentity and role vending keep private foreground current-file caches. */
@@ -98,6 +111,8 @@ export class BedrockProfile {
   private readonly redactor?: Pick<CredentialRedactor, 'add'>;
   private role?: BedrockProfileRole;
   private web?: { fingerprint: string; source: BedrockWebIdentityCredentials };
+  private sso?: { fingerprint: string; source: BedrockSsoCredentials };
+  private readonly ssoCacheDirectory: string;
   private readonly allowNetwork?: boolean;
   private readonly allowProcess: boolean;
   private processSource?: BedrockProfileProcess;
@@ -106,12 +121,13 @@ export class BedrockProfile {
     if (typeof config.profile !== 'string' || !config.profile || config.profile !== config.profile.trim() || Buffer.byteLength(config.profile) > 128
       || /[\u0000-\u001f\u007f-\u009f\[\]]/u.test(config.profile)
       || !config.credentialsFile && !config.configFile || config.credentialsFile !== undefined && !safePath(config.credentialsFile)
-      || config.configFile !== undefined && !safePath(config.configFile)) throw failure();
+      || config.configFile !== undefined && !safePath(config.configFile) || config.ssoCacheDirectory !== undefined && !safePath(config.ssoCacheDirectory)) throw failure();
+    this.ssoCacheDirectory = path.resolve(config.ssoCacheDirectory ?? path.join(homedir(), '.aws', 'sso', 'cache'));
     this.profile = config.profile; this.credentialsFile = config.credentialsFile ? path.resolve(config.credentialsFile) : undefined;
     this.configFile = config.configFile ? path.resolve(config.configFile) : undefined; this.lifetime = config.signal; this.redactor = config.redactor; this.allowNetwork = config.allowNetwork; this.allowProcess = config.allowProcess === true;
     this.environment = environment ? { ...environment, ecs: environment.ecs ? { ...environment.ecs } : undefined, imds: environment.imds ? { ...environment.imds } : undefined } : undefined;
   }
-  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); this.web?.source.invalidate(credentials, status); this.processSource?.invalidate(credentials, status); }
+  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); this.web?.source.invalidate(credentials, status); this.processSource?.invalidate(credentials, status); this.sso?.source.invalidate(credentials, status); }
   async resolve(caller: AbortSignal): Promise<{ credentials: BedrockProfileCredentials; region?: string; signal: AbortSignal; assertCurrent(): Promise<void> }> {
     const signal = this.lifetime ? AbortSignal.any([caller, this.lifetime]) : caller;
     try {
@@ -119,11 +135,20 @@ export class BedrockProfile {
       const config = section(current.config, this.profile === 'default' ? 'default' : 'profile ' + this.profile), credentials = { ...config, ...section(current.credentials, this.profile) };
       for (const key of ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token']) if (credentials[key]) this.redactor?.add(credentials[key]);
       if (Object.hasOwn(credentials, 'role_arn') && (Object.hasOwn(credentials, 'source_profile') || Object.hasOwn(credentials, 'credential_source'))) {
-        this.role ??= new BedrockProfileRole({ profile: this.profile, credentialsFile: this.credentialsFile, configFile: this.configFile, allowNetwork: this.allowNetwork, allowProcess: this.allowProcess, signal: this.lifetime, redactor: this.redactor }, this.parentRegion, this.send, this.environment);
+        this.role ??= new BedrockProfileRole({ profile: this.profile, credentialsFile: this.credentialsFile, configFile: this.configFile, ssoCacheDirectory: this.ssoCacheDirectory, allowNetwork: this.allowNetwork, allowProcess: this.allowProcess, signal: this.lifetime, redactor: this.redactor }, this.parentRegion, this.send, this.environment);
         return await this.role.resolve(signal);
       }
       const region = credentials.region; if (region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(region)) throw failure();
       const assertCurrent = async (currentSignal = signal) => { currentSignal.throwIfAborted(); const latest = await load(currentSignal); if (!same(current.credentials, latest.credentials) || !same(current.config, latest.config)) throw failure(); currentSignal.throwIfAborted(); };
+      if (ssoIntent(credentials)) {
+        if (this.allowNetwork === false) throw failure();
+        const selected = selectedSso(credentials, current.config, this.ssoCacheDirectory, this.lifetime, this.redactor), hash = createHash('sha256');
+        for (const value of [Buffer.from(this.profile), current.credentials, current.config]) { hash.update(value === undefined ? 'missing:' : value.length + ':'); if (value !== undefined) hash.update(value); }
+        const fingerprint = hash.digest('hex');
+        if (this.sso?.fingerprint !== fingerprint) this.sso = { fingerprint, source: new BedrockSsoCredentials(selected, assertCurrent, this.send) };
+        const result = await this.sso.source.resolve(signal); await assertCurrent();
+        return { ...result, ...(region ? { region } : {}), assertCurrent: async () => { try { await assertCurrent(); await result.assertCurrent(); await assertCurrent(); } catch { throw failure(); } } };
+      }
       const webIdentity = Object.hasOwn(credentials, 'web_identity_token_file') && Object.hasOwn(credentials, 'role_arn');
       if (webIdentity && ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(credentials, key))) throw failure();
       if (webIdentity && !(typeof credentials.aws_access_key_id === 'string' && typeof credentials.aws_secret_access_key === 'string')) {
@@ -175,12 +200,13 @@ class BedrockProfileProcess extends BedrockRefreshingCredentials<ProcessIdentity
     return { ...result, ...(identity.region ? { region: identity.region } : {}) };
   }
 }
-type RoleSource = { credentials: BedrockProfileCredentials; sourceExpiresAt?: number; web?: undefined; ecs?: undefined; imds?: undefined; process?: undefined }
-  | { credentials?: undefined; sourceExpiresAt?: undefined; web: BedrockWebIdentityConfig; ecs?: undefined; imds?: undefined; process?: undefined }
-  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs: BedrockEcsConfig; imds?: undefined; process?: undefined }
-  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs?: undefined; imds: BedrockImdsConfig; process?: undefined }
-  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs?: undefined; imds?: undefined; process: string };
-interface RoleIdentity extends BedrockCredentialIdentity { credentials?: BedrockProfileCredentials; sourceExpiresAt?: number; web?: BedrockWebIdentityConfig; ecs?: BedrockEcsConfig; imds?: BedrockImdsConfig; process?: string; steps: Record<string, string>[]; region?: string; sts: string }
+type RoleSource = { credentials: BedrockProfileCredentials; sourceExpiresAt?: number; web?: undefined; ecs?: undefined; imds?: undefined; process?: undefined; sso?: undefined }
+  | { credentials?: undefined; sourceExpiresAt?: undefined; web: BedrockWebIdentityConfig; ecs?: undefined; imds?: undefined; process?: undefined; sso?: undefined }
+  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs: BedrockEcsConfig; imds?: undefined; process?: undefined; sso?: undefined }
+  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs?: undefined; imds: BedrockImdsConfig; process?: undefined; sso?: undefined }
+  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs?: undefined; imds?: undefined; process: string; sso?: undefined }
+  | { credentials?: undefined; sourceExpiresAt?: undefined; web?: undefined; ecs?: undefined; imds?: undefined; process?: undefined; sso: BedrockSsoConfig };
+interface RoleIdentity extends BedrockCredentialIdentity { credentials?: BedrockProfileCredentials; sourceExpiresAt?: number; web?: BedrockWebIdentityConfig; ecs?: BedrockEcsConfig; imds?: BedrockImdsConfig; process?: string; sso?: BedrockSsoConfig; steps: Record<string, string>[]; region?: string; sts: string }
 /** Bounded role chains use static, explicit named sources or file WebIdentity, never inferred execution. */
 class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
   private readonly sessionName = 'ai-harness-' + randomUUID();
@@ -219,6 +245,10 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
     const walk = (name: string, recursive: boolean): RoleSource => {
       if (!name || name !== name.trim() || Buffer.byteLength(name) > 128 || /[\u0000-\u001f\u007f-\u009f\[\]]/u.test(name)) throw failure();
       const data = selected(name), isStatic = typeof data.aws_access_key_id === 'string' && typeof data.aws_secret_access_key === 'string';
+      if (recursive && !isStatic && ssoIntent(data)) {
+        if (this.config.allowNetwork === false) throw failure();
+        return { sso: selectedSso(data, current.config, this.config.ssoCacheDirectory!, this.config.signal, this.redactor) };
+      }
       if (recursive && !isStatic && ['Environment', 'EcsContainer', 'Ec2InstanceMetadata'].includes(data.credential_source) && data.role_arn === undefined) {
         if (['source_profile', 'credential_process', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
         return namedSource(data.credential_source);
@@ -258,7 +288,8 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
       ...(source.web ? [Buffer.from(source.web.tokenFile), Buffer.from(this.webSessionName), await bedrockCredentialFile(source.web.tokenFile, 20000, signal)] : []),
       ...(source.ecs ? [Buffer.from(source.ecs.relativeUri ?? ''), Buffer.from(source.ecs.fullUri ?? ''), Buffer.from(source.ecs.authorizationToken ?? ''), Buffer.from(source.ecs.authorizationTokenFile ?? ''),
         ...(source.ecs.authorizationTokenFile ? [await bedrockCredentialFile(source.ecs.authorizationTokenFile, 65536, signal)] : [])] : []),
-      ...(source.imds ? [Buffer.from(bedrockImdsEndpoint(source.imds))] : []), ...(source.process ? [Buffer.from(process.cwd())] : [])]) {
+      ...(source.imds ? [Buffer.from(bedrockImdsEndpoint(source.imds))] : []),
+      ...(source.sso ? [Buffer.from(bedrockSsoCacheFile(source.sso)), await bedrockCredentialFile(bedrockSsoCacheFile(source.sso), MAX_FILE, signal)] : []), ...(source.process ? [Buffer.from(process.cwd())] : [])]) {
       hash.update(value === undefined ? 'missing:' : value.length + ':'); if (value !== undefined) hash.update(value);
     }
     signal.throwIfAborted(); return { fingerprint: hash.digest('hex'), ...source, steps, ...(region ? { region } : {}), sts: awsStsEndpoint(region ?? this.parentRegion ?? 'us-east-1') };
@@ -270,11 +301,11 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
       if ((await this.identity(signal)).fingerprint !== identity.fingerprint) throw failure();
       const source = await executeBedrockCredentialProcess(identity.process, signal, this.redactor); credentials = source.credentials; sourceExpiresAt = source.expiresAt;
     }
-    if (identity.web || identity.ecs || identity.imds) {
+    if (identity.web || identity.ecs || identity.imds || identity.sso) {
       const current = async (signal: AbortSignal) => { if ((await this.identity(signal)).fingerprint !== identity.fingerprint) throw failure(); };
       const child = identity.web ? new BedrockWebIdentityCredentials(identity.web, undefined, async (url, init) => {
         if (!init.signal) throw failure(); await current(init.signal); return this.send(url, init);
-      }) : identity.ecs ? new BedrockEcsCredentials(identity.ecs, current) : new BedrockImdsCredentials(identity.imds!, current);
+      }) : identity.ecs ? new BedrockEcsCredentials(identity.ecs, current) : identity.sso ? new BedrockSsoCredentials(identity.sso, current, this.send) : new BedrockImdsCredentials(identity.imds!, current);
       const source = await child.resolve(signal); credentials = source.credentials; sourceCurrent = source.assertCurrent;
     }
     if (!credentials) throw failure();
