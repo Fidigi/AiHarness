@@ -14,7 +14,7 @@ import { azureCompletionReasoning, azureCompletionStreamValidator, azureProfileA
 import { parseProviderToolArguments } from './tool-arguments.js';
 import { consumeBedrockStream } from './bedrock-converse-stream.js';
 import { bedrockRedactedBytes, bedrockReplayBlocks } from './bedrock-replay.js';
-import { applyBedrockProfileSimplePolicy, prepareBedrockOutputBudget, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
+import { applyBedrockProfileSimplePolicy, applyBedrockProfilePromptCache, prepareBedrockOutputBudget, bedrockProfileUsage, bedrockPublishedProfiles, hasBedrockProfile } from './bedrock-profiles.js';
 import { OPENAI_DECISIONS_MODEL, decisionsBody, decisionsAnswers, type NativeWireQuestion } from './openai-decisions.js';
 export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
@@ -5216,7 +5216,7 @@ export class BedrockProvider extends AiProvider {
         ],
       };
     });
-    return {
+    const body: Record<string, unknown> = {
       messages: mapped,
       ...(system.length ? { system } : {}),
       inferenceConfig: {
@@ -5225,6 +5225,8 @@ export class BedrockProvider extends AiProvider {
       },
       ...(toolConfig ? { toolConfig } : {}),
     };
+    if (nativeReplay) applyBedrockProfilePromptCache(replayModel, body, options?.cacheRetention);
+    return body;
   }
 
   private async profileAuthentication(signal?: AbortSignal) {

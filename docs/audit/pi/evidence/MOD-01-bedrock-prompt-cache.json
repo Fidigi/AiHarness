@@ -1,0 +1,68 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-prompt-cache.v1",
+  "date": "2026-11-15",
+  "baseline": "694212f",
+  "status": "DELIVERED bounded native Bedrock prompt-cache policy",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "gap": "Bedrock already normalized observed cache counters/prices but ignored ChatOptions.cacheRetention and never emitted automatic native cachePoint hints. This was an effective default gap, not a missing optional foreign caller ABI.",
+  "implementation": {
+    "files": ["packages/core/src/providers/index.ts", "packages/core/src/providers/bedrock-profiles.ts"],
+    "policy": "Only original construction/exact pinned cache-capable Claude profiles: append a fresh default cache point after nonempty system blocks and after the terminal user message content (including tool-result prefixes); never add one to an assistant prefix or tool declarations. Omitted/short use short hints, long adds ttl:1h, none adds nothing. Both JSON/binary request paths share the same freshly built body before serialization/signing. Whole private replay/caller objects/journal remain unchanged. No warming request or inferred cache-hit/billing.",
+    "scope": "82 cache-capable Claude4/5 rows among193 pinned Bedrock declarations, including regional IDs. Exact private membership precedes the version rule. Nova automatic caching gets no explicit point. Unknown/derived, display-name/public flags, model ARNs/routing and AWS_BEDROCK_FORCE_CACHE cannot grant cache policy. Core's existing explicit options/short default are retained; no implicit PI_CACHE_RETENTION environment contract or force-cache escape hatch introduced.",
+    "source": {
+      "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+      "path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/bedrock-converse-stream.ts",
+      "sha256": "122b26fdcd1671cc885e37b5410a418b056cf43cc49856f6ae421017beff3097",
+      "ranges": "resolveCacheRetention837-845; supportsPromptCaching876-900; buildSystemPrompt914-931; final-user cache point1132-1143",
+      "access": "Existing pinned source read-only, no acquisition/import/SDK execution or account access. Existing immutable tests/fixtures/bedrock-reference.json supplies the193 declaration projection, not fresh SDK inference evidence."
+    }
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-cache-owned",
+    "imageId": "sha256:45ab3fca655bc86124b6e66a59e83a14c85e833a31244472b6ab6ce69b7815d2",
+    "candidateImageId": "sha256:f671adbe8aedb0c25b67356104ad84f33afe5ff0c8aace2d5323fd1b001b73a9",
+    "predecessorImageId": "sha256:0575b5bcae3399c095c721f1a7c037580a150d54a553c7e5e93bad984ea9a74c",
+    "runtime": "Makefile Docker build/workspace-parity types, network none/CI=true/node --no-maglev. Canonical scripts/run-typescript.mjs keeps --no-maglev/--no-turbofan. Tar-stdin strict config under /app/strict.json; no bind mount, product/dependency/generated-file overlay, retry/deadline/flag relaxation or protected-container operation.",
+    "regularRuntimePassed": 29,
+    "newCases": 3,
+    "regularReusedCases": 26,
+    "strictChangedRoots": 1,
+    "strictLimit": "New bedrock-cache.test.ts strict root PASS. Existing modified bedrock-converse-stream.test.ts root has10 pre-existing diagnostics (nullable clone/SessionEntry.blocks/optional metadata), identical on predecessor and candidate; strict-preexisting.diff empty. No strict pass claimed for that old root, no flags/assertions suppressed or unrelated type refactor.",
+    "unselectedCases": 637,
+    "coverage": "Three new compiled-public-Core cases: explicit/omitted retention on native Opus/global Fable JSON+binary (16 requests), assistant/tool-use versus terminal tool-result/absent-system hints with complete arrays (five requests), and Nova/unknown Claude/ARN/forged-derived negative authority on both paths (eight requests). Once-only observed10-token counters and input immutability retained. Reused tools5/profile6/intent5 and selected Bedrock protocol/default/identity/replay10 conserve auth/source/signatures/strictness/ceiling/known accounting. Static declaration projection193/82 is not193 runtime requests or a model-host campaign.",
+    "existingOracleChange": "Only owning agent continuation expectation is extended: immutable saved SDK vectors have caching disabled; the agent already defaults to short. Preserve the full original captured array and assert its exact terminal followup before appending the independently specified native default point. No filtered actual result, fixture rewrite, disabled cache/default, weakened assertion or private replay change.",
+    "sourceWitness": {
+      "packages/core/src/providers/index.ts": "fc98da3ea1959dba7f5583127d6c61ab3d4b91c0f7db8ba3ea1565531223b443",
+      "packages/core/src/providers/bedrock-profiles.ts": "d12baca71763ad5310ed46cecc2ed03b654fcc67f95045b040ededbafa3763bc"
+    },
+    "tests": {
+      "packages/core/src/providers/bedrock-cache.test.ts": "9ed868e9c31b7061f268bcce85c6c1db2ef1be4d676c9d315d8f7cb0ef93bd2d",
+      "packages/core/src/providers/bedrock-converse-stream.test.ts": "3e21cf7318a5ac5607dda252a959240aea827a4d42a66b61eed082d02a2fab39"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-bedrock-cache/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-bedrock-cache/red.log (two genuine missing-hint failures/one negative scope control PASS)",
+      "firstBuild": "/tmp/mod01-bedrock-cache/build-owned.log",
+      "candidate": "/tmp/mod01-bedrock-cache/owned.log (candidate19 PASS then five selected agent replay expectations lacked the new default hint/five PASS)",
+      "strictCandidate": "/tmp/mod01-bedrock-cache/owned-r2.log (existing root10 diagnostics)",
+      "strictPredecessor": "/tmp/mod01-bedrock-cache/strict-predecessor.log (same10 diagnostics)",
+      "strictDiff": "/tmp/mod01-bedrock-cache/strict-preexisting.diff (empty)",
+      "build": "/tmp/mod01-bedrock-cache/build-owned-r2.log (build/types PASS, final fixture included)",
+      "owned": "/tmp/mod01-bedrock-cache/owned-r3.log (19+10=29 PASS/one new strict root;637 unselected)",
+      "declarationReaderFailure": "/tmp/mod01-bedrock-cache/declaration-reader-failure.txt (initial static reader incorrectly used startsWith on regional display names; source unchanged)",
+      "declarations": "/tmp/mod01-bedrock-cache/declaration-check.json (193 declared/82 admitted; unknown refused; no SDK/service inference)",
+      "review": "/tmp/mod01-bedrock-cache/review-check.json",
+      "docs": "/tmp/mod01-bedrock-cache/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-cache-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-bedrock-cache-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-cache.test.ts packages/core/src/providers/bedrock-tools.test.ts packages/core/src/providers/native-owner-intent.test.ts packages/core/src/providers/bedrock-profile.test.ts --maxWorkers=1'",
+      "same isolated image: node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-converse-stream.test.ts --maxWorkers=1 -t 'withholds signed carriers|explicit opaque Bearer|independent SigV4|193 approved|anthropic[.]claude-opus-4-6-v1:|keeps native defaults private'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "No new host option/source, format/dependency, cache model alias, credentials priority, endpoint/proxy, background warming or store mutation. No claim of actual remote hit, cost saving or service availability.",
+    "Existing host/installed/browser proofs retain their own scopes; no new distinct changed boundary warrants another campaign. No QUA/global/account or MOD-03 redelivery, historical repair or acceptance extension.01b/04a remain PARTIAL pending the remaining source-contract reconciliation;02e/06c unchanged."
+  ]
+}

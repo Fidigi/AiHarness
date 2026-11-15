@@ -877,7 +877,13 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
         messages: history, tools: structuredClone(profileReplay.tools), extensionRegistry: registry,
         resolveProvider: name => name === 'bedrock' ? provider : undefined, cacheWarming: 'off', maxRetries: 0 });
       const target = profileReplay.rows.find(row => row.model === physical)!;
-      expect(captured.at(-1)?.messages).toEqual(target.cases.find(row => row.case === (foreign ? 'foreign-model' : 'same'))!.expectedMessages);
+      const expected = [...target.cases.find(row => row.case === (foreign ? 'foreign-model' : 'same'))!.expectedMessages];
+      // Captured SDK replay vectors disable cache. The agent's unchanged short default now emits its native hint.
+      if (physical.includes('anthropic.claude')) {
+        expect(expected.pop()).toEqual({ role: 'user', content: [{ text: 'followup' }] });
+        expected.push({ role: 'user', content: [{ text: 'followup' }, { cachePoint: { type: 'default' } }] });
+      }
+      expect(captured.at(-1)?.messages).toEqual(expected);
       expect(history).toEqual(original);
     }
     expect(captured).toHaveLength(24);

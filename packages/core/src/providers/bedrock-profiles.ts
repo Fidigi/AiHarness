@@ -259,6 +259,16 @@ export function bedrockPublishedProfiles(): PublishedModelMetadata[] {
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const counter = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
+/** Exact admitted pinned profiles only; labels, ARNs and ambient force-cache flags grant no policy. */
+export function applyBedrockProfilePromptCache(model: string, body: Record<string, unknown>, retention: ChatOptions['cacheRetention'] = 'short'): void {
+  if (retention === 'none' || !profiles.has(model)
+    || !/anthropic\.claude-(?:fable-5|haiku-(?:4-|5)|opus-(?:4-|5)|sonnet-(?:4-|5))/u.test(model)) return;
+  const point = () => ({ cachePoint: { type: 'default', ...(retention === 'long' ? { ttl: '1h' } : {}) } });
+  if (Array.isArray(body.system) && body.system.length) body.system.push(point());
+  const last = Array.isArray(body.messages) ? body.messages.at(-1) : undefined;
+  if (record(last) && last.role === 'user' && Array.isArray(last.content)) last.content.push(point());
+}
+
 /** Raw native omitted-output defaults and explicit/effective ceilings; simple/context/host preparation remain separate. */
 export function applyBedrockProfileOutputPolicy(model: string, body: Record<string, unknown>, requested: unknown): void {
   const profile = profiles.get(model);
