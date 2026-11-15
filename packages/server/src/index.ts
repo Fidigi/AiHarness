@@ -24,6 +24,7 @@ import {
   McpOAuthFlowService,
   ProviderCredentialService,
   resolveVertexAdcEnvironment,
+  resolveBedrockProfileEnvironment,
   serializeSession,
   serializeSessionForExport,
   SessionBranchCancelledError,
@@ -248,6 +249,10 @@ function initializeCredentials(
           const config = await resolveVertexAdcEnvironment(credentialEnvironment, runtime.controller.signal);
           if (config && !proxy.isConfigured(type)) proxy.setVertexAdc({ ...config, vertexAdc: { ...config.vertexAdc!, signal: runtime.controller.signal } });
         }
+        if (type === 'bedrock' && !proxy.isConfigured(type) && !credentials.list().some(item => item.provider === type) && !credentialEnvironment[credentialCommandVariable(type)]) {
+          const config = await resolveBedrockProfileEnvironment(credentialEnvironment, runtime.controller.signal);
+          if (config && !proxy.isConfigured(type)) proxy.setBedrockProfile({ ...config, bedrockProfile: { ...config.bedrockProfile!, signal: runtime.controller.signal } });
+        }
         continue;
       }
       const value = resolved.credential.type === 'api-key'
@@ -256,11 +261,13 @@ function initializeCredentials(
         const mode = resolved.credential.type === 'oauth' || resolved.descriptor.source === 'environment'
           && !credentialEnvironment.ANTHROPIC_API_KEY && !!(credentialEnvironment.ANTHROPIC_AUTH_TOKEN || credentialEnvironment.ANTHROPIC_OAUTH_TOKEN) ? 'oauth' : 'api-key';
         proxy.setApiKey(type, value, credentialEnvironment.ANTHROPIC_BASE_URL, credentialEnvironment.ANTHROPIC_MODEL, mode);
+      } else if (type === 'bedrock') {
+        proxy.setApiKey(type, resolved.descriptor.source === 'environment' ? JSON.stringify({ bearerToken: value }) : value,
+          credentialEnvironment.BEDROCK_BASE_URL, credentialEnvironment.BEDROCK_MODEL);
       } else if (type === 'vertex') {
         const mode = resolved.descriptor.source === 'environment' && !credentialEnvironment.GOOGLE_VERTEX_ACCESS_TOKEN && credentialEnvironment.GOOGLE_CLOUD_API_KEY ? 'api-key' : 'bearer';
         proxy.setApiKey(type, value, credentialEnvironment.VERTEX_BASE_URL, credentialEnvironment.VERTEX_MODEL, 'api-key', mode);
-      } else proxy.setApiKey(type, type === 'bedrock' && resolved.descriptor.source === 'environment'
-        ? JSON.stringify({ bearerToken: value }) : value);
+      } else proxy.setApiKey(type, value);
     }
     if (runtime.closed) throw new Error('Application runtime is no longer active.');
     const copilot = await resolveGitHubCopilotSubscription(credentials, runtime.controller.signal);

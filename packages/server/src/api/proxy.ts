@@ -47,6 +47,7 @@ import type {
   ProviderOAuthCredential,
   ProviderNetworkScope,
   VertexProviderConfig,
+  BedrockProviderConfig,
 } from '@ai-harness/core';
 
 /** Configuration for the proxy server */
@@ -424,6 +425,7 @@ export class AiProxyServer {
   private vertexProxy?: CoreProviderProxy;
   private vertexWorkload?: AbortController;
   private bedrockProxy?: CoreProviderProxy;
+  private bedrockProfileLifetime?: AbortController;
   private mockProxy?: CoreProviderProxy;
   private githubCopilotProxy?: CoreProviderProxy;
   private openaiCodexProxy?: CoreProviderProxy;
@@ -510,7 +512,8 @@ export class AiProxyServer {
         ...network,
         type: ProviderType.BEDROCK,
         ...(process.env.AWS_BEARER_TOKEN_BEDROCK ? { apiKey: process.env.AWS_BEARER_TOKEN_BEDROCK } : {}),
-        region: process.env.AWS_REGION,
+        region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
+        baseUrl: process.env.BEDROCK_BASE_URL,
         model: process.env.BEDROCK_MODEL,
       });
       this.bedrockProxy = new CoreProviderProxy(provider);
@@ -587,6 +590,20 @@ export class AiProxyServer {
 
   hasVertexAdc(): boolean { return !!this.vertexWorkload; }
 
+  /** Trusted profile fallback only; HTTP configuration cannot choose credential files. */
+  setBedrockProfile(config: BedrockProviderConfig): void {
+    if (!config.bedrockProfile) throw new Error('Invalid Bedrock profile configuration.');
+    const controller = new AbortController(), lifetime = config.bedrockProfile.signal;
+    lifetime?.throwIfAborted();
+    const provider = new BedrockProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'bedrock',
+      region: config.region, baseUrl: config.baseUrl, model: config.model,
+      bedrockProfile: { ...config.bedrockProfile, signal: lifetime ? AbortSignal.any([lifetime, controller.signal]) : controller.signal, redactor: this.redactor } });
+    this.bedrockProfileLifetime?.abort(); this.bedrockProfileLifetime = controller;
+    this.bedrockProxy = new CoreProviderProxy(provider); this.agentProviders.set('bedrock', provider);
+  }
+
+  hasBedrockProfile(): boolean { return !!this.bedrockProfileLifetime; }
+
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key', vertexAuthMode: 'api-key' | 'bearer' = 'bearer'): void {
     if (apiKey) this.redactor.add(apiKey);
@@ -635,6 +652,7 @@ export class AiProxyServer {
         model,
       };
       provider = new BedrockProvider(config);
+      this.bedrockProfileLifetime?.abort(); this.bedrockProfileLifetime = undefined;
       this.bedrockProxy = new CoreProviderProxy(provider);
     } else {
       const normalizedBaseUrl = normalizeLocalBaseUrl(baseUrl || 'http://localhost:11434/v1');
@@ -734,7 +752,7 @@ export class AiProxyServer {
       case 'google': this.googleProxy = undefined; break;
       case 'azure': this.azureProxy = undefined; break;
       case 'vertex': this.vertexWorkload?.abort(); this.vertexWorkload = undefined; this.vertexProxy = undefined; break;
-      case 'bedrock': this.bedrockProxy = undefined; break;
+      case 'bedrock': this.bedrockProfileLifetime?.abort(); this.bedrockProfileLifetime = undefined; this.bedrockProxy = undefined; break;
       case 'local': this.localProxy = undefined; break;
       case 'github-copilot': this.githubCopilotProxy = undefined; break;
       case 'openai-codex': this.openaiCodexProxy = undefined; break;

@@ -19,7 +19,9 @@ import {
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
   resolveVertexAdcEnvironment,
+  resolveBedrockProfileEnvironment,
   type VertexProviderConfig,
+  type BedrockProviderConfig,
   type MetaOAuthCredentialSource,
   type XaiOAuthCredentialSource,
 } from '@ai-harness/core';
@@ -71,6 +73,7 @@ export interface CliProviderRuntime {
   anthropicOAuth?: CliAnthropicOAuth;
   anthropicFederation?: AnthropicFederationConfig;
   vertexAdc?: VertexProviderConfig;
+  bedrockProfile?: BedrockProviderConfig;
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -224,8 +227,11 @@ export async function createCliProviderRuntime(
     && (!offline || storedXai.expiresAt! > Date.now() + 60_000) ? storedXai : undefined;
   const vertexAdc = !offline && !values.has('vertex') && !present.has('vertex') && !commandEnv[commandVariable('vertex')]
     ? await resolveVertexAdcEnvironment(env, lifetime) : undefined;
+  const bedrockProfile = !values.has('bedrock') && !present.has('bedrock') && !commandEnv[commandVariable('bedrock')]
+    ? await resolveBedrockProfileEnvironment(env, lifetime) : undefined;
   lifetime.throwIfAborted();
   return {
+    ...(bedrockProfile ? { bedrockProfile: { ...bedrockProfile, bedrockProfile: { ...bedrockProfile.bedrockProfile!, signal: lifetime, redactor } } } : {}),
     ...(vertexAdc ? { vertexAdc: { ...vertexAdc, vertexAdc: { ...vertexAdc.vertexAdc!, signal: lifetime, redactor } } } : {}),
     ...(xai ? { xaiOAuth: { credential: xai, credentialSource: xaiSource } } : {}),
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),

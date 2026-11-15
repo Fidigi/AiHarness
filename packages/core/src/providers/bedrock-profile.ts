@@ -1,5 +1,7 @@
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import type { BedrockProviderConfig } from './index.js';
 import path from 'node:path';
 import type { CredentialRedactor } from './credentials.js';
 
@@ -52,6 +54,25 @@ function section(input: Buffer | undefined, name: string): Record<string, string
   return selected;
 }
 const same = (left: Buffer | undefined, right: Buffer | undefined) => left === undefined ? right === undefined : right !== undefined && left.equals(right);
+
+/** Trusted native-host admission: named profile plus bounded existing INI metadata, never file contents. */
+export async function resolveBedrockProfileEnvironment(env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<BedrockProviderConfig | undefined> {
+  signal?.throwIfAborted();
+  const profile = env.AWS_PROFILE;
+  if (!profile || profile !== profile.trim() || Buffer.byteLength(profile) > 128 || /[\u0000-\u001f\u007f-\u009f\[\]]/u.test(profile)
+    || env.AWS_BEARER_TOKEN_BEDROCK || env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) return undefined;
+  const home = env.HOME || homedir(), credentialsFile = env.AWS_SHARED_CREDENTIALS_FILE || path.join(home, '.aws', 'credentials'), configFile = env.AWS_CONFIG_FILE || path.join(home, '.aws', 'config');
+  if (!safePath(credentialsFile) || !safePath(configFile)) return undefined;
+  const files = [path.resolve(credentialsFile), path.resolve(configFile)]; let present = false;
+  for (const file of files) {
+    const metadata = await stat(file).catch(() => undefined); signal?.throwIfAborted();
+    if (!metadata) continue;
+    if (!metadata.isFile() || metadata.size > MAX_FILE) return undefined;
+    present = true;
+  }
+  return present ? { type: 'bedrock', model: env.BEDROCK_MODEL, baseUrl: env.BEDROCK_BASE_URL, region: env.AWS_REGION || env.AWS_DEFAULT_REGION,
+    bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], signal } } : undefined;
+}
 
 /** No token cache/store, ambient scans, process execution or network. Each call binds both current file bytes. */
 export class BedrockProfile {

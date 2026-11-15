@@ -161,6 +161,7 @@ export interface CreateConfiguredProvidersOptions {
   anthropicOAuth?: CliAnthropicOAuth;
   anthropicFederation?: CliProviderRuntime['anthropicFederation'];
   vertexAdc?: CliProviderRuntime['vertexAdc'];
+  bedrockProfile?: CliProviderRuntime['bedrockProfile'];
   radiusCatalogueDirectory?: string;
   radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
@@ -186,6 +187,7 @@ function configuredCredential(
 }
 
 function nativeEnvironmentHints(name: string, env: NodeJS.ProcessEnv, catalogueDirectory?: string): Partial<ProviderConfig> {
+  if (name === 'bedrock') return { region: env.AWS_REGION || env.AWS_DEFAULT_REGION, baseUrl: env.BEDROCK_BASE_URL, model: env.BEDROCK_MODEL };
   if (name === 'vertex') return { project: env.GOOGLE_CLOUD_PROJECT || env.GCLOUD_PROJECT, location: env.GOOGLE_CLOUD_LOCATION,
     baseUrl: env.VERTEX_BASE_URL, model: env.VERTEX_MODEL, vertexAuthMode: env.GOOGLE_VERTEX_ACCESS_TOKEN || !env.GOOGLE_CLOUD_API_KEY ? 'bearer' : 'api-key' };
   if (!Object.hasOwn(NATIVE_PROVIDERS, name)) return {};
@@ -297,8 +299,8 @@ export function createConfiguredProviders(
   const vertex = vertexEnvironmentConfig(env, vertexKey);
   attempt(providers, 'vertex', vertex ? { ...network, ...vertex } : options.vertexAdc ? { ...network, ...options.vertexAdc } : undefined);
   attempt(providers, 'bedrock', bedrockCredential
-    ? { ...network, ...bedrockCredential, type: 'bedrock', region: env.AWS_REGION, model: env.BEDROCK_MODEL }
-    : undefined);
+    ? { ...network, ...bedrockCredential, ...nativeEnvironmentHints('bedrock', env), type: 'bedrock' }
+    : options.bedrockProfile ? { ...network, ...options.bedrockProfile } : undefined);
   attempt(providers, 'local', {
     ...network,
     type: 'local',
