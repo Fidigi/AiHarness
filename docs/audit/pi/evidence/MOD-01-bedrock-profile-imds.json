@@ -1,0 +1,69 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-profile-imds.v1",
+  "date": "2026-11-15",
+  "baseline": "de7fadb",
+  "status": "DELIVERED bounded explicit IMDSv2 role-profile source;02e PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "gap": "Ec2InstanceMetadata role/source-profile leaves were rejected despite existing named-role/native host composition. Four predecessor REDs cover selected IPv4/recursive IPv6, final-cache inference and actual emitted JSON CLI; seven unrelated refusal/cancellation/static/web/ECS cases unselected.",
+  "reference": {
+    "library": "@smithy/credential-provider-imds",
+    "version": "4.5.2",
+    "files": {
+      "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@smithy/credential-provider-imds/dist-es/fromInstanceMetadata.js": "96c7bb7f310dde37cdf8be95057483605cd72c8bca6c7c3710c56fccf09328b1",
+      "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@smithy/credential-provider-imds/dist-es/config/EndpointConfigOptions.js": "298d1191ac60cd07e7c3a69ee96a81228a45a4c1f7bad1705c04eba2ad3ab9db",
+      "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@smithy/credential-provider-imds/dist-es/config/EndpointModeConfigOptions.js": "fc945062e1b5c9227177c28bab4c577e1cac42060e02d26ebc00a81d6ac764e8"
+    },
+    "review": "Read-only installed source, no acquisition/import/execution. Standard PUT/latest/api/token,21600 TTL, token-authenticated role-list and credential GET. Endpoint/mode env and INI config supported. SDK v1 downgrade/retries/static-stability are not blindly copied as native defaults or claimed qualified."
+  },
+  "implementation": {
+    "files": ["packages/core/src/providers/bedrock-imds.ts", "packages/core/src/providers/bedrock-profile.ts", "packages/core/src/providers/index.ts"],
+    "admission": "Only original trusted explicit profile: role_arn + credential_source=Ec2InstanceMetadata without source_profile, or recursive source_profile named leaf with no role. Reuse existing four-role/static-priority/INI/STS/XML/current-source/final-native mechanisms. No ambient default IMDS probe, root public source option, DTO/store/profile picker, command execution or added credential dependency.",
+    "authority": "Capture/copy AWS_EC2_METADATA_SERVICE_ENDPOINT/MODE/DISABLED at original construction. Env endpoint overrides selected-root INI ec2_metadata_service_endpoint; env mode overrides selected-root INI mode; endpoint authority wins mode. Default IPv4 http://169.254.169.254 or explicit IPv6 http://[fd00:ec2::254]. Safe HTTPS overrides/prefixes accepted; HTTP restricted to loopback/IMDS addresses, no userinfo/query/fragment/unsafe text. Leaf region never retargets metadata, signed top-role STS or configured inference. Disabled/offline/mixed/unsafe authority refuses before network, no raw ambient-key fallback.",
+    "protocol": "Internal BedrockImdsCredentials reuses foreground vending/expiry/caller lifetime and bounded JSON; PUT gets a nonempty printable header-safe token<=4096 bytes, role GET admits one trimmed IAM role name<=64 in body<=1024 bytes, credential GET requires Code=Success and current valid bounded credential JSON. Fatal UTF8/content-length/stream byte bounds, manual redirects/exact200/no retry/proxy/inference headers. Failure never downgrades to unauthenticated IMDSv1. Token/role/source/final secrets enroll, never enter STS or inference headers/context.",
+    "lifetime": "Each metadata send rechecks parent INI/current endpoint after previous body work; recheck before signed STS, between roles/after mint/before inference. Whole auth15s includes all three metadata requests and up to four roles. Reader cancellation does not wait for hostile body completion. Final-role cache only across operations; no persisted/shared metadata token/intermediate cache, watcher or expiry extension. Valid final-role hits never probe IMDS, exact401-403 only evicts for next operation; existing owner/independent-caller/newest-success semantics retained.",
+    "hosts": "Reuse AWS_PROFILE native admission/outside-values/readonly source, ordinary credential and cold invocation-key priorities. One added existing actual JSON role-scenario variant maps only fixed IMDS origin to CA-verified loopback TLS: PUT/token GETs -> EU signed STS -> US binary native/private process restart, source-key/token revision, passive listing/auth0 acquisition, offline refusal, cold override without metadata, echo redaction/journal0600/no credentials.enc/30 once-only model tokens. Existing trusted Server role owner/API scope reused, not a new IMDS-specific HTTP/Settings/RPC/browser journey."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-profile-imds-owned",
+    "imageId": "sha256:f86b86aa7ee2cf8603ef7275e844f2005d35093ce82796f9388485ada4568ea1",
+    "initialCandidateImageId": "sha256:bb55b424dec9b053830080b26881a4e4eab28bc46a6a725abc9204c86e5489be",
+    "predecessorImageId": "sha256:dfa05f90f40cdeaffd063ef97bde0243a02f89bf25131f22a31d60a2118042ba",
+    "runtime": "Docker --network none/CI=true/node --no-maglev, strict.json tar stdin under /app, canonical scripts/run-typescript.mjs preserves --no-maglev/--no-turbofan; synthetic accounts/files/HOME/stores, mock metadata or fixed-origin CA-verified loopback, no real-account/live opt-in fixture.",
+    "newRuntimeCases": 8,
+    "newSdkCases": 7,
+    "newActualCliVariants": 1,
+    "runtimePassed": 65,
+    "reusedRuntimeCases": 57,
+    "strictChangedRoots": 2,
+    "coverage": "Default IPv4/recursive IPv6/captured env and root-file authority; pure passive listing, PUT/token-only metadata headers/no inference auth/proxy, source-only STS/final-only native JSON/binary/cache/private replay/redaction/regions; disabled/unsafe/offline/mixed/ambient-fallback refusals; bad statuses/redirect/token length+UTF8+header grammar/role bounds+ambiguity/credentials+expiry; INI withdrawal after each metadata stage; held body retirement cancellation; next-call403 remint; actual native emitted JSON restart/cold override/privacy.",
+    "reused": "EcsContainer-profile SDK6; direct ECS SDK9; named role8; static profile6; selected-root INI WebIdentity6; web-role leaf5; Environment role5; existing static/web/ECS CLI variants3; direct ECS host gates8; native trusted HTTP role owner/private restart/once-only usage1. No all-model/host matrix or whole-root/browser/installed campaign; existing package inclusion contract already owns ordinary Core dist modules, no new worker/dependency/asset/export risk.",
+    "tests": {
+      "packages/core/src/providers/bedrock-profile-imds.test.ts": "1617bbfb7b97e659259e5954209c6a8f1763e931778ed1337501031ebf8c3fe4",
+      "packages/cli/src/cli/bedrock-profile-role-process.test.ts": "62b5bca348f00d863b670aceaa9888db80a3cee922ce670a591bf1b2e7697071"
+    },
+    "sourceWitness": {
+      "packages/core/src/providers/index.ts": "b3160a5e2d6235b3fd7ece0d6b5546db85f11bdc3a4dc82d48f690582570f276",
+      "packages/core/src/providers/bedrock-profile.ts": "93138e1e7240efae2b19175b4eb34b65335e158beefab73a6ce86a45d5ba8b73",
+      "packages/core/src/providers/bedrock-imds.ts": "dd08a928ffada6ce573475bab54e4e7428e1d891370eb93cc8dd005a7bb1dd18"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-bedrock-profile-imds/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-bedrock-profile-imds/red.log (four genuine failures/seven unselected)",
+      "initialBuild": "/tmp/mod01-bedrock-profile-imds/build-owned.log (workspace build/types PASS)",
+      "focused": "/tmp/mod01-bedrock-profile-imds/focused.log (eight PASS/three unselected/strict2)",
+      "finalBuild": "/tmp/mod01-bedrock-profile-imds/build-owned-r2.log (same product plus stronger endpoint-priority/content-length controls, build/types PASS)",
+      "owned": "/tmp/mod01-bedrock-profile-imds/owned.log (65 PASS/strict2)",
+      "docs": "/tmp/mod01-bedrock-profile-imds/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-profile-imds-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-bedrock-profile-imds-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-profile-imds.test.ts packages/core/src/providers/bedrock-profile-ecs.test.ts packages/core/src/providers/bedrock-ecs.test.ts packages/core/src/providers/bedrock-profile-role.test.ts packages/core/src/providers/bedrock-profile-environment.test.ts packages/core/src/providers/bedrock-profile-web-identity.test.ts packages/core/src/providers/bedrock-profile-web-leaf.test.ts packages/core/src/providers/bedrock-profile.test.ts packages/cli/src/cli/bedrock-profile-role-process.test.ts packages/cli/src/providers/bedrock-ecs.test.ts packages/server/src/api/bedrock-profile-role-http.test.ts --maxWorkers=1'",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "limits": [
+    "Role-profile IMDSv2 subset only, not standalone named credential_source without a role, ambient default credential chain, IMDSv1 downgrade, SDK retry/static-stability/expired-key extension, account fulfilment or full SDK equivalence. Remaining mechanisms/policies must be reconciled explicitly, not silently declared done or converted wholesale into mandatory SDK-optional backlog.",
+    "AWS SSO/login/process/scoped profile choice/unsupported signing scopes/remaining source-region/ADC mechanisms and stored Vertex cloud-key mode remain separate. Auth-file executable authorization is still unanswered; no command execution or implicit authorization added.",
+    "02e PARTIAL;01b/04a PARTIAL and06c OPEN. Exact23/18 functional rows/one historical/four unresolved unchanged, MOD-01 IN PROGRESS/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged."
+  ]
+}
