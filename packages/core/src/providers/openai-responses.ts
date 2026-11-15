@@ -194,8 +194,11 @@ export function prepareOpenAiResponse(body: Record<string, unknown>, options?: C
 }
 
 /** Native R primary input includes disjoint cache reads and writes; tiers use the genuine gross count. */
-export function openAiResponseUsage(value: unknown, model: string): ChatResponse['usage'] {
-  return nativeResponsesUsage(value, openAiResponseProfile(model));
+export function openAiResponseUsage(value: unknown, model: string, serviceTier?: unknown): ChatResponse['usage'] {
+  const usage = nativeResponsesUsage(value, openAiResponseProfile(model));
+  // Pinned observed-tier estimate, not caller selection or an invoice. Other owners keep their own rates.
+  const multiplier = serviceTier === 'flex' ? 0.5 : serviceTier === 'priority' || serviceTier === 'fast' ? model === 'gpt-5.5' ? 2.5 : 2 : 1;
+  return usage?.costUsd !== undefined ? { ...usage, costUsd: usage.costUsd * multiplier } : usage;
 }
 
 export function nativeResponsesUsage(value: unknown, profile: Pick<NativeResponsesProfile, 'pricing' | 'pricingTiers'>): ChatResponse['usage'] {

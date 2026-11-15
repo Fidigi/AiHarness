@@ -1,0 +1,64 @@
+{
+  "schema": "ai-harness.mod-01.responses-service-tier.v1",
+  "date": "2026-11-15",
+  "baseline": "236d843",
+  "status": "DELIVERED observed native OpenAI Responses service-tier estimate",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "gap": "The pinned OpenAI adapter automatically applies service-tier pricing from the terminal response even without its optional caller tier selector. Core discarded this observed field and always returned the base-context tariff. This is an actual response/default accounting gap, not an obligation to add a foreign public selector or raw sampling ABI.",
+  "implementation": {
+    "files": ["packages/core/src/providers/index.ts", "packages/core/src/providers/openai-responses.ts"],
+    "policy": "Pass terminal service_tier through the existing internal usage callback (SSE complete/done/incomplete, WebSocket, existing compatible JSON branch). Only the private original OpenAI Responses delegate consumes it, after disjoint counters/gross-context tariffs reconcile: flex0.5; priority/fast2, except exact requested gpt-5.5 uses2.5; other labels/missing values retain the pinned unit multiplier. No multiplication or invented price when the existing accounting returned no cost. Requested captured physical model, not remote alias, selects both tariff and exception. Azure/compatible/other owners ignore this new optional internal callback argument and keep independent prices.",
+    "publicBoundary": "No service-tier request field, paid selection/default, metadata capability, session/DTO/schema, replay authority, background warming, dependency or retry/deadline change. It remains a pinned estimate rather than an invoice/availability promise. Other/future tier labels follow the pinned unit-multiplier fallback, not newly claimed service-specific tariffs.",
+    "source": [
+      { "path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/openai-responses.ts", "sha256": "0e9b9b4bae4265803cd1c6a203492065d6fcbec5cf86b57c614c3b75e7a0a554", "ranges": "194-198 automatic pricing callback;391-420 multipliers" },
+      { "path": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/openai-responses-shared.ts", "sha256": "09100e0bfe8fa4ad212312956930f4a9e70cd29ca823d2e1f1c97f87b4541afe", "ranges": "578-582 observed response tier precedes optional request tier" }
+    ],
+    "sourceAccess": "Existing Pi1.2.0/06a466935536f8c9bcacb2d5efc0fc021be1bdff read-only sources; no SDK acquisition/import/execution. Azure's independent source supplies no such OpenAI pricing callback."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-responses-tier-owned",
+    "imageId": "sha256:01a6d8f3208dbc451e3d687899144be1bb86b8d42482eca4a145c55e62d250e0",
+    "candidateImageId": "sha256:a95314145103e59360f414afb6d21be9384d3e44284a74cbdfc0f049fc1e7e49",
+    "predecessorImageId": "sha256:45ab3fca655bc86124b6e66a59e83a14c85e833a31244472b6ab6ce69b7815d2",
+    "runtime": "Makefile Docker build/workspace-parity types, network none/CI=true/node --no-maglev; strict configs tar stdin under /app/strict.json, canonical run-typescript keeps --no-maglev/--no-turbofan. Synthetic credentials, mocked SSE and an existing RFC6455 loopback fixture only; no personal source/account, TLS bypass, product/dependency/generated overlay or protected container.",
+    "regularRuntimePassed": 63,
+    "newCases": 3,
+    "regularReusedCases": 60,
+    "strengthenedExistingCases": 1,
+    "strictChangedRoots": 2,
+    "unselectedCases": 432,
+    "coverage": "New compiled-public-Core3: omitted/base/auto/flex/priority/fast/future labels on requested gpt-5.4/5.5, chat+stream SSE over JSON requests; immutable input, unchanged disjoint counters, no paid request selector; gross-context tier then observed multiplier, per-turn requested override/remote-alias and early-created-event isolation; independent Azure/generic pricing. Existing real-WebSocket case adds terminal flex counters and exact gpt-5/gpt-4o costs across socket reuse/physical switch while keeping all prior frames, private replay, timeout/retirement, no-SSE-fallback and auth assertions. It is one strengthened case among reused7, not a new transport campaign. Other reused cases:systems6/additive history7/native R28/Azure11/shared gateway1.34 new mocked requests and the existing7-request real socket scenario, not model-host qualification.",
+    "sourceWitness": {
+      "packages/core/src/providers/index.ts": "f6c01fa4d6d4099051f5afc29745f5a9ea394b18f2b76aa15702e4c256cbe89e",
+      "packages/core/src/providers/openai-responses.ts": "aaa8c4eda0f2246b851dba3ceff72aaba29d98dd7ba36127205501e9e82c4353"
+    },
+    "tests": {
+      "packages/core/src/providers/responses-service-tier.test.ts": "d85ea4f79cf8c5d92ef07c284728fcc24dd1eaa6fcac4538b7c533583987376f",
+      "packages/core/src/providers/provider-websocket.integration.test.ts": "20e64d2fa4435485867bba71653c85f394138fbc59e006ea8f954fb8fcef0a40"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-responses-tier/runtime-witness.diff (empty)",
+    "logs": {
+      "initial": "/tmp/mod01-responses-tier/red.log (three invalid fixture failures:original OpenAI/Azure only accept SSE replies; no product gap credit)",
+      "red": "/tmp/mod01-responses-tier/red-r2.log (correct SSE replies:two genuine unadjusted price failures/one independent-owner control PASS)",
+      "wsRed": "/tmp/mod01-responses-tier/ws-red.log (one genuine observed-flex cost failure/six unselected; existing source-local loopback scenario)",
+      "firstBuild": "/tmp/mod01-responses-tier/build-owned.log (first candidate build/types PASS)",
+      "focused": "/tmp/mod01-responses-tier/focused.log (16 PASS/one strict root before WS test strengthening)",
+      "build": "/tmp/mod01-responses-tier/build-owned-r2.log (final build/types PASS, exact final tests)",
+      "owned": "/tmp/mod01-responses-tier/owned.log (23+28+11+1=63 distinct PASS/two strict roots;432 unselected)",
+      "review": "/tmp/mod01-responses-tier/review-check.json",
+      "docs": "/tmp/mod01-responses-tier/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-responses-tier-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-responses-tier-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/responses-service-tier.test.ts packages/core/src/providers/responses-system-history.test.ts packages/core/src/providers/responses-tool-history.test.ts packages/core/src/providers/provider-websocket.integration.test.ts --maxWorkers=1'",
+      "same image: node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/openai-responses.test.ts --maxWorkers=1 -t 'gpt-5:|gpt-5[.]4:|bounds opaque capture|preserves tool/final signatures|independent catalogue|malformed defined|legacy prefer'",
+      "same image: node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/azure-responses.test.ts --maxWorkers=1 -t '45 independent|dispatches native|pins native identity|callback cancellation|gpt-4o:|gpt-5:|gpt-5[.]4:|deployment per requested|truncated Azure|cancels an owned'",
+      "same image: node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/ai-gateways.test.ts --maxWorkers=1 -t 'shared codec'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "No new original OpenAI/Azure JSON-response support:the initial JSON-reply fixture was incorrect and is retained as failure, not repaired by transport expansion. JSON refers to request bodies; native regular replies remain SSE. Internal JSON forwarding is inert for these owners and independently used by compatible owners that ignore the tier.",
+    "Fresh actual loopback WebSocket pricing covers the changed callback path and existing scenario only; it does not repair historical Codex unsupported/native CLI/other socket or global incidents. No new CLI/HTTP/browser/installed/production/account campaign, host selector, paid warming, all-profile price certificate or MOD-03 redelivery.01b/04a remain PARTIAL pending remaining source-contract review; exact23/current counts/exactly three historical acceptances unchanged."
+  ]
+}

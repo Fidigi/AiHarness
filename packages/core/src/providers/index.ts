@@ -3090,7 +3090,7 @@ async function applyResponsesEvent(
   event: ProviderResponseRecord,
   state: ResponsesAccumulator,
   onChunk: StreamChunkCallback,
-  usage: (value: unknown) => ChatResponse['usage'] = responsesUsage,
+  usage: (value: unknown, serviceTier?: unknown) => ChatResponse['usage'] = responsesUsage,
   toolId?: (item: ProviderResponseRecord) => string,
   grammarProperty?: (name: string) => string | undefined,
 ): Promise<void> {
@@ -3158,7 +3158,7 @@ async function applyResponsesEvent(
     const response = providerResponseRecord(event.response) ?? {};
     state.responseId = typeof response.id === 'string' ? response.id : state.responseId;
     state.model = typeof response.model === 'string' ? response.model : state.model;
-    state.usage = usage(response.usage) ?? state.usage;
+    state.usage = usage(response.usage, response.service_tier) ?? state.usage;
     state.stopReason = lengthStop(providerResponseRecord(response.incomplete_details)?.reason).stopReason;
     for (const [index, item] of (Array.isArray(response.output) ? response.output : []).entries()) {
       const tool = parseResponsesTool(item, toolId, grammarProperty);
@@ -3463,7 +3463,7 @@ export class OpenAiResponsesProvider extends AiProvider {
     }
   }
 
-  protected responseUsage(value: unknown, _model: string, _body?: ResponsesRequest): ChatResponse['usage'] { return responsesUsage(value); }
+  protected responseUsage(value: unknown, _model: string, _body?: ResponsesRequest, _serviceTier?: unknown): ChatResponse['usage'] { return responsesUsage(value); }
   protected responseToolId(item: ProviderResponseRecord, _body: ResponsesRequest): string { return String(item.call_id ?? item.id ?? randomUUID()); }
   protected responseGrammarProperty(_name: string, _body: ResponsesRequest): string | undefined { return undefined; }
 
@@ -3593,7 +3593,7 @@ export class OpenAiResponsesProvider extends AiProvider {
       try {
         lease.socket.send(serializeProviderBody({ type: 'response.create', ...body }));
         for await (const event of responsesWebSocketEvents(lease.socket, signal, network.httpIdleTimeoutMs)) {
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, fullBody.model, fullBody),
+          await applyResponsesEvent(event, state, onChunk, (value, tier) => this.responseUsage(value, fullBody.model, fullBody, tier),
             item => this.responseToolId(item, fullBody), name => this.responseGrammarProperty(name, fullBody));
         }
         if (!state.completed) throw new ResponsesProtocolError('incomplete_websocket_response');
@@ -3650,7 +3650,7 @@ export class OpenAiResponsesProvider extends AiProvider {
         throw new ResponsesProtocolError('invalid_json_response');
       }
       await applyResponsesEvent({ type: value.status === 'completed' ? 'response.completed' : 'response.incomplete', response: value },
-        state, onChunk, usage => this.responseUsage(usage, body.model, body), item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
+        state, onChunk, (usage, tier) => this.responseUsage(usage, body.model, body, tier), item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
       return finalizeResponses(state);
     }
     const reader = response.body.getReader();
@@ -3678,7 +3678,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body),
+          await applyResponsesEvent(event, state, onChunk, (value, tier) => this.responseUsage(value, body.model, body, tier),
             item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
         }
       }
@@ -3689,7 +3689,7 @@ export class OpenAiResponsesProvider extends AiProvider {
           let event: ProviderResponseRecord;
           try { event = JSON.parse(payload) as ProviderResponseRecord; }
           catch { throw new ResponsesProtocolError('invalid_sse_json'); }
-          await applyResponsesEvent(event, state, onChunk, value => this.responseUsage(value, body.model, body),
+          await applyResponsesEvent(event, state, onChunk, (value, tier) => this.responseUsage(value, body.model, body, tier),
             item => this.responseToolId(item, body), name => this.responseGrammarProperty(name, body));
         }
       }
@@ -4410,7 +4410,7 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
   }
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
   protected override responseGrammarProperty(name: string, body: ResponsesRequest): string | undefined { return nativeResponsesGrammarProperty(body, name); }
-  protected override responseUsage(value: unknown, model: string): ChatResponse['usage'] { return openAiResponseUsage(value, model); }
+  protected override responseUsage(value: unknown, model: string, _body?: ResponsesRequest, serviceTier?: unknown): ChatResponse['usage'] { return openAiResponseUsage(value, model, serviceTier); }
   protected override requiresCompleteSseResponse(): boolean { return true; }
   protected override headers(websocket: boolean, sessionId?: string): Record<string, string> {
     const headers = super.headers(websocket, this.retention === 'none' ? undefined : sessionId);

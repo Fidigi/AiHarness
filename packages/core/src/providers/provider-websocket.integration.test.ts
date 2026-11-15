@@ -174,7 +174,8 @@ describe('OpenAI Responses real WebSocket transport', () => {
           socket.write(serverFrame({ type: 'response.created', response: { id: `response-${sequence}` } }));
           if (sequence === 3) continue; // Exercise a started response that becomes idle.
           if (body.model === 'gpt-5' || body.model === 'gpt-4o') {
-            socket.write(serverFrame({ type: 'response.completed', response: { id: `response-${sequence}`, status: 'completed', model: 'untrusted-alias', output: nativeOutput } }));
+            socket.write(serverFrame({ type: 'response.completed', response: { id: `response-${sequence}`, status: 'completed', model: 'untrusted-alias', output: nativeOutput,
+              service_tier: 'flex', usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 } } }));
             continue;
           }
           socket.write(serverFrame({ type: 'response.output_text.delta', delta: `answer-${sequence}` }));
@@ -237,7 +238,8 @@ describe('OpenAI Responses real WebSocket transport', () => {
       const owner = new OpenAiMixedProvider({ ...config, type: 'owner-a' }), foreign = new OpenAiMixedProvider({ ...config, type: 'owner-b' });
       const user = message('native-user', 'user', 'start'), options = { sessionId: 'real-native-session', cacheRetention: 'none' as const };
       const result = await owner.chat([user], options);
-      expect(result).toMatchObject({ provider: 'owner-a', api: 'openai-responses', model: 'gpt-5', content: 'answer' });
+      expect(result).toMatchObject({ provider: 'owner-a', api: 'openai-responses', model: 'gpt-5', content: 'answer', usage: { totalTokens: 3 } });
+      expect(result.usage?.costUsd).toBeCloseTo(0.00000625, 12);
       expect(result.blocks).toEqual([{ type: 'reasoning', text: 'visible', thinkingSignature: JSON.stringify(nativeOutput[0]) },
         { type: 'text', text: 'answer', textSignature: JSON.stringify({ v: 1, id: 'msg_ws', phase: 'final_answer' }) }]);
       const history: Message[] = [user, { ...message('native-assistant', 'assistant', result.content), provider: result.provider,
@@ -246,14 +248,15 @@ describe('OpenAI Responses real WebSocket transport', () => {
       await owner.chat(history, options); expect(requests).toHaveLength(5); expect(upgrades).toHaveLength(2); expect(sockets.size).toBe(1);
       expect(requests[3].input).toEqual([{ role: 'user', content: 'start' }]);
       expect(requests[4].input).toEqual([{ role: 'user', content: 'start' }, ...nativeOutput, { role: 'user', content: 'next' }]);
-      await foreign.chat(history, options); owner.setConfiguredModel('gpt-4o'); await owner.chat(history, options);
+      await foreign.chat(history, options); owner.setConfiguredModel('gpt-4o');
+      expect((await owner.chat(history, options)).usage?.costUsd).toBeCloseTo(0.0000075, 12);
       const visibleInput = [{ role: 'user', content: 'start' },
         { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'visible', annotations: [] }], status: 'completed', id: 'msg_pi_1' },
         { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_pi_1_1' },
         { role: 'user', content: 'next' }];
       expect(requests).toHaveLength(7); expect(requests[5].input).toEqual(visibleInput); expect(requests[6].input).toEqual(visibleInput);
       expect(requests.slice(3).map(body => body.model)).toEqual(['gpt-5', 'gpt-5', 'gpt-5', 'gpt-4o']);
-      for (const body of requests.slice(3)) expect(body.previous_response_id).toBeUndefined();
+      for (const body of requests.slice(3)) { expect(body.previous_response_id).toBeUndefined(); expect(body.service_tier).toBeUndefined(); }
       expect(upgrades).toEqual([{ path: '/v1/responses', authorization: 'Bearer test-key' },
         ...Array(3).fill({ path: '/v1/responses', authorization: 'Bearer disposable-native' })]);
       expect(httpRequests).toBe(0); expect(history).toEqual(originalHistory);
