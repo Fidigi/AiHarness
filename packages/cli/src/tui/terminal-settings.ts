@@ -10,6 +10,5 @@ export const UNSUPPORTED_CLI_SETTINGS = [
 ] as const satisfies readonly (keyof AgentSettings)[];
 
 export function unsupportedCliSettings(settings: AgentSettings): string[] {
-  return [...UNSUPPORTED_CLI_SETTINGS.filter(field => settings[field] !== undefined),
-    ...(settings.images?.blockImages !== undefined ? ['images.blockImages'] : [])];
+  return UNSUPPORTED_CLI_SETTINGS.filter(field => settings[field] !== undefined);
 }

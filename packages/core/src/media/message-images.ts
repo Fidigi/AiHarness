@@ -3,7 +3,7 @@ import type { SessionManager } from '../sessions/session-manager.js';
 import type { VirtualModelRegistry, VirtualModelContext } from '../providers/virtual-models.js';
 import { awaitAgentAdmission } from '../agent/prestart-admission.js';
 import { isValidModelId } from '../providers/model-catalog.js';
-import type { MessageContentBlock } from '../types/index.js';
+import type { Message, MessageContentBlock } from '../types/index.js';
 import { prepareModelImage } from './image-preparation.js';
 
 /** Pinned conversation policy: last successful physical response, not speculative routing. */
@@ -20,6 +20,19 @@ export async function resolveRoutedImageTarget(
   signal?.throwIfAborted();
   if (manager.get(sessionId) !== session || session?.activeLeafId !== leaf) throw new Error('Image preparation context changed.');
   return provider && !models.get(latest.provider, latest.model) ? { provider, model: latest.model } : undefined;
+}
+
+/** Outgoing conversation policy only: retain journal bytes and assistant output. */
+export function blockMessageImages(messages: Message[]): Message[] {
+  const note = 'Image reading is disabled.';
+  return messages.map(message => {
+    if (!['user', 'tool'].includes(message.role) || !message.blocks?.some(block => block.type === 'image')) return message;
+    const blocks = message.blocks.map(block => block.type === 'image' ? { type: 'text' as const, text: note } : block)
+      .filter((block, index, all) => !(block.type === 'text' && block.text === note && index > 0
+        && all[index - 1].type === 'text' && (all[index - 1] as { text: string }).text === note));
+    if (message.content && !message.blocks.some(block => block.type === 'text')) blocks.unshift({ type: 'text', text: message.content });
+    return { ...message, content: `${message.content}${message.content ? '\n' : ''}${note}`, blocks };
+  });
 }
 
 /** Normalize only new input, after caller hooks and before its first journal append. Never rewrites history. */

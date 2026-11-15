@@ -28,11 +28,14 @@ import { clampPublishedThinkingLevel, getSupportedThinkingLevels } from '../prov
 import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache-warmer.js';
 import { projectAssistantReplay } from '../providers/message-replay.js';
 import { hasBedrockProfile } from '../providers/bedrock-profiles.js';
+import { blockMessageImages } from '../media/message-images.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
   providerName: string;
   model?: string;
+  /** Trusted host conversation projection, never an extension/request-option override. */
+  blockImages?: boolean;
   maxTokens?: number;
   temperature?: number;
   resolveProvider?(name: string): AiProvider | undefined | Promise<AiProvider | undefined>;
@@ -114,6 +117,7 @@ function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
  * preserving streamed text/reasoning deltas for any frontend adapter.
  */
 export async function streamProviderTurn(options: StreamProviderTurnOptions): Promise<ChatResponse> {
+  if (options.blockImages) options = { ...options, messages: blockMessageImages(options.messages) };
   const models = options.extensionRegistry.virtualModels;
   const hasVirtual = models.list().some(model => model.provider === options.providerName);
   if (hasVirtual && !options.model) captureNativeOutputBudget(options.provider);
@@ -254,7 +258,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
     messages: Message[]; options: import('../providers/index.js').ChatOptions;
   };
 }): Promise<ChatResponse> {
-  const contextBudget = captureProviderRequestBudget(options), signal = options.signal;
+  const contextBudget = captureProviderRequestBudget(options), signal = options.signal, blockImages = options.blockImages === true;
   const sessionManager = options.sessionManager, sessionId = options.sessionId;
   const sourceSession = sessionId ? sessionManager?.get(sessionId) : undefined;
   const current = (): void => { if (signal?.aborted) throw new AgentAbortError(); };
@@ -416,8 +420,9 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
         const prepared = prepare(safeJson);
         const projected = options.prepareDispatch?.(prepared.data.messages, prepared.data.options)
           ?? { messages: prepared.data.messages, options: prepared.data.options };
-        const nativeOutput = nativeOutputPolicy?.(projected.options, projected.messages);
-        const requestMessages = projected.messages, requestOptions = nativeOutput?.options ?? projected.options;
+        const requestMessages = blockImages ? blockMessageImages(projected.messages) : projected.messages;
+        const nativeOutput = nativeOutputPolicy?.(projected.options, requestMessages);
+        const requestOptions = nativeOutput?.options ?? projected.options;
         if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
           Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
         if (sessionManager && sessionId) {

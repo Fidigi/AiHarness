@@ -1802,6 +1802,7 @@ async function main(): Promise<void> {
           provider,
           providerName,
           model: providerModel,
+          blockImages: settingsResolution.settings.images?.blockImages,
           sessionId: currentSessionId,
           sessionManager,
           messages,

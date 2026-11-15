@@ -1366,6 +1366,7 @@ export class RpcController {
                 return await streamProviderTurn({
                   provider: this.context.provider,
                   providerName: this.context.providerName,
+                  blockImages: this.context.agentSettings?.().images?.blockImages,
                   model: this.model,
                   sessionId: this.currentSessionId,
                   sessionManager: this.context.sessionManager,

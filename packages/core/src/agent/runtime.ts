@@ -86,8 +86,8 @@ export interface AgentRuntimeOptions {
   specializedProviders?: SpecializedProviderSource;
   /** Resolve live reasoning immediately before each model turn; never mutates an in-flight request. */
   resolveThinking?(session: Session, initial: Session['thinking']): Session['thinking'];
-  /** Trusted host settings for new image input; no journal/body option authority. */
-  resolveImageOptions?(cwd: string): { autoResize?: boolean } | Promise<{ autoResize?: boolean }>;
+  /** Trusted host media preparation/dispatch settings; no journal/body option authority. */
+  resolveImageOptions?(cwd: string): { autoResize?: boolean; blockImages?: boolean } | Promise<{ autoResize?: boolean; blockImages?: boolean }>;
   journal?: AgentEventJournal;
   isProjectTrusted?(cwd: string): boolean | Promise<boolean>;
   onUsage?(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
@@ -748,6 +748,7 @@ export class AgentRuntime {
           provider,
           providerName: run.snapshot.provider,
           model: request.model,
+          blockImages: (await awaitAgentAdmission(() => Promise.resolve(this.resolveImageOptions?.(run.snapshot.cwd)), run.controller.signal))?.blockImages,
           sessionId: run.snapshot.sessionId,
           sessionManager: this.sessionManager,
           messages: currentMessages.length ? currentMessages : messages,
