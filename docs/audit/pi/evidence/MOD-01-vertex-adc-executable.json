@@ -1,0 +1,70 @@
+{
+  "schema": "ai-harness.mod-01.vertex-adc-executable.v1",
+  "date": "2026-11-15",
+  "baseline": "cfffec3",
+  "status": "DELIVERED operator-gated ADC executable subject sources;02e remains PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "decision": "Reuses the explicit/default-off operator authorization recorded in MOD-01-bedrock-credential-process.json. Trusted VertexAdcConfig.allowExecutable===true or native CLI/Server AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION=1 only; auth-file allowExecutable/allow_executable fields and ambient GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES do not grant Core permission. No new consent request, browser source option or implied live-account authorization.",
+  "implementation": {
+    "files": ["packages/core/src/providers/vertex-adc.ts", "packages/core/src/providers/vertex-adc-executable.ts", "packages/core/src/providers/vertex-config.ts", "packages/core/src/tools/process-execution.ts"],
+    "protocol": "Explicit external_account credential_source.executable is exclusive of file/URL/header/format sources. Validate bounded command/direct double-quoted argv, timeout_millis integer5000..120000 (default30000, clamped to the existing whole-auth15s bound), optional bounded output_file. Reuse executeProcess filtered environment/tree cancellation/forced completion with128KiB combined capture, stdout-only fatal/replacement-character-safe JSON Version1, success boolean, exact configured JWT/id_token/SAML2 type, bounded subject and integer future expiration when supplied (required with output_file). Errors are fixed Vertex ADC authentication failed, never command/path/raw output/stderr.",
+    "environment": "A small trusted environment addition to the existing generic runner supplies only validated Google audience/token type/interactive0/optional output file/validated external-impersonation email. Absent optional protocol variables are explicitly cleared; no ambient token type/email or credential/permission inheritance. New runner option is not exposed to model tool arguments or HTTP configuration. No new process framework, dependency, shell expansion or argv secret token.",
+    "cacheAndAuthority": "Lazy bounded regular/fatal-UTF8 output-cache reads occur only after permission; missing/empty/expired/valid error caches may invoke the helper, malformed/unsafe caches refuse. Core never writes the cache. Root ADC bytes/CWD and cache path/bytes identify cached final access tokens. A helper may publish its own cache only without changing root authority or introducing a different valid subject from stdout. Recheck before spawn, before STS, after STS/before IAM/final publication and before native inference, including cached-hit withdrawal. Existing final-token cache/expiry/exact401/newest-success/independent caller/lifetime logic is reused; no background polling, persistent intermediates or revocation certificate.",
+    "scope": "JWT/id_token/SAML2 helper→fixed Google STS→optional already-qualified IAM→native G. Per-source authority, OAuth Basic/workforce/quota and inference headers stay separate. Explicit key/Bearer/derived priority and offline automatic-acquisition denial remain. Existing authorized-user/service-account/file/URL/Workforce/IAM paths retain their contracts.",
+    "reference": {
+      "package": "google-auth-library",
+      "version": "10.9.1",
+      "access": "Already available sources read-only; no acquisition/import/SDK execution. Core's operator gate/filter/strict protocol/bounds/current-source and stdout-only diagnostics policy are explicit safety differences, not complete raw SDK equivalence.",
+      "files": {
+        "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/pluggable-auth-client.js": "9f0e1b93d7bd9a9d7989a2ef8c1a8ae75b82ad04e54da86d40bf88144e9d3f86",
+        "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/pluggable-auth-handler.js": "aafa525c53e918d155a6abbb57e90524c0e2579903f28396cbd99931ac64f34e",
+        "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/google-auth-library/build/src/auth/executable-response.js": "44f9505eac008b33963e95c88ee7de52753d77acd61dac186773e23e35809311"
+      }
+    }
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-vertex-executable-owned",
+    "imageId": "sha256:a6d2b50b473e5fbac493a56e641b72e0fd16311d986212311c7a6f786d4c5fef",
+    "candidateImageId": "sha256:cc92e323d98fab05377fedb85919b236b9f6591a8bc34846494996bcf7f18285",
+    "predecessorImageId": "sha256:80f065bfbc1db685609c8fb00b36ccc025e60a817fde4060d776d7b5b31cb372",
+    "runtime": "Makefile Docker build/workspace-parity types, network none/CI=true/node --no-maglev. Canonical run-typescript retains --no-maglev/--no-turbofan; strict.json tar stdin under /app. Real synthetic helpers/disposable HOME/files/stores and mocked/loopback issuer/inference transports only. CLI TLS verifies its disposable CA. No personal credentials/store, live-account switch, protected container, generated/dependency overlay or changed assertion/deadline/retry flag.",
+    "regularRuntimePassed": 69,
+    "newCases": 10,
+    "regularReusedCases": 59,
+    "strictChangedRoots": 3,
+    "unselectedCases": 0,
+    "coverage": "Seven new compiled-public-Core tests bind JWT(no optional expiry)/id_token/SAML2, exact helper environment/direct argv with spaces, passive0exec, JSON/SSE native10-token results, STS/header/quota/final cache, valid/stale/malformed output cache, legitimate helper cache publication versus identity mismatch, required output-cache expiry, rotation/removal, strict invalid protocol/output/bounds, default-off/file/ambient/derived/direct-key/host permission, pre-spawn/post-return/cached-hit authority withdrawal, external IAM email and held STS withdrawal, independent hostile-helper cancellation/newest cache/owner retirement. Two added existing CLI scenarios bind opted-in native JSON private cold restart20tokens/privacy/offline-removal0extraexec and default-off0exec0issuer. One added existing HTTP scenario binds passive/read-only Test409/Disconnect409/source DTO400, process/STS cache, private restart/rotation30tokens/usage/privacy0600/no encrypted cache. Reuse all five original ADC source families, existing CLI7/HTTP10, AWS process7 and generic process tests2.69 distinct cases, not69 fresh provider integrations.",
+    "sourceWitness": {
+      "packages/core/src/providers/vertex-adc.ts": "57bc3852fa6f7a5c810aa22eb87e2e77e690a1589e61119c2f440007e581b0e4",
+      "packages/core/src/providers/vertex-adc-executable.ts": "c6421084c0e42eb35a5dfd061778a03ab7d6a57daf22a6324bbf33a3ea2f5434",
+      "packages/core/src/providers/vertex-config.ts": "aa66c95016222a4623f302a1e486e587b2be6106dbc6f257c3a3e0ca149888d4",
+      "packages/core/src/tools/process-execution.ts": "b9ebdb16e6a66655bd9466d859fe93592a731cf5be20b0cf5cbf441632ece922"
+    },
+    "tests": {
+      "packages/core/src/providers/vertex-adc-executable.test.ts": "c063ef2b1c55d435b11f7364c205c8cd5563f8188d488e2f3808a161434dbef6",
+      "packages/cli/src/cli/vertex-adc-process.test.ts": "73d42d9d67a9b8c180429b6e6aba2f774b8d959fe27df6c023542b3c2339661c",
+      "packages/server/src/api/vertex-adc-http.test.ts": "5eee5c76dbd0f0d9daf71601ded938bbb2714f17622cb45bbc3bbf2615a4f401"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-vertex-executable/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-vertex-executable/red.log (six genuine missing-source/protocol/host permission failures;held process case unselected rather than hanging a missing-acquisition latch)",
+      "hostsRed": "/tmp/mod01-vertex-executable/hosts-red.log (two genuine native CLI/HTTP failures;one default-off control PASS/17 unselected)",
+      "firstBuild": "/tmp/mod01-vertex-executable/build-owned.log (first candidate build/types PASS)",
+      "focused": "/tmp/mod01-vertex-executable/focused.log (initial seven Core cases/one strict root PASS)",
+      "build": "/tmp/mod01-vertex-executable/build-owned-r2.log (final build/types PASS, exact strengthened/new host fixtures)",
+      "owned": "/tmp/mod01-vertex-executable/owned.log (69 PASS/ten files/three strict roots/no skipped cases)",
+      "review": "/tmp/mod01-vertex-executable/review-check.json",
+      "docs": "/tmp/mod01-vertex-executable/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-vertex-executable-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-vertex-executable-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/vertex-adc-executable.test.ts packages/core/src/providers/vertex-adc.test.ts packages/core/src/providers/vertex-adc-external.test.ts packages/core/src/providers/vertex-adc-iam.test.ts packages/core/src/providers/vertex-adc-workforce.test.ts packages/core/src/providers/vertex-adc-url.test.ts packages/core/src/providers/bedrock-profile-process.test.ts packages/cli/src/cli/vertex-adc-process.test.ts packages/server/src/api/vertex-adc-http.test.ts packages/core/src/tools/process-execution.test.ts --maxWorkers=1'",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": [
+    "Execution is trusted operator code authority, not a sandbox or binary-content watcher. Executable/script/private backing-file changes alone do not invalidate an unchanged recipe's cached final access token; auth/cache source change, final expiry/exact401 or reconstruction does. Helpers own optional cache writes; output-file support is not user-grant persistence or automatic cleanup. Strict token-type matching/stdout-only diagnostics/UTF8 and bounded operation time may deliberately refuse scripts tolerated by the reference library.",
+    "No arbitrary per-file environment map, interactive mode, ambient permission promotion, executable login UI or raw DTO/file-selector authority. This does not deliver remaining ADC certificate/AWS-subject/universe or stored Vertex cloud-key choice, AWS SSO/process role-leaf/standalone/scoped policies, final06c or parent acceptance. The approved execution rule is now implemented for both selected-root AWS process and ADC executable sources, not a pending consent blocker.",
+    "No new browser/installed/production/SDK/account/global campaign, MOD-03/01b/04a redelivery or historical runtime134/other-failure repair.02e PARTIAL/06c OPEN/exact23/current counts and exactly three historical acceptances unchanged."
+  ]
+}

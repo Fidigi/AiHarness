@@ -62,6 +62,8 @@ export interface ExecuteProcessOptions {
   onOutput?(chunk: string, stream: ProcessOutputStream): void | Promise<void>;
   /** Adds the non-secret marker used by model-invocable command tools. */
   agentEnvironment?: boolean;
+  /** Explicit trusted protocol additions, never arbitrary tool input or inherited secrets. */
+  environment?: Readonly<NodeJS.ProcessEnv>;
 }
 
 export interface ExecuteShellCommandOptions {
@@ -216,7 +218,7 @@ export async function executeProcess(input: ExecuteProcessOptions): Promise<Proc
       cwd: input.cwd,
       detached,
       windowsHide: true,
-      env: filteredProcessEnvironment(input.agentEnvironment),
+      env: { ...filteredProcessEnvironment(input.agentEnvironment), ...input.environment },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const capturedChunks: Buffer[] = [];

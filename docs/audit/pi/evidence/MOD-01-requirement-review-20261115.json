@@ -18,6 +18,7 @@
   "responsesServiceTierBaseline": "236d843",
   "effectivePolicyReviewBaseline": "991c967",
   "bedrockCredentialProcessBaseline": "6f814ed",
+  "vertexExecutableBaseline": "cfffec3",
   "bedrockRegionBaseline": "abe9323",
   "bedrockEnvironmentBaseline": "ed796a4",
   "bedrockEcsProfileBaseline": "532b230",
@@ -273,7 +274,7 @@
       "id": "MOD-01.02e",
       "requirement": "Vertex API-key/ADC and the wider AWS profile, ECS and web-identity credential chain/region policy.",
       "status": "PARTIAL",
-      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/env web identity/static/web-leaf role chains and selected-root INI WebIdentity delivered. Original ARN/explicit standard-endpoint inference region and matching JSON-binary ARN paths now delivered with independent STS/cache/no native-profile borrowing; actual JSON CLI ARN boundary qualified. Explicit selected/recursive Environment role sources now reuse captured constructor keys/expiry and existing role cache, with SDK/trusted Server HTTP evidence; ambient CLI priority and stored profile-choice scope unchanged. Selected/recursive EcsContainer role sources now reuse existing metadata transport with copied descriptor/current INI+auth-file/pre-GET authority/final-only native cache, SDK/actual JSON CLI restart/offline/privacy proof;57 runtime/seven new/two strict roots, no new host field. Explicit selected/recursive IMDSv2 role leaves now bind bounded PUT/token-authenticated GETs/captured endpoint-mode-disable/root INI/current parent authority/final-only cache and actual JSON restart:65 runtime/eight new/two strict roots, no v1 downgrade/ambient probe/full-chain credit. User now approves executable auth only through explicit operator opt-in/default off. Selected-root credential_process now implements that permission outside INI, bounded shared runner/Version1 stdout/current-file cache and pre-spawn/post-mint withdrawal;57 runtime (11 new)/three strict roots/three product witnesses. Native JSON CLI private restart/rotation20tokens plus default-off/offline0exec, and actual HTTP readonly/private restart30tokens are separate proofs. Narrow flag0/1 secret-seeding bug fixed; old 193-versus194 fixture and combined CLI-budget failures retained, no deadline/retry changes. ADC execution/process leaves/SSO and other cloud mechanisms remain required, not a continued consent blocker.",
+      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/env web identity/static/web-leaf role chains and selected-root INI WebIdentity delivered. Original ARN/explicit standard-endpoint inference region and matching JSON-binary ARN paths now delivered with independent STS/cache/no native-profile borrowing; actual JSON CLI ARN boundary qualified. Explicit selected/recursive Environment role sources now reuse captured constructor keys/expiry and existing role cache, with SDK/trusted Server HTTP evidence; ambient CLI priority and stored profile-choice scope unchanged. Selected/recursive EcsContainer role sources now reuse existing metadata transport with copied descriptor/current INI+auth-file/pre-GET authority/final-only native cache, SDK/actual JSON CLI restart/offline/privacy proof;57 runtime/seven new/two strict roots, no new host field. Explicit selected/recursive IMDSv2 role leaves now bind bounded PUT/token-authenticated GETs/captured endpoint-mode-disable/root INI/current parent authority/final-only cache and actual JSON restart:65 runtime/eight new/two strict roots, no v1 downgrade/ambient probe/full-chain credit. User now approves executable auth only through explicit operator opt-in/default off. Selected-root credential_process now implements that permission outside INI, bounded shared runner/Version1 stdout/current-file cache and pre-spawn/post-mint withdrawal;57 runtime (11 new)/three strict roots/three product witnesses. Native JSON CLI private restart/rotation20tokens plus default-off/offline0exec, and actual HTTP readonly/private restart30tokens are separate proofs. Narrow flag0/1 secret-seeding bug fixed; old 193-versus194 fixture and combined CLI-budget failures retained, no deadline/retry changes. ADC executable JWT/id_token/SAML2 sources are now also delivered under the approved opt-in, with exact protocol environment/direct argv/readonly advisory output cache and root/cache pre-spawn/STS/IAM/publication/inference fences;69 runtime (ten new+59 reused)/three strict roots/four product witnesses. Actual native CLI JSON private restart20tokens/default-off+offline0exec and HTTP readonly/private restart/rotation30tokens separately qualify host admission; all current ADC source families/AWS process/runner controls reused. Six Core/two host REDs retained; no new consent/SDK/account/global campaign. AWS process leaves/SSO and remaining ADC/cloud mechanisms still require work.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-vertex-api-key.json",
         "docs/audit/pi/evidence/MOD-01-vertex-adc-sdk.json",
@@ -283,6 +284,7 @@
         "docs/audit/pi/evidence/MOD-01-vertex-adc-iam.json",
         "docs/audit/pi/evidence/MOD-01-vertex-adc-workforce.json",
         "docs/audit/pi/evidence/MOD-01-vertex-adc-url.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-adc-executable.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
@@ -298,6 +300,7 @@
       "files": [
         "packages/core/src/providers/index.ts",
         "packages/core/src/providers/vertex-adc.ts",
+        "packages/core/src/providers/vertex-adc-executable.ts",
         "packages/core/src/providers/vertex-config.ts",
         "packages/core/src/providers/bedrock-ecs.ts",
         "packages/core/src/providers/bedrock-imds.ts",
@@ -306,7 +309,7 @@
         "packages/core/src/providers/bedrock-config.ts"
       ],
       "gapClass": "functional/cloud-policy/security scope",
-      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, remaining AWS standalone/ambient instance-metadata/downgrade policy and SSO/process/scoped choice/unsupported signing credential scopes and remaining ambient/scoped source-region policies (ARN/explicit-endpoint inference policy delivered); assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. User approved explicit operator opt-in/default off for AWS/ADC executable auth; selected-root AWS process is delivered. Implement remaining ADC executable/process-role-leaf paths under that captured permission, not another consent request or blind SDK inheritance."
+      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/universe mechanisms, remaining AWS standalone/ambient instance-metadata/downgrade policy and SSO/process/scoped choice/unsupported signing credential scopes and remaining ambient/scoped source-region policies (ARN/explicit-endpoint inference policy delivered); assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. User approved explicit operator opt-in/default off for AWS/ADC executable auth; selected-root AWS process is delivered. ADC executable sources are now delivered; implement AWS process-role-leaf and remaining cloud paths under their captured permissions, not another consent request or blind SDK inheritance."
     },
     {
       "id": "MOD-01.03a",

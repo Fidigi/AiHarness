@@ -4,11 +4,14 @@ import { createHash, createPrivateKey, sign } from 'node:crypto';
 import { readOAuthJson } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
 import type { CredentialRedactor } from './credentials.js';
+import { vertexExecutable, vertexExecutableSubject, runVertexExecutable, type VertexExecutable } from './vertex-adc-executable.js';
 
 /** Explicit trusted file only; host admission owns standard-path/environment selection. */
 export interface VertexAdcConfig {
   credentialsFile: string;
   quotaProjectId?: string;
+  /** Trusted operator permission, default false; credentials files cannot enable execution. */
+  allowExecutable?: boolean;
   signal?: AbortSignal;
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
@@ -98,6 +101,7 @@ export class VertexAdc {
   private readonly lifetime?: AbortSignal;
   private readonly redactor?: Pick<CredentialRedactor, 'add'>;
   private readonly quota?: string;
+  private readonly allowExecutable: boolean;
   private cached?: { fingerprint: string; token: string; expiresAt: number };
   private sequence = 0;
   private published = 0;
@@ -105,7 +109,7 @@ export class VertexAdc {
   constructor(config: VertexAdcConfig) {
     if (!config || typeof config.credentialsFile !== 'string' || !config.credentialsFile || Buffer.byteLength(config.credentialsFile) > 4096
       || /[\u0000-\u001f\u007f-\u009f]/u.test(config.credentialsFile) || config.quotaProjectId !== undefined && !text(config.quotaProjectId, 500)) throw failure();
-    this.file = config.credentialsFile; this.lifetime = config.signal; this.redactor = config.redactor; this.quota = config.quotaProjectId;
+    this.file = config.credentialsFile; this.lifetime = config.signal; this.redactor = config.redactor; this.quota = config.quotaProjectId; this.allowExecutable = config.allowExecutable === true;
   }
   private async document(signal: AbortSignal) {
     const bytes = await fileBytes(this.file, signal), value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
@@ -135,14 +139,18 @@ export class VertexAdc {
         || data.workforce_pool_user_project !== undefined && (!text(data.workforce_pool_user_project, 500) || !data.audience.startsWith('//iam.googleapis.com/locations/'))) throw failure();
     }
     else throw failure();
-    let subject: string | undefined, subjectBytes: Buffer | undefined, remote: { url: string; headers: Headers; format?: Record<string, unknown> } | undefined;
+    let subject: string | undefined, subjectBytes: Buffer | undefined, executable: VertexExecutable | undefined, executableBytes: Buffer | undefined, remote: { url: string; headers: Headers; format?: Record<string, unknown> } | undefined;
     if (data.type === 'external_account') {
       const source = data.credential_source as Record<string, unknown> | undefined;
-      if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).some(key => !['file', 'url', 'headers', 'format'].includes(key)) || (source.file === undefined) === (source.url === undefined)) throw failure();
+      if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).some(key => !['file', 'url', 'headers', 'format', 'executable'].includes(key))
+        || [source.file, source.url, source.executable].filter(value => value !== undefined).length !== 1) throw failure();
       const format = source.format as Record<string, unknown> | undefined;
       if (format !== undefined && (!format || typeof format !== 'object' || Array.isArray(format)
         || format.type !== undefined && format.type !== 'text' && format.type !== 'json' || format.type === 'json' && !text(format.subject_token_field_name, 500))) throw failure();
-      if (source.url !== undefined) {
+      if (source.executable !== undefined) {
+        if (!this.allowExecutable || Object.keys(source).length !== 1) throw failure(); executable = vertexExecutable(source.executable); this.redactor?.add(executable.command);
+        if (executable.outputFile) executableBytes = await fileBytes(executable.outputFile, signal).catch(error => { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error; });
+      } else if (source.url !== undefined) {
         if (!text(source.url, 4096)) throw failure(); const url = new URL(source.url);
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) throw failure();
         this.redactor?.add(url.href); for (const value of url.searchParams.values()) this.redactor?.add(value);
@@ -162,14 +170,33 @@ export class VertexAdc {
       }
     }
     const quota = this.quota ?? root.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
-    return { data, iam, subject, remote, fingerprint: createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(subjectBytes ?? Buffer.alloc(0)).digest('hex'), quota };
+    const authFingerprint = createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(executable ? process.cwd() : '').digest('hex');
+    const fingerprint = createHash('sha256').update(authFingerprint).update(subjectBytes ?? Buffer.alloc(0)).update(executable?.outputFile ?? '').update(executableBytes ?? Buffer.alloc(0)).digest('hex');
+    return { data, iam, subject, remote, executable, executableBytes, authFingerprint, fingerprint, quota };
   }
   private async credential(send: Send, parent: AbortSignal) {
     const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]); disableProviderNetworkRetries(signal);
     return observed(async () => {
-      const document = await this.document(signal), sequence = ++this.sequence;
+      let document = await this.document(signal); const sequence = ++this.sequence;
       if (this.cached?.fingerprint === document.fingerprint && this.cached.expiresAt > Date.now() + 300_000) return { ...document, token: this.cached.token };
       let subject = document.subject;
+      if (document.executable) {
+        const recipe = document.executable, type = document.data.subject_token_type as string;
+        subject = document.executableBytes?.length ? vertexExecutableSubject(document.executableBytes, type, true, this.redactor, true) : undefined;
+        if (!subject) {
+          if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure();
+          const url = document.data.service_account_impersonation_url as string | undefined;
+          const email = url ? decodeURIComponent(/serviceAccounts\/([^:]+):/u.exec(url)![1]) : undefined;
+          subject = await runVertexExecutable(recipe, type, document.data.audience as string, email, signal, this.redactor);
+          const latest = await this.document(signal); if (latest.authFingerprint !== document.authFingerprint) throw failure();
+          // The helper may publish its own cache, but not a different currently valid subject identity.
+          if (latest.executableBytes?.length && !latest.executableBytes.equals(document.executableBytes ?? Buffer.alloc(0))) {
+            const cached = vertexExecutableSubject(latest.executableBytes, type, true, this.redactor, true); if (cached !== undefined && cached !== subject) throw failure();
+          }
+          document = latest;
+        }
+        if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+      }
       if (document.remote) {
         const response = await send(document.remote.url, { method: 'GET', redirect: 'manual', signal, headers: document.remote.headers });
         subject = subjectToken(await subjectResponse(response, signal), document.remote.format, this.redactor);
@@ -226,6 +253,7 @@ export class VertexAdc {
     try {
       const credential = await this.credential(send, signal); signal.throwIfAborted(); const headers = new Headers(init.headers); headers.delete('x-goog-api-key'); headers.set('authorization', `Bearer ${credential.token}`);
       if (credential.quota && !headers.has('x-goog-user-project')) headers.set('x-goog-user-project', credential.quota);
+      if (credential.executable && (await this.document(signal)).fingerprint !== credential.fingerprint) throw failure(); signal.throwIfAborted();
       const response = await send(url, { ...init, headers, signal, redirect: 'manual' }); signal.throwIfAborted();
       if (response.status === 401 && this.cached?.token === credential.token) this.cached = undefined;
       return response;

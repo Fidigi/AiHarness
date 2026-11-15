@@ -27,7 +27,7 @@ export async function resolveVertexAdcEnvironment(env: NodeJS.ProcessEnv, signal
     if (!file.isFile() || file.size > 256 * 1024) return undefined;
   } catch { signal?.throwIfAborted(); return undefined; }
   return { type: 'vertex', project, location, baseUrl: env.VERTEX_BASE_URL, model: env.VERTEX_MODEL,
-    vertexAdc: { credentialsFile, ...(env.GOOGLE_CLOUD_QUOTA_PROJECT ? { quotaProjectId: env.GOOGLE_CLOUD_QUOTA_PROJECT } : {}) } };
+    vertexAdc: { credentialsFile, ...(env.AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION === '1' ? { allowExecutable: true } : {}), ...(env.GOOGLE_CLOUD_QUOTA_PROJECT ? { quotaProjectId: env.GOOGLE_CLOUD_QUOTA_PROJECT } : {}) } };
 }
 
 /** Trusted host configuration; existing access-token consumers retain Bearer priority. */
