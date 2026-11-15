@@ -233,7 +233,7 @@
       "id": "MOD-01.02e",
       "requirement": "Vertex API-key/ADC and the wider AWS profile, ECS and web-identity credential chain/region policy.",
       "status": "PARTIAL",
-      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/web identity/static-leaf role chains now delivered, offline acquisition and region provenance covered.",
+      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/env web identity/static-leaf role chains and selected-root INI WebIdentity now delivered, current INI-before-mint guards/offline acquisition/region provenance covered.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-vertex-api-key.json",
         "docs/audit/pi/evidence/MOD-01-vertex-adc-sdk.json",
@@ -246,7 +246,8 @@
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
-        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json"
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json"
       ],
       "files": [
         "packages/core/src/providers/vertex-adc.ts",
@@ -255,7 +256,7 @@
         "packages/core/src/providers/bedrock-config.ts"
       ],
       "gapClass": "functional/cloud-policy/security scope",
-      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, AWS profile leaves/SSO/process/scoped choice and meaningful ARN/endpoint policies; assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. Execution from mutable auth files needs explicit security disposition, not blind SDK inheritance."
+      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, AWS nested web/other profile leaves/SSO/process/scoped choice and meaningful ARN/endpoint policies; assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. Execution from mutable auth files needs explicit security disposition, not blind SDK inheritance."
     },
     {
       "id": "MOD-01.03a",
@@ -453,7 +454,10 @@
       "minimumAction": "After02e/04a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
     }
   ],
-  "followUps": [{ "baseline": "9d2f44a", "requirements": ["MOD-01.01b", "MOD-01.04a"], "receipt": "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json", "meaning": "Three new cases/11 runtime/one strict root close Azure C caller controls only, both parent rows PARTIAL/counts unchanged; no other row gains runtime credit." }],
+  "followUps": [
+    { "baseline": "9d2f44a", "requirements": ["MOD-01.01b", "MOD-01.04a"], "receipt": "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json", "meaning": "Three new cases/11 runtime/one strict root close Azure C caller controls only, both parent rows PARTIAL/counts unchanged; no other row gains runtime credit." },
+    { "baseline": "ba7d33c", "requirements": ["MOD-01.02e"], "receipt": "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json", "meaning": "Selected-root INI WebIdentity/current-INI guards/native JSON-HTTP delivered with eight new cases/58 runtime/three strict roots; nested/other leaves and policies remain,02e PARTIAL/counts unchanged." }
+  ],
   "importantCorrections": [
     "MOD-03 and image04b closed, not work to redeliver; 1649 typed entries are not1649 distinct usable models",
     "Kimi helper-only/native supplied-key/Radius/gateway missing statements in old table obsolete after native deliveries",

@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { signAwsRequest } from './aws-sigv4.js';
 import { awsStsEndpoint, readAwsStsCredentials, validIamRoleArn, type AwsStsSend } from './aws-sts.js';
+import { BedrockWebIdentityCredentials } from './bedrock-web-identity.js';
 import { BedrockRefreshingCredentials, bedrockVendedCredentials, type BedrockCredentialIdentity, type BedrockVendedCredentials } from './bedrock-credentials.js';
 import { fetchOAuthResponse } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
@@ -81,7 +82,7 @@ export async function resolveBedrockProfileEnvironment(env: NodeJS.ProcessEnv, s
     bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], signal } } : undefined;
 }
 
-/** Static keys stay file-bound; role/source-profile vending adds only a private foreground current-file cache. */
+/** Static keys stay file-bound; selected-root WebIdentity and role vending keep private foreground current-file caches. */
 export class BedrockProfile {
   private readonly profile: string;
   private readonly credentialsFile?: string;
@@ -89,6 +90,7 @@ export class BedrockProfile {
   private readonly lifetime?: AbortSignal;
   private readonly redactor?: Pick<CredentialRedactor, 'add'>;
   private role?: BedrockProfileRole;
+  private web?: { fingerprint: string; source: BedrockWebIdentityCredentials };
   private readonly allowNetwork?: boolean;
   constructor(config: BedrockProfileConfig, private readonly parentRegion?: string, private readonly send: AwsStsSend = (url, init) => Promise.resolve().then(() => fetch(url, init))) {
     if (typeof config.profile !== 'string' || !config.profile || config.profile !== config.profile.trim() || Buffer.byteLength(config.profile) > 128
@@ -98,23 +100,42 @@ export class BedrockProfile {
     this.profile = config.profile; this.credentialsFile = config.credentialsFile ? path.resolve(config.credentialsFile) : undefined;
     this.configFile = config.configFile ? path.resolve(config.configFile) : undefined; this.lifetime = config.signal; this.redactor = config.redactor; this.allowNetwork = config.allowNetwork;
   }
-  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); }
+  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); this.web?.source.invalidate(credentials, status); }
   async resolve(caller: AbortSignal): Promise<{ credentials: BedrockProfileCredentials; region?: string; signal: AbortSignal; assertCurrent(): Promise<void> }> {
     const signal = this.lifetime ? AbortSignal.any([caller, this.lifetime]) : caller;
     try {
-      signal.throwIfAborted(); const load = async () => ({ credentials: await bytes(this.credentialsFile, signal), config: await bytes(this.configFile, signal) }), current = await load();
+      signal.throwIfAborted(); const load = async (currentSignal = signal) => ({ credentials: await bytes(this.credentialsFile, currentSignal), config: await bytes(this.configFile, currentSignal) }), current = await load();
       const config = section(current.config, this.profile === 'default' ? 'default' : 'profile ' + this.profile), credentials = { ...config, ...section(current.credentials, this.profile) };
       for (const key of ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token']) if (credentials[key]) this.redactor?.add(credentials[key]);
       if (Object.hasOwn(credentials, 'role_arn') && Object.hasOwn(credentials, 'source_profile')) {
         this.role ??= new BedrockProfileRole({ profile: this.profile, credentialsFile: this.credentialsFile, configFile: this.configFile, allowNetwork: this.allowNetwork, signal: this.lifetime, redactor: this.redactor }, this.parentRegion, this.send);
         return await this.role.resolve(signal);
       }
-      if (['role_arn', 'source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope'].some(key => Object.hasOwn(credentials, key))) throw failure();
+      const region = credentials.region; if (region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(region)) throw failure();
+      const assertCurrent = async (currentSignal = signal) => { currentSignal.throwIfAborted(); const latest = await load(currentSignal); if (!same(current.credentials, latest.credentials) || !same(current.config, latest.config)) throw failure(); currentSignal.throwIfAborted(); };
+      const webIdentity = Object.hasOwn(credentials, 'web_identity_token_file') && Object.hasOwn(credentials, 'role_arn');
+      if (webIdentity && ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(credentials, key))) throw failure();
+      if (webIdentity && !(typeof credentials.aws_access_key_id === 'string' && typeof credentials.aws_secret_access_key === 'string')) {
+        if (this.allowNetwork === false) throw failure();
+        const hash = createHash('sha256');
+        for (const value of [Buffer.from(this.profile), Buffer.from(this.parentRegion ?? ''), current.credentials, current.config]) {
+          hash.update(value === undefined ? 'missing:' : value.length + ':'); if (value !== undefined) hash.update(value);
+        }
+        const fingerprint = hash.digest('hex');
+        if (this.web?.fingerprint !== fingerprint) this.web = { fingerprint, source: new BedrockWebIdentityCredentials({
+          tokenFile: credentials.web_identity_token_file, roleArn: credentials.role_arn, roleSessionName: credentials.role_session_name,
+          region: this.parentRegion ?? region, signal: this.lifetime, redactor: this.redactor,
+        }, undefined, async (url, init) => { if (!init.signal) throw failure(); await assertCurrent(init.signal); return this.send(url, init); }) };
+        const result = await this.web.source.resolve(signal); await assertCurrent();
+        return { ...result, ...(region ? { region } : {}), assertCurrent: async () => {
+          try { await assertCurrent(); await result.assertCurrent(); await assertCurrent(); } catch { throw failure(); }
+        } };
+      }
+      if (['role_arn', 'source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope']
+        .some(key => Object.hasOwn(credentials, key) && !(webIdentity && ['role_arn', 'web_identity_token_file'].includes(key)))) throw failure();
       const accessKeyId = credentials.aws_access_key_id, secretAccessKey = credentials.aws_secret_access_key, sessionToken = credentials.aws_session_token;
       if (!/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId ?? '') || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey ?? '')
         || sessionToken !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken)) throw failure();
-      const region = credentials.region; if (region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(region)) throw failure();
-      const assertCurrent = async () => { signal.throwIfAborted(); const latest = await load(); if (!same(current.credentials, latest.credentials) || !same(current.config, latest.config)) throw failure(); signal.throwIfAborted(); };
       return { credentials: { accessKeyId, secretAccessKey, ...(sessionToken ? { sessionToken } : {}) }, ...(region ? { region } : {}), signal, assertCurrent };
     } catch { throw failure(); }
   }
