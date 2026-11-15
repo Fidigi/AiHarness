@@ -599,16 +599,19 @@ export class AiProxyServer {
 
   /** Trusted native AWS source only; no credential endpoint/file authority comes from HTTP DTOs. */
   setBedrockCredentials(config: BedrockProviderConfig): void {
-    if (!config.bedrockProfile && !config.bedrockEcs || config.bedrockProfile && config.bedrockEcs) throw new Error('Invalid Bedrock credential configuration.');
-    const source = config.bedrockProfile ?? config.bedrockEcs!, controller = new AbortController(), lifetime = source.signal;
+    if ([config.bedrockProfile, config.bedrockEcs, config.bedrockWebIdentity].filter(Boolean).length !== 1) throw new Error('Invalid Bedrock credential configuration.');
+    const source = config.bedrockProfile ?? config.bedrockEcs ?? config.bedrockWebIdentity!, controller = new AbortController(), lifetime = source.signal;
     lifetime?.throwIfAborted(); const signal = lifetime ? AbortSignal.any([lifetime, controller.signal]) : controller.signal;
     const provider = new BedrockProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'bedrock',
       region: config.region, baseUrl: config.baseUrl, model: config.model, ...(config.bedrockProfile
         ? { bedrockProfile: { ...config.bedrockProfile, signal, redactor: this.redactor } }
-        : { bedrockEcs: { relativeUri: config.bedrockEcs!.relativeUri, fullUri: config.bedrockEcs!.fullUri,
-          authorizationToken: config.bedrockEcs!.authorizationToken, authorizationTokenFile: config.bedrockEcs!.authorizationTokenFile, signal, redactor: this.redactor } }) });
+        : config.bedrockEcs ? { bedrockEcs: { relativeUri: config.bedrockEcs.relativeUri, fullUri: config.bedrockEcs.fullUri,
+          authorizationToken: config.bedrockEcs.authorizationToken, authorizationTokenFile: config.bedrockEcs.authorizationTokenFile, signal, redactor: this.redactor } }
+        : { bedrockWebIdentity: { roleArn: config.bedrockWebIdentity!.roleArn, tokenFile: config.bedrockWebIdentity!.tokenFile,
+          roleSessionName: config.bedrockWebIdentity!.roleSessionName, durationSeconds: config.bedrockWebIdentity!.durationSeconds,
+          region: config.bedrockWebIdentity!.region, signal, redactor: this.redactor } }) });
     this.bedrockProfileLifetime?.abort(); this.bedrockProfileLifetime = controller;
-    this.bedrockCredentialEnvironment = config.bedrockProfile ? 'AWS_PROFILE' : config.bedrockEcs!.relativeUri ? 'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI' : 'AWS_CONTAINER_CREDENTIALS_FULL_URI';
+    this.bedrockCredentialEnvironment = config.bedrockProfile ? 'AWS_PROFILE' : config.bedrockWebIdentity ? 'AWS_WEB_IDENTITY_TOKEN_FILE' : config.bedrockEcs!.relativeUri ? 'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI' : 'AWS_CONTAINER_CREDENTIALS_FULL_URI';
     this.bedrockProxy = new CoreProviderProxy(provider); this.agentProviders.set('bedrock', provider);
   }
 

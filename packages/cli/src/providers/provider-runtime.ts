@@ -233,7 +233,8 @@ export async function createCliProviderRuntime(
   return {
     ...(bedrockProfile ? { bedrockProfile: { ...bedrockProfile, ...(bedrockProfile.bedrockProfile
       ? { bedrockProfile: { ...bedrockProfile.bedrockProfile, signal: lifetime, redactor } }
-      : { bedrockEcs: { ...bedrockProfile.bedrockEcs!, signal: lifetime, redactor } }) } } : {}),
+      : bedrockProfile.bedrockEcs ? { bedrockEcs: { ...bedrockProfile.bedrockEcs, signal: lifetime, redactor } }
+      : { bedrockWebIdentity: { ...bedrockProfile.bedrockWebIdentity!, signal: lifetime, redactor } }) } } : {}),
     ...(vertexAdc ? { vertexAdc: { ...vertexAdc, vertexAdc: { ...vertexAdc.vertexAdc!, signal: lifetime, redactor } } } : {}),
     ...(xai ? { xaiOAuth: { credential: xai, credentialSource: xaiSource } } : {}),
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),

@@ -1,0 +1,91 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "88c8bbe",
+  "criterion": "MOD-01.02e / MOD-01.03a / MOD-01.05",
+  "status": "PARTIAL",
+  "scope": "Trusted native STS web-identity environment composition in CLI/Server/readonly Settings; not full AWS chain or scoped profile login choice",
+  "implementation": "Existing resolveBedrockCredentialsEnvironment admits AWS_WEB_IDENTITY_TOKEN_FILE/AWS_ROLE_ARN/optional AWS_ROLE_SESSION_NAME, captures absolute file, model/base/region and lifetime; pure descriptor constructor validation, no file or STS I/O. Ordinary Bearer/environment keys/commands/stored authority and sticky explicit AWS_PROFILE remain ahead. Selected web-token-file intent chooses web identity ahead of container credentials or refuses invalid/missing role, never changes account silently; role ARN alone is not web-token intent. Native allowNetwork=false refuses new web/ECS acquisition while static profile/direct invocation policies remain. CLI extends existing outside-values BedrockProviderConfig envelope with actual disjoint web child and runtime redactor/lifetime; startup/reload/RPC/default order/factory and exact/scoped/cold override reuse existing propagation, not profile-as-key. Server generic trusted setter projects only web role/file/session/duration/region fields with owned parent/controller/redactor/network scope, compatible profile wrapper and strict one-source-kind. Pre-abort/validation cannot replace old owner, key/remove/shutdown retire old XML and inference. Actual selected readonly environment pointer is AWS_WEB_IDENTITY_TOKEN_FILE, before ambient-key availability; no file/role/STS authority from HTTP DTO, source not encrypted/persisted. Existing metadata/Test409/Disconnect409/body400/Settings shape reused.",
+  "qualification": {
+    "environment": "Makefile Docker build/types; --network none/CI=true/node --no-maglev. Synthetic role/account IDs/JWT/key/files/HOME/stores, mocked or verified-CA loopback TLS/HTTP only; no real-account switch/personal store/protected container/SDK acquisition/generated output edit.",
+    "image": "ai-harness:mod01-bedrock-web-identity-hosts-owned",
+    "imageId": "sha256:7b1af46b0cc2977cff55a35956605f86cb39bb1e98e282013e301ca31a618157",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-web-identity-hosts-owned",
+    "buildLog": "/tmp/mod01-bedrock-web-identity-hosts/build-owned.log",
+    "strict": {
+      "passed": true,
+      "roots": 3,
+      "config": "/tmp/mod01-bedrock-web-identity-hosts/strict.json",
+      "log": "/tmp/mod01-bedrock-web-identity-hosts/owned.log"
+    },
+    "runtime": {
+      "passed": 183,
+      "failed": 0,
+      "new": 18,
+      "reused": 165,
+      "log": "/tmp/mod01-bedrock-web-identity-hosts/owned.log",
+      "files": [
+        "packages/cli/src/providers/bedrock-web-identity.test.ts",
+        "packages/cli/src/cli/bedrock-web-identity-process.test.ts",
+        "packages/server/src/api/bedrock-web-identity-http.test.ts",
+        "packages/core/src/providers/bedrock-web-identity.test.ts",
+        "packages/core/src/providers/bedrock-ecs.test.ts",
+        "packages/core/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/providers/bedrock-ecs.test.ts",
+        "packages/cli/src/cli/bedrock-ecs-process.test.ts",
+        "packages/server/src/api/bedrock-ecs-http.test.ts",
+        "packages/cli/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/cli/bedrock-profile-process.test.ts",
+        "packages/server/src/api/bedrock-profile-http.test.ts",
+        "packages/cli/src/providers/provider-runtime.test.ts",
+        "packages/server/src/api/proxy.test.ts",
+        "packages/server/src/api/vertex-auth-http.test.ts"
+      ],
+      "filteredControl": {
+        "file": "packages/core/src/providers/bedrock-converse-stream.test.ts",
+        "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4",
+        "passed": 4,
+        "unselected": 643,
+        "runtimeOnly": true
+      },
+      "meaning": "Nine new CLI resolver/priority/override/retirement cases: malformed JWT passive admission0, full source outside values/cache/native signatures, exact fixed Query payload/known region/redaction, offline/missing-role/invalid-role/sticky profile/no-source deny, no alternate ECS, ordinary/foreign marker/blocked-command priority, cold overrides before file or STS, held XML close. Three actual emitted print/JSON/RPC cases: passive model/auth0 with malformed JWT, real POST Query->XML->native binary signing/payload hash/session token/reasoning, new OS-process JWT+key rotation/private exact history/70 once-only tokens including one cold print override, zero-wire offline/withdrawal,0600/privacy/no source credentials store. Six STS and seven inference requests. Six actual application API cases: passive readonly Test409/Disconnect409/unknown authority DTO400, cached native private runs across runtime restart/JWT+key rotation/30tokens/0600/privacy/no source persisted; direct app-owned held STS XML SDK adapter retires on HTTP key replacement/shutdown/trusted remove/pre-aborted setter no replacement; incomplete selected web intent never falls to ECS; explicit injected web source and actual readonly provenance beat ambient keys. Main API five requests, lifecycle/priority11 total attempts (six STS/five inference), not additional journal usage. Reused165 = Core web8/ECS9/profile6, native ECS17/profile20, CLI runtime68, proxy30, Vertex-key3 and filtered signature4. No new browser/installed/production/model-host/MOD-03 campaign."
+    },
+    "transportAdapter": {
+      "meaning": "Actual CLI child calls fixed regional STS in product. Test-only preload maps exactly that one URL to owned verified-CA loopback /sts, adds nonsecret original-origin marker asserted server-side, rejects every other non-inference URL including deliberately available ECS fallback. It cannot select production/live accounts or change product issuer/config; not a runtime product overlay. Server transport mocks fixed STS directly, native API itself authenticates on real loopback HTTP.",
+      "fixture": "tests/fixtures/sts-web-identity.ts",
+      "meaningFixture": "One small shared synthetic XML constants helper reused across new CLI resolver/process/API, no new test framework, arbitrary credential store/environment input or live transport option."
+    },
+    "counterfactual": {
+      "image": "ai-harness:mod01-bedrock-web-identity-owned",
+      "failed": 13,
+      "passed": 5,
+      "log": "/tmp/mod01-bedrock-web-identity-hosts/red.log",
+      "meaning": "Same18 new cases on SDK-only image: native source absent/old helper may select available ECS instead, five negative/priority controls already pass. No thirteen independent bugs or SDK/factory-only native usability claim."
+    },
+    "retainedFailures": [],
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 3,
+      "imageWitness": "/tmp/mod01-bedrock-web-identity-hosts/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-bedrock-web-identity-hosts/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-bedrock-web-identity-hosts/runtime-witness.diff",
+      "meaning": "Three changed production inputs image-identical; final tests source-built/baked, only strict config tar-injected. Counterfactual fixture overlays and fixed-STS TLS mapping test-only, no runtime/global image authority."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-bedrock-web-identity-hosts/docs.log"
+    }
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/bedrock-config.ts": "96bdf1461bccd5bf342676da563fe14dbe759b1087bb215987fbc84557800871",
+    "packages/cli/src/providers/provider-runtime.ts": "241cb112217400eb64db79e7ca03ff083b09de1652fa822ba39b5ba086d67981",
+    "packages/server/src/api/proxy.ts": "91e9b7b66429f4cadae28209c7759864c149e692c3c5501ee5796063bcb2c168"
+  },
+  "remaining": [
+    "AWS source-profile/AssumeRole/SSO/process/scoped profile choice and meaningful ARN/endpoint/region/request policies; explicit native profile/ECS/web sources do not equal whole SDK chain",
+    "Other ADC/effective default-tool/catalogue scope and final23-row MOD-01 requirement-to-proof audit"
+  ],
+  "limits": "Web token-file presence is sticky explicit native identity intent: invalid/missing role refuses rather than automatically falling through to container as a general SDK provider chain might. This security-local policy is explicit, not full default-chain equivalence; bare role ARN without token file does not select it. Passive configured/connected metadata is not token/role validity or entitlement. No web login/profile-choice marker/new browser form or HTTP role/file/STS selector, cache watcher/shared process/disk cache/remote account certificate. Native CLI offline runtime has no reusable credentials cache and admits no web/ECS source, while direct invocation/static files remain separate. Selected RPC file failure preserves protocol (prompt accepted then assistant error/0tokens/settled/default four attempts/process0), never counted as inference success; startup refusal remains mode-specific. Direct held SDK acquisition checks distinct from main authenticated agent HTTP journeys. Existing SDK/profile/ECS/04b/MOD-03 proofs remain scoped/sealed; no account/installed/production/global/historical repair or broader04a closure.",
+  "auditState": "Native web-identity path delivered, MOD-01.02e PARTIAL/MOD-01 IN PROGRESS/04b DONE/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged; goal active/not completed."
+}
