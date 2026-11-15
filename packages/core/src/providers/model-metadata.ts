@@ -1,5 +1,6 @@
 import type { ModelCapabilities, ModelPricing } from '../types/index.js';
 import { MISTRAL_MODELS } from './mistral-metadata.js';
+import type { ImageResizeLimits } from '../media/image-processing.js';
 import type { AiProvider } from './index.js';
 import { getProviderPublishedModels } from './provider-model-metadata.js';
 
@@ -20,6 +21,8 @@ export interface PublishedModelMetadata {
   contextWindow?: number;
   maxOutputTokens?: number;
   pricing?: ModelPricing;
+  /** Model-owned inline image preparation limits, not authenticated access. */
+  inputLimits?: { images?: { resize?: ImageResizeLimits } };
   /** Conservative provider prompt-cache lifetimes, in seconds. Missing means no warming. */
   promptCache?: { short?: number; long?: number };
   /** Per-level overrides; a null map explicitly marks thinking as unsupported. */
@@ -87,6 +90,7 @@ function cloneMetadata(model: PublishedModelMetadata): PublishedModelMetadata {
   return {
     ...model,
     capabilities: { ...model.capabilities },
+    ...(model.inputLimits?.images?.resize ? { inputLimits: { images: { resize: { ...model.inputLimits.images.resize } } } } : {}),
     ...(model.pricing ? { pricing: { ...model.pricing } } : {}),
     ...(model.promptCache ? { promptCache: { ...model.promptCache } } : {}),
     ...(model.thinkingLevelMap === undefined

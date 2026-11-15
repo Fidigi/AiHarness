@@ -11,6 +11,10 @@ export * from './types/index.js';
 export * from './types/resource-batches.js';
 export * from './sdk/index.js';
 
+// Explicit model-owned media preparation (hosts choose prompt/tool persistence policy).
+export { prepareModelImage } from './media/image-preparation.js';
+export type { PreparedModelImage, ImageResizeLimits } from './media/image-preparation.js';
+
 // Providers
 export { azureEnvironmentConfig } from './providers/azure-config.js';
 export { vertexEnvironmentConfig, resolveVertexAdcEnvironment } from './providers/vertex-config.js';

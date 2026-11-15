@@ -4549,6 +4549,7 @@ export class RadiusProvider extends AiProvider {
   override getPublishedModels(): readonly PublishedModelMetadata[] {
     return this.radiusModels.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
       maxOutputTokens: profile.maxOutputTokens, ...(profile.thinkingLevelMap ? { thinkingLevelMap: { ...profile.thinkingLevelMap } } : {}),
+      ...(profile.imageResizeLimits ? { inputLimits: { images: { resize: { ...profile.imageResizeLimits } } } } : {}),
       capabilities: { reasoning: profile.reasoning, imageInput: profile.declaredInput.includes('image'), toolCalls: true }, ...(profile.pricing ? { pricing: { ...profile.pricing } } : {}) }));
   }
   override getSpecializedModels(): SpecializedModel[] {
@@ -6643,6 +6644,7 @@ export class MiniMaxProvider extends AnthropicProvider {
   override getPublishedModels(): readonly PublishedModelMetadata[] {
     return MINIMAX_MODELS.map(profile => ({ id: profile.id, name: profile.name, api: profile.api, contextWindow: profile.contextWindow,
       maxOutputTokens: profile.maxOutputTokens, pricing: { ...profile.pricing },
+      ...(profile.declaredInputLimits ? { inputLimits: structuredClone(profile.declaredInputLimits) } : {}),
       capabilities: { reasoning: true, imageInput: profile.declaredInput.includes('image'), toolCalls: true } }));
   }
   override getSpecializedModels(): SpecializedModel[] {

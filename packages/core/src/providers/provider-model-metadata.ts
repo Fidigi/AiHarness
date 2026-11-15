@@ -41,8 +41,14 @@ export function getProviderPublishedModels(
     for (const key of ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
       const value = data(rawThinking, key); if (value === null || text(value)) thinkingLevelMap[key] = value;
     }
+    const rawResize = data(data(data(row, 'inputLimits'), 'images'), 'resize');
+    const maxWidth = data(rawResize, 'maxWidth'), maxHeight = data(rawResize, 'maxHeight'), maxBytes = data(rawResize, 'maxBytes'), jpegQuality = data(rawResize, 'jpegQuality');
+    const resize = positive(maxWidth) && maxWidth <= 8192 && positive(maxHeight) && maxHeight <= 8192
+      && positive(maxBytes) && maxBytes <= 16 * 1024 * 1024 && positive(jpegQuality) && jpegQuality <= 100
+      ? { maxWidth, maxHeight, maxBytes, jpegQuality } : undefined;
     seen.add(id.trim());
     models.push({ id: id.trim(), name: name.trim(), capabilities: { reasoning, imageInput, toolCalls }, ...(api ? { api } : {}),
+      ...(resize ? { inputLimits: { images: { resize } } } : {}),
       ...(positive(contextWindow) ? { contextWindow } : {}), ...(positive(maxOutputTokens) ? { maxOutputTokens } : {}),
       ...(Object.keys(pricing).length ? { pricing } : {}),
       ...(Object.keys(promptCache).length ? { promptCache } : {}),
