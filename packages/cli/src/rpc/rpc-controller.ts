@@ -1301,6 +1301,7 @@ export class RpcController {
           const routed = prompt.blocks.some(block => block.type === 'image') && this.context.extensionRegistry.virtualModels.get(this.context.providerName, this.model)
             ? await resolveRoutedImageTarget(this.context.sessionManager, this.currentSessionId, this.context.extensionRegistry.virtualModels, name => this.configuredProvider(name), signal) : undefined;
           const prepared = await prepareMessageImages(routed?.provider ?? this.context.provider, routed?.model ?? this.model, prompt.content, prompt.blocks, 'prompt', this.context.agentSettings?.().images, signal);
+          this.events.continueAgent(prepared.content, prepared.blocks);
           await this.context.sessionManager.addMessage(this.currentSessionId, {
             role: 'user',
             content: prepared.content,
