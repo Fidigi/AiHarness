@@ -522,6 +522,8 @@ export class CredentialRedactor {
   addEnvironment(environment: NodeJS.ProcessEnv): void {
     for (const [name, value] of Object.entries(environment)) {
       if (!value) continue;
+      // This operator permission is not a credential; process environment filtering still removes it.
+      if (name === 'AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION' && (value === '0' || value === '1')) continue;
       if (!SENSITIVE_ENVIRONMENT_NAME.test(name)
         && !PROXY_ENVIRONMENT_NAME.test(name)
         && !isSensitiveEnvironmentEntry(name, value)) continue;

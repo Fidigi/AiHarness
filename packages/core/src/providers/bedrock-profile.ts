@@ -10,6 +10,7 @@ import { BedrockImdsCredentials, bedrockImdsEndpoint, type BedrockImdsConfig } f
 import { BedrockRefreshingCredentials, bedrockCredentialFile, bedrockVendedCredentials, type BedrockCredentialIdentity, type BedrockVendedCredentials } from './bedrock-credentials.js';
 import { fetchOAuthResponse } from './oauth-device.js';
 import { disableProviderNetworkRetries } from './provider-network.js';
+import { executeBedrockCredentialProcess } from './bedrock-process.js';
 import type { BedrockProviderConfig } from './index.js';
 import path from 'node:path';
 import type { CredentialRedactor } from './credentials.js';
@@ -20,6 +21,8 @@ export interface BedrockProfileConfig {
   credentialsFile?: string;
   configFile?: string;
   allowNetwork?: boolean;
+  /** Trusted operator permission, default false; INI files cannot enable execution. */
+  allowProcess?: boolean;
   signal?: AbortSignal;
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
@@ -83,7 +86,7 @@ export async function resolveBedrockProfileEnvironment(env: NodeJS.ProcessEnv, s
     present = true;
   }
   return present ? { type: 'bedrock', model: env.BEDROCK_MODEL, baseUrl: env.BEDROCK_BASE_URL, region: env.AWS_REGION || env.AWS_DEFAULT_REGION,
-    bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], signal } } : undefined;
+    bedrockProfile: { profile, credentialsFile: files[0], configFile: files[1], ...(env.AI_HARNESS_ALLOW_CREDENTIAL_EXECUTION === '1' ? { allowProcess: true } : {}), signal } } : undefined;
 }
 
 /** Static keys stay file-bound; selected-root WebIdentity and role vending keep private foreground current-file caches. */
@@ -96,6 +99,8 @@ export class BedrockProfile {
   private role?: BedrockProfileRole;
   private web?: { fingerprint: string; source: BedrockWebIdentityCredentials };
   private readonly allowNetwork?: boolean;
+  private readonly allowProcess: boolean;
+  private processSource?: BedrockProfileProcess;
   private readonly environment?: ProfileEnvironment;
   constructor(config: BedrockProfileConfig, private readonly parentRegion?: string, private readonly send: AwsStsSend = (url, init) => Promise.resolve().then(() => fetch(url, init)), environment?: ProfileEnvironment) {
     if (typeof config.profile !== 'string' || !config.profile || config.profile !== config.profile.trim() || Buffer.byteLength(config.profile) > 128
@@ -103,10 +108,10 @@ export class BedrockProfile {
       || !config.credentialsFile && !config.configFile || config.credentialsFile !== undefined && !safePath(config.credentialsFile)
       || config.configFile !== undefined && !safePath(config.configFile)) throw failure();
     this.profile = config.profile; this.credentialsFile = config.credentialsFile ? path.resolve(config.credentialsFile) : undefined;
-    this.configFile = config.configFile ? path.resolve(config.configFile) : undefined; this.lifetime = config.signal; this.redactor = config.redactor; this.allowNetwork = config.allowNetwork;
+    this.configFile = config.configFile ? path.resolve(config.configFile) : undefined; this.lifetime = config.signal; this.redactor = config.redactor; this.allowNetwork = config.allowNetwork; this.allowProcess = config.allowProcess === true;
     this.environment = environment ? { ...environment, ecs: environment.ecs ? { ...environment.ecs } : undefined, imds: environment.imds ? { ...environment.imds } : undefined } : undefined;
   }
-  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); this.web?.source.invalidate(credentials, status); }
+  invalidate(credentials: BedrockProfileCredentials, status: number): void { this.role?.invalidate(credentials, status); this.web?.source.invalidate(credentials, status); this.processSource?.invalidate(credentials, status); }
   async resolve(caller: AbortSignal): Promise<{ credentials: BedrockProfileCredentials; region?: string; signal: AbortSignal; assertCurrent(): Promise<void> }> {
     const signal = this.lifetime ? AbortSignal.any([caller, this.lifetime]) : caller;
     try {
@@ -137,6 +142,20 @@ export class BedrockProfile {
           try { await assertCurrent(); await result.assertCurrent(); await assertCurrent(); } catch { throw failure(); }
         } };
       }
+      if (Object.hasOwn(credentials, 'credential_process')) {
+        if (!this.allowProcess || this.allowNetwork === false) throw failure();
+        this.processSource ??= new BedrockProfileProcess(async currentSignal => {
+          const latest = await load(currentSignal), data = { ...section(latest.config, this.profile === 'default' ? 'default' : 'profile ' + this.profile), ...section(latest.credentials, this.profile) };
+          if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope', 'mfa_serial'].some(key => Object.hasOwn(data, key))
+            || typeof data.credential_process !== 'string' || !data.credential_process || Buffer.byteLength(data.credential_process) > 8192 || /[\u0000-\u001f\u007f-\u009f]/u.test(data.credential_process)
+            || data.region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(data.region)) throw failure();
+          const hash = createHash('sha256');
+          for (const value of [Buffer.from(this.profile), Buffer.from(process.cwd()), latest.credentials, latest.config]) { hash.update(value === undefined ? 'missing:' : value.length + ':'); if (value !== undefined) hash.update(value); }
+          this.redactor?.add(data.credential_process); currentSignal.throwIfAborted();
+          return { fingerprint: hash.digest('hex'), command: data.credential_process, ...(data.region ? { region: data.region } : {}) };
+        }, this.lifetime, this.redactor);
+        return await this.processSource.resolve(signal);
+      }
       if (['role_arn', 'source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope']
         .some(key => Object.hasOwn(credentials, key) && !(webIdentity && ['role_arn', 'web_identity_token_file'].includes(key)))) throw failure();
       const accessKeyId = credentials.aws_access_key_id, secretAccessKey = credentials.aws_secret_access_key, sessionToken = credentials.aws_session_token;
@@ -144,6 +163,16 @@ export class BedrockProfile {
         || sessionToken !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken)) throw failure();
       return { credentials: { accessKeyId, secretAccessKey, ...(sessionToken ? { sessionToken } : {}) }, ...(region ? { region } : {}), signal, assertCurrent };
     } catch { throw failure(); }
+  }
+}
+interface ProcessIdentity extends BedrockCredentialIdentity { command: string; region?: string }
+class BedrockProfileProcess extends BedrockRefreshingCredentials<ProcessIdentity> {
+  constructor(private readonly read: (signal: AbortSignal) => Promise<ProcessIdentity>, lifetime?: AbortSignal, redactor?: Pick<CredentialRedactor, 'add'>) { super('Bedrock profile authentication failed.', lifetime, redactor); }
+  protected identity(signal: AbortSignal): Promise<ProcessIdentity> { return this.read(signal); }
+  protected async acquire(identity: ProcessIdentity, signal: AbortSignal): Promise<BedrockVendedCredentials> {
+    if ((await this.identity(signal)).fingerprint !== identity.fingerprint) throw failure();
+    const result = await executeBedrockCredentialProcess(identity.command, signal, this.redactor);
+    return { ...result, ...(identity.region ? { region: identity.region } : {}) };
   }
 }
 type RoleSource = { credentials: BedrockProfileCredentials; sourceExpiresAt?: number; web?: undefined; ecs?: undefined; imds?: undefined }
