@@ -110,7 +110,7 @@ import { radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type Ra
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
-import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
+import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, applyAnthropicSystemHistory, applyAnthropicToolHistory } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
 import { projectAssistantReplay } from './message-replay.js';
 import { googleResponseBlocks, appendGoogleResponseBlocks, googleReplayParts, type GoogleResponsePart } from './google-replay.js';
@@ -5451,6 +5451,11 @@ export class AnthropicProvider extends AiProvider {
   }
 
   protected getMessagesUrl(): string { return `${this.baseUrl}/v1/messages`; }
+  private prepareMessageContext(body: Record<string, unknown>, messages: readonly Message[], options?: ChatOptions): void {
+    const native = this.#ownsNativeProfiles && hasAnthropicProfile(String(body.model));
+    if (native) applyAnthropicSystemHistory(body, messages, options?.systemPrompt);
+    if (!native || !Array.isArray(body.messages) || body.messages.at(-1)?.role !== 'assistant') applyAnthropicPromptCache(body, options?.cacheRetention);
+  }
   protected messageHeaders(_options?: ChatOptions, model?: string): Record<string, string> {
     const headers = { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
@@ -5640,7 +5645,7 @@ export class AnthropicProvider extends AiProvider {
       }));
     }
 
-    applyAnthropicPromptCache(body, options?.cacheRetention);
+    this.prepareMessageContext(body, history, options);
     let providerThinkingLevel = this.#ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
@@ -5732,7 +5737,7 @@ export class AnthropicProvider extends AiProvider {
       }));
     }
 
-    applyAnthropicPromptCache(body, options?.cacheRetention);
+    this.prepareMessageContext(body, history, options);
     let providerThinkingLevel = this.#ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     try {
       const response = await this.request(url, {

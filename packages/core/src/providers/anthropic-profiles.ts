@@ -99,6 +99,27 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
 }
+const systemUpdateModels = new Set(['claude-fable-5', 'claude-fable-5-1', 'claude-haiku-5-5', 'claude-opus-4-8',
+  'claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5']);
+/** Plain Core system messages only; preserve updates before the next assistant, never inside a tool pair. */
+export function applyAnthropicSystemHistory(body: Record<string, unknown>, messages: readonly Message[], systemPrompt?: string): void {
+  if (!systemUpdateModels.has(String(body.model)) || !Array.isArray(body.messages)) return;
+  const converted = body.messages, result: unknown[] = [], pending: unknown[] = [], initial = [systemPrompt];
+  let index = 0;
+  for (const message of messages) {
+    if (message.role === 'system') {
+      if (!index) initial.push(message.content);
+      else if (message.content) pending.push({ role: 'system', content: [{ type: 'text', text: message.content }] });
+      continue;
+    }
+    if (message.role === 'assistant') { result.push(...pending); pending.length = 0; }
+    result.push(converted[index++]);
+  }
+  result.push(...pending);
+  if (index) body.messages = result;
+  const leading = initial.filter(Boolean).join('\n\n');
+  if (leading) body.system = leading; else delete body.system;
+}
 /** Correlate paired tool results without changing surrounding native content order. */
 export function applyAnthropicToolHistory(body: Record<string, unknown>, messages: readonly Message[], owner: string,
   toolImageParts: (message: Message) => Array<Record<string, unknown>>): void {

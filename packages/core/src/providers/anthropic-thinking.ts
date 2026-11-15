@@ -133,9 +133,10 @@ export function anthropicThinkingBetas(model: string, options?: ChatOptions): st
 export function applyAnthropicManagedHistory(body: Record<string, unknown>, options: ChatOptions | undefined, messages: readonly Message[], owner: string,
   effort = anthropicManagedEffort(String(body.model), options)): void {
   if (effort === undefined || !Array.isArray(body.messages)) return;
-  const converted = body.messages;
-  body.messages = converted.flatMap((message: unknown, index: number) => {
-    const original = messages[index], level = original?.metadata?.providerThinkingLevel;
+  const converted = body.messages; let index = 0;
+  body.messages = converted.flatMap((message: unknown) => {
+    if (message !== null && typeof message === 'object' && 'role' in message && message.role === 'system') return [message];
+    const original = messages[index++], level = original?.metadata?.providerThinkingLevel;
     const historical = original?.role === 'assistant' && original.api === 'anthropic-messages' && original.provider === owner
       && (level === 'low' || level === 'medium' || level === 'high' || level === 'xhigh' || level === 'max') ? level : undefined;
     return [...(historical ? [{ role: 'system', content: [], output_config: { effort: historical } }] : []), message];
