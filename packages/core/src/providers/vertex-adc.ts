@@ -129,7 +129,10 @@ export class VertexAdc {
       if (iam.length >= 4) throw failure(); iam.unshift(impersonation(data, true));
     }
     for (const field of ['client_secret', 'refresh_token', 'private_key']) this.redactor?.add(typeof data[field] === 'string' ? data[field] as string : undefined);
-    if (data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com') throw failure();
+    const selfSigned = data.type === 'service_account' && data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com';
+    if (data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com'
+      && (!selfSigned || !text(data.universe_domain, 253) || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/u.test(data.universe_domain))) throw failure();
+    if (selfSigned && data.private_key_id !== undefined && !text(data.private_key_id, 4096)) throw failure();
     if (data.type === 'authorized_user' || data.type === 'external_account_authorized_user') {
       if (!text(data.client_id, 4096) || !text(data.client_secret) || !text(data.refresh_token)
         || data.type === 'external_account_authorized_user' && data.token_url !== undefined && data.token_url !== WORKFORCE) throw failure();
@@ -184,7 +187,7 @@ export class VertexAdc {
     const quota = this.quota ?? root.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
     const authFingerprint = createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(executable ? process.cwd() : '').digest('hex');
     const fingerprint = createHash('sha256').update(authFingerprint).update(subjectBytes ?? Buffer.alloc(0)).update(executable?.outputFile ?? '').update(executableBytes ?? Buffer.alloc(0)).update(certificate?.fingerprint ?? '').digest('hex');
-    return { data, iam, subject, remote, executable, executableBytes, aws, certificate, authFingerprint, fingerprint, quota };
+    return { data, iam, subject, remote, executable, executableBytes, aws, certificate, selfSigned, authFingerprint, fingerprint, quota };
   }
   private async credential(send: Send, parent: AbortSignal, proxy?: string) {
     const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]); disableProviderNetworkRetries(signal);
@@ -226,7 +229,7 @@ export class VertexAdc {
         subject = subjectToken(await subjectResponse(response, signal), document.remote.format, this.redactor);
         if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
       }
-      const data = document.data; let fields: Record<string, string>, authorization: string | undefined;
+      const data = document.data; let fields: Record<string, string>, authorization: string | undefined, direct: string | undefined, directExpiresAt: number | undefined;
       if (data.type === 'external_account' || data.type === 'external_account_authorized_user') {
         fields = data.type === 'external_account_authorized_user'
           ? { grant_type: 'refresh_token', refresh_token: this.workforceRefresh?.fingerprint === document.fingerprint ? this.workforceRefresh.token : data.refresh_token as string }
@@ -238,14 +241,20 @@ export class VertexAdc {
       else if (data.type === 'authorized_user') fields = { grant_type: 'refresh_token', client_id: data.client_id as string, client_secret: data.client_secret as string, refresh_token: data.refresh_token as string };
       else {
         const key = createPrivateKey(data.private_key as string); if (key.asymmetricKeyType !== 'rsa' || (key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048) throw failure();
-        const now = Math.floor(Date.now() / 1000), header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-        const payload = Buffer.from(JSON.stringify({ iss: data.client_email, scope: SCOPE, aud: TOKEN, iat: now, exp: now + 3600 })).toString('base64url'), unsigned = `${header}.${payload}`;
+        const now = Math.floor(Date.now() / 1000), header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT', ...(document.selfSigned && data.private_key_id ? { kid: data.private_key_id } : {}) })).toString('base64url');
+        const claims = document.selfSigned ? { iss: data.client_email, sub: data.client_email, scope: SCOPE, exp: now + 3600, iat: now } : { iss: data.client_email, scope: SCOPE, aud: TOKEN, iat: now, exp: now + 3600 };
+        const payload = Buffer.from(JSON.stringify(claims)).toString('base64url'), unsigned = `${header}.${payload}`;
         const assertion = `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), key).toString('base64url')}`; this.redactor?.add(assertion);
         fields = { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion };
+        if (document.selfSigned) { direct = assertion; directExpiresAt = (now + 3600) * 1000; }
       }
-      if ((document.aws || document.certificate) && (await this.document(signal)).fingerprint !== document.fingerprint) throw failure();
-      signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? (document.certificate ? (data.token_url as string | undefined) ?? STS : STS) : data.type === 'external_account_authorized_user' ? WORKFORCE : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) }, dispatcher);
-      if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); } const body = await readOAuthJson(response, signal);
+      let body: Record<string, unknown>;
+      if (direct !== undefined) body = { access_token: direct, expires_in: 3600, token_type: 'Bearer' };
+      else {
+        if ((document.aws || document.certificate) && (await this.document(signal)).fingerprint !== document.fingerprint) throw failure();
+        signal.throwIfAborted(); const response = await send(data.type === 'external_account' ? (document.certificate ? (data.token_url as string | undefined) ?? STS : STS) : data.type === 'external_account_authorized_user' ? WORKFORCE : TOKEN, { method: 'POST', redirect: 'manual', signal, headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json', ...(authorization ? { authorization } : {}) }, body: new URLSearchParams(fields) }, dispatcher);
+        if (!response.ok) { void response.body?.cancel().catch(() => undefined); throw failure(); } body = await readOAuthJson(response, signal);
+      }
       this.redactor?.add(typeof body.access_token === 'string' ? body.access_token : undefined);
       if (!text(body.access_token) || typeof body.expires_in !== 'number' || !Number.isFinite(body.expires_in) || body.expires_in <= 0 || body.expires_in > 31_536_000
         || body.token_type !== undefined && (typeof body.token_type !== 'string' || body.token_type.toLowerCase() !== 'bearer')) throw failure();
@@ -258,7 +267,7 @@ export class VertexAdc {
           this.workforceRefresh = { fingerprint: document.fingerprint, token: body.refresh_token as string, sequence };
         }
       }
-      let token = body.access_token, expiresAt = Date.now() + body.expires_in * 1000;
+      let token = body.access_token, expiresAt = directExpiresAt ?? Date.now() + body.expires_in * 1000;
       for (const step of document.iam) {
         new Headers({ authorization: `Bearer ${token}` }); if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
         const response = await send(step.url, { method: 'POST', redirect: 'manual', signal, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json', ...(step.sourceQuota ? { 'x-goog-user-project': step.sourceQuota } : {}) }, body: JSON.stringify(step.body) }, dispatcher);
@@ -278,7 +287,7 @@ export class VertexAdc {
     try {
       const credential = await this.credential(send, signal, proxy); signal.throwIfAborted(); const headers = new Headers(init.headers); headers.delete('x-goog-api-key'); headers.set('authorization', `Bearer ${credential.token}`);
       if (credential.quota && !headers.has('x-goog-user-project')) headers.set('x-goog-user-project', credential.quota);
-      if ((credential.executable || credential.aws || credential.certificate) && (await this.document(signal)).fingerprint !== credential.fingerprint) throw failure(); signal.throwIfAborted();
+      if ((credential.executable || credential.aws || credential.certificate || credential.selfSigned) && (await this.document(signal)).fingerprint !== credential.fingerprint) throw failure(); signal.throwIfAborted();
       const response = await send(url, { ...init, headers, signal, redirect: 'manual' }); signal.throwIfAborted();
       if (response.status === 401 && this.cached?.token === credential.token) this.cached = undefined;
       return response;
