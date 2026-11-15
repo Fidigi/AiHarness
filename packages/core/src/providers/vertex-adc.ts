@@ -131,7 +131,7 @@ export class VertexAdc {
     for (const field of ['client_secret', 'refresh_token', 'private_key']) this.redactor?.add(typeof data[field] === 'string' ? data[field] as string : undefined);
     const selfSigned = data.type === 'service_account' && data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com';
     if (data.universe_domain !== undefined && data.universe_domain !== 'googleapis.com'
-      && (!selfSigned || !text(data.universe_domain, 253) || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/u.test(data.universe_domain))) throw failure();
+      && ((!selfSigned && data.type !== 'authorized_user') || !text(data.universe_domain, 253) || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/u.test(data.universe_domain))) throw failure();
     if (selfSigned && data.private_key_id !== undefined && !text(data.private_key_id, 4096)) throw failure();
     if (data.type === 'authorized_user' || data.type === 'external_account_authorized_user') {
       if (!text(data.client_id, 4096) || !text(data.client_secret) || !text(data.refresh_token)
