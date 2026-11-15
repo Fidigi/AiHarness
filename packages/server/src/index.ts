@@ -24,7 +24,7 @@ import {
   McpOAuthFlowService,
   ProviderCredentialService,
   resolveVertexAdcEnvironment,
-  resolveBedrockProfileEnvironment,
+  resolveBedrockCredentialsEnvironment,
   serializeSession,
   serializeSessionForExport,
   SessionBranchCancelledError,
@@ -250,8 +250,8 @@ function initializeCredentials(
           if (config && !proxy.isConfigured(type)) proxy.setVertexAdc({ ...config, vertexAdc: { ...config.vertexAdc!, signal: runtime.controller.signal } });
         }
         if (type === 'bedrock' && !proxy.isConfigured(type) && !credentials.list().some(item => item.provider === type) && !credentialEnvironment[credentialCommandVariable(type)]) {
-          const config = await resolveBedrockProfileEnvironment(credentialEnvironment, runtime.controller.signal);
-          if (config && !proxy.isConfigured(type)) proxy.setBedrockProfile({ ...config, bedrockProfile: { ...config.bedrockProfile!, signal: runtime.controller.signal } });
+          const config = await resolveBedrockCredentialsEnvironment(credentialEnvironment, runtime.controller.signal);
+          if (config && !proxy.isConfigured(type)) proxy.setBedrockCredentials(config);
         }
         continue;
       }

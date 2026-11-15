@@ -1,0 +1,101 @@
+{
+  "schema": "ai-harness.mod-01.functional-evidence.v1",
+  "date": "2026-11-15",
+  "baseline": "276e025",
+  "criterion": "MOD-01.02e / MOD-01.03a / MOD-01.05",
+  "status": "PARTIAL",
+  "scope": "Native trusted ECS/EKS HTTP credential admission/lifetime/provenance in CLI/Server/readonly Settings, not wider AWS chain completion",
+  "implementation": "Public resolveBedrockCredentialsEnvironment(env,signal?,allowNetwork=true) chooses explicit AWS_PROFILE intent first using delivered static-profile helper; missing/invalid selected profile never silently switches to available container identity. Bearer/complete environment keys suppress fallback. Otherwise explicit admitted relative/full endpoint and captured absolute auth-file or inline-token descriptor, pure constructor admission with no file read or GET; no ambient metadata scan. allowNetwork=false refuses new container acquisition while static named profile can still sign offline. CLI post-ordinary-key/command/store source stays outside values, gets runtime redactor/parent scope and existing startup/reload/index/RPC native factory propagation. Historical internal bedrockProfile field remains a full BedrockProviderConfig envelope; actual disjoint bedrockProfile/bedrockEcs child determines identity, not its field name or a profile-as-key serialization. Exact/scoped/cold invocation-key override retains model/base/region without metadata. Server post-resolution/configured/injected recheck reuses trusted setBedrockCredentials with owned projection/controller/redactor/network lifetime; compatible setBedrockProfile wrapper remains. Validate/pre-aborted failure cannot retire prior source; API-key/remove/shutdown retire old acquisition/inference. Readonly getter reports the actual selected source variable (AWS_PROFILE or relative/full container variable) before ambient-key availability, no URI/token/file DTO or UI selector. Existing metadata/Test409/Disconnect409/unknown source-body400 reused. No new native profile/container marker in credentials store.",
+  "qualification": {
+    "environment": "Docker Makefile build/types; runtime --network none/CI=true/node --no-maglev. Synthetic temporary HOME/auth files/stores and mocked or verified-CA loopback TLS/HTTP only. No account/live switch/personal store/protected container/SDK acquisition/generated output edit.",
+    "image": "ai-harness:mod01-bedrock-ecs-hosts-owned",
+    "imageId": "sha256:5f4fa7ceece3baa6756eebecba114ab2922e0fc6fd48aedd2f8f9fa09f27efdc",
+    "buildCommand": "make typecheck IMAGE_TYPECHECK=ai-harness:mod01-bedrock-ecs-hosts-owned",
+    "buildLog": "/tmp/mod01-bedrock-ecs-hosts/build-owned-r2.log",
+    "strict": {
+      "passed": true,
+      "roots": 3,
+      "config": "/tmp/mod01-bedrock-ecs-hosts/strict.json",
+      "log": "/tmp/mod01-bedrock-ecs-hosts/owned.log"
+    },
+    "runtime": {
+      "passed": 156,
+      "failed": 0,
+      "new": 17,
+      "reused": 139,
+      "log": "/tmp/mod01-bedrock-ecs-hosts/owned.log",
+      "files": [
+        "packages/cli/src/providers/bedrock-ecs.test.ts",
+        "packages/cli/src/cli/bedrock-ecs-process.test.ts",
+        "packages/server/src/api/bedrock-ecs-http.test.ts",
+        "packages/core/src/providers/bedrock-ecs.test.ts",
+        "packages/core/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/providers/bedrock-profile.test.ts",
+        "packages/cli/src/cli/bedrock-profile-process.test.ts",
+        "packages/server/src/api/bedrock-profile-http.test.ts",
+        "packages/cli/src/providers/provider-runtime.test.ts",
+        "packages/server/src/api/proxy.test.ts",
+        "packages/server/src/api/vertex-auth-http.test.ts"
+      ],
+      "filteredControl": {
+        "file": "packages/core/src/providers/bedrock-converse-stream.test.ts",
+        "filter": "explicit opaque Bearer|malformed explicit Bearers|serialized Bearer credentials|independent SigV4",
+        "passed": 4,
+        "unselected": 643,
+        "runtimeOnly": true
+      },
+      "meaning": "Eight CLI resolver cases: pure malformed-auth-file passive admission0, live cache/current auth/redaction, offline/unsafe/explicit-profile/no-source refusals, Bearer/env-key/stored/foreign marker/blocked-command priority, relative precedence/exact-scoped-cold Bearer override, held metadata runtime retirement/no store. Three actual emitted print/JSON/RPC loopback TLS cases bind malformed-file passive model/auth0, foreground GET->native binary SigV4/payload hash/session token/private reasoning, new OS process key/auth-file rotation and signed history, offline startup zero-wire, missing auth-file zero-wire selected failure, print cold offline override, privacy/0600/no credentials store and immutable old entries. Six metadata GETs/seven inferences/seven10-token assistants across modes (print30 including override,JSON20,RPC20). RPC selected failure is accepted prompt disposition followed by exact terminal assistant error/0tokens/settled, not inference success, command-process exit0; existing four attempts/default delays unmodified and all file failures stay zero-wire. Six real-application HTTP cases: passive readonly pointer/Test409/Disconnect409/rejected authority DTO/no I/O, authenticated three native/private runs/30 once-only tokens with two GETs across runtime restart/file-key rotation, no secret/URI/path in state/journal/metadata or source store; direct held SDK metadata acquisition from real app retires on HTTP key replacement/shutdown/trusted remove, pre-aborted setter preserves old; selected absent profile refuses alternate container; injected explicit ECS source beats ambient keys and pointer describes actual source. Main API five requests; lifecycle/priority controls total API11 attempts (six credential GETs/five inference), not extra journal usage. Reused139 = Core ECS8+profile6, static-profile native resolver9/process3/API8, CLI runtime68, proxy30, Vertex-key3 and filtered signature4. No new browser/installed/production/model-host/MOD-03 campaign."
+    },
+    "counterfactual": {
+      "image": "ai-harness:mod01-bedrock-ecs-owned",
+      "failed": 12,
+      "passed": 5,
+      "log": "/tmp/mod01-bedrock-ecs-hosts/red-r2.log",
+      "meaning": "Final corrected17 host cases against SDK-only image: missing native composition/new trusted host API surfaces, five source-absence/priority controls already pass. Not twelve independent product defects or whole SDK-chain proof. Initial red.log13fail/4pass retains pre-correction fixture state, no extra distinct credit."
+    },
+    "retainedFailures": [
+      {
+        "log": "/tmp/mod01-bedrock-ecs-hosts/focused.log",
+        "passed": 12,
+        "failed": 5,
+        "meaning": "Three new resolver fixture calls put offline into fifth persistCredentials argument instead of eighth offline: expected denial/source absence/command-blocked not active, synthetic must-not-run command correctly failed rather than bypassing. Fix call-site parameter placement, keep exact source/values/mount/no-I/O assertions; no product changes. Two process oracles confused startup JSON unavailable(exit2) with selected RPC tour failure(exit0 with terminal error, not command rejection). Preserve product protocols/exits/retry flags/deadlines."
+      },
+      {
+        "log": "/tmp/mod01-bedrock-ecs-hosts/rpc-diagnostic.log",
+        "meaning": "Test-only stdout diagnostic binds RPC prompt disposition started, four existing attempts (2/4/8s delays), terminal assistant stopReason error/exact auth error/0tokens, retry end false/attempt4, settled, process0/empty stderr. Final fixture asserts failure events and zero I/O rather than exit-as-inference oracle; no diagnostic in final source."
+      },
+      {
+        "log": "/tmp/mod01-bedrock-ecs-hosts/focused-r2.log",
+        "exit": 2,
+        "meaning": "Strict new fixture errors TS2722 optional getPublishedModels, TS2554 delete arity, TS2339 nonexistent commandErrors. Correct API invocation/optional call (still >190), use actual credential delete and equivalent stronger source+values+mount/no-I/O outcomes for blocked command, no weakened compiler flags. No Vitest credit for this stage."
+      }
+    ],
+    "runtimeBinding": {
+      "passed": true,
+      "inputs": 6,
+      "imageWitness": "/tmp/mod01-bedrock-ecs-hosts/runtime-witness-image.txt",
+      "worktreeWitness": "/tmp/mod01-bedrock-ecs-hosts/runtime-witness-worktree.txt",
+      "diff": "/tmp/mod01-bedrock-ecs-hosts/runtime-witness.diff",
+      "meaning": "Six changed production inputs image-identical; final tests built/baked, strict config only tar-injected. Earlier fixture/diagnostic/predecessor overlays test-only, not runtime/global image authority."
+    },
+    "documentation": {
+      "lintDocs": "PASS",
+      "diffCheck": "PASS",
+      "log": "/tmp/mod01-bedrock-ecs-hosts/docs.log"
+    }
+  },
+  "sourceSha256": {
+    "packages/core/src/providers/bedrock-config.ts": "91a0afcff0f52372f81d91e4f77f8aaf57fb2fc0bddb702e2bda39122afc8780",
+    "packages/core/src/index.ts": "e58d8e002aa13ba9a7e87f1851bf19ceae2d0fde069d9fa83d72f9fcc1e0ef67",
+    "packages/cli/src/providers/provider-runtime.ts": "73e5e70919e1c69e00427b2e607d29edabbabc2b9a2d05d54b6008a5b98f3a9e",
+    "packages/server/src/index.ts": "275fa4de83496360efb36e35858811d85dd7cf457fb1ff2b240b5c341cac391b",
+    "packages/server/src/api/proxy.ts": "6cf4ac99ae08f408a868b1023ea8b5909ad499a6e61e7255e79d2f131c2182e7",
+    "packages/server/src/api/provider-registry-routes.ts": "54af8d7336318409d0bdcae77aa08ce3479b80d7eafe2bdcb4251ace2e34233c"
+  },
+  "remaining": [
+    "AWS web identity/role/source-profile/SSO/process/scoped profile choices and remaining ARN/endpoint/ambient-profile region policy; ECS source is not full AWS SDK chain",
+    "Other ADC/effective-default-tool/catalogue requirements and final MOD-01 requirement-to-proof audit"
+  ],
+  "limits": "No ECS login/persisted-choice marker/browser file or URI authority, machine metadata scan, shared process cache or remote entitlement/account certificate. Endpoint/auth bytes are local source identity, not vendor subject proof or remote revocation; foreground cache may skip metadata until eager expiry/current file change/matching rejection. Offline new process has no fresh ECS credentials cache, so container source is not admitted; explicit static profiles/direct invocation keys retain their separate offline behavior. SDK/direct held-adapter acquisition evidence is distinct from ordinary authenticated agent HTTP journeys. Native reload/index/RPC propagation reuses delivered envelope paths; process restarts are real CLI OS processes and new Server application runtimes, not installed/browser/production claims. Historical profile/SDK receipts remain scoped/sealed, this supersedes ECS-only host gap but no other AWS/ADC/policy/MOD-03/global historical repair.",
+  "auditState": "Native ECS/EKS HTTP path delivered. MOD-01.02e PARTIAL/MOD-01 IN PROGRESS/04b DONE/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged; active goal not completed."
+}

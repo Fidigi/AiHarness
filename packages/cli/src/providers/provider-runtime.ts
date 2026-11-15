@@ -19,7 +19,7 @@ import {
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
   resolveVertexAdcEnvironment,
-  resolveBedrockProfileEnvironment,
+  resolveBedrockCredentialsEnvironment,
   type VertexProviderConfig,
   type BedrockProviderConfig,
   type MetaOAuthCredentialSource,
@@ -228,10 +228,12 @@ export async function createCliProviderRuntime(
   const vertexAdc = !offline && !values.has('vertex') && !present.has('vertex') && !commandEnv[commandVariable('vertex')]
     ? await resolveVertexAdcEnvironment(env, lifetime) : undefined;
   const bedrockProfile = !values.has('bedrock') && !present.has('bedrock') && !commandEnv[commandVariable('bedrock')]
-    ? await resolveBedrockProfileEnvironment(env, lifetime) : undefined;
+    ? await resolveBedrockCredentialsEnvironment(env, lifetime, !offline) : undefined;
   lifetime.throwIfAborted();
   return {
-    ...(bedrockProfile ? { bedrockProfile: { ...bedrockProfile, bedrockProfile: { ...bedrockProfile.bedrockProfile!, signal: lifetime, redactor } } } : {}),
+    ...(bedrockProfile ? { bedrockProfile: { ...bedrockProfile, ...(bedrockProfile.bedrockProfile
+      ? { bedrockProfile: { ...bedrockProfile.bedrockProfile, signal: lifetime, redactor } }
+      : { bedrockEcs: { ...bedrockProfile.bedrockEcs!, signal: lifetime, redactor } }) } } : {}),
     ...(vertexAdc ? { vertexAdc: { ...vertexAdc, vertexAdc: { ...vertexAdc.vertexAdc!, signal: lifetime, redactor } } } : {}),
     ...(xai ? { xaiOAuth: { credential: xai, credentialSource: xaiSource } } : {}),
     ...(meta ? { metaOAuth: { credential: meta, credentialSource: metaSource } } : {}),

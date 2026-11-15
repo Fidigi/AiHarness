@@ -30,6 +30,7 @@ export type { VertexAdcConfig } from './providers/vertex-adc.js';
 export type { BedrockProfileConfig } from './providers/bedrock-profile.js';
 export type { BedrockEcsConfig } from './providers/bedrock-ecs.js';
 export { resolveBedrockProfileEnvironment } from './providers/bedrock-profile.js';
+export { resolveBedrockCredentialsEnvironment } from './providers/bedrock-config.js';
 export type { AnthropicFederationConfig } from './providers/anthropic-federation.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
 export type { RadiusChatOptions } from './providers/radius.js';

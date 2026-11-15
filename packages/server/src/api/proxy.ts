@@ -426,6 +426,7 @@ export class AiProxyServer {
   private vertexWorkload?: AbortController;
   private bedrockProxy?: CoreProviderProxy;
   private bedrockProfileLifetime?: AbortController;
+  private bedrockCredentialEnvironment?: string;
   private mockProxy?: CoreProviderProxy;
   private githubCopilotProxy?: CoreProviderProxy;
   private openaiCodexProxy?: CoreProviderProxy;
@@ -593,16 +594,26 @@ export class AiProxyServer {
   /** Trusted profile fallback only; HTTP configuration cannot choose credential files. */
   setBedrockProfile(config: BedrockProviderConfig): void {
     if (!config.bedrockProfile) throw new Error('Invalid Bedrock profile configuration.');
-    const controller = new AbortController(), lifetime = config.bedrockProfile.signal;
-    lifetime?.throwIfAborted();
+    this.setBedrockCredentials(config);
+  }
+
+  /** Trusted native AWS source only; no credential endpoint/file authority comes from HTTP DTOs. */
+  setBedrockCredentials(config: BedrockProviderConfig): void {
+    if (!config.bedrockProfile && !config.bedrockEcs || config.bedrockProfile && config.bedrockEcs) throw new Error('Invalid Bedrock credential configuration.');
+    const source = config.bedrockProfile ?? config.bedrockEcs!, controller = new AbortController(), lifetime = source.signal;
+    lifetime?.throwIfAborted(); const signal = lifetime ? AbortSignal.any([lifetime, controller.signal]) : controller.signal;
     const provider = new BedrockProvider({ ...providerNetworkConfig(this.network, this.networkScope), type: 'bedrock',
-      region: config.region, baseUrl: config.baseUrl, model: config.model,
-      bedrockProfile: { ...config.bedrockProfile, signal: lifetime ? AbortSignal.any([lifetime, controller.signal]) : controller.signal, redactor: this.redactor } });
+      region: config.region, baseUrl: config.baseUrl, model: config.model, ...(config.bedrockProfile
+        ? { bedrockProfile: { ...config.bedrockProfile, signal, redactor: this.redactor } }
+        : { bedrockEcs: { relativeUri: config.bedrockEcs!.relativeUri, fullUri: config.bedrockEcs!.fullUri,
+          authorizationToken: config.bedrockEcs!.authorizationToken, authorizationTokenFile: config.bedrockEcs!.authorizationTokenFile, signal, redactor: this.redactor } }) });
     this.bedrockProfileLifetime?.abort(); this.bedrockProfileLifetime = controller;
+    this.bedrockCredentialEnvironment = config.bedrockProfile ? 'AWS_PROFILE' : config.bedrockEcs!.relativeUri ? 'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI' : 'AWS_CONTAINER_CREDENTIALS_FULL_URI';
     this.bedrockProxy = new CoreProviderProxy(provider); this.agentProviders.set('bedrock', provider);
   }
 
-  hasBedrockProfile(): boolean { return !!this.bedrockProfileLifetime; }
+  getBedrockCredentialEnvironmentVariable(): string | undefined { return this.bedrockProfileLifetime ? this.bedrockCredentialEnvironment : undefined; }
+  hasBedrockProfile(): boolean { return this.getBedrockCredentialEnvironmentVariable() === 'AWS_PROFILE'; }
 
   /** Set provider API keys dynamically and refresh both chat and agent adapters. */
   setApiKey(type: 'openai' | 'anthropic' | 'google' | 'azure' | 'vertex' | 'bedrock' | 'local', apiKey: string, baseUrl?: string, model?: string, anthropicAuthMode: 'api-key' | 'oauth' = 'api-key', vertexAuthMode: 'api-key' | 'bearer' = 'bearer'): void {

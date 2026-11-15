@@ -47,11 +47,11 @@ export function createProviderRegistryRouter(
         .filter(provider => provider.type in BUILTIN_ENVIRONMENT)
         .map(provider => {
           const vertexAdc = provider.type === 'vertex' && proxy.hasVertexAdc();
-          const bedrockProfile = provider.type === 'bedrock' && proxy.hasBedrockProfile();
-          const workload = provider.type === 'anthropic' && proxy.hasAnthropicFederation() || vertexAdc || bedrockProfile;
-          const environmentVariable = BUILTIN_ENVIRONMENT[provider.type]?.find(name => Boolean(process.env[name]))
+          const bedrockCredentials = provider.type === 'bedrock' ? proxy.getBedrockCredentialEnvironmentVariable() : undefined;
+          const workload = provider.type === 'anthropic' && proxy.hasAnthropicFederation() || vertexAdc || !!bedrockCredentials;
+          const environmentVariable = bedrockCredentials ?? BUILTIN_ENVIRONMENT[provider.type]?.find(name => Boolean(process.env[name]))
             ?? (vertexAdc ? process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'GOOGLE_APPLICATION_CREDENTIALS' : process.env.GOOGLE_CLOUD_PROJECT ? 'GOOGLE_CLOUD_PROJECT' : 'GCLOUD_PROJECT'
-              : bedrockProfile ? 'AWS_PROFILE' : workload ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
+              : workload ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
           const cloudKey = provider.type === 'vertex' && environmentVariable === 'GOOGLE_CLOUD_API_KEY';
           return {
             type: provider.type,
@@ -145,10 +145,9 @@ export function createProviderRegistryRouter(
         response.json(await services.providerRegistry.disconnect(id));
         return;
       }
-      const environmentVariable = BUILTIN_ENVIRONMENT[id]?.find(name => Boolean(process.env[name]))
+      const environmentVariable = (id === 'bedrock' ? proxy.getBedrockCredentialEnvironmentVariable() : undefined) ?? BUILTIN_ENVIRONMENT[id]?.find(name => Boolean(process.env[name]))
         ?? (id === 'vertex' && proxy.hasVertexAdc() ? process.env.GOOGLE_APPLICATION_CREDENTIALS ? 'GOOGLE_APPLICATION_CREDENTIALS' : process.env.GOOGLE_CLOUD_PROJECT ? 'GOOGLE_CLOUD_PROJECT' : 'GCLOUD_PROJECT'
-          : id === 'bedrock' && proxy.hasBedrockProfile() ? 'AWS_PROFILE'
-            : id === 'anthropic' && proxy.hasAnthropicFederation() ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
+          : id === 'anthropic' && proxy.hasAnthropicFederation() ? 'ANTHROPIC_IDENTITY_TOKEN_FILE' : undefined);
       if (environmentVariable) {
         response.status(409).json({
           error: `Provider is controlled by ${environmentVariable}; remove it from the server environment.`,
