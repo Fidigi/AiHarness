@@ -7,6 +7,7 @@
   "catalogueBaseline": "7f5d625",
   "anthropicPolicyReviewBaseline": "05d15d4",
   "bedrockRegionBaseline": "abe9323",
+  "bedrockEnvironmentBaseline": "ed796a4",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
   "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. 05b current source/host review and cold-admission recovery/lifetime fixes now delivered with44 Docker cases/two compiled probes/one strict root, not a global offline firewall or all-provider certificate. Four unresolved rows remain;00b historical outcomes/exactly three acceptances unchanged.",
@@ -238,7 +239,7 @@
       "id": "MOD-01.02e",
       "requirement": "Vertex API-key/ADC and the wider AWS profile, ECS and web-identity credential chain/region policy.",
       "status": "PARTIAL",
-      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/env web identity/static/web-leaf role chains and selected-root INI WebIdentity delivered. Original ARN/explicit standard-endpoint inference region and matching JSON-binary ARN paths now delivered with independent STS/cache/no native-profile borrowing; actual JSON CLI ARN boundary qualified.",
+      "current": "Vertex explicit cloud-key/legacy Bearer, standard two-file/STS/IAM/Workforce/URL ADC and live hosts; native AWS static profile/ECS/env web identity/static/web-leaf role chains and selected-root INI WebIdentity delivered. Original ARN/explicit standard-endpoint inference region and matching JSON-binary ARN paths now delivered with independent STS/cache/no native-profile borrowing; actual JSON CLI ARN boundary qualified. Explicit selected/recursive Environment role sources now reuse captured constructor keys/expiry and existing role cache, with SDK/trusted Server HTTP evidence; ambient CLI priority and stored profile-choice scope unchanged.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-vertex-api-key.json",
         "docs/audit/pi/evidence/MOD-01-vertex-adc-sdk.json",
@@ -254,7 +255,8 @@
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json",
-        "docs/audit/pi/evidence/MOD-01-bedrock-arn-region.json"
+        "docs/audit/pi/evidence/MOD-01-bedrock-arn-region.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-environment.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
@@ -264,7 +266,7 @@
         "packages/core/src/providers/bedrock-config.ts"
       ],
       "gapClass": "functional/cloud-policy/security scope",
-      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, AWS other profile leaves/SSO/process/scoped choice and remaining ambient/scoped source-region policies (ARN/explicit-endpoint inference policy delivered); assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. Execution from mutable auth files needs explicit security disposition, not blind SDK inheritance."
+      "minimumAction": "Reconcile actual remaining ADC certificate/AWS/executable/universe mechanisms, AWS container/instance-metadata profile leaves/SSO/process/scoped choice/unsupported signing credential scopes and remaining ambient/scoped source-region policies (ARN/explicit-endpoint inference policy delivered); assess explicit stored Vertex cloud-key mode. No implicit key migration/profile-as-key encoding/default-file-only admission. Execution from mutable auth files needs explicit security disposition, not blind SDK inheritance."
     },
     {
       "id": "MOD-01.03a",
@@ -396,6 +398,7 @@
       "current": "Clause-by-clause current source/host contracts reviewed: captured CLI/RPC offline/no-command/no-refresh, actual reload/selection/failure, static/cloud/current authority and Server/Settings passive ownership. Two real cold Server defects fixed: poisoned failed initialization and missing host lifetime on generic refresh.44 runtime/two compiled probes/one strict root; no global Server offline switch or inference firewall.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-offline-host-review.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-environment.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-hosts.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-ecs-hosts.json",

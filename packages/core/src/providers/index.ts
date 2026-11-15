@@ -5107,7 +5107,11 @@ export class BedrockProvider extends AiProvider {
       && config.secretAccessKey === undefined && config.sessionToken === undefined
       && !hasBedrockAuthHeaders(config)) {
       if ([config.bedrockProfile, config.bedrockEcs, config.bedrockWebIdentity].filter(Boolean).length > 1) throw new Error('Only one Bedrock credential source is allowed.');
-      this.profile = config.bedrockProfile ? new BedrockProfile(config.bedrockProfile, this.configuredRegion, (url, init) => super.request(url, init)) : config.bedrockEcs ? new BedrockEcsCredentials(config.bedrockEcs)
+      this.profile = config.bedrockProfile ? new BedrockProfile(config.bedrockProfile, this.configuredRegion, (url, init) => super.request(url, init), {
+        accessKeyId: String(this.config.accessKeyId ?? ''), secretAccessKey: String(this.config.secretAccessKey ?? ''),
+        sessionToken: this.config.sessionToken ? String(this.config.sessionToken) : undefined,
+        expiration: process.env.AWS_CREDENTIAL_EXPIRATION, credentialScope: process.env.AWS_CREDENTIAL_SCOPE,
+      }) : config.bedrockEcs ? new BedrockEcsCredentials(config.bedrockEcs)
         : new BedrockWebIdentityCredentials(config.bedrockWebIdentity!, this.configuredRegion, (url, init) => super.request(url, init));
       nativeSubscriptionStreamConsumers.add(this);
     }

@@ -1,0 +1,68 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-profile-environment.v1",
+  "date": "2026-11-15",
+  "baseline": "ed796a4",
+  "status": "DELIVERED bounded explicit Environment role source;02e PARTIAL",
+  "requirements": ["MOD-01.02e"],
+  "gap": "Selected role profiles and recursive source_profile leaves could not use credential_source=Environment, although existing explicit profile/role and ambient key mechanisms were present.",
+  "implementation": {
+    "files": ["packages/core/src/providers/bedrock-profile.ts", "packages/core/src/providers/index.ts"],
+    "admission": "Original BedrockProvider and explicit trusted bedrockProfile only. Capture existing constructor ambient access key/secret/session plus AWS_CREDENTIAL_EXPIRATION/AWS_CREDENTIAL_SCOPE once; copy the internal snapshot, never reread process.env during file resolution or infer source choice from labels/metadata.",
+    "recipes": "Selected role_arn + credential_source=Environment without source_profile; or an explicit recursive source_profile leaf containing credential_source=Environment without role_arn. Existing recursive complete static keys still win unused recipes. Existing four-role limit, session/duration/external-ID validation and top-role STS region remain.",
+    "sourceKeys": "Bounded static-key/session grammar and lazy redactor enrollment; missing/invalid source refuses, never dispatches raw environment inference as fallback. Nonempty AWS_CREDENTIAL_SCOPE is explicitly unsupported/fail-closed. Optional finite environment expiration is checked immediately before first signed STS authority.",
+    "cacheLifetime": "Reuse private role cache/whole15s/current-INI checks/independent callers/exact401-403 next-call eviction. Captured environment is immutable per instance; no environment watcher/dynamic rotation promise. A cached final role retains its own expiration and existing five-minute eager refresh window after source expiry. Required remint with expired source refuses. New constructor/trusted re-admission is required for changed ambient values.",
+    "authority": "Source keys sign STS, intermediates sign later roles, final-only keys reach Bedrock. Inference endpoint/region do not retarget STS. Existing owner/network/caller lifetime and model-private budget/replay/usage mechanisms unchanged.",
+    "hostBoundary": "Existing trusted AiProxyServer.setBedrockProfile selects the source outside HTTP key values. Actual authenticated HTTP proves passive readonly source metadata/no secret read, source-to-final signing/cache/usage/privacy and shutdown retirement. No new source DTO, profile picker/store/login or automatic CLI admission.",
+    "priorityDistinction": "Native CLI/environment bootstrap still gives ordinary complete AWS environment keys priority over an ambient AWS_PROFILE. Explicit SDK/Server trusted profile selection is different authority and can use Environment within its chosen role. One existing CLI priority case requalified; no new CLI Environment-role claim.",
+    "unchanged": "No public-root config/credential schema, dependency/lock, factory/model catalogue, command execution or replacement auth framework. Internal profile snapshot and existing role mechanisms only; no new install/browser boundary risk."
+  },
+  "reference": {
+    "kind": "Previously installed SDK source inspected read-only; no acquisition/import/execution",
+    "ini": {"version": "3.973.19", "file": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-ini/dist-cjs/index.js", "sha256": "2d975f8114b17e1e96eea2735c7271f735f08bab35dc922384cd15735bbdd085", "lines": "4-28,33-107,192-205"},
+    "environment": {"version": "3.972.74", "file": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-env/dist-cjs/index.js", "sha256": "d23e2c99a7f9bff60ecc65b297decd4c49736d2faffd33910fe67ba6799e98a6"},
+    "binding": "Installed fromIni explicitly maps Environment through fromEnv, rejects source_profile+credential_source combinations and supports credential-source-only recursive leaves. Installed fromEnv identifies optional expiry/scope fields. Native captured-constructor lifetime and fail-closed unsupported scope are explicit, not full SDK dynamic-provider/default-chain equivalence."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-profile-environment-owned",
+    "imageId": "sha256:14871bf8cf1c96de2ee181d14916224a8970efebcf951b512db7b159915e2d35",
+    "policy": "Docker --network none, CI=true, node --no-maglev; canonical TypeScript wrapper retains --no-maglev/--no-turbofan. Synthetic keys/roles/profile files/HOME and mock or loopback transports only.",
+    "sourceWitness": {
+      "packages/core/src/providers/index.ts": "cba4478fb13d6e4c370fb9fd2535661e3d56ab27b923f1c5ced6fbf19f18c20c",
+      "packages/core/src/providers/bedrock-profile.ts": "798799352ce5e49dcd7e85ed3765d7cffda6cd07397b6c4a9c3f2f3f5d0496f0"
+    },
+    "witnessDiff": "/tmp/mod01-bedrock-profile-environment/runtime-witness.diff (empty)",
+    "newTests": {
+      "packages/core/src/providers/bedrock-profile-environment.test.ts": "5e946dd3e85e612751c47803192ba61d2517bdf8d90ad608311e537b7989b651",
+      "packages/server/src/api/bedrock-profile-environment-http.test.ts": "6e6aea1cf14ca94f8f8126d76f663031622bb8348f2fa7e9efd3418a1c79e16e"
+    },
+    "newCoverage": "SDK5: selected/recursive Environment role (2), captured pre-operation source keys/regions/native JSON-binary/cache/private replay/redaction; malformed/expired/scope/mixed/offline zero-wire refusal; final cached role after source expiry/403/remint refusal; static-source/Bearer/derived precedence. HTTP1: trusted explicit source selection outside values, passive invalid-file metadata0, fixed EU source STS/final US native key cache, two native runs/20 once-only tokens, secret-free journal/status/state and retired source refusal.",
+    "reusedCoverage": "Core static6 + role8 + selected-root WebIdentity6 + WebIdentity leaf5 + actual native role HTTP1 + selected CLI credential/profile priority1 =27 reused cases. Existing role source withdrawal/cancellation/static/self-source/vector/current-file safeguards unchanged. Nine other CLI cases unselected, not extra passes.",
+    "runtimePassed": 33,
+    "newCases": 6,
+    "reusedCases": 27,
+    "strictChangedRoots": 2,
+    "build": "/tmp/mod01-bedrock-profile-environment/build-owned.log",
+    "focused": "/tmp/mod01-bedrock-profile-environment/focused.log",
+    "final": "/tmp/mod01-bedrock-profile-environment/owned.log",
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-profile-environment-owned",
+      "tar(strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-bedrock-profile-environment-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/bedrock-profile-environment.test.ts packages/core/src/providers/bedrock-profile.test.ts packages/core/src/providers/bedrock-profile-role.test.ts packages/core/src/providers/bedrock-profile-web-identity.test.ts packages/core/src/providers/bedrock-profile-web-leaf.test.ts packages/server/src/api/bedrock-profile-environment-http.test.ts packages/server/src/api/bedrock-profile-role-http.test.ts --maxWorkers=1'",
+      "node --no-maglev node_modules/vitest/vitest.mjs run packages/cli/src/providers/bedrock-profile.test.ts --maxWorkers=1 -t 'keeps Bearer/environment/stored' (same isolated image)",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "retainedStages": [
+    {"log": "/tmp/mod01-bedrock-profile-environment/red.log", "image": "ai-harness:mod01-credential-recovery-owned", "result": "Test-only overlay:3 useful SDK REDs/2 refusal-precedence controls; HTTP fixture ReferenceError from missing writeFile import, not a product failure"},
+    {"log": "/tmp/mod01-bedrock-profile-environment/http-red-r2.log", "result": "Import corrected; genuine native HTTP run fails instead of completed, existing5000ms wait/default retries unchanged"},
+    {"log": "/tmp/mod01-bedrock-profile-environment/build-owned.log", "result": "First candidate build/workspace types PASS"},
+    {"log": "/tmp/mod01-bedrock-profile-environment/focused.log", "result": "First candidate6 PASS, no product candidate failure or weakened control"},
+    {"log": "/tmp/mod01-bedrock-profile-environment/owned.log", "result": "Final33 PASS/two strict changed roots/two equal production witnesses; existing assertions/deadlines/flags/retries preserved"}
+  ],
+  "limits": [
+    "Explicit SDK/trusted Server profile source only; native ambient CLI bootstrap priority is unchanged and no new stored/scoped profile-choice contract is delivered.",
+    "No direct selected credential-source-only profile without role, dynamic environment watcher/rotation, signing credential-scope support, EcsContainer/Ec2InstanceMetadata leaves, SSO/login/process or full AWS default chain claimed.",
+    "No real account/vendor grant/role validity, new browser/installed/production/full-root campaign or reference SDK execution.",
+    "05b remains delivered with this new source's offline/lifetime/refusal evidence added.02e remains PARTIAL; other cloud/ADC/effective/final audit work and executable security disposition remain. No auth-file command authorization inferred.",
+    "Current23 unchanged:18 functionally delivered rows/one historical/four unresolved01b/02e/04a/06c. MOD-01 IN PROGRESS/MOD-03 DONE/04b DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged."
+  ]
+}
