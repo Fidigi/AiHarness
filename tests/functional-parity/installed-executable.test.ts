@@ -552,6 +552,21 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
   }, 30_000);
 
+  it('publishes MOD-01 provider sources and native image worker through genuinely installed strict public contracts', async () => {
+    const packed = inventory.find(item => item.name === '@ai-harness/core')!;
+    for (const file of ['dist/media/image-worker.js', 'dist/providers/bedrock-profile.js', 'dist/providers/bedrock-web-identity.js']) expect(packed.files.some(item => item.path === file)).toBe(true);
+    const metadata = JSON.parse(await readFile(path.join(consumer, 'node_modules/@ai-harness/core/package.json'), 'utf8'));
+    expect(metadata.dependencies.sharp).toBe('0.34.5'); expect(metadata.dependencies.saxes).toBe('6.0.0');
+    await cp(path.join(fixtureRoot, 'sdk/mod01-package.ts'), path.join(consumer, 'mod01-package.ts'));
+    for (const file of ['model-image.mjs', 'model-image.d.mts', 'sts-web-identity.ts']) await cp(path.join(checkout, 'tests/fixtures', file), path.join(consumer, file));
+    const types = await succeed(process.execPath, [compiler, '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--types', 'node', 'mod01-package.ts'], consumer, environment);
+    expect(types.stdout).toBe(''); expect(types.stderr).toBe('');
+    expect(await run(process.execPath, ['--no-maglev', 'mod01-package.js'], consumer, environment, '', 30_000))
+      .toEqual({ code: 0, stdout: 'MOD01_PACKAGED_PROVIDER_MEDIA_OK\n', stderr: '' });
+    const listing = await run('ai-harness', ['--offline', '--list-models', 'bedrock'], workspace, { ...environment, AWS_PROFILE: 'chosen', AWS_CONFIG_FILE: path.join(consumer, 'mod01-auth/config'), AWS_REGION: 'us-west-2', BEDROCK_MODEL: 'anthropic.claude-opus-4-6-v1' });
+    expect(listing.code, listing.stderr).toBe(0); expect(listing.stderr).toBe(''); expect(listing.stdout).toContain('anthropic.claude-opus-4-6-v1'); expect(listing.stdout).not.toContain('synthetic.installed.subject');
+  }, 60_000);
+
   it('contains declarations, executable and worker artifacts and resolves PATH only inside the consumer', async () => {
     const core = inventory.find(item => item.name === '@ai-harness/core')!;
     const cli = inventory.find(item => item.name === '@ai-harness/cli')!;

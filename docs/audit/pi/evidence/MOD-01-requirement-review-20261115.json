@@ -1,17 +1,18 @@
 {
   "schema": "ai-harness.mod-01.requirement-review.v1",
   "date": "2026-11-15",
-  "baseline": "7f5d625",
+  "baseline": "66ed870",
   "initialBaseline": "7e0e8ba",
+  "catalogueBaseline": "7f5d625",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
-  "method": "Initial documentary review preserved canonical task statements verbatim. Later Bedrock/Azure C caller strict/choice deliveries remain scoped01b/04a evidence, not closure of those rows. Catalogue05a review now specifies current source mechanisms and closes one composed proof gap without product changes:33 Docker runtime cases/one strict changed root under its separate receipt, not fresh runtime credit for all23 rows. Existing delivered results reused, every referenced path exists. A delivered row does not assert every model-host/method/vendor outcome; its mechanism has bounded evidence. Six unresolved/review rows remain,00b historical outcomes retained; no reference SDK/account/global campaign.",
+  "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. Five unresolved/review rows remain;00b historical outcomes/exactly three acceptances unchanged.",
   "counts": {
-    "DELIVERED": 15,
+    "DELIVERED": 16,
     "HISTORICAL": 1,
     "PARTIAL": 3,
     "DONE": 1,
-    "REVIEW": 2,
+    "REVIEW": 1,
     "OPEN": 1
   },
   "requirements": [
@@ -405,20 +406,24 @@
     {
       "id": "MOD-01.06a",
       "requirement": "Bind implemented rows to Core wire, installed public declarations/runtime, emitted CLI/RPC and authenticated HTTP evidence.",
-      "status": "REVIEW",
-      "current": "Compiled public API/strict declaration, emitted CLI/RPC/HTTP/native transport evidence and historical installed proofs exist; direct product XML dependency explicitly locked/resolved production graph.",
+      "status": "DELIVERED",
+      "current": "Current added package/declaration risk now covered by genuine outside-checkout Core+CLI archive install/strict public consumer/native Sharp worker/SAX XML/web-role source/final native wire and PATH offline metadata. Existing independent Core/SDK/emitted CLI-RPC/authenticated HTTP/Settings source receipts remain distinct; no all-integration new installed credit.",
       "evidence": [
-        "docs/audit/pi/evidence/MOD-01-bedrock-profile-role.json",
+        "docs/audit/pi/evidence/MOD-01-package-boundary-review.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json",
+        "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-sdk.json",
         "docs/audit/pi/evidence/MOD-01-typesafe-hosts.json",
         "docs/audit/pi/evidence/MOD-03-closure.json"
       ],
       "files": [
         "packages/core/package.json",
-        ".docker/Dockerfile.test"
+        ".docker/Dockerfile.test",
+        "tests/functional-parity/installed-executable.test.ts",
+        "tests/functional-parity/fixtures/sdk/mod01-package.ts"
       ],
-      "gapClass": "final artifact/package-boundary review",
-      "minimumAction": "Check changed package/declaration boundary only if actual unresolved packaging risk; no automatic reinstall/SDK capture/full matrix. Reused evidence stays source-scoped."
+      "gapClass": "none in current package/declaration scope",
+      "minimumAction": "Recheck future changed declaration/artifact risks only. No automatic reinstall/SDK capture/full model-host matrix; final06c keeps source-specific outcomes and other functional gaps separate."
     },
     {
       "id": "MOD-01.06b",
@@ -452,13 +457,14 @@
       ],
       "files": [],
       "gapClass": "final audit",
-      "minimumAction": "After02e/04a/05b/06a reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
+      "minimumAction": "After02e/04a/05b reconcile every23 rows, freeze required changed-scope evidence and actual outcomes, keep QUA/manual accounts/historical failures independent; only then consider goal complete."
     }
   ],
   "followUps": [
     { "baseline": "9d2f44a", "requirements": ["MOD-01.01b", "MOD-01.04a"], "receipt": "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json", "meaning": "Three new cases/11 runtime/one strict root close Azure C caller controls only, both parent rows PARTIAL/counts unchanged; no other row gains runtime credit." },
     { "baseline": "ba7d33c", "requirements": ["MOD-01.02e"], "receipt": "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json", "meaning": "Selected-root INI WebIdentity/current-INI guards/native JSON-HTTP delivered with eight new cases/58 runtime/three strict roots; other leaves/policies separately reviewed,02e PARTIAL/counts unchanged." },
-    { "baseline": "06622a5", "requirements": ["MOD-01.02e"], "receipt": "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json", "meaning": "WebIdentity source-profile leaf/final JWT+INI cache/distinct STS regions/native JSON delivered with six new cases/47 runtime/two strict roots; other cloud/policy/security work remains,02e PARTIAL/counts unchanged." }
+    { "baseline": "06622a5", "requirements": ["MOD-01.02e"], "receipt": "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json", "meaning": "WebIdentity source-profile leaf/final JWT+INI cache/distinct STS regions/native JSON delivered with six new cases/47 runtime/two strict roots; other cloud/policy/security work remains,02e PARTIAL/counts unchanged." },
+    { "baseline": "66ed870", "requirements": ["MOD-01.06a"], "receipt": "docs/audit/pi/evidence/MOD-01-package-boundary-review.json", "meaning": "One genuine installed public consumer covers changed Sharp worker/parser/cloud declarations/runtime and PATH metadata; other functional gaps remain,06a DELIVERED/five unresolved rows." }
   ],
   "importantCorrections": [
     "MOD-03 and image04b closed, not work to redeliver; 1649 typed entries are not1649 distinct usable models",
@@ -469,11 +475,11 @@
     "Current unresolved executable auth-file mechanisms require a deliberate security/trust decision, not automatic execution merely because a transitive SDK supports it"
   ],
   "validation": {
-    "type": "Initial source/document reconciliation plus targeted05a contract/proof follow-up",
-    "runtimeTests": "Separate catalogue receipt owns33 Docker runtime cases (one new)/one changed strict root; no product change or whole23-row runtime certificate. Bedrock tool and all other deliveries retain their own scoped gates, no reference SDK/browser/installed/production/global campaign.",
+    "type": "Initial source/document reconciliation plus targeted05a contract and06a package follow-ups",
+    "runtimeTests": "Separate05a receipt owns33 Docker cases/one strict root; separate06a receipt owns one installed package scenario/strict public consumer and one changed harness strict root. No product change or whole23-row runtime certificate. Other deliveries retain scoped gates; no reference SDK/browser/production/global campaign.",
     "lintDocs": "PASS",
     "diffCheck": "PASS",
-    "log": "/tmp/mod01-catalogue-contract/docs.log",
+    "log": "/tmp/mod01-package-boundary/docs.log",
     "initialLog": "/tmp/mod01-requirement-review/docs.log"
   },
   "auditState": "MOD-01 IN PROGRESS;04b DONE;MOD-03 DONE;38/43;runtime134 OPEN;exactly three historical acceptances unchanged;goal active/not completed."
