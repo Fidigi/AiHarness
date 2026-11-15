@@ -12,6 +12,8 @@ The [subscription-provider contract](./subscription-providers.md) documents the 
 
 **MOD-03 closure:** the [final eight-axis audit](../../audit/pi/evidence/MOD-03-closure.json) verifies reasoning, private replay and request budgets through product `eda7593`, including the Anthropic zero-fallback reserve and Copilot cap/effort corrections. Model-owned image preparation is now delivered under the [scoped MOD-01.04b audit](../../audit/pi/evidence/MOD-01-image-preparation-closure.json), following explicit delegation; unknown-media/heuristic estimates are not billed usage. Wider MOD-01 delivery, manual real-account verification and QUA qualification remain open. Historical subset limitations below retain their source scope, not automatic current MOD-03 blockers.
 
+**Current model-policy disposition:** the [six-family/eight-axis source-contract audit](../../audit/pi/evidence/MOD-01-effective-policy-closure.json), baseline `991c967`, marks MOD-01.01b/04a functionally DELIVERED. Actual Core defaults/sampling/tool/capability/context/media/continuation/response policies and native host evidence—not catalogue presence—support that result. Automatic flag/response effects were traced and fixed; optional foreign raw-sampling/hosted/named-section ABI is explicit and not silently promised. Dated PARTIAL/source-local caveats below retain historical scope, not current backlog. Cloud methods02e/final qualification06c and parent MOD-01 remain open; no new runtime/QUA/global credit from this documentary review.
+
 ## Architecture
 
 ```text
