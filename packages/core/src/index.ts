@@ -224,6 +224,7 @@ export type {
   ResponsesChatOptions,
   AnthropicChatOptions,
   GoogleChatOptions,
+  BedrockChatOptions,
   ChatToolDefinition,
   ThinkingLevel,
   ThinkingBudgets,

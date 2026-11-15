@@ -80,6 +80,7 @@ import { BedrockProfile, hasBedrockAuthHeaders, type BedrockProfileConfig, type 
 import { BedrockEcsCredentials, type BedrockEcsConfig } from './bedrock-ecs.js';
 import { BedrockWebIdentityCredentials, type BedrockWebIdentityConfig } from './bedrock-web-identity.js';
 import { signAwsRequest } from './aws-sigv4.js';
+import { prepareBedrockTools } from './bedrock-tools.js';
 import { validXaiOAuthIdentity, type XaiOAuthCredential, type XaiOAuthCredentialSource } from './xai-oauth.js';
 import { xaiOAuthHistory, sealXaiOAuthCall, sealXaiOAuthResponse, withoutXaiOAuthReplay } from './xai-oauth-replay.js';
 import { validMetaOAuthIdentity, type MetaOAuthCredential, type MetaOAuthCredentialSource } from './meta-oauth.js';
@@ -616,6 +617,12 @@ export interface ResponsesChatOptions extends ChatOptions {
 
 /** Scoped JSON-schema/choice controls for original Anthropic profiles, not generic or automatic host tools. */
 export interface AnthropicChatOptions extends ChatOptions {
+  tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
+  toolChoice?: 'auto' | 'none' | 'any' | { type: 'tool'; name: string };
+}
+
+/** Caller JSON-schema/choice controls for exact original Bedrock profiles, not automatic host-tool strictness. */
+export interface BedrockChatOptions extends ChatOptions {
   tools?: Array<ChatToolDefinition & { constrainedSampling?: false | { type: 'json_schema'; strict: 'prefer' | 'require' } }>;
   toolChoice?: 'auto' | 'none' | 'any' | { type: 'tool'; name: string };
 }
@@ -5123,7 +5130,7 @@ export class BedrockProvider extends AiProvider {
     return url;
   }
 
-  private requestBody(messages: Message[], options?: ChatOptions, replayModel?: string): Record<string, unknown> {
+  private requestBody(messages: Message[], options?: ChatOptions, replayModel?: string, toolConfig?: Record<string, unknown>): Record<string, unknown> {
     const nativeReplay = replayModel !== undefined && hasBedrockProfile(replayModel);
     if (replayModel) messages = messages.flatMap(message => {
       if (message.role !== 'assistant' || !nativeReplay
@@ -5186,9 +5193,7 @@ export class BedrockProvider extends AiProvider {
         ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
       },
-      ...(options?.tools?.length ? { toolConfig: { tools: options.tools.map(tool => ({ toolSpec: {
-        name: tool.name, description: tool.description, inputSchema: { json: tool.parameters },
-      } })) } } : {}),
+      ...(toolConfig ? { toolConfig } : {}),
     };
   }
 
@@ -5206,12 +5211,13 @@ export class BedrockProvider extends AiProvider {
       ...(this.config.sessionToken ? { sessionToken: String(this.config.sessionToken) } : {}) }, region, { 'content-type': 'application/json', ...custom }, now);
   }
 
-  async chat(messages: Message[], options?: ChatOptions): Promise<ChatResponse> {
+  async chat(messages: Message[], options?: BedrockChatOptions): Promise<ChatResponse> {
     if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
     const requestedModel = this.ownsNativeProfiles ? options?.model || String(this.config.model) : String(this.config.model);
     const native = this.ownsNativeProfiles && hasBedrockProfile(requestedModel);
     const signed = native, owner = this.config.type;
     if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, requestedModel, messages, this.region);
+    const toolConfig = prepareBedrockTools(native ? requestedModel : undefined, options);
     const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
     const region = this.configuredRegion ?? authentication?.region ?? this.region;
     const model = encodeURIComponent(requestedModel);
@@ -5224,7 +5230,7 @@ export class BedrockProvider extends AiProvider {
     if (this.config.apiKey !== undefined && (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)) {
       throw new Error('Invalid Bedrock endpoint.');
     }
-    const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? requestedModel : undefined);
+    const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? requestedModel : undefined, toolConfig);
     if (native) applyBedrockProfileSimplePolicy(requestedModel, prepared, options, messages, region);
     const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
     await authentication?.assertCurrent();
@@ -5280,7 +5286,7 @@ export class BedrockProvider extends AiProvider {
     onChunk: StreamChunkCallback,
     onComplete?: (response?: ChatResponse) => void,
     onError?: (error: Error) => void,
-    options?: ChatOptions,
+    options?: BedrockChatOptions,
   ): Promise<void> {
     try {
       if (!this.validateConfig()) throw new Error('AWS Bedrock credentials are required');
@@ -5289,10 +5295,11 @@ export class BedrockProvider extends AiProvider {
       const native = this.ownsNativeProfiles && hasBedrockProfile(model);
       const signed = native, owner = this.config.type;
       if (this.profile && native) prepareBedrockOutputBudget(options ?? {}, model, messages, this.region);
+      const toolConfig = prepareBedrockTools(native ? model : undefined, options);
       const authentication = this.profile ? await this.profileAuthentication(options?.signal) : undefined;
       const region = this.configuredRegion ?? authentication?.region ?? this.region;
       const url = this.streamEndpoint(model, region);
-      const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined);
+      const prepared = this.requestBody(messages, options, this.ownsNativeProfiles ? model : undefined, toolConfig);
       if (native) applyBedrockProfileSimplePolicy(model, prepared, options, messages, region);
       const body = serializeProviderBody(prepared), headers = await this.requestHeaders(url, body, new Date(), authentication?.credentials, region);
       await authentication?.assertCurrent();
