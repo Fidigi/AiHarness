@@ -64,6 +64,34 @@ async function fileBytes(file: string, signal: AbortSignal): Promise<Buffer> {
   } finally { await handle.close(); }
 }
 
+function subjectToken(bytes: Buffer, format: Record<string, unknown> | undefined, redactor?: Pick<CredentialRedactor, 'add'>): string {
+  const raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes); let token: unknown = raw;
+  if (format?.type === 'json') {
+    const parsed: unknown = JSON.parse(raw), field = format.subject_token_field_name as string;
+    token = parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.hasOwn(parsed, field) ? (parsed as Record<string, unknown>)[field] : undefined;
+  }
+  if (typeof token !== 'string' || !token.trim() || Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(token)) throw failure();
+  redactor?.add(token); if (token.trim() !== token) redactor?.add(token.trim()); return token;
+}
+
+async function subjectResponse(response: Response, signal: AbortSignal): Promise<Buffer> {
+  const length = response.headers.get('content-length');
+  if (!response.ok || length !== null && (!/^(?:0|[1-9]\d*)$/u.test(length) || Number(length) > MAX_FILE)) {
+    void response.body?.cancel().catch(() => undefined); throw failure();
+  }
+  const reader = response.body?.getReader(); if (!reader) throw failure(); let completed = false;
+  try {
+    return await observed(async () => {
+      const chunks: Uint8Array[] = []; let total = 0;
+      while (true) {
+        signal.throwIfAborted(); const item = await reader.read(); signal.throwIfAborted();
+        if (item.done) { completed = true; return Buffer.concat(chunks); }
+        total += item.value.byteLength; if (total > MAX_FILE) throw failure(); chunks.push(item.value);
+      }
+    }, signal);
+  } finally { if (!completed) void reader.cancel().catch(() => undefined); try { reader.releaseLock(); } catch { /* Hostile pending read. */ } }
+}
+
 /** Per-instance cache bound to the exact current file bytes, never a global/persisted token cache. */
 export class VertexAdc {
   private readonly file: string;
@@ -107,37 +135,52 @@ export class VertexAdc {
         || data.workforce_pool_user_project !== undefined && (!text(data.workforce_pool_user_project, 500) || !data.audience.startsWith('//iam.googleapis.com/locations/'))) throw failure();
     }
     else throw failure();
-    let subject: string | undefined, subjectBytes: Buffer | undefined;
+    let subject: string | undefined, subjectBytes: Buffer | undefined, remote: { url: string; headers: Headers; format?: Record<string, unknown> } | undefined;
     if (data.type === 'external_account') {
       const source = data.credential_source as Record<string, unknown> | undefined;
-      if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).some(key => !['file', 'format'].includes(key))) throw failure();
+      if (!source || typeof source !== 'object' || Array.isArray(source) || Object.keys(source).some(key => !['file', 'url', 'headers', 'format'].includes(key)) || (source.file === undefined) === (source.url === undefined)) throw failure();
       const format = source.format as Record<string, unknown> | undefined;
       if (format !== undefined && (!format || typeof format !== 'object' || Array.isArray(format)
         || format.type !== undefined && format.type !== 'text' && format.type !== 'json' || format.type === 'json' && !text(format.subject_token_field_name, 500))) throw failure();
-      subjectBytes = await fileBytes(source.file as string, signal);
-      const raw = new TextDecoder('utf-8', { fatal: true }).decode(subjectBytes);
-      let token: unknown = raw;
-      if (format?.type === 'json') {
-        const parsed: unknown = JSON.parse(raw), field = format.subject_token_field_name as string;
-        token = parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.hasOwn(parsed, field) ? (parsed as Record<string, unknown>)[field] : undefined;
+      if (source.url !== undefined) {
+        if (!text(source.url, 4096)) throw failure(); const url = new URL(source.url);
+        if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.hash) throw failure();
+        this.redactor?.add(url.href); for (const value of url.searchParams.values()) this.redactor?.add(value);
+        const configured = source.headers;
+        if (configured !== undefined && (!configured || typeof configured !== 'object' || Array.isArray(configured))) throw failure();
+        const entries = Object.entries(configured ?? {}); if (entries.length > 32) throw failure(); let headerBytes = 0; const headers = new Headers();
+        for (const [name, value] of entries) {
+          if (typeof value !== 'string' || Buffer.byteLength(name) > 256 || (headerBytes += Buffer.byteLength(name) + Buffer.byteLength(value)) > 16384
+            || ['host', 'content-length', 'connection', 'transfer-encoding', 'proxy-authorization'].includes(name.toLowerCase())) throw failure();
+          this.redactor?.add(value); headers.set(name, value); const normalized = headers.get(name)!; this.redactor?.add(normalized);
+          if (name.toLowerCase() === 'authorization') this.redactor?.add(/^(?:Bearer|Basic)\s+(\S+)$/iu.exec(normalized)?.[1]);
+        }
+        remote = { url: url.href, headers, format };
+      } else {
+        if (source.headers !== undefined) throw failure(); subjectBytes = await fileBytes(source.file as string, signal);
+        subject = subjectToken(subjectBytes, format, this.redactor);
       }
-      if (typeof token !== 'string' || !token.trim() || Buffer.byteLength(token) > 64 * 1024 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(token)) throw failure();
-      subject = token; this.redactor?.add(subject); if (subject.trim() !== subject) this.redactor?.add(subject.trim());
     }
     const quota = this.quota ?? root.quota_project_id; if (quota !== undefined && !text(quota, 500)) throw failure(); if (quota) new Headers({ 'x-goog-user-project': quota });
-    return { data, iam, subject, fingerprint: createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(subjectBytes ?? Buffer.alloc(0)).digest('hex'), quota };
+    return { data, iam, subject, remote, fingerprint: createHash('sha256').update(String(bytes.length) + ':').update(bytes).update(subjectBytes ?? Buffer.alloc(0)).digest('hex'), quota };
   }
   private async credential(send: Send, parent: AbortSignal) {
     const signal = AbortSignal.any([parent, AbortSignal.timeout(15_000)]); disableProviderNetworkRetries(signal);
     return observed(async () => {
       const document = await this.document(signal), sequence = ++this.sequence;
       if (this.cached?.fingerprint === document.fingerprint && this.cached.expiresAt > Date.now() + 300_000) return { ...document, token: this.cached.token };
+      let subject = document.subject;
+      if (document.remote) {
+        const response = await send(document.remote.url, { method: 'GET', redirect: 'manual', signal, headers: document.remote.headers });
+        subject = subjectToken(await subjectResponse(response, signal), document.remote.format, this.redactor);
+        if ((await this.document(signal)).fingerprint !== document.fingerprint) throw failure(); signal.throwIfAborted();
+      }
       const data = document.data; let fields: Record<string, string>, authorization: string | undefined;
       if (data.type === 'external_account' || data.type === 'external_account_authorized_user') {
         fields = data.type === 'external_account_authorized_user'
           ? { grant_type: 'refresh_token', refresh_token: this.workforceRefresh?.fingerprint === document.fingerprint ? this.workforceRefresh.token : data.refresh_token as string }
           : { grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange', audience: data.audience as string, scope: SCOPE,
-          requested_token_type: 'urn:ietf:params:oauth:token-type:access_token', subject_token: document.subject!, subject_token_type: data.subject_token_type as string };
+          requested_token_type: 'urn:ietf:params:oauth:token-type:access_token', subject_token: subject!, subject_token_type: data.subject_token_type as string };
         if (data.client_id) { const encoded = Buffer.from(`${data.client_id}:${data.client_secret ?? ''}`).toString('base64'); authorization = 'Basic ' + encoded; if (Buffer.byteLength(authorization) > 64 * 1024) throw failure(); this.redactor?.add(encoded); this.redactor?.add(authorization); }
         else if (data.workforce_pool_user_project) fields.options = JSON.stringify({ userProject: data.workforce_pool_user_project });
       }
