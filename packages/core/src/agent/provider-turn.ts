@@ -31,6 +31,7 @@ import { projectAssistantReplay } from '../providers/message-replay.js';
 import { hasBedrockProfile } from '../providers/bedrock-profiles.js';
 import { blockMessageImages } from '../media/message-images.js';
 import { supportsAnthropicToolHistory, attachAnthropicToolHistory } from '../providers/anthropic-tool-history.js';
+import { supportsResponsesToolHistory, attachResponsesToolHistory } from '../providers/responses-tool-history.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -437,7 +438,9 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
           }, { signal });
           current();
           if (sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
-          if (supportsAnthropicToolHistory(provider, requestOptions.model ?? '')) {
+          const captureHistory = supportsAnthropicToolHistory(provider, requestOptions.model ?? '') ? attachAnthropicToolHistory
+            : supportsResponsesToolHistory(provider, requestOptions.model ?? '') ? attachResponsesToolHistory : undefined;
+          if (captureHistory) {
             historyLeaf = sourceSession.activeLeafId;
             const read = () => sessionManager.getActiveBranchEntries(sessionId);
             const path = await (signal ? awaitAgentAdmission(read, signal) : read()).catch(error => {
@@ -446,7 +449,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
               throw error;
             }); current();
             if (sessionManager.get(sessionId) !== sourceSession || sourceSession.activeLeafId !== historyLeaf) throw new ProviderRequestContextError('stale');
-            const historical = attachAnthropicToolHistory(provider, requestOptions, prepared.data.provider, requestOptions.model!, requestMessages, path);
+            const historical = captureHistory(provider, requestOptions, prepared.data.provider, requestOptions.model!, requestMessages, path);
             if (historical && contextBudget) assertProviderRequestBudget([...requestMessages, { id: 'native-tool-budget', role: 'system', content: historical, timestamp: new Date(0) }], requestOptions, contextBudget,
               Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
           }

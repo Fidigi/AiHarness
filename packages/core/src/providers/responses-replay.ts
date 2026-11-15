@@ -4,6 +4,8 @@ import { responseItemHash } from './openai-responses.js';
 
 export type ResponsesReplayOwner = { provider: string; api: string; model: string };
 type Item = Record<string, unknown>;
+const inputAnchors = new WeakMap<object, ReadonlyMap<string, Item | undefined>>();
+export function responsesInputAnchor(body: object, messageId: string): Item | undefined { return inputAnchors.get(body)?.get(messageId); }
 const record = (value: unknown): value is Item => value !== null && typeof value === 'object' && !Array.isArray(value);
 const invalid = (): never => { throw new Error('Invalid native Responses continuation.'); };
 const reasoningText = (item: Item): string => {
@@ -124,9 +126,10 @@ export function applyResponsesSplitIdHistory(body: Record<string, unknown>, mess
 
 /** Replace only native rich assistant slots; all existing user/tool/image preparation remains owning code. */
 export function applyResponsesReplay(body: { input: Item[] }, messages: Message[], owner: ResponsesReplayOwner): void {
-  const input: Item[] = [];
+  const input: Item[] = [], starts = new Map<string, number>();
   let cursor = 0;
   for (const [index, original] of messages.entries()) {
+    starts.set(original.id, input.length);
     const messageIndex = index - (messages[0]?.role === 'system' ? 1 : 0);
     const count = original.role === 'assistant' && original.toolCalls?.length ? original.toolCalls.length + (original.content ? 1 : 0) : 1;
     const legacy = body.input.slice(cursor, cursor + count); cursor += count;
@@ -169,4 +172,5 @@ export function applyResponsesReplay(body: { input: Item[] }, messages: Message[
     for (const value of message.toolCalls ?? []) if (!seen.has(value.id)) call(value);
   }
   body.input = input;
+  inputAnchors.set(body, new Map([...starts].map(([id, index]) => [id, input[index]])));
 }

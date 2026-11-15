@@ -1,0 +1,74 @@
+{
+  "schema": "ai-harness.mod-01.responses-tool-history.v1",
+  "date": "2026-11-15",
+  "baseline": "0a714ed",
+  "status": "DELIVERED eleven-model native additive tool history;01b/04a PARTIAL",
+  "requirements": ["MOD-01.01b", "MOD-01.04a"],
+  "gap": "The preceding source review identified automatic OpenAI additional_tools history, not an optional new caller interface. Core sent every current declaration at the request root instead of keeping initial tools and loading later definitions in context. Existing v2 post-hook loadouts already provide the data; removals or same-name redefinitions must fall back to current flat tools.",
+  "reference": {
+    "review": "docs/audit/pi/evidence/MOD-01-responses-system-policy.json",
+    "revision": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+    "shared": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/api/openai-responses-shared.ts:179-212",
+    "sharedSha256": "09100e0bfe8fa4ad212312956930f4a9e70cd29ca823d2e1f1c97f87b4541afe",
+    "transcript": "/tmp/aih-parity-audit-ejvmwn/pi/packages/ai/src/utils/transcript.ts:202-246",
+    "transcriptSha256": "e0814f35bdcc93b017fa45589a6920e46b5480b88fba01ef93e5d2d4e815f0f2",
+    "scope": "Eleven exact deeply frozen original OpenAI profiles prefer additional_tools; zero original OpenAI/Azure R profiles select search-only fallback. Existing review/declaration witness reused; no SDK acquisition/import/execution, new captured fixture or hosted/search-only caller API."
+  },
+  "implementation": {
+    "files": ["packages/core/src/providers/provider-tool-history.ts", "packages/core/src/providers/anthropic-tool-history.ts", "packages/core/src/providers/responses-tool-history.ts", "packages/core/src/providers/responses-replay.ts", "packages/core/src/providers/index.ts", "packages/core/src/agent/provider-turn.ts"],
+    "reuse": "Extract only the existing pure active-ancestry/checkpoint/provider-model reset/superseded-attempt/diff reconstruction from the Anthropic owner into provider-tool-history.ts. Keep protocol-specific registration, private request maps and projection separate. The existing cancellable/stale-branch/canonical-budget host admission selects one registered family; no duplicate metadata reader, new journal format, public field or generic provider-property lookup.",
+    "policy": "Only exact first-party OpenAiMixedProvider plus its private reviewed delegate are registered. Private request sidecar copies to that delegate, bound to the actual model/current tools. Purely additive history preserves initial normalized root declarations, including an empty initial list, and inserts developer additional_tools items before the next visible assistant/end. Any removal or already-declared-name addition disables anchoring for the whole retained history and keeps current flat tools. Generic/Azure/derived/unsupported-model/public flags gain no ancestry read. No synthetic search rows/executables or host tool registration from historical schemas.",
+    "replayAndGrammar": "Existing current-tool conversion still validates every active strict/grammar declaration and populates grammar input-property mappings before the root is restricted to initial definitions. Thus a newly added grammar tool can produce a custom call and paired output without promoting unknown tool authority. Private message-to-wire object anchors are recorded during native rich replay, so inline insertion stays aligned across multi-item encrypted/message/tool blocks and later system preparation; no enumerable metadata or user mutation. Logical provider/model, opaque boundaries and existing signed/token accounting remain owning code.",
+    "budget": "Additive definitions already occur once in current options.tools, so do not count their schemas twice. Only additional inline framing is conservatively measured as extra canonical model text; the measurement row is neither sent nor persisted/billed. Removal/redefinition fallback sends no historical definitions. Reuse the same abort/source-session/leaf fences; current tools and executable registry remain authoritative. No paid warming, new dependency/export/DTO/credentials/command or native search-only ABI."
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-responses-tools-owned",
+    "imageId": "sha256:056f512c04bbbb1cf64ce0641bfccaa8794c1fd91a6d29c05f9591148fa9cbb9",
+    "predecessorImageId": "sha256:bd9fbb6bb2e04ab18bd6eab987a6baf5f91fc419b4e062b9776eb1d09d5084bb",
+    "runtime": "Makefile Docker build/workspace types; network none/CI=true/node --no-maglev. Final changed Core/CLI tests and strict.json supplied via tar stdin under /app; canonical scripts/run-typescript.mjs retains --no-maglev/--no-turbofan. Compiled production six-file witnesses equal the worktree/image. Synthetic credentials/isolated HOME/stores/mock fetch/verified loopback TLS only; CLI child --no-maglev is direct, never NODE_OPTIONS.",
+    "newCoreCases": 7,
+    "newCliCases": 1,
+    "regularRuntimePassed": 117,
+    "regularReusedCases": 109,
+    "strictRoots": 3,
+    "strictChangedRoots": 2,
+    "strictReusedRoots": 1,
+    "unselectedCases": 368,
+    "newCoverage": "Public compiled Core root (canonical estimator imported from its emitted internal module only as budget oracle): post-hook additions with actual cold JSONL reload, empty initial tools, encrypted prefix and exact future inline position, newly added grammar call/output and immutable current tools; removal/redefinition whole-history flat fallback; generic/Azure/derived/unsupported no-read refusal; held-read abort/stale branch no-wire/no-retry; exact-framing budget refusal versus no-double-schema-count admission. Actual builtin JSON CLI across three processes, last offline, keeps one initial root declaration/one inline addition, executes only the current added extension and bills four verified TLS requests once (40 tokens/$0.0002), privacy0600.",
+    "reusedCoverage": "Anthropic tool-history11 unchanged owns extracted reconstruction/checkpoints/scope/reset/budget/lifetime, Responses system6, caller-option flow27, canonical request admission36, selected original Responses28 and independent gateway grammar/replay1.109 reused cases, not109 new integrations;348 original Responses and20 gateway cases unselected. No automatic full-root/browser/installed/production/account/reference campaign or MOD-03 redelivery.",
+    "sourceWitness": {
+      "packages/core/src/providers/provider-tool-history.ts": "82e115001e871fb4c90cca7e0c20463cadd281704f761a6a1d174736faf005fa",
+      "packages/core/src/providers/anthropic-tool-history.ts": "e2b2f00adea700e96644bdd5ba4ae5b1abf0c1e6a147abde1498eac25bd5cd19",
+      "packages/core/src/providers/responses-tool-history.ts": "cb7fe1c82d345e0547b5b88e37848dba71e602d160d0e3aa72294f0f7e174266",
+      "packages/core/src/providers/responses-replay.ts": "f3e1fd3ca6a032acae67556f65d79bda8c9611e9e49c1a194b8d9e030159dbcd",
+      "packages/core/src/providers/index.ts": "51a085fda7ed22a7aee032af8ec04710b8f7f1b3b343dd73e91aee11002b37d6",
+      "packages/core/src/agent/provider-turn.ts": "8511ae9e167e9969c5d1b380267f79d6182736b1773ac056663d63fcba4ae9aa"
+    },
+    "tests": {
+      "packages/core/src/providers/responses-tool-history.test.ts": "33dc17e91933ee5639cdf0b72092c10c3d71824c9fa49dc402fd8ee993311b35",
+      "packages/cli/src/cli/responses-tool-history-process.test.ts": "0e0d7892ca152afd4716d32435efbef55d64b2b5f90afa4c819dcea36febae45"
+    },
+    "sourceWitnessDiff": "/tmp/mod01-responses-tools/runtime-witness.diff (empty)",
+    "logs": {
+      "red": "/tmp/mod01-responses-tools/red.log (two genuine root-versus-inline failures, three flat/no-read controls PASS, held-read case unselected rather than pretending its absent-read latch completed)",
+      "build": "/tmp/mod01-responses-tools/build-owned.log (first candidate build/types PASS)",
+      "focused": "/tmp/mod01-responses-tools/focused.log (new Core6 plus unchanged Anthropic11 PASS/two strict roots)",
+      "cli": "/tmp/mod01-responses-tools/cli.log (one actual builtin CLI case PASS/three strict roots)",
+      "budget": "/tmp/mod01-responses-tools/budget.log (seven Core cases PASS/three strict roots, including extra framing/no-double-count check)",
+      "owned": "/tmp/mod01-responses-tools/owned.log (88+28+1=117 distinct PASS/three strict roots;368 unselected)",
+      "review": "/tmp/mod01-responses-tools/review-check.json",
+      "docs": "/tmp/mod01-responses-tools/docs.log"
+    },
+    "commands": [
+      "make build-test IMAGE_TEST=ai-harness:mod01-responses-tools-owned",
+      "tar(changed Core/CLI tests + strict.json) | docker run --rm -i --network none -e CI=true ai-harness:mod01-responses-tools-owned sh -c 'tar -xf - -C /app && node --no-maglev scripts/run-typescript.mjs -p /app/strict.json && node --no-maglev node_modules/vitest/vitest.mjs run packages/core/src/providers/responses-tool-history.test.ts packages/cli/src/cli/responses-tool-history-process.test.ts packages/core/src/providers/anthropic-tool-history.test.ts packages/core/src/providers/responses-system-history.test.ts packages/core/src/agent/provider-request-options-flow.test.ts packages/core/src/agent/provider-request-budget.test.ts --maxWorkers=1'",
+      "same isolated image: openai-responses.test.ts -t 'gpt-5:|gpt-5[.]4:|bounds opaque capture|preserves tool/final signatures|independent catalogue|malformed defined|legacy prefer'; ai-gateways.test.ts -t 'shared codec'; node --no-maglev/--maxWorkers=1",
+      "make lint-docs; git diff --check"
+    ]
+  },
+  "limits": [
+    "Core-owned visible assistant boundaries/current systemPrompt contract, not the complete foreign SystemMessage/named-section ABI. Stateless calls keep flat current tools. No automatic native previous-response delta or fresh WebSocket success claim, account/cryptographic/cache-hit/service acceptance or all-model/host certificate.",
+    "The concrete eleven-model additive-history gap identified in the preceding receipt is now delivered. No original search-only declaration exists; optional hosted/search-only public caller ABI is not silently introduced. Remaining source-specific owner-intent/default/capability reconciliation stays under01b/04a, cloud02e and final06c remain unresolved.",
+    "All23 task statements/status/order/counts/18 functional rows/one historical/four unresolved unchanged. MOD-01 IN PROGRESS/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged. Historical outcomes retain their scoped source, no goal completion."
+  ]
+}

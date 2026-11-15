@@ -1,0 +1,34 @@
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:https';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import path from 'node:path';
+import { expect, it } from 'vitest';
+import { createLocalTLSFixture } from './fixtures/oauth-local-tls.mjs';
+const cli = fileURLToPath(new URL('../../dist/index.js', import.meta.url)), model = 'gpt-5.4';
+it('anchors an actual builtin OpenAI addition across CLI restart/offline while executing only the current extension', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-r-history-cli-')), cwd = path.join(root, 'work'), home = path.join(root, 'home'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions'), extension = path.join(root, 'tools.mjs'), effect = path.join(root, 'effect.txt'); await mkdir(cwd); await mkdir(home); await mkdir(agent); await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ cacheWarming: 'off', transport: 'sse' }));
+  const parameters = { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] }, initial = { name: 'history_echo', description: 'Initial tool', parameters }, added = { name: 'history_added', description: 'Added tool', parameters }, bodies: Array<Record<string, any>> = []; let failure: unknown;
+  const server = createServer(await createLocalTLSFixture(root), async (request, response) => {
+    try {
+      expect(request.method).toBe('POST'); expect(request.url).toBe('/native/v1/responses'); expect(request.headers.authorization).toBe('Bearer synthetic-r-history-key'); expect(request.headers['chatgpt-account-id']).toBeUndefined(); let text = ''; for await (const chunk of request) { text += chunk; expect(Buffer.byteLength(text)).toBeLessThan(2000000); } const body = JSON.parse(text); bodies.push(body); const count = bodies.length; expect(body.model).toBe(model); expect(body.tools).toEqual([{ ...initial, type: 'function', strict: false }]);
+      const updates = body.input.filter((item: Record<string, unknown>) => item.type === 'additional_tools'); expect(updates).toEqual(count === 1 ? [] : [{ type: 'additional_tools', role: 'developer', tools: [{ ...added, type: 'function', strict: false }] }]); if (count === 2) expect(body.input.at(-1)).toEqual(updates[0]);
+      if (count >= 3) { const index = body.input.indexOf(updates[0]); expect(body.input[index + 1]).toMatchObject({ type: 'function_call', name: 'history_added', call_id: 'added-cli' }); expect(body.input[index + 2]).toMatchObject({ type: 'function_call_output', call_id: 'added-cli', output: 'current-added-result' }); }
+      const output = count === 2 ? [{ type: 'function_call', id: 'fc_added_cli', call_id: 'added-cli', name: 'history_added', arguments: '{"value":"synthetic"}', status: 'completed' }] : [{ type: 'message', id: 'msg_cli_' + count, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'response-tool-history-cli-ok', annotations: [] }] }];
+      response.setHeader('content-type', 'text/event-stream'); response.end('data: ' + JSON.stringify({ type: 'response.completed', response: { id: 'resp_cli_' + count, status: 'completed', model: 'untrusted-alias', output, usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 } } }) + '\n\n');
+    } catch (error) { failure ??= error; response.statusCode = 500; response.end('Invalid synthetic Responses history fixture'); }
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const endpoint = `https://127.0.0.1:${(server.address() as { port: number }).port}/native/v1`;
+  const launch = (offline: boolean) => new Promise<{ code: number | null; signal: string | null; stdout: string; stderr: string }>((resolve, reject) => {
+    const child = spawn(process.execPath, ['--no-maglev', cli, '--approve', '--no-extensions', '-e', extension, '--no-context-files', '--session-dir', sessions, '--session-id', 'r-tools', '--model', 'openai-native/' + model, '--thinking', 'high', ...(offline ? ['--offline'] : []), '--mode', 'json', 'probe'], { cwd, env: { PATH: process.env.PATH, HOME: home, TMPDIR: root, NO_COLOR: '1', AI_HARNESS_AGENT_DIR: agent, AI_HARNESS_MASTER_KEY: 'synthetic-r-history-master', NODE_EXTRA_CA_CERTS: path.join(root, 'cert.pem'), OPENAI_NATIVE_API_KEY: 'synthetic-r-history-key', OPENAI_NATIVE_BASE_URL: endpoint }, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '', stderr = ''; child.stdout.on('data', value => { stdout += String(value); }); child.stderr.on('data', value => { stderr += String(value); }); const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('Responses history child hung')); }, 20000); child.once('error', error => { clearTimeout(timer); reject(error); }); child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout, stderr }); });
+  });
+  try {
+    const outputs: string[] = [];
+    for (const stage of [0, 1, 2]) {
+      const tools = stage ? [initial, added] : [initial]; await writeFile(extension, `import{writeFileSync}from'node:fs';export default api=>{const tools=${JSON.stringify(tools)};for(const tool of tools)api.registerTool({...tool,execute:()=>{writeFileSync(${JSON.stringify(effect)},tool.name);return{content:'current-added-result'}}});api.before('before:provider',data=>({...data,options:{...data.options,tools:data.options.tools.filter(tool=>tools.some(current=>current.name===tool.name))}}));};`);
+      const result = await launch(stage === 2); expect(failure).toBeUndefined(); expect(result, result.stderr).toMatchObject({ code: 0, signal: null }); expect(result.stdout).toContain('response-tool-history-cli-ok'); outputs.push(result.stdout + result.stderr);
+    }
+    expect(bodies).toHaveLength(4); expect(await readFile(effect, 'utf8')).toBe('history_added'); const file = path.join(sessions, 'r-tools.jsonl'), journal = await readFile(file, 'utf8'), entries = journal.trim().split('\n').map(line => JSON.parse(line)), assistants = entries.filter(entry => entry.type === 'message' && entry.role === 'assistant'); expect(assistants).toHaveLength(4); expect(assistants.reduce((sum, entry) => sum + entry.usage.totalTokens, 0)).toBe(40); expect(assistants.reduce((sum, entry) => sum + entry.usage.costUsd, 0)).toBeCloseTo(0.0002, 12); expect(entries.filter(entry => entry.type === 'loadout').at(-1).changes.tools).toEqual([initial, added]); expect((await stat(file)).mode & 0o777).toBe(0o600); for (const secret of ['synthetic-r-history-key', 'synthetic-r-history-master']) expect(outputs.join('') + journal).not.toContain(secret);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true }); }
+}, 30000);

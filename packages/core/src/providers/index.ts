@@ -20,6 +20,7 @@ export { OPENAI_DECISIONS_MODEL } from './openai-decisions.js';
 import { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 export { OPENAI_RESPONSE_MODELS } from './openai-responses-metadata.js';
 import { applyNativeResponsesToolHistory, prepareNativeResponses, nativeResponsesToolId, nativeResponsesGrammarProperty, openAiMixedBase, openAiResponseProfile, prepareOpenAiResponse, openAiResponseUsage } from './openai-responses.js';
+import { registerResponsesToolHistory, copyResponsesToolHistory, projectResponsesToolHistory } from './responses-tool-history.js';
 import { applyResponsesReplay, applyResponsesWholeIdHistory, applyResponsesSplitIdHistory, createResponsesReplayCapture, type ResponsesReplayOwner } from './responses-replay.js';
 import { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
 export { CLOUDFLARE_CHAT_MODELS } from './cloudflare-completions-metadata.js';
@@ -4388,7 +4389,7 @@ export class XaiOAuthProvider extends XaiProvider {
 
 /** Reviewed native R policy, isolated from the legacy Responses/Azure entry points. */
 class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
-  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); }
+  constructor(config: ProviderConfig, private readonly retention?: ChatOptions['cacheRetention']) { super(config); registerResponsesToolHistory(this); }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey) && super.validateConfig(); }
   override canDiscoverModels(): boolean { return false; }
   override async getAvailableModels(): Promise<string[]> { return OPENAI_RESPONSE_MODELS.map(profile => profile.id); }
@@ -4404,6 +4405,7 @@ class ReviewedOpenAiResponsesProvider extends OpenAiResponsesProvider {
     const owner = { provider: this.getProviderType(), api: 'openai-responses', model: body.model };
     nativeResponsesOwners.set(body, owner); applyResponsesReplay(body, messages, owner);
     prepareOpenAiResponse(body, options);
+    projectResponsesToolHistory(this, body, options);
     applyNativeResponsesToolHistory(body, messages, 'openai', body.model, owner.api, owner.provider); return body;
   }
   protected override responseToolId(item: ProviderResponseRecord, body: ResponsesRequest): string { return nativeResponsesToolId(item) ?? super.responseToolId(item, body); }
@@ -4442,6 +4444,7 @@ export class OpenAiMixedProvider extends AiProvider {
   constructor(config: ProviderConfig) {
     const model = config.model ?? 'gpt-4o'; openAiResponseProfile(model);
     const baseUrl = openAiMixedBase(config.baseUrl); super({ ...config, model }); this.baseUrl = baseUrl;
+    if (new.target === OpenAiMixedProvider) registerResponsesToolHistory(this);
   }
   override validateConfig(): boolean { return validBearerApiKey(this.config.apiKey); }
   override canDiscoverModels(): boolean { return false; }
@@ -4457,7 +4460,8 @@ export class OpenAiMixedProvider extends AiProvider {
   override getModelApi(model = this.getConfiguredModel()): string | undefined { return OPENAI_RESPONSE_MODELS.some(profile => profile.id === model) ? 'openai-responses' : undefined; }
   private conversation(model = this.getConfiguredModel(), options?: ChatOptions): ReviewedOpenAiResponsesProvider {
     openAiResponseProfile(String(model));
-    return new ReviewedOpenAiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+    const child = new ReviewedOpenAiResponsesProvider({ ...this.config, model, baseUrl: this.baseUrl }, options?.cacheRetention);
+    copyResponsesToolHistory(this, options, child); return child;
   }
   private classifier(): OpenAiDecisionsProvider { return new OpenAiDecisionsProvider({ ...this.config, model: undefined, baseUrl: this.baseUrl }); }
   override getSpecializedModels(): SpecializedModel[] { return [...this.conversation().getSpecializedModels(), ...this.classifier().getSpecializedModels()]; }
