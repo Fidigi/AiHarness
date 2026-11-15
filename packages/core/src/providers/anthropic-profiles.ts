@@ -155,6 +155,7 @@ export function mergeAnthropicProfileUsage(previous: unknown, value: unknown, st
   if (!start) for (const key of ['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens']) {
     if (value[key] !== undefined && value[key] !== null) merged[key] = value[key];
   }
+  if (!start && value.iterations !== undefined && value.iterations !== null) merged.iterations = value.iterations;
   if (value.cache_creation !== undefined && value.cache_creation !== null) {
     if (!record(value.cache_creation)) merged.cache_creation = value.cache_creation;
     else if (value.cache_creation.ephemeral_1h_input_tokens !== undefined && value.cache_creation.ephemeral_1h_input_tokens !== null) {
@@ -164,24 +165,66 @@ export function mergeAnthropicProfileUsage(previous: unknown, value: unknown, st
   return merged;
 }
 
-/** Price the captured requested model, never the response alias, request TTL or output-token tier. */
-export function anthropicProfileUsage(value: unknown, model: string): ChatResponse['usage'] {
+/** Exact pinned nomination; public metadata and similar IDs cannot add targets or reorder them. */
+export function anthropicFallbackModels(model: string): string[] {
+  return model === 'claude-fable-5' ? ['claude-opus-4-8', 'claude-opus-5'] : [];
+}
+export function anthropicFallbackValidator(model: string): ((value: Record<string, unknown>) => boolean) | undefined {
+  const targets = anthropicFallbackModels(model);
+  if (!targets.length) return undefined;
+  let current = model, position = -1;
+  return value => {
+    if (!record(value.from) || value.from.model !== current || !record(value.to) || typeof value.to.model !== 'string') return false;
+    const next = targets.indexOf(value.to.model);
+    if (next <= position) return false;
+    current = value.to.model; position = next;
+    return true;
+  };
+}
+
+const unpricedFallbackUsage = new WeakSet<object>();
+/** Internal attribution refusal; never inferred from public model/response metadata. */
+export function isUnpricedAnthropicFallbackUsage(value: unknown): boolean { return record(value) && unpricedFallbackUsage.has(value); }
+
+/** Requested pricing except exact owned fallback targets; arbitrary response aliases stay inert. */
+export function anthropicProfileUsage(value: unknown, model: string, responseModel?: string, fallback = false): ChatResponse['usage'] {
   const profile = profiles.get(model);
   if (!profile || !record(value)) return undefined;
   const token = (v: unknown): number | undefined => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
   const input = token(value.input_tokens), output = token(value.output_tokens);
   const read = value.cache_read_input_tokens === undefined ? 0 : token(value.cache_read_input_tokens);
   const write = value.cache_creation_input_tokens === undefined ? 0 : token(value.cache_creation_input_tokens);
-  const creation = value.cache_creation;
+  const creation = model === 'claude-fable-5' && value.cache_creation === null ? undefined : value.cache_creation;
   const long = creation === undefined ? 0 : record(creation) ? creation.ephemeral_1h_input_tokens === undefined ? 0 : token(creation.ephemeral_1h_input_tokens) : undefined;
   if (input === undefined || output === undefined || read === undefined || write === undefined || long === undefined
     || long > write || !Number.isSafeInteger(input + output + read + write)) return undefined;
   const gross = input + read + write;
-  const pricing = model === 'claude-haiku-5-5' && gross > 100000
-    ? { inputPerMillion: 0.5, outputPerMillion: 2.5, cacheReadPerMillion: 0.05, cacheWritePerMillion: 0.625 } : profile.pricing;
-  return { promptTokens: input, completionTokens: output, totalTokens: gross + output,
+  const targets = anthropicFallbackModels(model), served = responseModel && targets.includes(responseModel) ? profiles.get(responseModel) : undefined;
+  const pricing = served?.pricing ?? (model === 'claude-haiku-5-5' && gross > 100000
+    ? { inputPerMillion: 0.5, outputPerMillion: 2.5, cacheReadPerMillion: 0.05, cacheWritePerMillion: 0.625 } : profile.pricing);
+  let costUsd: number | undefined = fallback && !served ? undefined : (input * pricing.inputPerMillion + output * pricing.outputPerMillion + read * pricing.cacheReadPerMillion
+    + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1000000;
+  // Never price a multi-model aggregate as though every token used the last model.
+  if (targets.length && value.iterations !== undefined && value.iterations !== null) {
+    costUsd = undefined;
+    if (Array.isArray(value.iterations) && value.iterations.length > 0 && value.iterations.length <= 128) {
+      const totals = [0, 0, 0, 0, 0]; let cost = 0, valid = true;
+      for (const item of value.iterations) {
+        if (!record(item) || !['message', 'fallback_message'].includes(String(item.type)) || typeof item.model !== 'string'
+          || item.model !== model && !targets.includes(item.model)) { valid = false; break; }
+        const part = anthropicProfileUsage({ ...item, iterations: undefined, cache_creation: item.cache_creation ?? undefined }, item.model);
+        if (!part || part.costUsd === undefined) { valid = false; break; }
+        const hour = record(item.cache_creation) ? item.cache_creation.ephemeral_1h_input_tokens ?? 0 : 0;
+        totals[0] += part.promptTokens; totals[1] += part.completionTokens; totals[2] += part.cacheReadTokens ?? 0;
+        totals[3] += part.cacheWriteTokens ?? 0; totals[4] += Number(hour); cost += part.costUsd;
+      }
+      if (valid && totals.every((total, index) => Number.isSafeInteger(total) && total === [input, output, read, write, long][index]) && Number.isFinite(cost)) costUsd = cost;
+    }
+  }
+  const result = { promptTokens: input, completionTokens: output, totalTokens: gross + output,
     ...(value.cache_read_input_tokens === undefined ? {} : { cacheReadTokens: read }),
     ...(value.cache_creation_input_tokens === undefined ? {} : { cacheWriteTokens: write }),
-    costUsd: (input * pricing.inputPerMillion + output * pricing.outputPerMillion + read * pricing.cacheReadPerMillion
-      + (write - long) * pricing.cacheWritePerMillion + long * pricing.inputPerMillion * 2) / 1000000 };
+    ...(costUsd === undefined ? {} : { costUsd }) };
+  if (targets.length && costUsd === undefined) unpricedFallbackUsage.add(result);
+  return result;
 }

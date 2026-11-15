@@ -1,4 +1,5 @@
 import { normalizeProviderUsage, type AiProvider, type ChatOptions, type ChatResponse } from './index.js';
+import { isUnpricedAnthropicFallbackUsage } from './anthropic-profiles.js';
 import type { Message, ModelPricing, TokenUsage } from '../types/index.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { captureProviderMessages, prepareProviderPayload } from '../agent/provider-request-payload.js';
@@ -192,7 +193,7 @@ export class CacheWarmer {
       const priced = [[usage.inputTokens, request.pricing.inputPerMillion], [usage.outputTokens, request.pricing.outputPerMillion],
         [usage.cacheReadTokens, request.pricing.cacheReadPerMillion], [usage.cacheWriteTokens, request.pricing.cacheWritePerMillion]]
         .every(([tokens, rate]) => !tokens || rate !== undefined);
-      const cost = usage.costUsd ?? (priced ? calculateModelCost(request.pricing, usage) : undefined);
+      const cost = usage.costUsd ?? (priced && !isUnpricedAnthropicFallbackUsage(response?.usage) ? calculateModelCost(request.pricing, usage) : undefined);
       if (cost !== undefined) usage.costUsd = cost;
       try { void Promise.resolve(this.onUsage?.(usage, request.providerName, response?.model ?? request.model)).catch(() => undefined); }
       catch { /* Preserve durable billing if an observer fails. */ }

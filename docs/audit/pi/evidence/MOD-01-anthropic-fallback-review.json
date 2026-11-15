@@ -2,14 +2,17 @@
   "schema": "ai-harness.mod-01.anthropic-fallback-review.v1",
   "date": "2026-11-15",
   "baseline": "05d15d4",
-  "status": "REVIEWED — no native default fallback gap; no product change",
+  "status": "CORRECTED REVIEW — Haiku control valid; prior all17-zero conclusion erroneous",
+  "erratum": {"baseline": "27aa57d", "followUp": "docs/audit/pi/evidence/MOD-01-anthropic-fable-fallback.json", "cause": "The local declaration-review.json already nominated claude-fable-5. The previous review misread its own diagnostic; the pinned input/hash did not change. Preserve the rejected Haiku experiment and negative proof, not the false all-model conclusion."},
   "requirements": ["MOD-01.01b", "MOD-01.04a"],
   "finding": {
     "initialHypothesis": "The generic Anthropic fallback codec was incorrectly interpreted as evidence that native Haiku5.5 declares two fallback targets.",
-    "authoritativeResult": "All17 pinned original Anthropic declarations have zero nonempty compat.allowedFallbackModels. The optional reference codec does not nominate a target. Its compat schema explicitly says to omit fallbacks when this list is absent/empty; enabling it can cause service refusal and unauthorized routing/pricing changes.",
-    "disposition": "Reject and remove the experimental product changes. Keep original body/beta/requested-model pricing and replay authority. Add one negative regression proof, not a fabricated missing-feature delivery.",
+    "priorErroneousConclusion": "All17 pinned original Anthropic declarations have zero nonempty compat.allowedFallbackModels. The optional reference codec does not nominate a target.",
+    "authoritativeResult": "Exactly one of17 declarations nominates targets: claude-fable-5 -> claude-opus-4-8 then claude-opus-5, with explicit costs. Haiku5.5/Sonnet4.6 nominate none, so their negative test and rejection of the Haiku patch remain valid. The Fable default gap is addressed separately by the follow-up receipt.",
+    "disposition": "Keep the experimental Haiku product patch rejected/removed and its negative regression proof. Correct the documentary overgeneralization; do not treat this negative proof as qualification or rejection of Fable's actual nominated fallback policy.",
     "declaredRows": 17,
-    "rowsWithNominatedFallbacks": 0,
+    "rowsWithNominatedFallbacks": 1,
+    "originalReportedRowsWithNominatedFallbacks": 0,
     "newFunctionalCredit": 0
   },
   "reference": {

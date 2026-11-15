@@ -38,15 +38,23 @@ function contentBlock(value: unknown): MessageContentBlock {
     redacted: true, thinkingSignature: block.data as string };
   return { type: 'tool_call', id: block.id as string, name: block.name as string, input: block.input };
 }
-export function validateAnthropicResponse(value: unknown): MessageContentBlock[] {
+export function validateAnthropicResponse(value: unknown, fallback?: (value: Record<string, unknown>) => boolean): MessageContentBlock[] {
   if (!record(value)) invalid();
   validateEnvelope(value);
   if (!Array.isArray(value.content) || value.content.length > 1024 || !validFinish(value.stop_reason)) invalid();
-  return value.content.map(contentBlock);
+  let output = false;
+  return value.content.flatMap(block => {
+    if (record(block) && block.type === 'fallback') {
+      if (output || !fallback?.(block)) invalid();
+      return [];
+    }
+    output = true;
+    return [contentBlock(block)];
+  });
 }
 
 /** Ordered native content is released only after complete blocks and terminal authority. */
-export function anthropicResponseStreamValidator(): { validate(value: unknown): void; finish(): MessageContentBlock[] } {
+export function anthropicResponseStreamValidator(fallback?: (value: Record<string, unknown>) => boolean): { validate(value: unknown): void; finish(): MessageContentBlock[] } {
   let started = false, finished = false, stopped = false;
   const blocks: Array<Record<string, unknown>> = [], open = new Set<number>(), argumentsJson = new Map<number, string>();
   return {
@@ -72,7 +80,10 @@ export function anthropicResponseStreamValidator(): { validate(value: unknown): 
         if (!started || finished || !Number.isSafeInteger(index) || index < 0 || index >= 1024) invalid();
         if (value.type === 'content_block_start') {
           if (index !== blocks.length) invalid();
-          validateBlock(value.content_block, false);
+          const marker = record(value.content_block) && value.content_block.type === 'fallback';
+          if (marker) {
+            if (blocks.some(block => block.type !== 'fallback') || open.size || !fallback?.(value.content_block as Record<string, unknown>)) invalid();
+          } else validateBlock(value.content_block, false);
           const block = { ...value.content_block as Record<string, unknown> };
           if (block.type === 'text') block.text ??= '';
           if (block.type === 'thinking') block.thinking ??= '';
@@ -96,8 +107,8 @@ export function anthropicResponseStreamValidator(): { validate(value: unknown): 
     },
     finish() {
       if (!started || !finished || !stopped || open.size) invalid();
-      return blocks.map((block, index) => contentBlock(block.type === 'tool_use'
-        ? { ...block, input: argumentsJson.get(index) ? parseProviderToolArguments(argumentsJson.get(index)!) : block.input ?? {} } : block));
+      return blocks.flatMap((block, index) => block.type === 'fallback' ? [] : [contentBlock(block.type === 'tool_use'
+        ? { ...block, input: argumentsJson.get(index) ? parseProviderToolArguments(argumentsJson.get(index)!) : block.input ?? {} } : block)]);
     },
   };
 }

@@ -109,7 +109,7 @@ import { radiusBody, radiusScope, readRadiusStream, RadiusProtocolError, type Ra
 import { ProviderContextOverflowError, rejectProviderHttpResponse } from './context-overflow.js';
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
-import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
+import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, applyAnthropicToolHistory } from './anthropic-profiles.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
 import { projectAssistantReplay } from './message-replay.js';
 import { googleResponseBlocks, appendGoogleResponseBlocks, googleReplayParts, type GoogleResponsePart } from './google-replay.js';
@@ -5383,7 +5383,7 @@ export interface AnthropicProviderConfig extends ProviderConfig { anthropicAuthM
 export class AnthropicProvider extends AiProvider {
   override getModelApi(): string { return 'anthropic-messages'; }
   override getPublishedModels(): readonly PublishedModelMetadata[] | undefined {
-    if (!this.ownsNativeProfiles) return super.getPublishedModels?.();
+    if (!this.#ownsNativeProfiles) return super.getPublishedModels?.();
     const legacy = getPublishedModels('anthropic');
     return [...anthropicPublishedProfiles().map(profile => {
       const previous = legacy.find(row => row.id === profile.id);
@@ -5392,29 +5392,29 @@ export class AnthropicProvider extends AiProvider {
     }), ...legacy.filter(profile => !hasAnthropicProfile(profile.id)).map(profile => ({ ...profile, api: 'anthropic-messages' }))];
   }
 
-  private readonly ownsNativeProfiles: boolean;
+  readonly #ownsNativeProfiles: boolean;
   private readonly ownsKimiCodingReplay: boolean;
   private readonly federation?: AnthropicFederation;
   private readonly baseUrl: string;
   static readonly DEFAULT_BASE_URL = 'https://api.anthropic.com';
   static readonly API_VERSION = '2023-06-01';
-  private get oauthMode(): boolean { return this.ownsNativeProfiles && this.config.anthropicAuthMode === 'oauth'; }
+  private get oauthMode(): boolean { return this.#ownsNativeProfiles && this.config.anthropicAuthMode === 'oauth'; }
 
   constructor(config: AnthropicProviderConfig) {
     if (new.target === AnthropicProvider && config.anthropicAuthMode !== undefined && !['api-key', 'oauth'].includes(config.anthropicAuthMode)) throw new Error('Invalid Anthropic authentication mode.');
     super(config);
-    this.ownsNativeProfiles = new.target === AnthropicProvider;
+    this.#ownsNativeProfiles = new.target === AnthropicProvider;
     if (new.target === MiniMaxProvider || new.target === MiniMaxCnProvider) nativeMiniMaxReplay.add(this);
     this.ownsKimiCodingReplay = new.target === KimiCodingProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
-    if (this.ownsNativeProfiles && !config.apiKey && config.anthropicAuthMode !== 'oauth' && config.anthropicFederation
+    if (this.#ownsNativeProfiles && !config.apiKey && config.anthropicAuthMode !== 'oauth' && config.anthropicFederation
       && !hasAnthropicAuthHeaders(config)) {
       this.baseUrl = this.baseUrl.replace(/\/+$/u, '');
       this.federation = new AnthropicFederation(config.anthropicFederation, this.baseUrl);
       this.config = { ...config, baseUrl: this.baseUrl, customHeaders: Object.freeze({ ...configuredHeaders(config) }) };
       nativeSubscriptionStreamConsumers.add(this);
     }
-    if (this.ownsNativeProfiles) registerNativeOutputBudget(this, () => {
+    if (this.#ownsNativeProfiles) registerNativeOutputBudget(this, () => {
       const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL);
       return (options, messages) => prepareAnthropicOutputBudget(options, model, messages);
     });
@@ -5453,7 +5453,8 @@ export class AnthropicProvider extends AiProvider {
   protected messageHeaders(_options?: ChatOptions, model?: string): Record<string, string> {
     const headers = { ...configuredHeaders(this.config), 'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
-    const betas = this.ownsNativeProfiles ? anthropicThinkingBetas(model ?? '', _options) : [];
+    const betas = this.#ownsNativeProfiles ? [...anthropicThinkingBetas(model ?? '', _options),
+      ...(anthropicFallbackModels(model ?? '').length ? ['server-side-fallback-2026-07-01'] : [])] : [];
     if (this.oauthMode) return anthropicOAuthHeaders(headers, String(this.config.apiKey), betas);
     if (!betas.length) return headers;
     const merged = new Headers(headers);
@@ -5461,18 +5462,22 @@ export class AnthropicProvider extends AiProvider {
     return Object.fromEntries(merged.entries());
   }
   protected prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
-    applyAnthropicProfileToolDeclarations(body, this.ownsNativeProfiles, options);
-    const native = this.ownsNativeProfiles && typeof body.model === 'string' && hasAnthropicProfile(body.model);
-    if (this.ownsNativeProfiles) applyAnthropicManagedHistory(body, options, (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system'), this.config.type);
+    applyAnthropicProfileToolDeclarations(body, this.#ownsNativeProfiles, options);
+    const native = this.#ownsNativeProfiles && typeof body.model === 'string' && hasAnthropicProfile(body.model);
+    if (this.#ownsNativeProfiles) applyAnthropicManagedHistory(body, options, (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system'), this.config.type);
     if (native) applyAnthropicToolHistory(body, messages, this.config.type, message => messageImages(message).flatMap(image => {
       const data = parseDataImage(image.url);
       return data ? [{ type: 'image', source: { type: 'base64', media_type: data.mediaType, data: data.data } }] : [];
     }));
+    if (native) {
+      const fallbacks = anthropicFallbackModels(String(body.model));
+      if (fallbacks.length) body.fallbacks = fallbacks.map(model => ({ model }));
+    }
     if (this.oauthMode) prepareAnthropicOAuthBody(body, options);
     return body;
   }
   protected applyMessageThinking(body: Record<string, unknown>, options?: ChatOptions, messages?: readonly Message[]): void {
-    if (this.ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options, messages);
+    if (this.#ownsNativeProfiles) applyNativeAnthropicOutputPolicy(body, options, messages);
     else applyAnthropicThinking(body, options);
   }
   protected validateMessageResponse(_value: unknown, _nativeReplay = false): void {}
@@ -5482,13 +5487,13 @@ export class AnthropicProvider extends AiProvider {
     return (content?.find(block => block.type === 'text') as AnthropicTextContent | undefined)?.text || '';
   }
   protected updateMessageUsage(previous: unknown, value: unknown, start: boolean, model?: string): unknown {
-    if (this.ownsNativeProfiles && model && hasAnthropicProfile(model)) return mergeAnthropicProfileUsage(previous, value, start);
+    if (this.#ownsNativeProfiles && model && hasAnthropicProfile(model)) return mergeAnthropicProfileUsage(previous, value, start);
     const prior = previous as AnthropicUsage | undefined, usage = value as AnthropicUsage | undefined;
     return { ...prior, ...usage, ...(start ? { output_tokens: prior?.output_tokens ?? usage?.output_tokens } : {}),
       ...(usage?.cache_creation ? { cache_creation: { ...prior?.cache_creation, ...usage.cache_creation } } : {}) };
   }
-  protected messageUsage(value: unknown, model: string, stream = false, retention?: ChatOptions['cacheRetention']): ChatResponse['usage'] {
-    if (this.ownsNativeProfiles && hasAnthropicProfile(model)) return anthropicProfileUsage(value, model);
+  protected messageUsage(value: unknown, model: string, stream = false, retention?: ChatOptions['cacheRetention'], responseModel?: string, fallback = false): ChatResponse['usage'] {
+    if (this.#ownsNativeProfiles && hasAnthropicProfile(model)) return anthropicProfileUsage(value, model, responseModel, fallback);
     const usage = value as AnthropicUsage | undefined;
     if (!usage) return undefined;
     const token = (value: unknown): number => typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -5509,7 +5514,7 @@ export class AnthropicProvider extends AiProvider {
   }
 
   private hasNativeMessageReplay(model: string): boolean {
-    return this.ownsNativeProfiles && hasAnthropicProfile(model)
+    return this.#ownsNativeProfiles && hasAnthropicProfile(model)
       || nativeMiniMaxReplay.has(this) && MINIMAX_MODELS.some(profile => profile.id === model)
       || this.ownsKimiCodingReplay && KIMI_CODING_MODELS.some(profile => profile.id === model)
       || nativeFireworksMessages.has(this) && FIREWORKS_MODELS.some(profile => profile.api === 'anthropic-messages' && profile.id === model)
@@ -5635,7 +5640,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
-    let providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
+    let providerThinkingLevel = this.#ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     const response = await this.request(this.getMessagesUrl(), {
       method: 'POST',
       headers: this.messageHeaders(options, model),
@@ -5653,7 +5658,8 @@ export class AnthropicProvider extends AiProvider {
     }
     if (native) assertAnthropicResponseActive(options?.signal);
     this.validateMessageResponse(data, native);
-    const blocks = native ? anthropicOAuthBlocks(validateAnthropicResponse(data), oauthName) : undefined;
+    const blocks = native ? anthropicOAuthBlocks(validateAnthropicResponse(data,
+      anthropicFallbackValidator(this.#ownsNativeProfiles ? model : '')), oauthName) : undefined;
     const contentBlock = data.content?.find(c => c.type === 'text') as AnthropicTextContent | undefined;
     const reasoning = data.content
       ?.filter((block): block is AnthropicThinkingContent => block.type === 'thinking')
@@ -5674,7 +5680,7 @@ export class AnthropicProvider extends AiProvider {
       ...(reasoning ? { reasoning } : {}),
       model: native ? model : data.model,
       ...(providerThinkingLevel !== undefined ? { providerThinkingLevel } : {}),
-      usage: data.usage ? this.messageUsage(data.usage, model, false, options?.cacheRetention) : undefined,
+      usage: data.usage ? this.messageUsage(data.usage, model, false, options?.cacheRetention, data.model, native && !!data.content?.some(block => block.type === 'fallback')) : undefined,
       toolCalls,
     };
   }
@@ -5726,7 +5732,7 @@ export class AnthropicProvider extends AiProvider {
     }
 
     applyAnthropicPromptCache(body, options?.cacheRetention);
-    let providerThinkingLevel = this.ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
+    let providerThinkingLevel = this.#ownsNativeProfiles ? anthropicManagedEffort(model, options) : undefined;
     try {
       const response = await this.request(url, {
         method: 'POST',
@@ -5742,13 +5748,14 @@ export class AnthropicProvider extends AiProvider {
       let fullReasoning = '';
       let stopReason: ChatResponse['stopReason'];
       let reportedUsage: unknown;
+      let responseModel: string | undefined, fallback = false;
       let outputBytes = 0;
       let transportBytes = 0;
       let streamEvents = 0;
       const toolCallFragments = new Map<number, { id: string; name: string; json: string }>();
 
       if (!response.body) throw new Error('Anthropic streaming response has no body');
-      const nativeStream = native ? anthropicResponseStreamValidator() : undefined;
+      const nativeStream = native ? anthropicResponseStreamValidator(anthropicFallbackValidator(this.#ownsNativeProfiles ? model : '')) : undefined;
       const validateStream = this.createMessageStreamValidator(native);
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -5797,6 +5804,7 @@ export class AnthropicProvider extends AiProvider {
           switch (eventData.type) {
             case 'content_block_start': {
               const block = eventData.content_block;
+              if (native && block?.type === 'fallback') fallback = true;
               if (native && block?.type === 'text' && block.text) {
                 fullContent += block.text;
                 await onChunk(block.text, { type: 'text_delta', data: eventData });
@@ -5839,6 +5847,7 @@ export class AnthropicProvider extends AiProvider {
             }
             case 'message_start': {
               const msgStart = eventData.message as AnthropicStreamMessage | undefined;
+              responseModel = typeof msgStart?.model === 'string' ? msgStart.model : undefined;
               if (msgStart?.usage) {
                 reportedUsage = this.updateMessageUsage(reportedUsage, msgStart.usage, true, model);
               }
@@ -5879,7 +5888,7 @@ export class AnthropicProvider extends AiProvider {
         ...(fullReasoning ? { reasoning: fullReasoning } : {}),
         model,
         ...(stopReason ? { stopReason } : {}),
-        usage: this.messageUsage(reportedUsage, model, true, options?.cacheRetention),
+        usage: this.messageUsage(reportedUsage, model, true, options?.cacheRetention, responseModel, fallback),
         toolCalls: toolCalls.length ? toolCalls : undefined,
       };
       if (native) await onComplete?.(result);
@@ -7296,10 +7305,12 @@ interface AnthropicResponse {
   id?: string;
   type?: string;
   model?: string;
-  content?: Array<AnthropicTextContent | AnthropicThinkingContent | AnthropicToolUseContent>;
+  content?: Array<AnthropicTextContent | AnthropicThinkingContent | AnthropicToolUseContent | AnthropicFallbackContent>;
   stop_reason?: string;
   usage?: AnthropicUsage;
 }
+
+interface AnthropicFallbackContent { type: 'fallback'; from?: unknown; to?: unknown }
 
 interface AnthropicTextContent {
   type: 'text';
@@ -7338,7 +7349,7 @@ interface AnthropicStreamMessage {
 interface AnthropicContentBlockStart {
   type: 'content_block_start';
   index: number;
-  content_block: AnthropicToolUseContent | AnthropicTextContent | AnthropicThinkingContent;
+  content_block: AnthropicToolUseContent | AnthropicTextContent | AnthropicThinkingContent | AnthropicFallbackContent;
 }
 
 interface AnthropicContentDelta {

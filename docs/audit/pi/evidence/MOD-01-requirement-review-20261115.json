@@ -6,11 +6,12 @@
   "initialBaseline": "7e0e8ba",
   "catalogueBaseline": "7f5d625",
   "anthropicPolicyReviewBaseline": "05d15d4",
+  "anthropicFableFallbackBaseline": "27aa57d",
   "bedrockRegionBaseline": "abe9323",
   "bedrockEnvironmentBaseline": "ed796a4",
   "status": "IN PROGRESS",
   "scope": "Exact23 task reconciliation, functional readiness versus remaining specific review/security/QUA; not parent acceptance or global current-image certificate",
-  "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. 05b current source/host review and cold-admission recovery/lifetime fixes now delivered with44 Docker cases/two compiled probes/one strict root, not a global offline firewall or all-provider certificate. Four unresolved rows remain;00b historical outcomes/exactly three acceptances unchanged.",
+  "method": "Canonical task statements remain verbatim from initial documentary review. Later Bedrock/Azure C controls and AWS web profiles/leaves own scoped evidence without closing01b/02e/04a. Catalogue05a contract review owns33 Docker cases/one strict root, no product change.06a now binds current package/declaration risk with one genuinely installed strict consumer: real Sharp worker/SAX XML/native source chain/PATH listing, not new functional credit for all providers. Distinct Core/emitted CLI-RPC/HTTP/Settings receipts reused, every cited path exists. No all-model/global/reference SDK/account campaign. 05b current source/host review and cold-admission recovery/lifetime fixes now delivered with44 Docker cases/two compiled probes/one strict root, not a global offline firewall or all-provider certificate. The Fable5 delivery corrects the prior all17-zero fallback review error and adds scoped default/response/pricing/non-forgeable admission proof, not row closure. Four unresolved rows remain;00b historical outcomes/exactly three acceptances unchanged.",
   "counts": {
     "DELIVERED": 17,
     "HISTORICAL": 1,
@@ -86,17 +87,20 @@
       "id": "MOD-01.01b",
       "requirement": "Complete the remaining original built-in model policies: OpenAI, Anthropic, Google, Azure, Vertex and Bedrock.",
       "status": "PARTIAL",
-      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock/Azure C caller strict/choice now delivered. Read-only Anthropic review finds zero nominated fallbacks across17 declarations; optional codec is not a missing default. Rejected speculative candidate removed; one negative proof, no product credit.",
+      "current": "Six original native owners, reasoning/budget/carrier/replay closed through MOD-03; media04b DONE, blockImages effective and exact original Bedrock/Azure C caller strict/choice now delivered. Corrected Anthropic review: all17-zero conclusion was erroneous; Haiku rejected experiment/negative proof retained. Original Fable5 now implements its actual two-target/beta default, prefix-only transitions/logical replay/observed iteration pricing and unknown-cost warming guard;51 runtime/six new/one strict root, no automatic warming/full beta claim.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json",
         "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json",
-        "docs/audit/pi/evidence/MOD-01-anthropic-fallback-review.json"
+        "docs/audit/pi/evidence/MOD-01-anthropic-fallback-review.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-fable-fallback.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
+        "packages/core/src/providers/anthropic-profiles.ts",
+        "packages/core/src/providers/anthropic-response.ts",
         "packages/core/src/providers/bedrock-profiles.ts",
         "packages/core/src/providers/anthropic-thinking.ts"
       ],
@@ -330,7 +334,7 @@
       "id": "MOD-01.04a",
       "requirement": "Complete per-model defaults, context/output reserves, sampling/tool strictness and capability descriptors.",
       "status": "PARTIAL",
-      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and Bedrock/Azure C scoped caller strict/choice gaps fixed, physical media policy proven. Anthropic fallback absence now source-checked: no invented targets/beta or pricing from known response aliases; no new default-policy delivery.",
+      "current": "Budget/reasoning/continuation closed, effective blockImages, native Bedrock custom-header/signing and Bedrock/Azure C scoped caller strict/choice gaps fixed, physical media policy proven. Corrected prior all17-zero review error; original Fable5 nominated default/beta, prefix transition validation and exact observed/consistent iteration pricing now delivered, with unknown costs retained through agent/explicit warming. Haiku/Sonnet negative proof stays valid; no unowned aliases/metadata/derived policy promotion.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-03-closure.json",
         "docs/audit/pi/evidence/MOD-01-block-images-policy.json",
@@ -338,10 +342,12 @@
         "docs/audit/pi/evidence/MOD-01-image-preparation-closure.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-tool-policy.json",
         "docs/audit/pi/evidence/MOD-01-azure-completions-tool-policy.json",
-        "docs/audit/pi/evidence/MOD-01-anthropic-fallback-review.json"
+        "docs/audit/pi/evidence/MOD-01-anthropic-fallback-review.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-fable-fallback.json"
       ],
       "files": [
         "packages/core/src/providers/index.ts",
+        "packages/core/src/providers/cache-warmer.ts",
         "packages/core/src/agent/provider-turn.ts"
       ],
       "gapClass": "effective-policy review",
