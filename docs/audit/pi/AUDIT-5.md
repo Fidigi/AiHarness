@@ -1,10 +1,12 @@
 # Audit Report — Pi 1.2.0 and Pi Web 0.12.2 / AiHarness
 
-> **Status: IN PROGRESS** (2026-11-13)
+> **Status: IN PROGRESS** (2026-11-15)
 >
 > 38 of 43 criteria are closed under their scoped native contracts. Installation/update, provider/model delivery and integrated/platform/distribution qualification remain open; source-local green tests do not certify complete Pi parity.
 
 **Reading order and authority:** §§2–3 own current criterion status and completion requirements; §5 owns audit-level decisions. The [MOD-01 delivery board](./MOD-01-tracking.md) owns the next functional batch and delivered versus isolated results; [MOD-01](./MOD-01.md) owns its 23-task register, detailed decisions and receipts. Historical blocks below preserve source-specific evidence, not another work queue. Fresh application qualification is credited only by its dated source-bound delivery receipt, not by a documentary cleanup.
+
+**MOD-01 Anthropic historical tool loadouts — 2026-11-15:** [receipt](./evidence/MOD-01-anthropic-tool-history.json), baseline `c12bef8`. Private v2 post-hook active ancestry now drives fixed initial declarations and native removals/additions/redefinitions, never executable tool restoration. Seven-model initial-empty/all-removed/raw-live OAuth signed adjacency/compaction/budget/abort/stale-read fences; current systemPrompt semantics unchanged. Four predecessor/three candidate REDs and intervening fixture/prototype/retry failures retained. Final build/types/two strict roots/163 runtime (12 new+151 reused)/four equal product inputs PASS. Actual builtin JSON CLI cold restart/offline refuses removed executable and runs added code,60 physical tokens/$0.00054 once; no new DTO/schema/dependency/automatic warming/full foreign transcript/browser/installed/global or MOD-03 credit.01b/04a PARTIAL,02e/06c unresolved; exact23/18 functional/one historical/four unresolved/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged.
 
 **MOD-01 current23 requirement review — 2026-11-15:** [exact task/proof/gap/action audit](./evidence/MOD-01-requirement-review-20261115.json), current `2fcac44`/initial `7e0e8ba`.17 delivered +04b DONE, one historical gate disposition, four unresolved rows (01b/02e/04a/06c). [05b source/host contracts](./evidence/MOD-01-offline-host-review.json) now delivered after two cold-admission failure/lifetime fixes and44 scoped cases/two compiled probes. [05a contract review](./evidence/MOD-01-catalogue-contract-review.json) retains33 scoped Docker cases; [06a package boundary](./evidence/MOD-01-package-boundary-review.json) now covers changed public declarations/native worker/parser graph with one genuinely installed case. No product change or all-provider functional credit from those proof increments. OpenRouter SDK/CLI foreground/static Server import/operator availability contracts unchanged. Not parent acceptance/model percentage/full current-image certificate or fresh runtime credit for all23 rows; no reference SDK/account/global campaign. Auth-file execution still needs explicit security disposition; historical failures unchanged. MOD-01 IN PROGRESS/MOD-03 DONE/38-of43/runtime134 OPEN/exactly three historical acceptances unchanged.
 
@@ -566,6 +568,12 @@ Remaining delivery and qualification concern the six open criteria in §3: CLI-0
 Any later `GAP ACCEPTED` still needs an explicit dated omission, justification, approving source and re-examination trigger. None is recorded by this session.
 
 ## 6. Delivery Journal
+
+### MOD-01 — Native historical tool loadouts
+
+| Date | ID(s) | Old → New | Evidence | Validation | Notes/decision |
+|---|---|---|---|---|---|
+| 2026-11-15 | MOD-01.01b; MOD-01.04a | PARTIAL → PARTIAL | [Owned tool-history receipt](./evidence/MOD-01-anthropic-tool-history.json), baseline `c12bef8`; existing v2 ancestry/private physical owner and current executable registry | Make build/types; two canonical strict roots;163 scoped Docker cases (12 new);four equal production witnesses; `make lint-docs`; `git diff --check` | Fixed initial tools/native deltas and raw/live OAuth signed adjacency; CLI restart/offline60 once-only tokens, removed executable refused; seven genuine REDs/candidate failures retained, no new schema/public ABI/paid warming/global or historical-acceptance extension |
 
 ### MOD-03 — legacy chat versus trusted budget settings review
 

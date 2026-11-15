@@ -21,6 +21,7 @@ import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequ
 import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
 import { AgentAbortError } from './tool-loop.js';
+import { awaitAgentAdmission } from './prestart-admission.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { resolveVirtualModelFallback, VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';
 import { getProviderPublishedModel } from '../providers/provider-model-metadata.js';
@@ -29,6 +30,7 @@ import { getSessionCacheWarmer, type CacheWarmingMode } from '../providers/cache
 import { projectAssistantReplay } from '../providers/message-replay.js';
 import { hasBedrockProfile } from '../providers/bedrock-profiles.js';
 import { blockMessageImages } from '../media/message-images.js';
+import { supportsAnthropicToolHistory, attachAnthropicToolHistory } from '../providers/anthropic-tool-history.js';
 
 export interface StreamProviderTurnOptions {
   provider: AiProvider;
@@ -425,6 +427,7 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
         const requestOptions = nativeOutput?.options ?? projected.options;
         if (contextBudget) assertProviderRequestBudget(requestMessages, requestOptions, contextBudget,
           Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
+        let historyLeaf: string | undefined;
         if (sessionManager && sessionId) {
           if (!sourceSession || sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
           await sessionManager.recordSessionLoadout(sessionId, {
@@ -434,9 +437,23 @@ async function streamPhysicalProviderTurn(options: StreamProviderTurnOptions & {
           }, { signal });
           current();
           if (sessionManager.get(sessionId) !== sourceSession) throw new Error('Request session changed.');
+          if (supportsAnthropicToolHistory(provider, requestOptions.model ?? '')) {
+            historyLeaf = sourceSession.activeLeafId;
+            const read = () => sessionManager.getActiveBranchEntries(sessionId);
+            const path = await (signal ? awaitAgentAdmission(read, signal) : read()).catch(error => {
+              current();
+              if (sessionManager.get(sessionId) !== sourceSession || sourceSession.activeLeafId !== historyLeaf) throw new ProviderRequestContextError('stale');
+              throw error;
+            }); current();
+            if (sessionManager.get(sessionId) !== sourceSession || sourceSession.activeLeafId !== historyLeaf) throw new ProviderRequestContextError('stale');
+            const historical = attachAnthropicToolHistory(provider, requestOptions, prepared.data.provider, requestOptions.model!, requestMessages, path);
+            if (historical && contextBudget) assertProviderRequestBudget([...requestMessages, { id: 'native-tool-budget', role: 'system', content: historical, timestamp: new Date(0) }], requestOptions, contextBudget,
+              Math.max(prepared.requestedMaxTokens ?? 0, nativeOutput?.maxTokens ?? 0));
+          }
         }
         await options.validateDispatch?.(requestOptions.model);
         current();
+        if (historyLeaf !== undefined && sourceSession?.activeLeafId !== historyLeaf) throw new ProviderRequestContextError('stale');
         if (sessionManager && sessionId && sourceSession) {
           const warmer = getSessionCacheWarmer(sessionManager, sessionId, async (decision, warmSignal) => {
             const result = await options.extensionRegistry.runBefore('before:cache:warm', { ...decision, signal: warmSignal }, warmSignal);

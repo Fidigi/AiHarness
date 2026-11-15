@@ -68,7 +68,7 @@ const strictFormats = new Set(['date-time', 'time', 'date', 'duration', 'email',
 const unsupportedStrictKeyword = (key: string, value: unknown): boolean => strictUnsupportedKeys.has(key)
   || (key === 'minItems' && value !== 0 && value !== 1) || (key === 'format' && (typeof value !== 'string' || !strictFormats.has(value)));
 /** Caller declarations only; native deferred/inline tool changes remain a separate policy. */
-export function applyAnthropicProfileToolDeclarations(body: Record<string, unknown>, owned: boolean, options?: AnthropicChatOptions): void {
+export function applyAnthropicProfileToolDeclarations(body: Record<string, unknown>, owned: boolean, options?: AnthropicChatOptions, scaffold = true): void {
   const admitted = owned && typeof body.model === 'string' && profiles.has(body.model), choice = options?.toolChoice;
   const invalid = (): never => { throw new Error('Invalid Anthropic tool policy.'); };
   const unsupported = (): never => { throw new Error('Anthropic tool requires unsupported constrained sampling.'); };
@@ -98,7 +98,7 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
     return { ...tool, eager_input_streaming: true, ...(strict ? { strict: true } : {}),
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
-  if (admitted && anthropicInlineTools(String(body.model), declarations.length)) {
+  if (scaffold && admitted && anthropicInlineTools(String(body.model), declarations.length)) {
     if (declarations.some(tool => tool.name === '__pi_deferred_placeholder__')) invalid();
     declarations.push({ name: '__pi_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.',
       input_schema: { type: 'object', properties: {}, required: [] }, defer_loading: true });

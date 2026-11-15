@@ -111,6 +111,7 @@ import { ProviderContextOverflowError, rejectProviderHttpResponse } from './cont
 import { resolveThinkingBudget, type ThinkingBudgets } from './thinking-budgets.js';
 import { ANTHROPIC_DEFAULT_MAX_TOKENS, ANTHROPIC_DEFAULT_MODEL, applyAnthropicThinking, applyNativeAnthropicOutputPolicy, prepareAnthropicOutputBudget, anthropicManagedEffort, anthropicThinkingBetas, applyAnthropicManagedHistory } from './anthropic-thinking.js';
 import { anthropicPublishedProfiles, hasAnthropicProfile, anthropicProfileUsage, mergeAnthropicProfileUsage, anthropicFallbackModels, anthropicFallbackValidator, applyAnthropicProfileToolDeclarations, anthropicInlineTools, applyAnthropicSystemHistory, applyAnthropicToolHistory } from './anthropic-profiles.js';
+import { registerAnthropicToolHistory, readAnthropicToolHistory, copyAnthropicToolHistory, projectAnthropicToolHistory } from './anthropic-tool-history.js';
 import { validateAnthropicResponse, anthropicResponseStreamValidator, assertAnthropicResponseActive } from './anthropic-response.js';
 import { projectAssistantReplay } from './message-replay.js';
 import { googleResponseBlocks, appendGoogleResponseBlocks, googleReplayParts, type GoogleResponsePart } from './google-replay.js';
@@ -5405,6 +5406,7 @@ export class AnthropicProvider extends AiProvider {
     if (new.target === AnthropicProvider && config.anthropicAuthMode !== undefined && !['api-key', 'oauth'].includes(config.anthropicAuthMode)) throw new Error('Invalid Anthropic authentication mode.');
     super(config);
     this.#ownsNativeProfiles = new.target === AnthropicProvider;
+    if (this.#ownsNativeProfiles) registerAnthropicToolHistory(this);
     if (new.target === MiniMaxProvider || new.target === MiniMaxCnProvider) nativeMiniMaxReplay.add(this);
     this.ownsKimiCodingReplay = new.target === KimiCodingProvider;
     this.baseUrl = config.baseUrl || AnthropicProvider.DEFAULT_BASE_URL;
@@ -5453,7 +5455,10 @@ export class AnthropicProvider extends AiProvider {
   protected getMessagesUrl(): string { return `${this.baseUrl}/v1/messages`; }
   private prepareMessageContext(body: Record<string, unknown>, messages: readonly Message[], options?: ChatOptions): void {
     const native = this.#ownsNativeProfiles && hasAnthropicProfile(String(body.model));
-    if (native) applyAnthropicSystemHistory(body, messages, options?.systemPrompt);
+    if (native) {
+      applyAnthropicSystemHistory(body, messages, options?.systemPrompt);
+      projectAnthropicToolHistory(body, messages, readAnthropicToolHistory(this, options, String(body.model)));
+    }
     if (!native || !Array.isArray(body.messages) || body.messages.at(-1)?.role !== 'assistant') applyAnthropicPromptCache(body, options?.cacheRetention);
   }
   protected messageHeaders(_options?: ChatOptions, model?: string): Record<string, string> {
@@ -5461,7 +5466,7 @@ export class AnthropicProvider extends AiProvider {
       'x-api-key': this.config.apiKey as string, 'anthropic-version': AnthropicProvider.API_VERSION };
     const betas = this.#ownsNativeProfiles ? [...anthropicThinkingBetas(model ?? '', _options),
       ...(anthropicFallbackModels(model ?? '').length ? ['server-side-fallback-2026-07-01'] : []),
-      ...(anthropicInlineTools(model ?? '', _options?.tools?.length ?? 0) ? ['inline-tools-2026-09-15'] : [])] : [];
+      ...(anthropicInlineTools(model ?? '', readAnthropicToolHistory(this, _options, model ?? '')?.initial.length ?? _options?.tools?.length ?? 0) ? ['inline-tools-2026-09-15'] : [])] : [];
     if (this.oauthMode) return anthropicOAuthHeaders(headers, String(this.config.apiKey), betas);
     if (!betas.length) return headers;
     const merged = new Headers(headers);
@@ -5469,7 +5474,8 @@ export class AnthropicProvider extends AiProvider {
     return Object.fromEntries(merged.entries());
   }
   protected prepareMessageBody(body: Record<string, unknown>, options?: ChatOptions, messages: Message[] = []): Record<string, unknown> {
-    applyAnthropicProfileToolDeclarations(body, this.#ownsNativeProfiles, options);
+    const history = readAnthropicToolHistory(this, options, String(body.model));
+    applyAnthropicProfileToolDeclarations(body, this.#ownsNativeProfiles, history?.native ? { ...options, tools: history.initial } : options, history?.native ?? true);
     const native = this.#ownsNativeProfiles && typeof body.model === 'string' && hasAnthropicProfile(body.model);
     if (this.#ownsNativeProfiles) applyAnthropicManagedHistory(body, options, (native ? messages : toolImageMessages(messages)).filter(message => message.role !== 'system'), this.config.type);
     if (native) applyAnthropicToolHistory(body, messages, this.config.type, message => messageImages(message).flatMap(image => {
@@ -5918,7 +5924,7 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
     super({ ...config, model: config.model ?? ANTHROPIC_DEFAULT_MODEL, apiKey: undefined, anthropicAuthMode: 'oauth' });
     const headers = new Headers(configuredHeaders(this.config)); headers.delete('authorization'); headers.delete('x-api-key');
     this.oauthHeaders = Object.freeze(Object.fromEntries(headers)); this.config.customHeaders = this.oauthHeaders;
-    if (new.target === AnthropicOAuthProvider) nativeAnthropicOAuthProviders.add(this);
+    if (new.target === AnthropicOAuthProvider) { nativeAnthropicOAuthProviders.add(this); registerAnthropicToolHistory(this); }
     registerNativeOutputBudget(this, () => { const model = captureNativeConfiguredModel(this.config, ANTHROPIC_DEFAULT_MODEL); return (options, messages) => prepareAnthropicOutputBudget(options, model, messages); });
   }
   override validateConfig(): boolean { return typeof this.credentialSource === 'function'; }
@@ -5963,6 +5969,7 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
       const credential = await Promise.race([this.currentCredential(signal), cancelled]); active();
       const scope = nativeAnthropicOAuthProviders.has(this) ? gatewayReplayScope(provider, 'anthropic-messages', model, endpoint, JSON.stringify(['anthropic-native-grant-v1', credential.subscription.grantId]), this.oauthHeaders) : undefined;
       const history = anthropicOAuthHistory(input, scope), delegate = new AnthropicProvider({ ...config, type: provider, model, apiKey: credential.accessToken, anthropicAuthMode: 'oauth', customHeaders: this.oauthHeaders }); nativeSubscriptionStreamConsumers.add(delegate);
+      copyAnthropicToolHistory(this, options, delegate, owned);
       if (onChunk) await Promise.race([delegate.streamChat(history, async (text, event) => {
         active(); const visible = event?.type === 'tool_call' ? { type: 'tool_call' as const, data: sealAnthropicOAuthCall(event.data as ToolCall, scope) }
           : event?.type === 'text_delta' ? { type: 'text_delta' as const, data: text } : event && ['message_start', 'message_end', 'done'].includes(event.type) ? { type: event.type } : event;
