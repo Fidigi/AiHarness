@@ -1,6 +1,6 @@
 # QUA-02 — repaired-source acceptance evidence and reproduced MCP blocker
 
-**PARTIAL — one reproduced visual incident awaits correction evidence or explicit user decision.** Audit closure remains40/43. This is a current Web-delta qualification, not reopening QUA-01/MOD-01/MOD-03 or qualifying CLI-04/QUA-03. The [pilot](./QUA-02.differential-20261116.md), its failed executions and four rejected narrow terminal frames remain historical, unchanged evidence.
+**Historical checkpoint: PARTIAL — one reproduced visual incident awaited correction evidence or explicit user decision.** Audit closure was40/43. The [subsequent closure](./QUA-02.closure-20261116.md) records fixture466e200c, focused1/1/owning18/18 PASS and zero changed pixels against the original golden; no exception was assumed. All failed results and observations below remain unchanged historical evidence. This is a current Web-delta qualification, not reopening QUA-01/MOD-01/MOD-03 or qualifying CLI-04/QUA-03. The [pilot](./QUA-02.differential-20261116.md), its failed executions and four rejected narrow terminal frames remain historical, unchanged evidence.
 
 ## Requirement audit
 
@@ -69,7 +69,7 @@ Fixed protocol predates execution and reuses the existing320-message/virtual-hei
 
 All original budgets PASS in the final build;28 JS chunks. Entry `index-CcRTEYiv.js` SHA256 `e24a0032df7456a03604dd5c96d715d3be0ba5761c9e6f37020c499ac526800a`; full asset hashes, metrics and raw traces are indexed. Exact sizes are read from final-container build-output copies without patching generated files.
 
-## Sole current blocker and minimal decision
+## Reproduced blocker and minimal decision at this checkpoint
 
 `mobile-keyboard.spec.ts:287/333/82`, `keyboard-live-mcp-mobile-light.png`: [expected](./QUA-02.validation-20261116/review/mcp/expected.png), [first actual](./QUA-02.validation-20261116/review/mcp/first-actual.png), [recheck actual](./QUA-02.validation-20261116/review/mcp/recheck-actual.png), [recheck diff](./QUA-02.validation-20261116/review/mcp/recheck-diff.png). Both executions report4664pixels/4%, exceeding the unchanged2% comparator. Text, focus, controls and synthetic preview URL remain visible; that observation does **not** turn the reproduced comparison into PASS.
 
