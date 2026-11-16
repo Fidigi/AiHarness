@@ -104,6 +104,15 @@ Actual/diff PNGs are preserved under [visual artifacts](./QUA-01.native-20261116
 | `history-minimap-tablet-dark` | 24,637 | Current child control/composer/return-to-bottom presentation and transcript position differ. Individual capture-state/reference reconciliation remains open |
 | `history-minimap-mobile-light` | 9,287 | Current child/composer controls, transcript position and return-to-bottom presentation differ. Preserve failure; do not hide controls or regenerate globally |
 
+**Geometry observation after `5e66f061`, no repair:** the reference for all four Settings images originates at `69100d29`. A [source comparison](./QUA-01.native-20261116/settings-review-source-comparison.json.gz) verifies that `DefaultModelSettings` and `index.css`, `agent.css`, `settings.css` are byte-identical to that commit. This does not establish equivalence of ancestors, browser rendering or the whole application.
+
+One distinct hypothesis was tested on **fr/dark/1280 only**: fractional section positioning can change the rasterized crop despite unchanged internal layout. The S1 image received only a temporary copy of the existing scenario. It records geometry and two captures, briefly translates the section onto an integer pixel, restores its original style, then retains the original screenshot assertion. No screenshot tolerance/deadline, product source or baseline was changed. [Commands/exits](./QUA-01.native-20261116/settings-review-commands.json.gz):
+
+- `settings-geometry`: authoring error in the temporary overlay (`before` duplicated an existing variable), **no tests executed**. Failed log/report and erroneous source retained, not product failure or a test skip.
+- `settings-geometry-fixed`: that variable was renamed, the sole reason for another attempt. **One case FAILS**, again 7,376 differing pixels. The unaligned and restored actual PNGs are byte-identical to the original campaign image (`00bf4980464690b3dcc11912d4dc7159edc0c53d2c0133d79644bb5c108ae302`).
+- [Geometry](./QUA-01.native-20261116/settings-review-geometry.json.gz): section height `579.125`, initial y `-0.3125`, aligned y `0`, restored y `0.6875` after screenshot scrolling. Internal child offsets/sizes remain identical. The [aligned observation image](./QUA-01.native-20261116/settings-review-pixel-aligned.png) still differs from the reference.
+- Read-only PNG comparison in Docker with the image's existing `sharp`: exact differing RGB pixels drop from **32,777 to 14,852**, summed absolute RGB error from **5,660,494 to 993,530**. These are raw analysis measures, **not Playwright's perceptual comparator or a passing assertion**. Fractional placement contributes, but the full discrepancy and a safe permanent capture/reference correction are not established. No inference transfers to the other six visual failures. The temporary transform is not delivered.
+
 These are in-scope regression gates, not waived as QUA-02. Later assertions after each failed screenshot were not reached and receive no credit.
 
 ## Completion audit and stopping boundary

@@ -474,5 +474,115 @@
     "sha256": "dd3ed5c0fae3cf164ccae60094ec54c024074a80409701ec9eb17e4bb0de2924",
     "uncompressedBytes": 124,
     "uncompressedSha256": "d5f65c0a293cab95a804b95e7ea4e63f479afe55e829e67ad601587003a64303"
+  },
+  {
+    "file": "settings-geometry.log.gz",
+    "bytes": 3151,
+    "sha256": "9a389f96d8ba064463bfc507a1f6abe104c76ed955dced771d9cc8f429770a51",
+    "uncompressedBytes": 10434,
+    "uncompressedSha256": "5f999fb4b353763b793ac94cf8a13ecf27b82003ed9dfe516b1ed5365c0a334b"
+  },
+  {
+    "file": "settings-geometry-report.json.gz",
+    "bytes": 1421,
+    "sha256": "59414d3871796881a110789786f288802bedf981692a95b55d95f8ae0425962f",
+    "uncompressedBytes": 6872,
+    "uncompressedSha256": "3395dfb8d5563cea89d0c4dee7e82e5e40ee1aac5b5a95c12829710f2b2baf8c"
+  },
+  {
+    "file": "settings-geometry-fixed.log.gz",
+    "bytes": 3876,
+    "sha256": "be82eb3f9a6252058a9e406783617b00b6c59bf36cf36194116c3bc287516d4a",
+    "uncompressedBytes": 13273,
+    "uncompressedSha256": "ccb5b18e701592c92f3150cd8a48ade084b8bf4809cb47d8a375e32f9bda8cd3"
+  },
+  {
+    "file": "settings-geometry-fixed-report.json.gz",
+    "bytes": 2656,
+    "sha256": "f75e541efd98f83cfb958769fe2ab2e95d2308d8ea8b5e6ff4afb6a3f4cfd93f",
+    "uncompressedBytes": 14362,
+    "uncompressedSha256": "a2a5c8c466f38a7da7371c8c1458c5d1ec6a652b8fe4a5126776832b8e2a5edd"
+  },
+  {
+    "file": "settings-review-source-comparison.json.gz",
+    "bytes": 342,
+    "sha256": "48219838eb515ea00365649b41145302c9be3da37d42abe9048ee832626529eb",
+    "uncompressedBytes": 726,
+    "uncompressedSha256": "7931b2e6b8b72257036b8d31c340a51688cc20654fa99e2cdc2f1c6b0fbaf811"
+  },
+  {
+    "file": "settings-review-settings-geometry-initial.spec.ts.gz",
+    "bytes": 4000,
+    "sha256": "f2d6e2349066caedbfafdf5f36b7516cd857a08b341ee5b1d78c607147f05456",
+    "uncompressedBytes": 13221,
+    "uncompressedSha256": "d7a180aac71134717d140ed50a26d4ee4ef43cfb06efb52eb95de4e78b5a7c2a"
+  },
+  {
+    "file": "settings-review-settings-geometry-initial.sh.gz",
+    "bytes": 326,
+    "sha256": "5941db81f06e9fb6ea329d77a34e43e6f53415171e7a527df3a20b7dad72ee7c",
+    "uncompressedBytes": 649,
+    "uncompressedSha256": "309470db241af7d8b3bc6c3caee45f1ce81af48ebd97429c8cbddad32ec8de0b"
+  },
+  {
+    "file": "settings-review-settings-geometry.spec.ts.gz",
+    "bytes": 4007,
+    "sha256": "b3eaded1470ff7ecf1efb9bbd3c7ec7899006a986d90017a58f6b603d379a127",
+    "uncompressedBytes": 13253,
+    "uncompressedSha256": "029d63f1cb17e469c9aaa69bf2f343d53c453e2d399c3196d9f9278a2021ea4e"
+  },
+  {
+    "file": "settings-review-settings-geometry.sh.gz",
+    "bytes": 335,
+    "sha256": "fb83ee5e2be33862876ad49a5cfec7a4a48feecbc92cc147064657a5625ce075",
+    "uncompressedBytes": 667,
+    "uncompressedSha256": "ea25de860132c371d2391640ccc18f1d9ddc698826576469ca604f3ae661fbbe"
+  },
+  {
+    "file": "settings-review-pixel-comparison.mjs.gz",
+    "bytes": 534,
+    "sha256": "a06f06b5a2f84d140ea1b675aed35f6e4f65ef280a3027cc544ecfa0a965c76c",
+    "uncompressedBytes": 1061,
+    "uncompressedSha256": "61411f8c11c13214cccc7f6d3c673e16f519e0f43f6af4bce0f47a793c705019"
+  },
+  {
+    "file": "settings-review-pixel-comparison.jsonl.gz",
+    "bytes": 250,
+    "sha256": "060ec3acc8eddf9e133aa75d90c603b0959ab9a0ca6aa5d4c2b67464a16e3362",
+    "uncompressedBytes": 991,
+    "uncompressedSha256": "a204e96df6f48ca08e80ef43d7209a34880449311a6302a18525fed82a04190d"
+  },
+  {
+    "file": "settings-review-geometry.json.gz",
+    "bytes": 816,
+    "sha256": "b15f74fa69e1779cb20b77656a28c80280579614de076e5d0eb5dc714d507fc6",
+    "uncompressedBytes": 10353,
+    "uncompressedSha256": "f2a36242896752d827bbca11ed42954ca2ea0c5a988434c3b44e3936a3647f00"
+  },
+  {
+    "file": "settings-review-pixel-aligned.png",
+    "bytes": 54398,
+    "sha256": "7e4d359a24284a80de7607cc529e3ca83857afc21a2e606ea6708c05c7572859"
+  },
+  {
+    "file": "settings-review-commands.json.gz",
+    "bytes": 217,
+    "sha256": "b99356bb66664b995da0a2fb5606f2a75c0b0907052b1733d99acbe072f7e119",
+    "uncompressedBytes": 553,
+    "uncompressedSha256": "b22170d439d7153b8f350f882e887bdde169df3f5e3ed9e9acf5ab72335075fb"
+  },
+  {
+    "file": "settings-review-analysis-notes.txt.gz",
+    "bytes": 757,
+    "sha256": "4cdad7dd2265d4ea01e4d98addb515b392b922a8c4f4aee160093f83fb131c3d",
+    "uncompressedBytes": 1564,
+    "uncompressedSha256": "b7097554c79f748062b39359a392d97a465fa29415465948507462077d2be2eb"
+  },
+  {
+    "file": "settings-review-lint-docs.log.gz",
+    "bytes": 122,
+    "sha256": "c597b6e53b5b354684b122005a407135909162f0d0ef7942352317e3963f59b2",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "548b045cf795d3263631e48fe84c7fce4a3a088927fd72d21ae6c0819d8d3536"
   }
 ]
