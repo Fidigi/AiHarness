@@ -34,6 +34,7 @@
   "vertexAwsCredentialMetadataBaseline": "fc33670",
   "cloudDispositionBaseline": "1573f3c",
   "bedrockProcessMetadataBaseline": "3ef41ea",
+  "evidenceLinkReviewBaseline": "17771137dc2d6cc6bd00fd439e5a387877b854ca",
   "bedrockRegionBaseline": "abe9323",
   "bedrockEnvironmentBaseline": "ed796a4",
   "bedrockEcsProfileBaseline": "532b230",
@@ -255,14 +256,15 @@
         "docs/audit/pi/evidence/MOD-01-radius-oauth-cli.json",
         "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
         "docs/audit/pi/evidence/MOD-01-openrouter-user-models-sdk.json",
-        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json"
+        "docs/audit/pi/evidence/MOD-01-openrouter-user-models-cli.json",
+        "docs/audit/pi/evidence/MOD-01-catalogue-contract-review.json"
       ],
       "files": [
         "packages/core/src/providers/openrouter-oauth.ts",
         "packages/core/src/providers/radius-oauth.ts"
       ],
-      "gapClass": "none in authentication; catalogue review05a",
-      "minimumAction": "Reconcile OpenRouter Server operator/static/personalized catalogue under05a, not a new OAuth rewrite."
+      "gapClass": "none; separate catalogue05a already delivered",
+      "minimumAction": "Preserve completed OAuth and separate05a contracts: explicit SDK/CLI personalization, static Server import and operator/account precedence. The former catalogue-review action is obsolete, not a new OAuth rewrite, hidden Server acquisition or remaining05a task."
     },
     {
       "id": "MOD-01.02d",
@@ -520,9 +522,10 @@
       "id": "MOD-01.06a",
       "requirement": "Bind implemented rows to Core wire, installed public declarations/runtime, emitted CLI/RPC and authenticated HTTP evidence.",
       "status": "DELIVERED",
-      "current": "Current added package/declaration risk now covered by genuine outside-checkout Core+CLI archive install/strict public consumer/native Sharp worker/SAX XML/web-role source/final native wire and PATH offline metadata. Existing independent Core/SDK/emitted CLI-RPC/authenticated HTTP/Settings source receipts remain distinct; no all-integration new installed credit.",
+      "current": "Current added package/declaration risk now covered by genuine outside-checkout Core+CLI archive install/strict public consumer/native Sharp worker/SAX XML/web-role source/final native wire and PATH offline metadata. Later Anthropic deferred-tools evidence separately owns the genuine installed full-declaration-array consumer plus its minimal-SDK prerequisite; both are now bound here, not just under01b/04a. Existing independent Core/SDK/emitted CLI-RPC/authenticated HTTP/Settings source receipts remain distinct; no all-integration or fresh installed credit.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-package-boundary-review.json",
+        "docs/audit/pi/evidence/MOD-01-anthropic-deferred-tools.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-profile-web-identity.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-leaf.json",
         "docs/audit/pi/evidence/MOD-01-bedrock-web-identity-sdk.json",
@@ -542,31 +545,37 @@
       "id": "MOD-01.06b",
       "requirement": "Exercise Settings/configuration and real native conversation paths with loopback upstreams.",
       "status": "DELIVERED",
-      "current": "Real Settings/native HTTP auth/import/inference/reload/navigation/disconnect with owned loopback, actual key/pointer interactions, preserved failures; new cloud modes reuse already-rendered readonly DTO shape without browser authority.",
+      "current": "Real Settings/native HTTP auth/import/inference/reload/navigation/disconnect with owned loopback, actual key/pointer interactions and preserved failures. Readonly ADC/profile metadata reuses existing layout, but stored Vertex Cloud-key mode separately changes SettingsView key-save selection/Web API/Server proxy and has its own actual Chromium EN1 journey: real config mode payload, passive0 discovery, native key header/no Authorization, privacy/encrypted store/browser reload. EN/FR strings are implemented, not two browser passes or browser Server-restart proof; separate native HTTP/CLI receipts retain their scope.",
       "evidence": [
         "docs/audit/pi/evidence/MOD-01-server-native-dialects.json",
         "docs/audit/pi/evidence/MOD-01-openrouter-oauth-server.json",
         "docs/audit/pi/evidence/MOD-01-anthropic-oauth-server.json",
         "docs/audit/pi/evidence/MOD-01-meta-oauth-server.json",
         "docs/audit/pi/evidence/MOD-01-xai-oauth-server.json",
-        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json"
+        "docs/audit/pi/evidence/MOD-01-radius-oauth-server.json",
+        "docs/audit/pi/evidence/MOD-01-vertex-stored-key.json"
       ],
       "files": [
         "packages/web/src/components/EcosystemSettings.tsx",
-        "packages/server/src/api/provider-registry-routes.ts"
+        "packages/server/src/api/provider-registry-routes.ts",
+        "packages/web/src/components/SettingsView.tsx",
+        "packages/web/src/services/api.ts",
+        "packages/server/src/api/proxy.ts",
+        "e2e/native-dialects-live.spec.ts"
       ],
       "gapClass": "none in delivered UI scope",
-      "minimumAction": "No force/offline/PWA workaround or browser replay for unchanged readonly layout; final evidence disposition06c."
+      "minimumAction": "Retain the distinct stored-Vertex-key EN browser proof alongside readonly source-layout reuse; do not infer a French browser or Server-restart browser pass. No force/offline/PWA workaround or unnecessary browser replay; final evidence disposition06c."
     },
     {
       "id": "MOD-01.06c",
       "requirement": "Freeze final inputs and run the standard Docker gates; reconcile requirements, results and commits in AUDIT-5.",
       "status": "OPEN",
-      "current": "Each delivered increment has frozen source/image/hash-bound bounded tests/types/docs/commit outcomes. Final scoped all23 reconciliation still awaits remaining02e security/product contracts and renewed SSO CLI boundary-evidence disposition; it does not reopen delivered catalogue/media/policy work or require an automatic global campaign.",
+      "current": "Each delivered increment has frozen source/image/hash-bound bounded tests/types/docs/commit outcomes. A documentary preparation review corrects stale02c catalogue work and binds the later06a installed/06b Settings evidence with their own receipt revisions and unchanged targeted inputs, without fresh runtime or status credit. Final scoped all23 reconciliation still awaits remaining02e security/product contracts and renewed SSO CLI boundary-evidence disposition; it does not reopen delivered catalogue/media/policy work or require an automatic global campaign.",
       "evidence": [
         "docs/audit/pi/MOD-01-tracking.md",
         "docs/audit/pi/AUDIT-5.md",
-        "docs/audit/pi/evidence/MOD-03-closure.json"
+        "docs/audit/pi/evidence/MOD-03-closure.json",
+        "docs/audit/pi/evidence/MOD-01-evidence-link-review-20261116.json"
       ],
       "files": [],
       "gapClass": "final audit",
