@@ -786,5 +786,47 @@
     "sha256": "63a177e431a1fa9614e932b01b8f1f36d6ab185ef5364b7314b7bae1250e666c",
     "uncompressedBytes": 124,
     "uncompressedSha256": "7d4a9ea4206b49dc63f6dc5f466220db3c219da6d501f3f17ab3c6cdf9ce2ee7"
+  },
+  {
+    "file": "settings-references.log.gz",
+    "bytes": 2959,
+    "sha256": "7b39fb2a59b56fc6ecaa2f39ae40b9a9b654fe452f455c355a83b2e0f2afcc40",
+    "uncompressedBytes": 11050,
+    "uncompressedSha256": "6cccb99a12af12a38572b80752743579ac08e6619562cdd8d07a57b2c506973f"
+  },
+  {
+    "file": "settings-references-report.json.gz",
+    "bytes": 1376,
+    "sha256": "881e315319d2a5106e2950ffa62bec6f7667ea7c5e4c85f7aec3206a20c0b3c4",
+    "uncompressedBytes": 8061,
+    "uncompressedSha256": "88cf2468d396afef4ce670298fd83d337b450d7e8e3091a2e6cd073ac03b545d"
+  },
+  {
+    "file": "settings-references.json.gz",
+    "bytes": 746,
+    "sha256": "472bc13615e05830cc2f573cd1302b9e7a6798bf05e2ead25239ade0d98175df",
+    "uncompressedBytes": 2117,
+    "uncompressedSha256": "b19a628f834957a872d8ae339f52ce158dd8077b7cb61802e22ecd76600b3092"
+  },
+  {
+    "file": "settings-references.sh.gz",
+    "bytes": 405,
+    "sha256": "3f3c1381e8608aaa02e909906bc083f6e71aef1aee74a1357f4347112c7c6104",
+    "uncompressedBytes": 760,
+    "uncompressedSha256": "cadb4b6d27ba61cc449766fa8f6d4e96d6a0671e4b144859389180bbc87a7835"
+  },
+  {
+    "file": "settings-references-command.json.gz",
+    "bytes": 150,
+    "sha256": "8e2b3c74e43459a5a68e57b4206c54b2eeb6277af173de45c96597397281b14f",
+    "uncompressedBytes": 182,
+    "uncompressedSha256": "686dee4c3a19c8dcbf369fa5471e596dbdeac7fde077d95e6757f80018d91137"
+  },
+  {
+    "file": "settings-references-lint-docs.log.gz",
+    "bytes": 123,
+    "sha256": "b92d04d6ce67c3c70e1cad62dbbea4220f5e973e0a3b6f64ffb8c6125182441e",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "db6398843e6f5cc06f14506ba89204f6983e00690b665c43064b70e6ce291938"
   }
 ]
