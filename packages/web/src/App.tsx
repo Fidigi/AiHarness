@@ -164,7 +164,10 @@ function App() {
 
   useEffect(() => {
     const requestTerminal = () => {
-      if (workspace) setTerminalWorkspaceId(workspace.id);
+      if (workspace) {
+        if (window.matchMedia?.('(max-width: 959px)').matches) setFilesOpen(false);
+        setTerminalWorkspaceId(workspace.id);
+      }
     };
     window.addEventListener('aih-toggle-terminal', requestTerminal);
     window.addEventListener('aih-open-terminal', requestTerminal);

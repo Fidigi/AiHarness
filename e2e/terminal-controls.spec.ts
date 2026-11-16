@@ -19,11 +19,17 @@ test.describe('native terminal touch controls', () => {
     const trust = await page.request.post('/api/workspaces/trust', { data: { cwd: workspace.cwd, confirm: true } });
     expect(trust.status()).toBe(200);
     await page.goto('/'); await expect(page.locator('.workspace-button small')).not.toBeEmpty();
+    await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
+    const explorer = page.getByRole('complementary', { name: 'Workspace explorer', exact: true });
+    await expect(explorer).toBeVisible();
     const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/terminals' && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Open workspace terminal', exact: true }).click();
+    await explorer.getByRole('button', { name: 'Open terminal from file explorer', exact: true }).click();
     const response = await created; expect(response.status()).toBe(201);
     const snapshot = await response.json() as { id: string }; expect(typeof snapshot.id).toBe('string');
     try {
+      // The narrow explorer overlays the terminal: opening a PTY must reveal it,
+      // not merely produce xterm output in an obscured DOM subtree.
+      await expect(explorer).toHaveCount(0);
       const panel = page.getByRole('region', { name: 'Terminal', exact: true });
       const code = 'process.stdin.setRawMode(true);process.stdin.resume();process.stdout.write("\\x1b[?1hKEY_"+"PROBE_READY\\r\\n");process.stdin.on("data",b=>{console.log("KEY_HEX="+b.toString("hex"));if(b.equals(Buffer.from([4])))process.exit(0)})';
       // Explicit fixture setup through the unchanged public, trust-gated input route.
