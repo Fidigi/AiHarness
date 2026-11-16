@@ -321,18 +321,19 @@ test.describe('real product and disposable server', () => {
     const panel = page.locator('.mcp-import-panel');
     await panel.scrollIntoViewIfNeeded();
     // Real server sections above this panel vary between isolated CI shards.
-    // Normalize only the capture's fractional pixel origin, not its dimensions,
-    // typography, controls or focus. Keep the original golden and 2% tolerance.
-    const previousTranslate = await panel.evaluate(element => {
-      const previous = element.style.translate;
+    // Align the layout origin before glyph painting, not a composited translation
+    // of already-painted text. Dimensions, typography, controls, focus, the original
+    // golden and 2% tolerance stay unchanged; restore the temporary margin afterward.
+    const previousMargin = await panel.evaluate(element => {
+      const previous = element.style.marginTop;
       const top = element.getBoundingClientRect().top;
-      element.style.translate = `0px ${Math.round(top) - top}px`;
+      element.style.marginTop = `${parseFloat(getComputedStyle(element).marginTop) + Math.round(top) - top}px`;
       return previous;
     });
     try {
       await capture(page, 'keyboard-live-mcp-mobile-light.png', '.mcp-import-panel');
     } finally {
-      await panel.evaluate((element, previous) => { element.style.translate = previous; }, previousTranslate);
+      await panel.evaluate((element, previous) => { element.style.marginTop = previous; }, previousMargin);
     }
   });
 });
