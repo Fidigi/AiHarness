@@ -1,0 +1,68 @@
+{
+  "schema": "qua-native-nonreproduction-acceptance-v1",
+  "date": "2026-11-16",
+  "decisionSource": "Explicit user instructions in the active QUA-01 conversation",
+  "investigationAuthorization": "Tu as mon accord pour réaliser les investigations nécessaires.",
+  "userInstruction": "Un correction n'est pas obligatoire si le bug n'est pas reproduit. Il faudra considéré le cas comme corrigé et donc OK.",
+  "status": "ACCEPTED_NONREPRODUCTION_DISPOSITION",
+  "scope": "The five incidents from the frozen 9f675713 QUA-01 campaign actually rechecked below. Resolve these cases as corrected/OK for native acceptance without an implementation fix. This is an explicit verification disposition, not proof of a causal repair or an all-green original execution.",
+  "sourceCommit": "9f675713c41d1b57f8156b2b7a42a8310a255622",
+  "testImage": "sha256:bb7fb54843773414206d8e23e202691948f28cb2bc5d9aff1ae1ef5501b63513",
+  "originalReceipt": "docs/audit/pi/evidence/QUA-01.ime-integrated-20261116.md",
+  "followupReceipt": "docs/audit/pi/evidence/QUA-01.closure-20261116.md",
+  "incidents": [
+    {
+      "id": "QUA-NATIVE-20261116-CODEMODE-SIGSEGV",
+      "original": "Root worker SIGSEGV in packages/core/src/tools/codemode-intrinsics.test.ts; 15 declared cases lacked completed results in the root summary.",
+      "recheck": "One whole-file observation: 59/59 PASS, 176 physical workers created and exited, zero live at completion. Temporary case/worker phase markers only; original assertions and deadlines retained.",
+      "evidence": "QUA-01.closure-20261116/authorized-native.log.gz",
+      "limitation": "Instrumentation perturbs timing; this does not diagnose the original signal or establish an uninstrumented whole-root pass.",
+      "disposition": "RESOLVED_BY_USER_NONREPRODUCTION_ACCEPTANCE"
+    },
+    {
+      "id": "QUA-NATIVE-20261116-OPENROUTER-NEMOTRON",
+      "original": "5-second whole-case timeout for nvidia/nemotron-3-super-120b-a12b in openrouter-completions.test.ts.",
+      "recheck": "Original case passes once without source instrumentation, together with the other failed model; original 5-second deadline/assertions retained. 2 PASS / 384 filtered cases, not a new whole-file or root run.",
+      "evidence": "QUA-01.closure-20261116/authorized-openrouter.log.gz",
+      "disposition": "RESOLVED_BY_USER_NONREPRODUCTION_ACCEPTANCE"
+    },
+    {
+      "id": "QUA-NATIVE-20261116-OPENROUTER-LAGUNA",
+      "original": "5-second whole-case timeout for poolside/laguna-s-2.1:free in openrouter-completions.test.ts.",
+      "recheck": "Original case passes once without source instrumentation in the same two-case command. No retry, deadline/assertion change or journal instrumentation.",
+      "evidence": "QUA-01.closure-20261116/authorized-openrouter.log.gz",
+      "disposition": "RESOLVED_BY_USER_NONREPRODUCTION_ACCEPTANCE"
+    },
+    {
+      "id": "QUA-NATIVE-20261116-MCP-SETTINGS-RELOAD",
+      "original": "mcp-selection.spec.ts:28 selected detail not found after navigation; error context remained at Loading Settings translations.",
+      "recheck": "Original complete case 1/1 PASS, including final viewport, stored selection and no-execution assertions. No source/fixture/timeout change, zero retries.",
+      "evidence": "QUA-01.closure-20261116/authorized-mcp-report.json.gz",
+      "disposition": "RESOLVED_BY_USER_NONREPRODUCTION_ACCEPTANCE"
+    },
+    {
+      "id": "QUA-NATIVE-20261116-PROGRESS-MOBILE-CAPTURE",
+      "original": "tool-progress.spec.ts cancelled mobile-dark capture differs by 2107 pixels; retained actual contains Trop de requêtes notifications over the card.",
+      "recheck": "All four original ordered live-phase/snapshot/durable-reload variants PASS, including the failed mobile-dark case and its subsequent clear/persistence assertions. No source/reference/mask/tolerance/timeout change, zero retries.",
+      "evidence": "QUA-01.closure-20261116/authorized-progress-report.json.gz",
+      "disposition": "RESOLVED_BY_USER_NONREPRODUCTION_ACCEPTANCE"
+    }
+  ],
+  "preservedOriginalResults": {
+    "root": { "passed": 11679, "failed": 2, "workerErrors": 1, "withoutCompletedResult": 15, "declared": 11696, "makeExit": 2 },
+    "browser": { "passed": 764, "failed": 2, "skipped": 0, "flaky": 0, "retries": 0, "makeExit": 2 }
+  },
+  "historicalCompilerAcceptance": {
+    "path": "docs/audit/pi/evidence/QUA-compiler-tier-repair-user-acceptance.json",
+    "sha256": "b01fbb91a366a002d0c33934d0db7ea633d9e1a36ae43a3ee7249aa150710dc9",
+    "disposition": "Exactly its three existing incidents remain unchanged. This new, separately authorized decision does not edit or silently extend that record."
+  },
+  "limits": [
+    "Only actually rechecked incidents are resolved; unobserved failures are not silently accepted.",
+    "The original failed executions remain failed historical measurements, with undetermined causes.",
+    "No product fix, runtime-flag change, assertion/deadline relaxation, reference update or automatic retry is inferred from acceptance.",
+    "Complete qualification still requires all other native controls on the same identified product; production and smoke are separately executed in the closure receipt.",
+    "No remote CI, real-account, upstream differential, platform, installation/update or release acceptance is granted."
+  ],
+  "reexaminationTrigger": "A subsequent observed recurrence is new evidence to record and review; this decision is not permission for automatic retry loops or unrelated historical experiments."
+}

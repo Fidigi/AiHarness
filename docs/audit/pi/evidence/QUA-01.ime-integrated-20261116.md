@@ -1,6 +1,6 @@
 # QUA-01 — post-IME frozen campaign, incomplete
 
-**Status: PARTIAL; goal incomplete; audit39/43.** This receipt supersedes the [previous campaign](./QUA-01.integrated-20261116.md) as the latest executed-input authority, without transferring its passes or erasing any failure. The verified IME repair passes in the complete browser campaign. Root and browser gates still fail. This follow-up only preserves evidence and updates documentation; it performs no new test, diagnostic or mitigation.
+**Historical checkpoint: PARTIAL; audit39/43.** The [subsequent closure](./QUA-01.closure-20261116.md) records the user's explicit non-reproduction acceptance for five actually rechecked incidents and completion of production/smoke on this same product. QUA-01 is now DONE under that decision; original measurements and this checkpoint's unexecuted gates below remain unchanged. This receipt supersedes the [previous campaign](./QUA-01.integrated-20261116.md) as the latest executed-input authority, without transferring its passes or erasing any failure. The verified IME repair passes in the complete browser campaign. Root and browser gates still fail. This follow-up only preserves evidence and updates documentation; it performs no new test, diagnostic or mitigation.
 
 ## Frozen inputs
 
