@@ -1,0 +1,140 @@
+[
+  {
+    "file": "protocol.md",
+    "bytes": 2911,
+    "sha256": "602b95795e22bdcf684dc45689e1eed7263e7a1cef29736f68e81e129196d078",
+    "source": "/tmp/aih-qua02-20261116/protocol.md"
+  },
+  {
+    "file": "provenance.mjs.gz",
+    "bytes": 1633,
+    "sha256": "2d008c7b33d55645be1e62013a3496d4e8de90bbb46d30491d073e3cb53ea83e",
+    "uncompressedBytes": 3505,
+    "uncompressedSha256": "7c89155b4ce85013b1a15bf1c482fe7b47e3489642a71d1f3dd9270c685d0af5",
+    "source": "/tmp/aih-qua02-20261116/provenance.mjs"
+  },
+  {
+    "file": "extract-metrics.py.gz",
+    "bytes": 691,
+    "sha256": "c76e251565bdc77fff9eae5dff9499e3d788727bb897eeb1d6b759209c5d250b",
+    "uncompressedBytes": 1470,
+    "uncompressedSha256": "fb42ebf49d6c8e6ddb04dfacf403f45b7802cdc83dd0079c625401d190bbd7b3",
+    "source": "/tmp/aih-qua02-20261116/extract-metrics.py"
+  },
+  {
+    "file": "measure-bundle.mjs.gz",
+    "bytes": 661,
+    "sha256": "d884fc5e90c33d728e6d5b33542c8aae27c3e3aae69c44b06e8af991f1d9152c",
+    "uncompressedBytes": 1218,
+    "uncompressedSha256": "23478f7be0d7960ddf6dbe1b1216bbddf9b126b6e341dc8e3f18ae1452bddb07",
+    "source": "/tmp/aih-qua02-20261116/measure-bundle.mjs"
+  },
+  {
+    "file": "performance.log.gz",
+    "bytes": 4869,
+    "sha256": "5a0f517c252539fa1b9efba2756ca6edb8b0e28b8b16fc3062e6f8250611dcf4",
+    "uncompressedBytes": 13895,
+    "uncompressedSha256": "bdc4a18ac4864bb53680424d71ff2ddad3a83759b511cfb6ffaa3424be16957b",
+    "source": "/tmp/aih-qua02-20261116/results/performance.log"
+  },
+  {
+    "file": "performance.command.gz",
+    "bytes": 63,
+    "sha256": "838ce744f939f9245030300281f58fef83b94339c45f3e092966e956474d0cc8",
+    "uncompressedBytes": 59,
+    "uncompressedSha256": "c5d2fda54938827d089c1f69d723fe2843b73e3200d09f5ceb40b16985915005",
+    "source": "/tmp/aih-qua02-20261116/results/performance.command"
+  },
+  {
+    "file": "provenance.json.gz",
+    "bytes": 3521,
+    "sha256": "bbb4d4b37ff8605d1c9a819a8899815c367e88eb641c3f4ec6d6df2b3cc21ce4",
+    "uncompressedBytes": 51475,
+    "uncompressedSha256": "d8437801402878c354ec85d1af67bac9de0465c3fe2b34e61e534a63fde2a0a7",
+    "source": "/tmp/aih-qua02-20261116/results/provenance.json"
+  },
+  {
+    "file": "trace-metrics.json.gz",
+    "bytes": 1464,
+    "sha256": "42620b31e10eeac446279fa3dc6d44e7b07e0cc7b783b2bbc4f123f9472da79a",
+    "uncompressedBytes": 6160,
+    "uncompressedSha256": "1688fa144f24a9a4beffb6700e0fcdb9ec38970a68682f30527051ea42544684",
+    "source": "/tmp/aih-qua02-20261116/results/trace-metrics.json"
+  },
+  {
+    "file": "bundle-metrics.json.gz",
+    "bytes": 2846,
+    "sha256": "9494ab3177d4395a14f08b1834367634ab5d6dafca48875a97ceaf7aa466b94c",
+    "uncompressedBytes": 7624,
+    "uncompressedSha256": "cabc25757901622c337d12fd30d913cccd0dc480984f7e76e1a55968b3881dc0",
+    "source": "/tmp/aih-qua02-20261116/results/bundle-metrics.json"
+  },
+  {
+    "file": "environment-budgets.log.gz",
+    "bytes": 169,
+    "sha256": "c9eff105c600aca28190b60183397b216433a22b064fda17aa1bc7d4e7735a59",
+    "uncompressedBytes": 185,
+    "uncompressedSha256": "3ca29b2d02b5d7baf3506dce11ac224a5bb72a277994b0900e734636fce1b39b",
+    "source": "/tmp/aih-qua02-20261116/results/environment-budgets.log"
+  },
+  {
+    "file": "test-image.json.gz",
+    "bytes": 1473,
+    "sha256": "057c280f5e38e4c1e118654e0b97ff3928ebeabe8a526a435dd7597a0916515e",
+    "uncompressedBytes": 3669,
+    "uncompressedSha256": "fe9b1358169551f2fb4bd7caf3464e435208a621d1f2275daf9ead2039d1234b",
+    "source": "/tmp/aih-qua02-20261116/results/test-image.json"
+  },
+  {
+    "file": "observation-container.json.gz",
+    "bytes": 1785,
+    "sha256": "284fd61e7c67fb8f6d7ed32ef5fc176bd4074c33fe482f1f8bce2da3ef2939db",
+    "uncompressedBytes": 6675,
+    "uncompressedSha256": "9ab7817fd26cd61b507828a81b424e91a6625ae6510d5cf756f217bdebd4eeba",
+    "source": "/tmp/aih-qua02-20261116/results/observation-container.json"
+  },
+  {
+    "file": "observation-stop.log.gz",
+    "bytes": 54,
+    "sha256": "45050711de61ac89cb54975d2fc82705a14721e633c1a857f05641eb85777660",
+    "uncompressedBytes": 62,
+    "uncompressedSha256": "d889667943563d9e29a29b14ca41780d864d71ac825770296a5b9da08875c6b2",
+    "source": "/tmp/aih-qua02-20261116/results/observation-stop.log"
+  },
+  {
+    "file": "lint-docs.log.gz",
+    "bytes": 123,
+    "sha256": "e0557b3c9d7351c1826a7d885e4aad0c32d3a91e4555ff76a31530c02613d66a",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "a2c9b79230cef783c7347cc9631feabd7c20f5c36275768c7c008c27185acb72",
+    "source": "/tmp/aih-qua02-20261116/results/lint-docs.log"
+  },
+  {
+    "file": "performance-report.json.gz",
+    "bytes": 1367,
+    "sha256": "70fb4db1327b4a6b46e7911ede9ca6048b6aec270e838709a904be2d0ec9a71b",
+    "uncompressedBytes": 5472,
+    "uncompressedSha256": "59932f30788174c37600c3831276333dd7957f13b7d1968e78bb0ff9f203ccfc",
+    "source": "/tmp/aih-qua02-20261116/source/test-results/focused/report.json"
+  },
+  {
+    "file": "performance-suites.json.gz",
+    "bytes": 106,
+    "sha256": "50281ad2d52d466330e4ee798e8b50a5d5c85a0c2edd74f2d47c018a9a8193bd",
+    "uncompressedBytes": 132,
+    "uncompressedSha256": "05a943a7c0bdc30c60645a8174df83a9d0cecf8974436465995df75e4becd6dc",
+    "source": "/tmp/aih-qua02-20261116/source/test-results/e2e-suites.json"
+  },
+  {
+    "file": "lazy-terminal.trace.zip",
+    "bytes": 304475,
+    "sha256": "2d591a7495277eb6bf74da3bd2427b78f577e84604b3354f492d6976e6f36a60",
+    "source": "/tmp/aih-qua02-20261116/source/test-results/performance-Budgets-et-lon-790b8--qu’à-sa-première-ouverture-chromium/trace.zip"
+  },
+  {
+    "file": "long-conversation.trace.zip",
+    "bytes": 819087,
+    "sha256": "8f2a09515477074dccd4834422cdb17d9d5170638b65e41f7790bcb9c6009d8a",
+    "source": "/tmp/aih-qua02-20261116/source/test-results/performance-Budgets-et-lon-983b6--vue-bornée-avant-le-réseau-chromium/trace.zip"
+  }
+]
