@@ -33,7 +33,7 @@ export interface BedrockProfileConfig {
   redactor?: Pick<CredentialRedactor, 'add'>;
 }
 export interface BedrockProfileCredentials { accessKeyId: string; secretAccessKey: string; sessionToken?: string }
-/** Original constructor snapshot, not an ambient lookup during file resolution. */
+/** Original constructor snapshot, not an ambient lookup during file resolution. Credential scope is inert in native Bedrock endpoints/SigV4. */
 interface ProfileEnvironment { accessKeyId?: string; secretAccessKey?: string; sessionToken?: string; expiration?: string; credentialScope?: string; ecs?: BedrockEcsConfig; imds?: BedrockImdsConfig }
 const failure = () => new Error('Bedrock profile authentication failed.');
 const MAX_FILE = 256 * 1024;
@@ -77,11 +77,11 @@ function section(input: Buffer | undefined, name: string): Record<string, string
 const same = (left: Buffer | undefined, right: Buffer | undefined) => left === undefined ? right === undefined : right !== undefined && left.equals(right);
 const ssoIntent = (data: Record<string, string>) => ['sso_session', 'sso_start_url', 'sso_region', 'sso_account_id', 'sso_role_name'].some(key => Object.hasOwn(data, key));
 function selectedLogin(data: Record<string, string>, cacheDirectory: string, parentRegion?: string, signal?: AbortSignal, redactor?: Pick<CredentialRedactor, 'add'>): BedrockLoginConfig {
-  if (ssoIntent(data) || ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'credential_process', 'web_identity_token_file', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
+  if (ssoIntent(data) || ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'credential_process', 'web_identity_token_file', 'mfa_serial'].some(key => Object.hasOwn(data, key))) throw failure();
   const config: BedrockLoginConfig = { session: data.login_session, region: data.region ?? parentRegion ?? 'us-east-1', cacheDirectory, signal, redactor }; bedrockLoginCacheFile(config); return config;
 }
 function selectedSso(data: Record<string, string>, input: Buffer | undefined, cacheDirectory: string, signal?: AbortSignal, redactor?: Pick<CredentialRedactor, 'add'>): BedrockSsoConfig {
-  if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'credential_process', 'web_identity_token_file', 'mfa_serial', 'aws_credential_scope', 'login_session'].some(key => Object.hasOwn(data, key))) throw failure();
+  if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'credential_process', 'web_identity_token_file', 'mfa_serial', 'login_session'].some(key => Object.hasOwn(data, key))) throw failure();
   const sessionName = data.sso_session;
   if (sessionName !== undefined && (!sessionName || sessionName !== sessionName.trim() || Buffer.byteLength(sessionName) > 128 || /[\u0000-\u001f\u007f-\u009f\[\]]/u.test(sessionName))) throw failure();
   const source = sessionName === undefined ? data : section(input, 'sso-session ' + sessionName);
@@ -170,7 +170,7 @@ export class BedrockProfile {
         return { ...result, ...(region ? { region } : {}), assertCurrent: async () => { try { await assertCurrent(); await result.assertCurrent(); await assertCurrent(); } catch { throw failure(); } } };
       }
       const webIdentity = Object.hasOwn(credentials, 'web_identity_token_file') && Object.hasOwn(credentials, 'role_arn');
-      if (webIdentity && ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope', 'login_session'].some(key => Object.hasOwn(credentials, key))) throw failure();
+      if (webIdentity && ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial', 'login_session'].some(key => Object.hasOwn(credentials, key))) throw failure();
       if (webIdentity && !(typeof credentials.aws_access_key_id === 'string' && typeof credentials.aws_secret_access_key === 'string')) {
         if (this.allowNetwork === false) throw failure();
         const hash = createHash('sha256');
@@ -191,7 +191,7 @@ export class BedrockProfile {
         if (!this.allowProcess || this.allowNetwork === false) throw failure();
         this.processSource ??= new BedrockProfileProcess(async currentSignal => {
           const latest = await load(currentSignal), data = { ...section(latest.config, this.profile === 'default' ? 'default' : 'profile ' + this.profile), ...section(latest.credentials, this.profile) };
-          if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope', 'mfa_serial', 'login_session'].some(key => Object.hasOwn(data, key))
+          if (['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'role_arn', 'source_profile', 'credential_source', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'mfa_serial', 'login_session'].some(key => Object.hasOwn(data, key))
             || !validBedrockProcessCommand(data.credential_process)
             || data.region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(data.region)) throw failure();
           const hash = createHash('sha256');
@@ -201,7 +201,7 @@ export class BedrockProfile {
         }, this.lifetime, this.redactor);
         return await this.processSource.resolve(signal);
       }
-      if (['role_arn', 'source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'web_identity_token_file', 'aws_credential_scope']
+      if (['role_arn', 'source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'web_identity_token_file']
         .some(key => Object.hasOwn(credentials, key) && !(webIdentity && ['role_arn', 'web_identity_token_file'].includes(key)))) throw failure();
       const accessKeyId = credentials.aws_access_key_id, secretAccessKey = credentials.aws_secret_access_key, sessionToken = credentials.aws_session_token;
       if (!/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId ?? '') || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey ?? '')
@@ -243,11 +243,11 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
     const root = selected(this.config.profile), region = root.region, steps: Record<string, string>[] = [], visited = new Set<string>(); let roles = 0;
     if (region !== undefined && !/^[a-z0-9]+(?:-[a-z0-9]+)+-\d+$/u.test(region)) throw failure();
     const environment = (): RoleSource => {
-      const { accessKeyId, secretAccessKey, sessionToken, expiration, credentialScope } = this.environment ?? {};
+      const { accessKeyId, secretAccessKey, sessionToken, expiration } = this.environment ?? {};
       for (const value of [accessKeyId, secretAccessKey, sessionToken]) if (value) this.redactor?.add(value);
       const sourceExpiresAt = expiration ? Date.parse(expiration) : undefined;
       if (!/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId ?? '') || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey ?? '')
-        || sessionToken !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken) || credentialScope
+        || sessionToken !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken)
         || sourceExpiresAt !== undefined && !Number.isFinite(sourceExpiresAt)) throw failure();
       return { credentials: { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey!, ...(sessionToken ? { sessionToken } : {}) },
         ...(sourceExpiresAt === undefined ? {} : { sourceExpiresAt }) };
@@ -277,12 +277,12 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
         return { sso: selectedSso(data, current.config, this.config.ssoCacheDirectory!, this.config.signal, this.redactor) };
       }
       if (recursive && !isStatic && ['Environment', 'EcsContainer', 'Ec2InstanceMetadata'].includes(data.credential_source) && data.role_arn === undefined) {
-        if (['source_profile', 'credential_process', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
+        if (['source_profile', 'credential_process', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial'].some(key => Object.hasOwn(data, key))) throw failure();
         return namedSource(data.credential_source);
       }
       if (recursive && !isStatic && Object.hasOwn(data, 'web_identity_token_file') && Object.hasOwn(data, 'role_arn')) {
         if (this.config.allowNetwork === false || !safePath(data.web_identity_token_file)
-          || ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
+          || ['source_profile', 'credential_source', 'credential_process', 'sso_session', 'sso_start_url', 'mfa_serial'].some(key => Object.hasOwn(data, key))) throw failure();
         const web: BedrockWebIdentityConfig = { tokenFile: path.resolve(data.web_identity_token_file), roleArn: data.role_arn,
           roleSessionName: data.role_session_name ?? this.webSessionName, region: this.parentRegion ?? region ?? 'us-east-1', signal: this.config.signal, redactor: this.redactor };
         new BedrockWebIdentityCredentials(web); // Descriptor admission only; JWT/network remain foreground below.
@@ -290,20 +290,20 @@ class BedrockProfileRole extends BedrockRefreshingCredentials<RoleIdentity> {
       }
       if (recursive && !isStatic && data.credential_process !== undefined) {
         if (this.config.allowProcess !== true || this.config.allowNetwork === false || !validBedrockProcessCommand(data.credential_process)
-          || ['role_arn', 'source_profile', 'credential_source', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope'].some(key => Object.hasOwn(data, key))) throw failure();
+          || ['role_arn', 'source_profile', 'credential_source', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial'].some(key => Object.hasOwn(data, key))) throw failure();
         this.redactor?.add(data.credential_process); return { process: data.credential_process };
       }
       if (!(recursive && isStatic) && data.role_arn !== undefined) {
         const fromNamedSource = ['Environment', 'EcsContainer', 'Ec2InstanceMetadata'].includes(data.credential_source) && data.source_profile === undefined;
         if (visited.has(name) || ++roles > 4 || !validIamRoleArn(data.role_arn) || !data.source_profile && !fromNamedSource
           || data.source_profile !== undefined && data.credential_source !== undefined
-          || ['credential_process', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial', 'aws_credential_scope', 'login_session'].some(key => Object.hasOwn(data, key))) throw failure();
+          || ['credential_process', 'web_identity_token_file', 'sso_session', 'sso_start_url', 'mfa_serial', 'login_session'].some(key => Object.hasOwn(data, key))) throw failure();
         visited.add(name); const source = fromNamedSource ? namedSource(data.credential_source) : walk(data.source_profile, true), sessionName = data.role_session_name || this.sessionName, duration = data.duration_seconds ?? '3600';
         if (!/^[A-Za-z0-9+=,.@_-]{2,64}$/u.test(sessionName) || !/^[1-9]\d*$/u.test(duration) || Number(duration) < 900 || Number(duration) > 43200
           || data.external_id !== undefined && !/^[A-Za-z0-9_+=,.@:/-]{2,1224}$/u.test(data.external_id)) throw failure();
         steps.push({ RoleArn: data.role_arn, RoleSessionName: sessionName, DurationSeconds: duration, ...(data.external_id !== undefined ? { ExternalId: data.external_id } : {}) }); return source;
       }
-      if (!isStatic || Object.hasOwn(data, 'aws_credential_scope') || !recursive && Object.hasOwn(data, 'source_profile')) throw failure();
+      if (!isStatic || !recursive && Object.hasOwn(data, 'source_profile')) throw failure();
       const accessKeyId = data.aws_access_key_id, secretAccessKey = data.aws_secret_access_key, sessionToken = data.aws_session_token;
       for (const value of [accessKeyId, secretAccessKey, sessionToken]) if (value) this.redactor?.add(value);
       if (!/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId) || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey)

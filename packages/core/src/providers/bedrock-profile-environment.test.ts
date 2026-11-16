@@ -14,7 +14,7 @@ beforeEach(() => { for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KE
 afterEach(async () => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 async function fixture(leaf = false) { const root = await mkdtemp(path.join(os.tmpdir(), 'aih-env-role-')); roots.push(root); const configFile = path.join(root, 'config'); await writeFile(configFile, role(leaf)); const redactor = new CredentialRedactor(), config: BedrockProviderConfig = { type: 'bedrock', model, region: 'us-west-2', bedrockProfile: { profile: 'chosen', configFile, redactor } }; return { configFile, redactor, config }; }
 it.each([false, true])('uses only captured environment source keys for signed role STS and final native JSON/binary/private replay (source-profile leaf=%s)', async leaf => {
-  const f = await fixture(leaf), provider = new BedrockProvider(f.config); vi.stubEnv('AWS_ACCESS_KEY_ID', 'LATERMUSTNOTRETARGET');
+  const f = await fixture(leaf); vi.stubEnv('AWS_CREDENTIAL_SCOPE', 'inert-environment-metadata'); const provider = new BedrockProvider(f.config); vi.stubEnv('AWS_ACCESS_KEY_ID', 'LATERMUSTNOTRETARGET');
   const calls: Array<{ url: string; headers: Headers; body: string }> = [];
   vi.stubGlobal('fetch', vi.fn(async (url: unknown, init: RequestInit) => { calls.push({ url: String(url), headers: new Headers(init.headers), body: String(init.body) }); return String(url) === sts ? new Response(syntheticAssumeRoleXml('ENVROLEFINAL')) : String(url).endsWith('/converse-stream') ? binary() : json(); }));
   expect(provider.validateConfig()).toBe(true); expect(provider.canDiscoverModels()).toBe(false); expect(await provider.getAvailableModels()).toEqual([]); expect(calls).toHaveLength(0);
@@ -26,14 +26,14 @@ it.each([false, true])('uses only captured environment source keys for signed ro
   for (const call of calls.slice(1)) { expect(call.headers.get('authorization')).toContain('Credential=ENVROLEFINAL/'); expect(call.headers.get('authorization')).toContain('/us-west-2/bedrock/aws4_request'); }
   expect(calls[3].body).toContain('env-role-private-signature'); for (const secret of ['ENVROLESOURCE', 'EnvRoleSecret/+=', 'EnvRoleSession/+=', 'ENVROLEFINAL']) expect(f.redactor.redact(secret)).not.toContain(secret);
 });
-it('refuses missing/invalid/expired/scoped environment sources, mixed recipes and offline mint without falling back to raw ambient keys', async () => {
+it('refuses missing/invalid/expired environment sources, mixed recipes and offline mint without falling back to raw ambient keys', async () => {
   const f = await fixture(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
-  for (const env of [{ AWS_SECRET_ACCESS_KEY: undefined }, { AWS_SESSION_TOKEN: 'invalid session' }, { AWS_CREDENTIAL_EXPIRATION: 'not-a-date' }, { AWS_CREDENTIAL_EXPIRATION: '2000-01-01T00:00:00Z' }, { AWS_CREDENTIAL_SCOPE: 'unsupported-scope' }]) {
-    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'EnvRoleSecret/+='); vi.stubEnv('AWS_SESSION_TOKEN', 'EnvRoleSession/+='); vi.stubEnv('AWS_CREDENTIAL_EXPIRATION', undefined); vi.stubEnv('AWS_CREDENTIAL_SCOPE', undefined);
+  for (const env of [{ AWS_SECRET_ACCESS_KEY: undefined }, { AWS_SESSION_TOKEN: 'invalid session' }, { AWS_CREDENTIAL_EXPIRATION: 'not-a-date' }, { AWS_CREDENTIAL_EXPIRATION: '2000-01-01T00:00:00Z' }, { AWS_ACCESS_KEY_ID: 'invalid key' }]) {
+    vi.stubEnv('AWS_ACCESS_KEY_ID', 'ENVROLESOURCE'); vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'EnvRoleSecret/+='); vi.stubEnv('AWS_SESSION_TOKEN', 'EnvRoleSession/+='); vi.stubEnv('AWS_CREDENTIAL_EXPIRATION', undefined); vi.stubEnv('AWS_CREDENTIAL_SCOPE', undefined);
     for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
     await expect(new BedrockProvider(f.config).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
   }
-  vi.stubEnv('AWS_CREDENTIAL_SCOPE', undefined); vi.stubEnv('AWS_CREDENTIAL_EXPIRATION', undefined);
+  vi.stubEnv('AWS_ACCESS_KEY_ID', 'ENVROLESOURCE'); vi.stubEnv('AWS_CREDENTIAL_SCOPE', undefined); vi.stubEnv('AWS_CREDENTIAL_EXPIRATION', undefined);
   for (const extra of ['source_profile=must-not-select', 'credential_process=must-not-run', 'web_identity_token_file=/must-not-read']) { await writeFile(f.configFile, role() + extra + '\n'); await expect(new BedrockProvider(f.config).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
   await writeFile(f.configFile, role()); await expect(new BedrockProvider({ ...f.config, bedrockProfile: { ...f.config.bedrockProfile!, allowNetwork: false } }).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); expect(fetch).not.toHaveBeenCalled();
 });

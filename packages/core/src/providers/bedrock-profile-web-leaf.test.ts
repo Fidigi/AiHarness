@@ -57,6 +57,6 @@ it('abandons held leaf XML on caller cancellation without revoking an independen
 it('refuses offline leaf acquisition and mixed/unsupported leaf scopes without executing commands or falling back', async () => {
   const f = await fixture(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch); await rm(f.file);
   await expect(new BedrockProvider({ ...f.config, bedrockProfile: { ...f.config.bedrockProfile, allowNetwork: false } }).chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
-  for (const extra of ['credential_source=Environment\n', 'credential_process=must-not-run\n', 'mfa_serial=not-supported\n', 'aws_credential_scope=not-supported\n', 'source_profile=chosen\n']) { await writeFile(f.configFile, f.recipe() + extra); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
+  for (const extra of ['credential_source=Environment\n', 'credential_process=must-not-run\n', 'mfa_serial=not-supported\n', 'role_arn=duplicate-authority\n', 'source_profile=chosen\n']) { await writeFile(f.configFile, f.recipe() + extra); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.'); }
   expect(fetch).not.toHaveBeenCalled();
 });

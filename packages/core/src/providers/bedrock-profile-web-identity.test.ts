@@ -75,7 +75,7 @@ it('rechecks selected INI authority after reading the JWT and before sending it 
 it('refuses offline vending, mixed/invalid authority and preflight-invalid requests before JWT or network acquisition', async () => {
   const f = await fixture(), fetch = vi.fn(); vi.stubGlobal('fetch', fetch); await rm(f.target);
   const offline = new BedrockProvider({ ...f.config, bedrockProfile: { ...f.config.bedrockProfile, allowNetwork: false } }); expect(offline.getPublishedModels()).toEqual(new BedrockProvider({ type: 'bedrock', model, apiKey: 'synthetic-metadata-key' }).getPublishedModels()); await expect(offline.chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
-  for (const extra of ['credential_source=Environment\n', 'credential_process=must-not-execute\n', 'mfa_serial=not-supported\n', 'aws_credential_scope=not-supported\n', 'source_profile=missing\n']) {
+  for (const extra of ['credential_source=Environment\n', 'credential_process=must-not-execute\n', 'mfa_serial=not-supported\n', 'role_arn=duplicate-authority\n', 'source_profile=missing\n']) {
     await writeFile(f.configFile, f.recipe() + extra); await expect(f.create().chat(messages)).rejects.toThrow('Bedrock profile authentication failed.');
   }
   await writeFile(f.configFile, f.recipe().replace(syntheticStsRole, 'not-a-role'));
