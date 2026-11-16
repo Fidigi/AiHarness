@@ -27,7 +27,7 @@ export function vertexAwsSource(value: unknown, env: VertexAwsEnvironment, redac
   const { accessKeyId, secretAccessKey, sessionToken, region } = env;
   for (const secret of [accessKeyId, secretAccessKey, sessionToken]) redactor?.add(secret);
   const expiresAt = env.expiration ? Date.parse(env.expiration) : undefined, hasCredentials = !!(accessKeyId || secretAccessKey || sessionToken);
-  if (env.credentialScope || expiresAt !== undefined && !Number.isFinite(expiresAt)
+  if (expiresAt !== undefined && !Number.isFinite(expiresAt)
     || hasCredentials && (!/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId ?? '') || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey ?? '') || sessionToken !== undefined && !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken))
     || typeof data.regional_cred_verification_url !== 'string' || Buffer.byteLength(data.regional_cred_verification_url) > 4096) throw failure();
   const template = data.regional_cred_verification_url;
