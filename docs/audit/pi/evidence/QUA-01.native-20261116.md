@@ -2,6 +2,8 @@
 
 **Status: PARTIAL / qualification failed.** No global green, incident waiver, remote CI success or goal completion is claimed. Audit closure remains **39/43**; MOD-01/MOD-03 remain DONE, CLI-04/QUA-02/QUA-03 remain separate.
 
+**Later reference continuation:** the [individual history-minimap receipt](./QUA-01.minimap-references-20261116.md), starting after `d1a4bb11`, records five separately reviewed reference changes and6/6 owning-scenario PASS after retaining an intermediate4/2 failure. Historical “no baseline change” statements below describe their named earlier inputs, not that later delivery. Four Settings readback mismatches and the root timeouts still block qualification; the original gate results below are unchanged.
+
 ## Authority and frozen inputs
 
 The current user request explicitly authorizes a fresh native campaign, not resumption of stopped Node/V8 experiments or historical diagnostic replays. The [AUDIT-5 native boundary](../AUDIT-5.md#qua-01-native-qualification-boundary) remains authoritative. The previous [capture campaign](./QUA-01.capture-reference-20261102.json), [final unsuccessful intervention](./QUA-01.final-local-20261102.json), [compiler commit validation](./QUA-compiler-tier-commit-validation.json) and recent [MOD-01](./MOD-01-closure.json)/[MOD-03](./MOD-03-closure.json) closures were consulted without transferring their passes.
