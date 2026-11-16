@@ -153,7 +153,13 @@ test('delayed CSS is real and Close cancels without mounting or moving composer 
 test('failed imports stay cached on reopen and French loading/error/reload is never transient English', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'fr'));
   let attempted = 0;
-  await page.route(js, route => { attempted++; return route.abort('failed'); });
+  // Reject evaluation, not the preload fetch: a failed preload can be fetched
+  // again by the initial import after CSS arrives, before any reopen occurs.
+  // Separate JS/CSS refusal cases above retain network-failure coverage.
+  await page.route(js, route => {
+    attempted++;
+    return route.fulfill({ contentType: 'application/javascript', body: 'throw new Error("synthetic interaction import failure");' });
+  });
   const api = await product(page, ['a']);
   await page.goto(url);
   const region = page.getByRole('region', { name: 'Request a' });
