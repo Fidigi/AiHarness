@@ -1,0 +1,48 @@
+{
+  "schema": "ai-harness.mod-01.bedrock-process-metadata.v1",
+  "date": "2026-11-16",
+  "baseline": "3ef41ea",
+  "requirement": "MOD-01.02e",
+  "status": "DELIVERED inert Version1 process CredentialScope compatibility;02e PARTIAL/06c OPEN",
+  "implementation": {
+    "owner": "packages/core/src/providers/bedrock-process.ts",
+    "contract": "The already-authorized Version1 helper may return optional CredentialScope string metadata, including a nonempty value. It is not another authority, region/endpoint/algorithm selector or an instruction. Keep nonstring values invalid; never project this metadata into keys, STS parameters, signing scope, native headers/body or persistent state. Existing 128KiB combined output bound, Version1/key/session/expiry checks, exact opt-in/default-off/offline behavior, filtered nonlogin shell/process-tree cancellation, whole15s/current INI/CWD/source fences and source/final cache semantics remain unchanged.",
+    "activation": "The source-only disposition identifies a direct parsed-stdout producer, not a getter behind a success-schema decoder: installed credential-provider-process maps data.CredentialScope into identity metadata. Native Bedrock and nested STS endpoint parameter sets do not consume it, and ordinary SigV4 constructs its own scope. Changing one response predicate restores that valid shape without a new signing implementation, recipient, dependency, host/public config/DTO or execution consent.",
+    "reference": { "path": "/usr/local/lib/node_modules/@agegr/pi-web/node_modules/@aws-sdk/credential-provider-process/dist-cjs/index.js", "version": "3.972.74", "sha256": "459dccd69ac50b0cf33d00398dd6b18dec18521d8ed6bc359121e1a96115ea4d", "use": "Read-only direct Version1 CredentialScope mapping; no SDK import/execution/acquisition" },
+    "sourceDisposition": "docs/audit/pi/evidence/MOD-01-cloud-disposition-20261116.json"
+  },
+  "qualification": {
+    "image": "ai-harness:mod01-bedrock-process-metadata-owned",
+    "imageId": "sha256:eba4165671c408f6b78cf2c0d24ec07ec28d280c48f5b650b0781944211d39f5",
+    "predecessorImageId": "sha256:99a7e4abd9d2424f1228e887e98ffb68ce926aac90f9d7db6eb66f03a7b57feb",
+    "environment": "Makefile Docker build, --network none/CI=true/node --no-maglev Vitest5 --maxWorkers=1; strict config tar stdin at /app/strict.json with canonical run-typescript.mjs preserving --no-maglev/--no-turbofan. Product and changed test input equal baked image, no product/dependency/compiled/test overlay. Separate same-image npm run typecheck checks workspace/parity types. Synthetic real helper scripts/disposable HOME/files/credentials/mock or loopback service transports only; no live-account mode/personal stores/reference SDK/protected containers/generated edits.",
+    "runtimePassed": 45,
+    "runtimeFailed": 0,
+    "newCases": 0,
+    "reusedCases": 45,
+    "strengthenedExistingCases": 2,
+    "strictRoots": 1,
+    "coverage": "Existing compiled-public-Core root process case now returns a nonempty CredentialScope while retaining exact source key/region/session-token JSON/binary signing, passive0exec/cached1exec, sensitive-child-env refusal, redaction/no persistence. Existing process role-leaf case now returns scope metadata while retaining source-only EU STS/final-only native keys, cached final credentials past source expiry, exact401 remint/expired-source refusal and execution/request counts. Existing malformed-result scope input is now an object, preserving the same fixed-error/no-inference/output/path-disclosure assertions. Process10/role8/static7/CLI admission-unit10/actual profile HTTP10 =45, five files. Default-off/offline/mixed/static priority, current source pre-spawn/post-mint, held independent cancellation and owner retirement stay covered; existing exact STS signature control reused. Both strengthened cases are part of45 reused, not two new cases.",
+    "boundarySufficiency": "A single internal response predicate changes; source descriptors, native forwarding, executable permissions, transport/issuer/signature code and package graph are unchanged. Reuse API10/CLI admission10 and earlier emitted process/role receipts with their own source scope. No new metadata-specific CLI process/API/browser/installed campaign or success transfer; SSO CLI case is not run, diagnosed or repaired.",
+    "sourceWitness": { "packages/core/src/providers/bedrock-process.ts": "70ddd5828a80ef02087315f86b666ba7544999f3a7b0b1fe90daae2fbb429462" },
+    "tests": { "packages/core/src/providers/bedrock-profile-process.test.ts": "d859eac03f4bd39388b7e41bbf94698555c5714ab4b95e5d871a549828d3f02e" },
+    "logs": {
+      "red": "/tmp/mod01-bedrock-process-metadata/red.log",
+      "build": "/tmp/mod01-bedrock-process-metadata/build-owned.log",
+      "typecheck": "/tmp/mod01-bedrock-process-metadata/typecheck.log",
+      "owned": "/tmp/mod01-bedrock-process-metadata/owned.log",
+      "runtimeEquality": "/tmp/mod01-bedrock-process-metadata/runtime-witness.diff",
+      "docs": "/tmp/mod01-bedrock-process-metadata/docs.log",
+      "review": "/tmp/mod01-bedrock-process-metadata/review-check.json"
+    },
+    "commands": [
+      "Predecessor test-only tar overlay; node --no-maglev Vitest --maxWorkers=1 -t 'runs only explicitly opted-in AWS Version1|uses a permitted process source_profile leaf':two genuine REDs/eight unselected",
+      "make build-test IMAGE_TEST=ai-harness:mod01-bedrock-process-metadata-owned:Core/CLI/Server/Web/build contracts PASS",
+      "Strict config tar stdin; same isolated image node --no-maglev Vitest five selected files --maxWorkers=1:45 PASS, then node --no-maglev scripts/run-typescript.mjs -p /app/strict.json:one root PASS",
+      "docker run --rm --network none -e CI=true ai-harness:mod01-bedrock-process-metadata-owned node --no-maglev /usr/local/lib/node_modules/npm/bin/npm-cli.js run typecheck:workspace/parity types PASS",
+      "make lint-docs; git diff --check; git diff --cached --check"
+    ]
+  },
+  "limits": "Two genuine predecessor failures retained, first candidate build/runtime/strict/types PASS; zero new top-level tests or runner/framework changes. No original assertion/deadline/flag/retry weakening, new process permission/algorithm/realm/unknown service-response ABI, SDK/account/global or MOD-03 credit. Preserve source-only review at its baseline: its concrete Version1 defect is now fixed, not another next batch. Alternate/inherited recipient/source-realm and explicit-file ADC v1-only decisions, renewed SSO CLI evidence insufficiency and final06c still require reconciliation; no old native incident replay/diagnosis/repair/fourth acceptance.",
+  "auditState": "MOD-01 IN PROGRESS;02e PARTIAL/06c OPEN;exact23 statements/order/statuses/counts/19DELIVERED+04bDONE/one historical/two unresolved/38-of43/MOD-03+04b DONE/SSO CLI+Vertex134 OPEN/exactly three acceptances/goal active unchanged."
+}

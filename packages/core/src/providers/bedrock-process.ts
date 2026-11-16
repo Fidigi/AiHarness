@@ -24,6 +24,6 @@ export async function executeBedrockCredentialProcess(command: string, signal: A
   if (data.Version !== 1 || typeof accessKeyId !== 'string' || !/^[A-Za-z0-9]{1,128}$/u.test(accessKeyId)
     || typeof secretAccessKey !== 'string' || !/^[A-Za-z0-9/+=]{1,4096}$/u.test(secretAccessKey)
     || sessionToken !== undefined && (typeof sessionToken !== 'string' || !/^[A-Za-z0-9/+=]{1,61440}$/u.test(sessionToken))
-    || data.CredentialScope !== undefined && data.CredentialScope !== '' || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw failure();
+    || data.CredentialScope !== undefined && typeof data.CredentialScope !== 'string' || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw failure();
   return { credentials: Object.freeze({ accessKeyId, secretAccessKey, ...(sessionToken ? { sessionToken } : {}) }), expiresAt };
 }
