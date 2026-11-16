@@ -1,0 +1,29 @@
+{
+  "criterion": "QUA-02",
+  "date": "2026-11-16",
+  "decisionSource": "Explicit user messages in the active QUA-02 conversation after checkpoint commit 3d4cd6b7",
+  "approvalQuote": "J'approuve Linux x64/Chromium, viewports 1440×900, 820×1180, 390×844, thèmes clair/sombre",
+  "status": "APPROVED_EXECUTION_MATRIX_NOT_EXECUTION_RESULT",
+  "platform": "Linux x64",
+  "browser": "Chromium",
+  "viewports": [
+    { "width": 1440, "height": 900 },
+    { "width": 820, "height": 1180 },
+    { "width": 390, "height": 844 }
+  ],
+  "themes": ["light", "dark"],
+  "cells": 6,
+  "followupQuote": "Si tu as la possibilité de tester sur windows, edge et safari se serai bien. Pour le mobile physique tant pis tu ne pourra pas.",
+  "otherEnvironments": {
+    "windows": "Optional availability-based follow-up requested; no Windows execution environment exposed by the current Linux Docker toolchain. Unverified, not passed or permanently unsupported.",
+    "edge": "Optional availability-based follow-up requested; no Edge executable found in the available immutable test image. Unverified, not inferred from Chromium or a Windows-looking user agent.",
+    "safari": "Optional availability-based follow-up requested; no macOS/Safari runner or executable available. Unverified; automated WebKit would not certify physical Safari.",
+    "physicalMobile": "User explicitly declines making unavailable physical-device verification a blocker for this milestone. Remains unverified, not unsupported or equivalent to viewport emulation."
+  },
+  "limits": [
+    "This approves the six-cell execution matrix, not test outcomes, visual references or criterion closure.",
+    "Windows, Edge and Safari are checked for availability rather than silently excluded or passed; no additional platform pass follows from Linux/Chromium.",
+    "No permanent support exclusion, physical keyboard/device qualification, publication, distribution/CLI-04 decision or real-account testing is approved.",
+    "Pinned Pi/Pi Web bounded differentials, individual visual review and applicable native HTTP/performance evidence remain required before QUA-02 closure."
+  ]
+}

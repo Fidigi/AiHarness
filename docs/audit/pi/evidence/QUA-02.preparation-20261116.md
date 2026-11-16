@@ -1,6 +1,8 @@
 # QUA-02 — applicable evidence, native measurements and matrix decision
 
-**PARTIAL, not closure.** 2026-11-16, clean starting HEAD `111c5da1fd82eb847b66811ab30479e8ad0a866e`. The active user request authorizes bounded QUA-02 work, not platform exclusion or a new full QUA-01 campaign. No product, fixture, baseline, assertion, deadline, budget, runtime/security policy or dependency changes. Audit remains40/43; QUA-01, MOD-01 and MOD-03 stay closed. Remote CI is **unobserved/uncredited**, separate from these local results.
+**Historical preparation checkpoint: PARTIAL, not closure.** The subsequent [user-approved matrix](./QUA-02.matrix-approval-20261116.json) and [paired pilot/visual rejection/repair](./QUA-02.differential-20261116.md) supersede the missing-decision/next-control statements below, without changing these original source-bound measurements. Current criterion status belongs to AUDIT-5 §3.
+
+2026-11-16, clean starting HEAD `111c5da1fd82eb847b66811ab30479e8ad0a866e`. The active user request authorizes bounded QUA-02 work, not platform exclusion or a new full QUA-01 campaign. No product, fixture, baseline, assertion, deadline, budget, runtime/security policy or dependency changes. Audit remains40/43; QUA-01, MOD-01 and MOD-03 stay closed. Remote CI is **unobserved/uncredited**, separate from these local results.
 
 ## Requirement → applicable evidence → actual gap → necessary control
 

@@ -1,0 +1,32 @@
+{
+  "criterion": "QUA-02",
+  "date": "2026-11-16",
+  "incident": "QUA02-COLLECTOR-WORKER-SIGSEGV-1440-LIGHT",
+  "decisionSource": "The active user's explicit rule: a current bug not reproduced by a relevant targeted recheck is resolved/OK without a mandatory causal code fix. This is separate from all historical QUA-01/compiler acceptances.",
+  "status": "RESOLVED_BY_USER_NONREPRODUCTION_RULE",
+  "original": {
+    "run": "initial-scroll-fixed",
+    "product": "9f675713c41d1b57f8156b2b7a42a8310a255622",
+    "image": "sha256:48b3cef7c6eb310d838506762cd9abfeea02cbd63b97ed1cce1c7178a871b198",
+    "case": "1440-light native paired acceptance",
+    "result": "Playwright worker code=null/signal=SIGSEGV; conversation/history/failure images and outcomes attachment retained; no complete trace finalized. The Pi Web sibling did not run. Command exit1.",
+    "phase": "Undetermined: the failed screenshot/outcomes show history restoration, but original worker-termination phase/cause is unknown."
+  },
+  "targetedRecheck": {
+    "run": "native-observation",
+    "image": "sha256:962a7bfee68e7c0af3e6ca5687acc41d93624fa54c8a3454576c4015c1777751",
+    "case": "The same 1440-light native case, selected alone once",
+    "instrumentation": "Only console phase markers around existing cleanup and reporting the original caught exception. Product, workload, assertions, deadlines, browser/runtime flags and internal-network configuration unchanged.",
+    "result": "No SIGSEGV. The original toBeAttached(History row179) assertion still fails within5000ms; before/after blank navigation, native stop and cleanup-complete markers all appear. The runner exits1 for that retained assertion failure, not a native signal.",
+    "caseDisposition": "FAILED_FIXTURE_ASSERTION_NOT_A_PASS",
+    "signalDisposition": "NOT_REPRODUCED_IN_ONE_RELEVANT_INSTRUMENTED_RECHECK"
+  },
+  "separateFixtureCorrection": "The observation exposes a new collector assumption: native cached reload restores row90, so expecting tail row179 to be mounted is invalid. Native row90/Pi Web page-memory-only tail179 are checked separately afterward. This is not a claimed repair of the SIGSEGV.",
+  "limits": [
+    "Instrumentation can perturb timing. No original cause or causal mitigation is established.",
+    "Neither the original campaign nor the targeted recheck is rewritten as green.",
+    "Unexecuted siblings/cells, unavailable platforms and later incidents are not accepted by this disposition.",
+    "The subsequent visible-terminal product defect is independent and requires its own correction and evidence.",
+    "Any observed recurrence is new evidence; this is not permission for retry loops or historical runtime experiments."
+  ]
+}
