@@ -1,0 +1,1548 @@
+[
+  {
+    "file": "inputs/Dockerfile.collector.gz",
+    "bytes": 166,
+    "sha256": "27e2d2399e6abb4498dc38c70263e029beb17283bcb9d61e7d30e12083b8a745",
+    "uncompressedBytes": 232,
+    "uncompressedSha256": "c69b457d464d0d7b43392935552efa1eba8575c7097b1685030066dbf6972982",
+    "source": "/tmp/aih-qua02-repair-20261116/Dockerfile.collector"
+  },
+  {
+    "file": "inputs/.dockerignore.gz",
+    "bytes": 72,
+    "sha256": "92d052c5101832a5b6375c483239134e6cc3c7a94c74cab1adb39aa5a31a8d36",
+    "uncompressedBytes": 52,
+    "uncompressedSha256": "c0d891981d0fafe8f38b6d8fce77b6615a722180918d7a1ef522b2cafaf5ed1d",
+    "source": "/tmp/aih-qua02-repair-20261116/.dockerignore"
+  },
+  {
+    "file": "inputs/final-protocol.md.gz",
+    "bytes": 2479,
+    "sha256": "31953af3231d722fc8b7152604d3f6450ce26dc05be095d754100e9e170903ed",
+    "uncompressedBytes": 4741,
+    "uncompressedSha256": "9ccb7ce79a53611d8d1f05cae3ce32b8b38d5a06727d744416379261fbc75c39",
+    "source": "/tmp/aih-qua02-repair-20261116/final-protocol.md"
+  },
+  {
+    "file": "inputs/validation-addendum.md.gz",
+    "bytes": 1601,
+    "sha256": "988ea54486fe2a74ea9fe01d7194cef231dbd4f5e63fd4ea17474db547858d34",
+    "uncompressedBytes": 3070,
+    "uncompressedSha256": "4462809d7ee9b23f024ac10f467ba01bf0acae2d3a6b15c0f3f9cbfec5c8e1e0",
+    "source": "/tmp/aih-qua02-repair-20261116/validation-addendum.md"
+  },
+  {
+    "file": "inputs/qua02-differential.spec.ts.gz",
+    "bytes": 5518,
+    "sha256": "8c93d24f56c60d8e468276f2140bd15d6965e8c555a457dad0832b35bbff39e0",
+    "uncompressedBytes": 17075,
+    "uncompressedSha256": "72f1f4a0afcf3891397db4371394a110f2c6777781db14b319a33f95bc2bc5ec",
+    "source": "/tmp/aih-qua02-repair-20261116/qua02-differential.spec.ts"
+  },
+  {
+    "file": "inputs/run-root.sh.gz",
+    "bytes": 373,
+    "sha256": "42a2364ab64b1619d41e4cab2071a799f07c8cb18ca6f1df7f288dd64478ec45",
+    "uncompressedBytes": 792,
+    "uncompressedSha256": "fe72e8f46e567547ea35b2e6504fd7f317aa98ea8de059629b4f7d145f3abe26",
+    "source": "/tmp/aih-qua02-repair-20261116/run-root.sh"
+  },
+  {
+    "file": "inputs/run-partitions.sh.gz",
+    "bytes": 684,
+    "sha256": "41a0cda06305468c3894a384eba5bf7541d858f786112c7dd42576a31dd6b932",
+    "uncompressedBytes": 1479,
+    "uncompressedSha256": "1c5d961d4298f451c1e6b057dbf48125393fe965e8ee92208d9cffa4a09916c9",
+    "source": "/tmp/aih-qua02-repair-20261116/run-partitions.sh"
+  },
+  {
+    "file": "inputs/recheck-root-case.sh.gz",
+    "bytes": 480,
+    "sha256": "96ea285a7fd35d6444fec1b3858b5573a3e480336e77f315aa6fd1e6915eb467",
+    "uncompressedBytes": 1000,
+    "uncompressedSha256": "e3e08bd5c0384747d6c587c4d9c56cd51c291f2ddaee98ea60aa5d883259714c",
+    "source": "/tmp/aih-qua02-repair-20261116/recheck-root-case.sh"
+  },
+  {
+    "file": "inputs/recheck-cli-case.sh.gz",
+    "bytes": 506,
+    "sha256": "4dd70b7efc6d25962035108e495ef1ff2523fb4e86af29b81d71edee8eff51da",
+    "uncompressedBytes": 1075,
+    "uncompressedSha256": "3a3f1c34395abf5406999238598638a81f612ba1b62ed2745ea59c87800c7234",
+    "source": "/tmp/aih-qua02-repair-20261116/recheck-cli-case.sh"
+  },
+  {
+    "file": "inputs/recheck-partitions.sh.gz",
+    "bytes": 777,
+    "sha256": "1ad7380c935ac2db4c8ad8f5d20cdce14d8927d5f629f26b9dbbd81135670551",
+    "uncompressedBytes": 1499,
+    "uncompressedSha256": "ec6f3d62ef5363718c8d12417f357e6aa8dd95fba8ce429a06fd4bcb391e8409",
+    "source": "/tmp/aih-qua02-repair-20261116/recheck-partitions.sh"
+  },
+  {
+    "file": "inputs/recheck-partition-3.sh.gz",
+    "bytes": 776,
+    "sha256": "3d321ca5ed33cf1bfac8d92f5b4a034c24ac60aa53d41354b96fd0b8432c3391",
+    "uncompressedBytes": 1497,
+    "uncompressedSha256": "202b1d37b12ae758eaa82f747924f7195cf68201a74b2dcefd75256851254e5c",
+    "source": "/tmp/aih-qua02-repair-20261116/recheck-partition-3.sh"
+  },
+  {
+    "file": "inputs/run-final-captures.sh.gz",
+    "bytes": 635,
+    "sha256": "a07291d998a72e6134f94b6df9a9f420f82f9c1e77ec849fa516aa2a313b6447",
+    "uncompressedBytes": 1398,
+    "uncompressedSha256": "6b4d0f20471c01190f812cb37a35fc5b98bfa08d1b2d47658a92d983b63fc49d",
+    "source": "/tmp/aih-qua02-repair-20261116/run-final-captures.sh"
+  },
+  {
+    "file": "inputs/verify-source.mjs.gz",
+    "bytes": 976,
+    "sha256": "3418f2d2b005f4e1d5ebd51d9c8ab75364b8de4217d413bbd34e8dc1c66ff1ce",
+    "uncompressedBytes": 1889,
+    "uncompressedSha256": "0b74a010906a3eed871b3b3948605aa84af1feaf970dff5d55e250e8c9d9d145",
+    "source": "/tmp/aih-qua02-repair-20261116/verify-source.mjs"
+  },
+  {
+    "file": "inputs/gather-final.mjs.gz",
+    "bytes": 1092,
+    "sha256": "4a3d4a6e0da132cb5d1c0b4fe2eb54959b0807c1c78ffd6b166e5da4df9fb3f3",
+    "uncompressedBytes": 2379,
+    "uncompressedSha256": "d855f0ce1e1020227cc07cc337866927e1567463a65e99ded1bc904f507e568d",
+    "source": "/tmp/aih-qua02-repair-20261116/gather-final.mjs"
+  },
+  {
+    "file": "inputs/make-pairs.mjs.gz",
+    "bytes": 611,
+    "sha256": "465ba2005abe43d193920cc59fcff8258f64426fc24d4a769e0193a855dd018c",
+    "uncompressedBytes": 1059,
+    "uncompressedSha256": "fba4d8931d313649af6aad7489b4fbccf43d4ef9101d218268ed2f7799128cf5",
+    "source": "/tmp/aih-qua02-repair-20261116/make-pairs.mjs"
+  },
+  {
+    "file": "inputs/record-review.mjs.gz",
+    "bytes": 2150,
+    "sha256": "d550ac76c538ad4a425ace9805471e900bb0b89bd4d731f3e2b002f5857cc890",
+    "uncompressedBytes": 4357,
+    "uncompressedSha256": "b313791b8778f97dde6193c4b1feb90d8cb2603356ae0e5c1e251f65994d7ecc",
+    "source": "/tmp/aih-qua02-repair-20261116/record-review.mjs"
+  },
+  {
+    "file": "inputs/measure-bundle.mjs.gz",
+    "bytes": 657,
+    "sha256": "c46ce74ca965aa597eaa0808d68e34233a96f515a285076ee84c99c50a2be00a",
+    "uncompressedBytes": 1215,
+    "uncompressedSha256": "24cd909f225795777f23fe568b2a53503c954e0585da61c6227db02ec65af3cf",
+    "source": "/tmp/aih-qua02-repair-20261116/measure-bundle.mjs"
+  },
+  {
+    "file": "inputs/extract-metrics.py.gz",
+    "bytes": 691,
+    "sha256": "c76e251565bdc77fff9eae5dff9499e3d788727bb897eeb1d6b759209c5d250b",
+    "uncompressedBytes": 1470,
+    "uncompressedSha256": "fb42ebf49d6c8e6ddb04dfacf403f45b7802cdc83dd0079c625401d190bbd7b3",
+    "source": "/tmp/aih-qua02-repair-20261116/extract-metrics.py"
+  },
+  {
+    "file": "inputs/repair.patch.gz",
+    "bytes": 1143,
+    "sha256": "1dd5f23af324eeb29ec3fb75e9a51c9f2969b04fe6ea3fe61a1ae8caef4b4e93",
+    "uncompressedBytes": 2532,
+    "uncompressedSha256": "f37eeef5f8b91778a9cccbc773caa21bf58de6928c77e419661872b9a412f0da",
+    "source": "/tmp/aih-qua02-repair-20261116/repair.patch"
+  },
+  {
+    "file": "inputs/seal-validation.mjs.gz",
+    "bytes": 1468,
+    "sha256": "77bdb2633b55f875b808bae60b4c02f927908a61d0f3d50d2c88485b94c9b9c5",
+    "uncompressedBytes": 3600,
+    "uncompressedSha256": "8e6aa764879ed55f4b84faa7bcabd77e4192c55cc05abacab66ccf8eb8d1d25e",
+    "source": "/tmp/aih-qua02-repair-20261116/seal-validation.mjs"
+  },
+  {
+    "file": "preparation/browser-driver.log.gz",
+    "bytes": 20,
+    "sha256": "59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2",
+    "uncompressedBytes": 0,
+    "uncompressedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source": "/tmp/aih-qua02-repair-20261116/results/browser-driver.log"
+  },
+  {
+    "file": "preparation/browser-summary.json.gz",
+    "bytes": 1832,
+    "sha256": "3b37c5dd1bc2e30d3747f54b6a3a6f8603b3ccd30e6456b266e68ecf73b7d618",
+    "uncompressedBytes": 10243,
+    "uncompressedSha256": "05994b61a9a74ad1ee5b1edd348ed28a2d874ea2fc3c9963ed2605e93c5467d6",
+    "source": "/tmp/aih-qua02-repair-20261116/results/browser-summary.json"
+  },
+  {
+    "file": "preparation/browser.exit.gz",
+    "bytes": 22,
+    "sha256": "288118306e4c7cb89d91b48edff339671496aa31d362532219909f9c370e0f78",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "source": "/tmp/aih-qua02-repair-20261116/results/browser.exit"
+  },
+  {
+    "file": "preparation/cli-case-container.json.gz",
+    "bytes": 1868,
+    "sha256": "2dd3088b8d609ca2561a2a05ab327f971c2264a1901724206b6b9a6ee73aab6b",
+    "uncompressedBytes": 7028,
+    "uncompressedSha256": "7b0393fc87793d9b219ef697bd866cb68ae11c87a56b78f0ea79b4c90405812e",
+    "source": "/tmp/aih-qua02-repair-20261116/results/cli-case-container.json"
+  },
+  {
+    "file": "preparation/cli-case.command.gz",
+    "bytes": 302,
+    "sha256": "30dc6692a3c95183e1d52fd07b821876714af09787fc9468f5e50aa18d4644de",
+    "uncompressedBytes": 400,
+    "uncompressedSha256": "31ea3e317943da6530dddf7d2e9e71bc992320e3e3cab8e75f5e5c5e5599ebb4",
+    "source": "/tmp/aih-qua02-repair-20261116/results/cli-case.command"
+  },
+  {
+    "file": "preparation/cli-case.exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/cli-case.exit"
+  },
+  {
+    "file": "preparation/cli-case.id.gz",
+    "bytes": 71,
+    "sha256": "79b212d72c38bb1edab8251cf63662ffefe1c168cf5ec2aa9bf1449be21d7f5f",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "b5348f43996ec3d7928cfa8ff406df7dc40dfbacc1782b6cd4e0ce657fb84985",
+    "source": "/tmp/aih-qua02-repair-20261116/results/cli-case.id"
+  },
+  {
+    "file": "preparation/cli-case.log.gz",
+    "bytes": 429,
+    "sha256": "1e826668c43d2bb5149300934822eaf0a9a387fdb86bcb3230752d06b5a34980",
+    "uncompressedBytes": 906,
+    "uncompressedSha256": "c59c49e0ac55e4698c276c30d69ea42a6207b1bd03f463b6f18c146167495f40",
+    "source": "/tmp/aih-qua02-repair-20261116/results/cli-case.log"
+  },
+  {
+    "file": "preparation/collector-build.command.gz",
+    "bytes": 295,
+    "sha256": "206d6a66a1481b4d4ed4418c61abed52f3baf508ce481cde8abb443e2284fb55",
+    "uncompressedBytes": 409,
+    "uncompressedSha256": "c22c58735ec2c36582fbdb7d6df9257ad4770bcc56d2bda15e926fc86366ec0e",
+    "source": "/tmp/aih-qua02-repair-20261116/results/collector-build.command"
+  },
+  {
+    "file": "preparation/collector-build.exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/collector-build.exit"
+  },
+  {
+    "file": "preparation/collector-build.log.gz",
+    "bytes": 1127,
+    "sha256": "188e8d441eef1c67c53976d1093f85b91408bba7fb312a9c7bbe16e241e58780",
+    "uncompressedBytes": 3160,
+    "uncompressedSha256": "5f1237717c8709efca3830d5d8009e7f199ea4603268672130db69e40cef0b5f",
+    "source": "/tmp/aih-qua02-repair-20261116/results/collector-build.log"
+  },
+  {
+    "file": "preparation/collector-image.json.gz",
+    "bytes": 1568,
+    "sha256": "c807d164c1d3dd8f2b6bbe0466862e554877d21e9aed06e9ec7975658a2b761d",
+    "uncompressedBytes": 3988,
+    "uncompressedSha256": "a01e42aa9d90b746424e977c916e434ce1c00d9542b4c6d14f4d428e8517f158",
+    "source": "/tmp/aih-qua02-repair-20261116/results/collector-image.json"
+  },
+  {
+    "file": "preparation/current-dispositions.json.gz",
+    "bytes": 2015,
+    "sha256": "64c411ccb28c27819ff5b96c45fe0e7df0069e05b8870f6a1db12d633bf1db7f",
+    "uncompressedBytes": 4449,
+    "uncompressedSha256": "1d95275ebec4eabea2ece4cc83f5d3495a55de877d7fd6b4d7e5c12b2be0ae7b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/current-dispositions.json"
+  },
+  {
+    "file": "preparation/documentation-checkpoint.log.gz",
+    "bytes": 124,
+    "sha256": "0e55f659a4fe9a35a33fdd83d23e22a0a2e3e39ed6d46c231c623ea07338c7b4",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "5cb7798fd6ee3ad8e7ad275b806f99a2fddae1438a122cd5758b0ffaac2249be",
+    "source": "/tmp/aih-qua02-repair-20261116/results/documentation-checkpoint.log"
+  },
+  {
+    "file": "preparation/documentation-final.log.gz",
+    "bytes": 123,
+    "sha256": "585ae90c35d1c6a5de719c31d2fc2933113d93f0ab6677ccb2e5b0e6e71501a4",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "d6ba38e0d817cf3cc9dd0d0e372e99d715ca5b574e547c632746bcf84263ff52",
+    "source": "/tmp/aih-qua02-repair-20261116/results/documentation-final.log"
+  },
+  {
+    "file": "preparation/final-bundle.json.gz",
+    "bytes": 2848,
+    "sha256": "9d407fdd07d02902d4dbddb44957aa7c46e7f5b5f1b6a70a59051ef50d3f5306",
+    "uncompressedBytes": 7624,
+    "uncompressedSha256": "535e9b79ef303ced11476f98e8ac46fce5dfdeb372c4c3ca3a1c39bf69105e72",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-bundle.json"
+  },
+  {
+    "file": "preparation/final-captures-driver.log.gz",
+    "bytes": 130,
+    "sha256": "fe2110546aa6fa8613f67e77fceec4e59fa61ea8d162d2397c66dd2a80cd9f51",
+    "uncompressedBytes": 218,
+    "uncompressedSha256": "ad9c6de665e3a455fc8d14bc3d8a04e7a80c0dc98673184d1afe3f4847d0239c",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-driver.log"
+  },
+  {
+    "file": "preparation/final-captures-network-fixed-driver.log.gz",
+    "bytes": 112,
+    "sha256": "261ee2d9b1ba9b946503860d1ee55b7d2e9c5a4cfc10361cf54fe47c309e9fe9",
+    "uncompressedBytes": 101,
+    "uncompressedSha256": "83519af5b8c5d769f27d15a84a255d6d29113bc91e50467c4a010b00609f93e5",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-fixed-driver.log"
+  },
+  {
+    "file": "preparation/final-coverage.log.gz",
+    "bytes": 850,
+    "sha256": "a445fa1b082a1950a7da9d2d489cbcf24d448308f933fae4fcf5111d574112f9",
+    "uncompressedBytes": 15779,
+    "uncompressedSha256": "efe6ede937200cb0dc3db67831b8279e410762f2d5c40d39aec3a9175e7ed772",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-coverage.log"
+  },
+  {
+    "file": "preparation/final-environment.log.gz",
+    "bytes": 136,
+    "sha256": "3baf6543417010b95d5728fa843b17699a3e07433bcac27056fbe7c0c405e487",
+    "uncompressedBytes": 126,
+    "uncompressedSha256": "724e3c6e274b84c9abae4a9edf75bb7c2fd93a6d8b5f2a0b4bda5e632dd5858c",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-environment.log"
+  },
+  {
+    "file": "preparation/final-performance-metrics.json.gz",
+    "bytes": 1456,
+    "sha256": "f32551e48931bf5489d8a3be0b9f4a1bd1a50a417d8af173cd6cf68614d5ecfa",
+    "uncompressedBytes": 6167,
+    "uncompressedSha256": "6a1eab9eba9f00d7f0ff3098bb29865c87876fca998da5579e2321472b5442be",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-performance-metrics.json"
+  },
+  {
+    "file": "preparation/final-review-cleanup.log.gz",
+    "bytes": 55,
+    "sha256": "b57331b950dab224e51944fea7c2a58e78f471ccbbcbd3e504ae9270dff869be",
+    "uncompressedBytes": 64,
+    "uncompressedSha256": "95cc44586ee2391fc920f0f559b74c5dac5dc26bd4f76c9e2f04fdb496098dcf",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-review-cleanup.log"
+  },
+  {
+    "file": "preparation/final-review-container.json.gz",
+    "bytes": 1881,
+    "sha256": "20a32f0fae2913222e4cda82680e46951c7d3022cc526a4b25c7c917063aca35",
+    "uncompressedBytes": 6538,
+    "uncompressedSha256": "78cb335d4abaa61d720da33fbabbc628283e5514b1b16b754839833266941bf2",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-review-container.json"
+  },
+  {
+    "file": "preparation/final-source-readback.log.gz",
+    "bytes": 205,
+    "sha256": "ad815482a83309e31717a89618bfcf188fa60659a87a4031259b52704b8ab59c",
+    "uncompressedBytes": 433,
+    "uncompressedSha256": "83bda01508788abaf53ca1562a4d2d1ff682423b76b8d77afdd4348dbf2008ea",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-source-readback.log"
+  },
+  {
+    "file": "preparation/final-source.sha256.gz",
+    "bytes": 115,
+    "sha256": "4d73b99e87893aed0b13d3894ef83fb84419a95fb26e2f344a9dc583f7156b05",
+    "uncompressedBytes": 114,
+    "uncompressedSha256": "aa30622afb91594c0bc9b84a2c16056d2838242674803c67e5adc2fc0d178c87",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-source.sha256"
+  },
+  {
+    "file": "preparation/make-pairs.log.gz",
+    "bytes": 83,
+    "sha256": "3c014a8134c6a668564ce12ad4a432a0c5cab57503dc3a4e35035070ddc29767",
+    "uncompressedBytes": 68,
+    "uncompressedSha256": "e9f3a1991da733104913acd34565c694f920d4d3fa4436416f1a3da97ad07d02",
+    "source": "/tmp/aih-qua02-repair-20261116/results/make-pairs.log"
+  },
+  {
+    "file": "preparation/owned-final-cleanup.log.gz",
+    "bytes": 93,
+    "sha256": "17f6f8d99e32b2d26931b9465344659cd056f81e3f4fb2e3b47d99fa448e3fe3",
+    "uncompressedBytes": 162,
+    "uncompressedSha256": "6bee5ebf342fc1a9eeddc7c53a772598a3c1527076b83d91be78c5beb2d962e6",
+    "source": "/tmp/aih-qua02-repair-20261116/results/owned-final-cleanup.log"
+  },
+  {
+    "file": "preparation/owning.command.gz",
+    "bytes": 175,
+    "sha256": "cb7cdb297e1cdbed51456fafa6ac326d0cbb62f97211f13515520c38f23d3923",
+    "uncompressedBytes": 190,
+    "uncompressedSha256": "aae4f1a58d65a8479c935bd4f6d7ef276ddecaeb2d31176fcedd188bf2581b42",
+    "source": "/tmp/aih-qua02-repair-20261116/results/owning.command"
+  },
+  {
+    "file": "preparation/owning.log.gz",
+    "bytes": 5131,
+    "sha256": "3cb1648ddc2281b00a252c226032ffb1982f439353b04fde79856bdcb352435f",
+    "uncompressedBytes": 15088,
+    "uncompressedSha256": "f5536342c53ba12ccea8dff522a62e48868dbb2f25c5f67bb2c4d5305e2937e8",
+    "source": "/tmp/aih-qua02-repair-20261116/results/owning.log"
+  },
+  {
+    "file": "preparation/partition-3-driver.log.gz",
+    "bytes": 20,
+    "sha256": "59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2",
+    "uncompressedBytes": 0,
+    "uncompressedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3-driver.log"
+  },
+  {
+    "file": "preparation/partition-rechecks-driver.log.gz",
+    "bytes": 126,
+    "sha256": "bc6d02f2f52e0724eb56c62958b653082521b68972f2f4f4c0ee947252be8b1e",
+    "uncompressedBytes": 140,
+    "uncompressedSha256": "42eb9d759cfa27eb9cbed6a6782f57b5949898c5101d0ebbaf2df9e01dedaaa9",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-rechecks-driver.log"
+  },
+  {
+    "file": "preparation/partitions-image.id.gz",
+    "bytes": 79,
+    "sha256": "e69e0814782f507a3fc55fc657aafe6f80e0b82f04f401f2a12f25d493820284",
+    "uncompressedBytes": 72,
+    "uncompressedSha256": "cfdd60943b0cbf129e9ba9c0d20825498e4417bf24965bcb52b9ed27b5ac6575",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partitions-image.id"
+  },
+  {
+    "file": "preparation/partitions-image.json.gz",
+    "bytes": 1505,
+    "sha256": "6931510011de528d6aa4707838bcb7fb2b2ac841ac1f955140d9e961023e6472",
+    "uncompressedBytes": 3789,
+    "uncompressedSha256": "ddf620d75e1cfd5775e4964a3c9dc51c7e0582ea7fad9a30f4d34af988dbaeb4",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partitions-image.json"
+  },
+  {
+    "file": "preparation/pilot-review-cleanup.log.gz",
+    "bytes": 49,
+    "sha256": "c33a60dd6eb3a07893c73941ebeab9a2b39fc12e3e8506b2c47dae1330db9de4",
+    "uncompressedBytes": 52,
+    "uncompressedSha256": "04076e600bd3da42f8a6d54db80f231ae2fafbf66b47a0b0ea962e989a440a26",
+    "source": "/tmp/aih-qua02-repair-20261116/results/pilot-review-cleanup.log"
+  },
+  {
+    "file": "preparation/pilot-review-container.json.gz",
+    "bytes": 1915,
+    "sha256": "2363d0fceae6e266262a3c463bbce8ee67df0635e25a6a4e176c8b2772b051ba",
+    "uncompressedBytes": 6612,
+    "uncompressedSha256": "42fdb4c2bdcde2d44134b7cecb188e1986934fb70e418789dcd2aa2e10a85df8",
+    "source": "/tmp/aih-qua02-repair-20261116/results/pilot-review-container.json"
+  },
+  {
+    "file": "preparation/restored-network.id.gz",
+    "bytes": 71,
+    "sha256": "0364daf5060e96e935a748462dd55910fa4d36812f349be2be1e99f2dd1c4c4d",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "3bc3c26e3e790b1808cd13674ce9ccf8b16891f096f072534b0740ae46f93eaf",
+    "source": "/tmp/aih-qua02-repair-20261116/results/restored-network.id"
+  },
+  {
+    "file": "preparation/restored-network.json.gz",
+    "bytes": 367,
+    "sha256": "6d09f09b09f47e60b163f703361d064f41c8a48a50495bacac2e242495835e7f",
+    "uncompressedBytes": 806,
+    "uncompressedSha256": "be5270dc06ba39cbef6a8ca5915741c898224d470263e8175935db1eb83fa4ef",
+    "source": "/tmp/aih-qua02-repair-20261116/results/restored-network.json"
+  },
+  {
+    "file": "preparation/review-container.id.gz",
+    "bytes": 72,
+    "sha256": "d75e2790dd8dd6437e107194e3f1658631221c9f2301eab5463275823acb885a",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "05dc2531f3fd2947413ecfa25e645c0e418570485824b48fb958f8a493dfb1f0",
+    "source": "/tmp/aih-qua02-repair-20261116/results/review-container.id"
+  },
+  {
+    "file": "preparation/review-start.log.gz",
+    "bytes": 52,
+    "sha256": "cbb885bd968158ebdd779bc3b529d9c22ccb206c6fe3e5d7304044b9eedc76fb",
+    "uncompressedBytes": 32,
+    "uncompressedSha256": "ce19a29f268d9c294daf5c15ccef8673b0fa503f6ef5459d0d483ede2ba15157",
+    "source": "/tmp/aih-qua02-repair-20261116/results/review-start.log"
+  },
+  {
+    "file": "preparation/root-case-container.json.gz",
+    "bytes": 1839,
+    "sha256": "95bdb43e12afb5555f446fc58bb3390770393fda60f87ba98944b4de9b8c9407",
+    "uncompressedBytes": 6941,
+    "uncompressedSha256": "61d9647bfecba6959cc264916f197e8d43a758ac4c6594664fdfff8f890806c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-case-container.json"
+  },
+  {
+    "file": "preparation/root-case.command.gz",
+    "bytes": 270,
+    "sha256": "79e615e524fa2cd106800a1359d75df7f741946e493b714ee6e7fe540a3df0f0",
+    "uncompressedBytes": 362,
+    "uncompressedSha256": "6c4cb7c58363404bf2065989f7024927e3600b6277de12f5871874b3470790eb",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-case.command"
+  },
+  {
+    "file": "preparation/root-case.exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-case.exit"
+  },
+  {
+    "file": "preparation/root-case.id.gz",
+    "bytes": 72,
+    "sha256": "135ee92b2355e5f460accb3a53dd46c5bfa3f33149891368817e7cc4ab081543",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "3e1b3f2337eea42684911f2b5490a2d0550de44061c832ab71f3a4838f7bb9ee",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-case.id"
+  },
+  {
+    "file": "preparation/root-case.log.gz",
+    "bytes": 450,
+    "sha256": "77f6851c98b2959cdc1de41687c85f8702378237f8728a1e2fa8f54f5888f3be",
+    "uncompressedBytes": 896,
+    "uncompressedSha256": "c9e67065d1d72c467fc0210e1e6293f54d7ffdb151a42f852c4402b8c70976b6",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-case.log"
+  },
+  {
+    "file": "preparation/root-disposition.json.gz",
+    "bytes": 1529,
+    "sha256": "f28cb365840b89914c5e917729ba3acfb009d11b0da70e8aedaeabd2d821c8d5",
+    "uncompressedBytes": 3041,
+    "uncompressedSha256": "7d99a5e196bba12bfaba957d97d040ed8a56c86a4b7b4bff3aaf3c4a016029ba",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-disposition.json"
+  },
+  {
+    "file": "preparation/root-driver.log.gz",
+    "bytes": 20,
+    "sha256": "59869db34853933b239f1e2219cf7d431da006aa919635478511fabbfc8849d2",
+    "uncompressedBytes": 0,
+    "uncompressedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root-driver.log"
+  },
+  {
+    "file": "preparation/root.command.gz",
+    "bytes": 165,
+    "sha256": "dc50374102fd0894a19a4dc751aa2e2d4fabe2c18fd33e9b3c63eb1b0c03f596",
+    "uncompressedBytes": 172,
+    "uncompressedSha256": "25aef755d1351aee198256091d97f29f8c1c1425f5d3fb6fc1e147524b900087",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root.command"
+  },
+  {
+    "file": "preparation/root.exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root.exit"
+  },
+  {
+    "file": "preparation/root.log.gz",
+    "bytes": 72473,
+    "sha256": "f11ae47ce5617c3143c5f787e1ec3c402bcb31e9a0cb54a0ba80d59ef5ac12ce",
+    "uncompressedBytes": 631989,
+    "uncompressedSha256": "36a75948619062b64d49b3e740e7134bf1bbd35d44e9bd81cfde318e8bcfd625",
+    "source": "/tmp/aih-qua02-repair-20261116/results/root.log"
+  },
+  {
+    "file": "preparation/source-verification-final.log.gz",
+    "bytes": 624,
+    "sha256": "847d1f15427f6ffe55f4b2829b48f0ee9c367fcf7f8bad4921486e573568c46d",
+    "uncompressedBytes": 1084,
+    "uncompressedSha256": "447acae268127d272a6308a637611355632635ec515828a8bb680adc413fa71b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/source-verification-final.log"
+  },
+  {
+    "file": "preparation/source-verification.json.gz",
+    "bytes": 624,
+    "sha256": "847d1f15427f6ffe55f4b2829b48f0ee9c367fcf7f8bad4921486e573568c46d",
+    "uncompressedBytes": 1084,
+    "uncompressedSha256": "447acae268127d272a6308a637611355632635ec515828a8bb680adc413fa71b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/source-verification.json"
+  },
+  {
+    "file": "preparation/source-verification.log.gz",
+    "bytes": 624,
+    "sha256": "847d1f15427f6ffe55f4b2829b48f0ee9c367fcf7f8bad4921486e573568c46d",
+    "uncompressedBytes": 1084,
+    "uncompressedSha256": "447acae268127d272a6308a637611355632635ec515828a8bb680adc413fa71b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/source-verification.log"
+  },
+  {
+    "file": "preparation/typecheck.command.gz",
+    "bytes": 139,
+    "sha256": "a8f38ed8d931626af8e56236c6ed4a3c37e66f00c4fdae678f4e156a60669021",
+    "uncompressedBytes": 135,
+    "uncompressedSha256": "4193e43e36538ceeb7eba4431eb0a66bdaa159d0b910471b11acfa23e82fc8db",
+    "source": "/tmp/aih-qua02-repair-20261116/results/typecheck.command"
+  },
+  {
+    "file": "preparation/typecheck.log.gz",
+    "bytes": 6220,
+    "sha256": "874c4c45968447b87e68620e10f14cd80c9194c0520a0cb9598b5b897d6782c0",
+    "uncompressedBytes": 19697,
+    "uncompressedSha256": "62c616de97af9f624ea6f73a3a979cca68f9ce1a09581e1ca5571feb7cf2705a",
+    "source": "/tmp/aih-qua02-repair-20261116/results/typecheck.log"
+  },
+  {
+    "file": "runs/partition-1/command.gz",
+    "bytes": 220,
+    "sha256": "c3007fca165a1eb67c88009d86a6f5e57432dffa16b2afbc7864d93c3e6ba368",
+    "uncompressedBytes": 251,
+    "uncompressedSha256": "f297ca335065aa9b9fea9188cd9040c83fcd95961963c7fd457f956c76c336c0",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-1/command"
+  },
+  {
+    "file": "runs/partition-1/exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-1/exit"
+  },
+  {
+    "file": "runs/partition-1/run.log.gz",
+    "bytes": 34562,
+    "sha256": "c3d5a96e073a2e072239fb13a76a3f64091237d8743603a484c82a0d78d6b823",
+    "uncompressedBytes": 180624,
+    "uncompressedSha256": "804983c18c49ec7941afcd909cde5e4a1ebff975546c643435429ca63942267b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-1/run.log"
+  },
+  {
+    "file": "runs/partition-1/test-results.tar.gz",
+    "bytes": 131205,
+    "sha256": "33e8385221386874ed75cc4061278b5136b25cc0433c04f7e9d5303f8b39517c",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/partition-2/command.gz",
+    "bytes": 218,
+    "sha256": "ffc36eeb95208c185c7e5ed6399837010c80f351c40fc7579e95467f67b3fe4c",
+    "uncompressedBytes": 251,
+    "uncompressedSha256": "150ce567a6c1732a26fbbcf983117a8a3b7912016feaa7da05de3fdf8a0c0c11",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2/command"
+  },
+  {
+    "file": "runs/partition-2/exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2/exit"
+  },
+  {
+    "file": "runs/partition-2/run.log.gz",
+    "bytes": 26468,
+    "sha256": "6b9e0bc19c37c6ad1eb03af9f49d03dd2e868543bc26ec4391ab32b53bdc10e4",
+    "uncompressedBytes": 130882,
+    "uncompressedSha256": "9f5accbf1d51245f35342b1d2fac834270c4055a8779d587f3c348fa5f2a5ccf",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2/run.log"
+  },
+  {
+    "file": "runs/partition-2/test-results.tar.gz",
+    "bytes": 239,
+    "sha256": "28c3cb4c6d1eb1de0f8819711783fa064da254a59eb363d41ae83c45dc557815",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/partition-3/command.gz",
+    "bytes": 219,
+    "sha256": "6108e4f559595160848c4f757c2d0bbeaa62f5971f6b6cf9c8864cc9c408d141",
+    "uncompressedBytes": 251,
+    "uncompressedSha256": "598e6fc5168a477a87a5cd3824e0a5ba1c251d0711e1d7362affe807088bb1b8",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3/command"
+  },
+  {
+    "file": "runs/partition-3/exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3/exit"
+  },
+  {
+    "file": "runs/partition-3/run.log.gz",
+    "bytes": 26442,
+    "sha256": "4631ab628b809bc8e20406ef1a43975973b437421f3fe7dc8fb60b3b7f894def",
+    "uncompressedBytes": 130506,
+    "uncompressedSha256": "ef03727679758f918e1216295fd6a05d62d90d59065447b14e70d562d7504243",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3/run.log"
+  },
+  {
+    "file": "runs/partition-3/test-results.tar.gz",
+    "bytes": 239,
+    "sha256": "8013ee7cdd50901f2ad68f37569266de8879e513a5bcdb12d208df4f612fea35",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/partition-4/command.gz",
+    "bytes": 220,
+    "sha256": "2693c6be1535a2ae2a615f0aa6a1cbbef83a509d8d9cd2c0049ef48da8228e32",
+    "uncompressedBytes": 251,
+    "uncompressedSha256": "3c5aa9e578e2d1e87cf77f9b583d825f62cb9bfcd6cadc6405414a0d7d20222c",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-4/command"
+  },
+  {
+    "file": "runs/partition-4/exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-4/exit"
+  },
+  {
+    "file": "runs/partition-4/run.log.gz",
+    "bytes": 33719,
+    "sha256": "6fca01b5fcdf5e4f93f0f80596fdc3705abd9e0af464e7be0e87d0faec2cbc7f",
+    "uncompressedBytes": 187837,
+    "uncompressedSha256": "013d187524192919ac81ae5be45af4663a0da907f159b7747c84656f81283060",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-4/run.log"
+  },
+  {
+    "file": "runs/partition-4/test-results.tar.gz",
+    "bytes": 2113163,
+    "sha256": "ba7304bc96353d103796d76b9b8bf5668e556d8a73186b71f042acd6200ecaad",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/partition-2-recheck/command.gz",
+    "bytes": 334,
+    "sha256": "4541783f85dbe76289b696880930a19b44a93faf0c9d0ab48cce2e877b02f1a7",
+    "uncompressedBytes": 443,
+    "uncompressedSha256": "f53388c814d9b67c52a1fcc45ecbe21fe43c48a68bdc86253a53d9c77eb57306",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2-recheck/command"
+  },
+  {
+    "file": "runs/partition-2-recheck/exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2-recheck/exit"
+  },
+  {
+    "file": "runs/partition-2-recheck/run.log.gz",
+    "bytes": 12543,
+    "sha256": "ef2ba6cc6942bce58ccd0e8adc2e90c759dfb3510cd0b4169d07e8a3602a97cf",
+    "uncompressedBytes": 80426,
+    "uncompressedSha256": "2ee14023ea616eea84f463a611db31e4a688ab180ab46052abc6c282856ceae4",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2-recheck/run.log"
+  },
+  {
+    "file": "runs/partition-2-recheck/test-results.tar.gz",
+    "bytes": 3119520,
+    "sha256": "f32679fa0e5919f6fe11d9ac360c81547003a225e70d2aae6e9e61b43540ac2b",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/partition-3-recheck/command.gz",
+    "bytes": 336,
+    "sha256": "c441b046edaa2de98c81059823d798b29187b0ab69d29367c6d544c128483438",
+    "uncompressedBytes": 443,
+    "uncompressedSha256": "3241267e7bf76eed6521a4c56ccbf5a986e594510b4bd16ae943338f1c40eb29",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3-recheck/command"
+  },
+  {
+    "file": "runs/partition-3-recheck/exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3-recheck/exit"
+  },
+  {
+    "file": "runs/partition-3-recheck/run.log.gz",
+    "bytes": 10904,
+    "sha256": "9adbdd83f194a08c8418a911a5e416e50cb6e63e1c9cdb1638580d99ed328921",
+    "uncompressedBytes": 46727,
+    "uncompressedSha256": "80138cf8f8edf32e57322d3c90a19bc3c94dbec2dd3ab6ed8709239114f6d9df",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-3-recheck/run.log"
+  },
+  {
+    "file": "runs/partition-3-recheck/test-results.tar.gz",
+    "bytes": 16776,
+    "sha256": "828952e334c98c4c82efc64f6e2ff68914cf303029de6a2a76764bee606f9a1b",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/chat-recheck/command.gz",
+    "bytes": 363,
+    "sha256": "9b144c5c7f320f7d13f6f6ad9b74bcce38955a0fe955101f4d16fa6b71339b13",
+    "uncompressedBytes": 481,
+    "uncompressedSha256": "99c94b8defac4b9883146bcf2b950ed5028b86178c2f6ea7b6824544922a8f9a",
+    "source": "/tmp/aih-qua02-repair-20261116/results/chat-recheck/command"
+  },
+  {
+    "file": "runs/chat-recheck/exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/chat-recheck/exit"
+  },
+  {
+    "file": "runs/chat-recheck/run.log.gz",
+    "bytes": 4807,
+    "sha256": "289d0775cddac577afc177e39d793e2489d67d817b4f60d2c87ee6698f078a7f",
+    "uncompressedBytes": 13896,
+    "uncompressedSha256": "f03754560d10cb9e860bb068a4062afe73a3ee9b4063d502bc062e1edaa4d238",
+    "source": "/tmp/aih-qua02-repair-20261116/results/chat-recheck/run.log"
+  },
+  {
+    "file": "runs/chat-recheck/test-results.tar.gz",
+    "bytes": 4231531,
+    "sha256": "b834ae0d62da0f866007cbad96cf2b1e5afc508c90f28858d2770ae06375e802",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/keyboard-recheck/command.gz",
+    "bytes": 434,
+    "sha256": "ce3494eab6482ae07d17130bdb12f1b95b89a88b57fdd46eebd50b288a4e4f93",
+    "uncompressedBytes": 614,
+    "uncompressedSha256": "d90019fcd0c81252af0f313c025c98e848493faa438037a9eb8ecc68a4cd69be",
+    "source": "/tmp/aih-qua02-repair-20261116/results/keyboard-recheck/command"
+  },
+  {
+    "file": "runs/keyboard-recheck/exit.gz",
+    "bytes": 22,
+    "sha256": "7c7d926e49c2baabb26290bc7456e6e58ec8078d43ac41cccbdba310c96666dc",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "53c234e5e8472b6ac51c1ae1cab3fe06fad053beb8ebfd8977b010655bfdd3c3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/keyboard-recheck/exit"
+  },
+  {
+    "file": "runs/keyboard-recheck/run.log.gz",
+    "bytes": 5719,
+    "sha256": "23f16e6f04145a5bc234b98543da604428867ef7a76dece2f601949fec320cdb",
+    "uncompressedBytes": 17936,
+    "uncompressedSha256": "cf3945e83389242fe2a3381a71c691e4c1ca07be0fbfddd54d4aea3c7a25ddd8",
+    "source": "/tmp/aih-qua02-repair-20261116/results/keyboard-recheck/run.log"
+  },
+  {
+    "file": "runs/keyboard-recheck/test-results.tar.gz",
+    "bytes": 1464305,
+    "sha256": "62f5dcd230904f98ff7d33052835dad876806e4e1941a9521e42f8ed37e61c9b",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "runs/final-captures-network-missing/command.gz",
+    "bytes": 255,
+    "sha256": "3191d82bcc686f92e3969031cd27f6d98653d64e4b36572d5615ae57206bff6a",
+    "uncompressedBytes": 352,
+    "uncompressedSha256": "b31906cf3c64cd955f9cf46c052a55af51c3e370d448118863a984cb2c95b611",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/command"
+  },
+  {
+    "file": "runs/final-captures-network-missing/exit.gz",
+    "bytes": 22,
+    "sha256": "288118306e4c7cb89d91b48edff339671496aa31d362532219909f9c370e0f78",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/exit"
+  },
+  {
+    "file": "runs/final-captures-network-missing/container-id.gz",
+    "bytes": 72,
+    "sha256": "0ecdec1a9e06c3a2ef640c4037e2042ae538d025894e90eba657efbe6c2cec59",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "91d168ae1f3689792d3ceedb6a72a814e5dc55a78d75e1f0409885b221e01ef3",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/container-id"
+  },
+  {
+    "file": "runs/final-captures-network-missing/container.json.gz",
+    "bytes": 1858,
+    "sha256": "0ad4afde357ea97f2df87c9ca9270cf763db389d881b2414a0172f14b6b24d81",
+    "uncompressedBytes": 6922,
+    "uncompressedSha256": "88b1a11b4415196b123d41059b0e1e19b7269a88b74028e4635e3130e8faae6a",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/container.json"
+  },
+  {
+    "file": "runs/final-captures-network-missing/image.json.gz",
+    "bytes": 1568,
+    "sha256": "c807d164c1d3dd8f2b6bbe0466862e554877d21e9aed06e9ec7975658a2b761d",
+    "uncompressedBytes": 3988,
+    "uncompressedSha256": "a01e42aa9d90b746424e977c916e434ce1c00d9542b4c6d14f4d428e8517f158",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/image.json"
+  },
+  {
+    "file": "runs/final-captures-network-missing/network.json.gz",
+    "bytes": 23,
+    "sha256": "68433ac2490ea1489ab0fa739057fe71c7d6843ae152225a0d6eaf3e299438b8",
+    "uncompressedBytes": 3,
+    "uncompressedSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/network.json"
+  },
+  {
+    "file": "runs/final-captures-network-missing/run.log.gz",
+    "bytes": 169,
+    "sha256": "e917333eafd950a44964019f8be24afd21074f3ba444af1f392b9707d7a7e0e7",
+    "uncompressedBytes": 202,
+    "uncompressedSha256": "a49b2053213723e4a1bb84842569540aa2ac56e2d3752f69c80ce67b0beca1c4",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures-network-missing/run.log"
+  },
+  {
+    "file": "runs/final-captures/command.gz",
+    "bytes": 257,
+    "sha256": "c1683647db9362ef1f2c25bd59f1a5c691d259b42596e76c566ad28a36aa1c9d",
+    "uncompressedBytes": 352,
+    "uncompressedSha256": "ac9085e837fe539d7fe6314dad844f4ad5248ced5834fd0aa29397463875d82b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/command"
+  },
+  {
+    "file": "runs/final-captures/exit.gz",
+    "bytes": 22,
+    "sha256": "de76e512a414e118fc8bc46cc3043f18cb60a7aa7b997d9564d30aae0cac9eee",
+    "uncompressedBytes": 2,
+    "uncompressedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/exit"
+  },
+  {
+    "file": "runs/final-captures/container-id.gz",
+    "bytes": 72,
+    "sha256": "180f61d747f81e804d9123fc63505d4cfbe084242ffaefd6bdbb605e3159d456",
+    "uncompressedBytes": 65,
+    "uncompressedSha256": "60a1b89b00d7df24796b73587e5bf0325fb3da0a4cc5ac941031c80132c8b220",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/container-id"
+  },
+  {
+    "file": "runs/final-captures/container.json.gz",
+    "bytes": 1908,
+    "sha256": "5a70f49c2f47cd6217968a6400efdcbacfb9df4e3d045b74685d8b5c243f7f0a",
+    "uncompressedBytes": 7068,
+    "uncompressedSha256": "fb062aea56720bd63e00e8707eb6b35186dc760b52d822de9214cd41b2af0f3e",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/container.json"
+  },
+  {
+    "file": "runs/final-captures/image.json.gz",
+    "bytes": 1568,
+    "sha256": "c807d164c1d3dd8f2b6bbe0466862e554877d21e9aed06e9ec7975658a2b761d",
+    "uncompressedBytes": 3988,
+    "uncompressedSha256": "a01e42aa9d90b746424e977c916e434ce1c00d9542b4c6d14f4d428e8517f158",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/image.json"
+  },
+  {
+    "file": "runs/final-captures/network.json.gz",
+    "bytes": 367,
+    "sha256": "6d09f09b09f47e60b163f703361d064f41c8a48a50495bacac2e242495835e7f",
+    "uncompressedBytes": 806,
+    "uncompressedSha256": "be5270dc06ba39cbef6a8ca5915741c898224d470263e8175935db1eb83fa4ef",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/network.json"
+  },
+  {
+    "file": "runs/final-captures/run.log.gz",
+    "bytes": 3209,
+    "sha256": "246269973d88c2a3e925143c57ff7ad2a5268ea1bd8604d6154916df66f5c641",
+    "uncompressedBytes": 12593,
+    "uncompressedSha256": "9cbe1a543f0b997513423f155540307c4b4d706d4e44aadeeac4c80810cfec40",
+    "source": "/tmp/aih-qua02-repair-20261116/results/final-captures/run.log"
+  },
+  {
+    "file": "runs/final-captures/test-results.tar.gz",
+    "bytes": 44400431,
+    "sha256": "98d351a9b8bbe0cf76a36d49b3553bd10a746456744997d85b8b754b51b3e24f",
+    "scope": "Complete original test-results tree: JSON/process reports, original PNG/diffs/error context and available traces; no status rewrite."
+  },
+  {
+    "file": "preparation/owning-test-results.tar.gz",
+    "bytes": 4827841,
+    "sha256": "f166f63539ab05d85d5103aa4ba91e283905213ddcff761ef615dd0a259c2a7d",
+    "scope": "Complete repaired9/9 actual-PTY owning controls, unchanged references."
+  },
+  {
+    "file": "observation/geometry-evidence.json.gz",
+    "bytes": 791,
+    "sha256": "ddf97baa9130cbc9f4044250784cc9b3736b2ae6bfa92843e9b8b38ac3b87e0b",
+    "uncompressedBytes": 11622,
+    "uncompressedSha256": "ced5b9e8174653e0aca1658e40e6996bfe77409e26d622f34e722526e72cf98b",
+    "source": "/tmp/aih-qua02-repair-20261116/results/mcp-observation/geometry-evidence.json"
+  },
+  {
+    "file": "observation/trace-calls.json.gz",
+    "bytes": 869,
+    "sha256": "72e7c0a2f04a9df7103954b8de9ab1e4c47f99f3d2a0a9260b69551d15b55033",
+    "uncompressedBytes": 4009,
+    "uncompressedSha256": "69348ae1e8e5ced1747cc7d57a71359a7faa93fff1f2672b693e2ebd24740d92",
+    "source": "/tmp/aih-qua02-repair-20261116/results/mcp-observation/trace-calls.json"
+  },
+  {
+    "file": "review/1440-dark-conversation-pair.png",
+    "bytes": 181715,
+    "sha256": "9611568ee6fae031d9c9baa02f40cbcb67bf996c91380ae982b77b21df1c422f",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-conversation-pair.png"
+  },
+  {
+    "file": "review/1440-dark-history-pair.png",
+    "bytes": 243289,
+    "sha256": "033e63e4784a4313c8ec314deb9600832c0efea867c92b2b9d4e9ae7f3ca1be9",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-history-pair.png"
+  },
+  {
+    "file": "review/1440-dark-native-conversation.png",
+    "bytes": 88211,
+    "sha256": "1c138c34cf7ab26ee3bbf09d663b7a2ee2ccc23244a5cb754c7f59fc36300233",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-native-conversation.png"
+  },
+  {
+    "file": "review/1440-dark-native-history.png",
+    "bytes": 120528,
+    "sha256": "43860f41e5d63e8f9756b08cf62be7744e6d4474ca12a5d0f2d1d3d35e8b5250",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-native-history.png"
+  },
+  {
+    "file": "review/1440-dark-native-outcomes.json.gz",
+    "bytes": 1330,
+    "sha256": "b594f1caffe0d187a3c1b7e5b5fab1100d718a454261e46af71999b410e4475c",
+    "uncompressedBytes": 25679,
+    "uncompressedSha256": "26a6c936a8c1aba227d5bac812de17da2e1a01263de2c8e47b3bb58bf5b9bca1",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-native-outcomes.json"
+  },
+  {
+    "file": "review/1440-dark-native-settings.png",
+    "bytes": 93217,
+    "sha256": "8a6bf9a3274bd9a73b50286863e6cdd6a6f5b3ec97dcc9ae5d6c5c7fdccb7b81",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-native-settings.png"
+  },
+  {
+    "file": "review/1440-dark-native-workspace.png",
+    "bytes": 106242,
+    "sha256": "872729d8f94e3683ec47dd6f5cac736d6449c1c95db5501dd157fcad94076a99",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-native-workspace.png"
+  },
+  {
+    "file": "review/1440-dark-piweb-conversation.png",
+    "bytes": 49100,
+    "sha256": "9f25546086da08fa0d5e2a5a314a534102ccb92f7b766029bb1e5d11cba09d4b",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-piweb-conversation.png"
+  },
+  {
+    "file": "review/1440-dark-piweb-history.png",
+    "bytes": 81252,
+    "sha256": "53ecfa01665958a570d963ccd602fe3fbe16c5bae3e0fb974bf6c496472fe611",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-piweb-history.png"
+  },
+  {
+    "file": "review/1440-dark-piweb-outcomes.json.gz",
+    "bytes": 3589,
+    "sha256": "8e16fd8d375172669d0aae154c32293a682ce29354e6d1464dee7fa949117006",
+    "uncompressedBytes": 23784,
+    "uncompressedSha256": "e08c3c0af94d3a5d9902663b3c479d707982ca73468788700906729747016d87",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-piweb-outcomes.json"
+  },
+  {
+    "file": "review/1440-dark-piweb-settings.png",
+    "bytes": 85625,
+    "sha256": "9783f524bd635b90428e9c214bbf0b2737f14ac7443238e5ee93d1dfa2c654e1",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-piweb-settings.png"
+  },
+  {
+    "file": "review/1440-dark-piweb-workspace.png",
+    "bytes": 86619,
+    "sha256": "679ca85c31843632423bef1cb00f3136b5154381530aae6a7015390726e69e2f",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-piweb-workspace.png"
+  },
+  {
+    "file": "review/1440-dark-settings-pair.png",
+    "bytes": 226414,
+    "sha256": "bfb2212b979c1b7df5f5f7834e7e8fc9072fc6723180bf6d989c5c49213b203e",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-settings-pair.png"
+  },
+  {
+    "file": "review/1440-dark-workspace-pair.png",
+    "bytes": 238669,
+    "sha256": "db499ff27c85209f3b427e730bf17b611a18781bc0ab46b00199a9ac94b808d4",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-dark-workspace-pair.png"
+  },
+  {
+    "file": "review/1440-light-conversation-pair.png",
+    "bytes": 165414,
+    "sha256": "9ba555d6104f37e6a6acf1b7d6118b50d85a44dddccc3bc82c4a0f68f1c4ac57",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-conversation-pair.png"
+  },
+  {
+    "file": "review/1440-light-history-pair.png",
+    "bytes": 230393,
+    "sha256": "7484f097786b6792edfcdf79a5adcdaccb1dcc99215e382282b0333c13b00e4e",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-history-pair.png"
+  },
+  {
+    "file": "review/1440-light-native-conversation.png",
+    "bytes": 89312,
+    "sha256": "eec4f0e4c85aae10d66b9ae3e4888edd33fb92846810e1af60185272c1013f51",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-native-conversation.png"
+  },
+  {
+    "file": "review/1440-light-native-history.png",
+    "bytes": 121928,
+    "sha256": "c0da97f7de296c91db531d39ceb7dd569b1082d843fb597802a4bf82c1da4e8a",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-native-history.png"
+  },
+  {
+    "file": "review/1440-light-native-outcomes.json.gz",
+    "bytes": 1328,
+    "sha256": "e9aa1171807e7bfae9763892ee3f96cde629fdca5aa14d5d091a1287eaea3721",
+    "uncompressedBytes": 24860,
+    "uncompressedSha256": "e3fb6ad7e622e4787582a2665333b4838df12c5aff3092ed8a5b93042350f5b9",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-native-outcomes.json"
+  },
+  {
+    "file": "review/1440-light-native-settings.png",
+    "bytes": 91652,
+    "sha256": "6c27550003c1e260fe5f44f14e87b83c9fde17daeabdf446cda145f1ec444eeb",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-native-settings.png"
+  },
+  {
+    "file": "review/1440-light-native-workspace.png",
+    "bytes": 107772,
+    "sha256": "381fea46774cf93e3746e139565c67cd0c438f4e0c2bbae10ccff27433929842",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-native-workspace.png"
+  },
+  {
+    "file": "review/1440-light-piweb-conversation.png",
+    "bytes": 54208,
+    "sha256": "1c1a8cbaf4f6cc72d1a93d875c093e060c6677dad71f3805dd583f497abc5078",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-piweb-conversation.png"
+  },
+  {
+    "file": "review/1440-light-piweb-history.png",
+    "bytes": 86653,
+    "sha256": "cd2e5036582a249224ea473b3de364694443c7ba19a84a44bb278147f52f10f5",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-piweb-history.png"
+  },
+  {
+    "file": "review/1440-light-piweb-outcomes.json.gz",
+    "bytes": 3572,
+    "sha256": "3b8fa3c1b31faba25502f07eb1bd41e1b82cdbfb5a845a5c5471bd49b8e9d7a8",
+    "uncompressedBytes": 23558,
+    "uncompressedSha256": "039ad6840de0a41c1979ae5f3b9c61f11d0d6caa040ad091e215cc9356179450",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-piweb-outcomes.json"
+  },
+  {
+    "file": "review/1440-light-piweb-settings.png",
+    "bytes": 96226,
+    "sha256": "49d01819741c589205bccf65b0e1c8c0903c1a1a1ee1243f08abbfe419f60fef",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-piweb-settings.png"
+  },
+  {
+    "file": "review/1440-light-piweb-workspace.png",
+    "bytes": 92743,
+    "sha256": "871b4d83ac89e33cf067b0356bae43a21f5aa67ef768c24ccc178c139ef1ee97",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-piweb-workspace.png"
+  },
+  {
+    "file": "review/1440-light-settings-pair.png",
+    "bytes": 212642,
+    "sha256": "3bbdac3f7dbf66b00508686f501452aadf61d3350e52486d2541754d72bb90c2",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-settings-pair.png"
+  },
+  {
+    "file": "review/1440-light-workspace-pair.png",
+    "bytes": 234811,
+    "sha256": "17a1390b54e0de5673494382d4c00326433ad982eea3f7d438b6422fbf00da8f",
+    "source": "/tmp/aih-qua02-repair-20261116/review/1440-light-workspace-pair.png"
+  },
+  {
+    "file": "review/390-dark-conversation-pair.png",
+    "bytes": 85284,
+    "sha256": "7983ba4a7adfcb5493a8f01603f99e8e95ffcf535d8195612ac92f4fd93ea260",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-conversation-pair.png"
+  },
+  {
+    "file": "review/390-dark-history-pair.png",
+    "bytes": 110192,
+    "sha256": "dc2839ef05b7cea70edd7f2f65bf29982e273b50e5131ac7f4d73528384940d9",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-history-pair.png"
+  },
+  {
+    "file": "review/390-dark-native-conversation.png",
+    "bytes": 49956,
+    "sha256": "107ca07b8e8ab63e8b837ebe84a74d666b5abf57ed25204213dbf5ba5f2f3a22",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-native-conversation.png"
+  },
+  {
+    "file": "review/390-dark-native-history.png",
+    "bytes": 60156,
+    "sha256": "6d235199f4fa1f1ab8c57849897d923deb3f97c56c447e14439f6238ceb11695",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-native-history.png"
+  },
+  {
+    "file": "review/390-dark-native-outcomes.json.gz",
+    "bytes": 1290,
+    "sha256": "61a42c1efff94a4c23460a3e33f77f407834cd5c56586774d999860f4dacde16",
+    "uncompressedBytes": 23739,
+    "uncompressedSha256": "563ab47f6229750bf22ec464b26452f2bd7677e401e0c5cda632d8dc4d88de06",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-native-outcomes.json"
+  },
+  {
+    "file": "review/390-dark-native-settings.png",
+    "bytes": 54234,
+    "sha256": "125b4aa96f1375196177ae874501fdec8fa51b5b1fd2b5fe607c7e16dac81205",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-native-settings.png"
+  },
+  {
+    "file": "review/390-dark-native-workspace.png",
+    "bytes": 39649,
+    "sha256": "d96fd7c433e5bd3359a35b5558870deae7df64d9a2a27926ec255173ccc1e181",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-native-workspace.png"
+  },
+  {
+    "file": "review/390-dark-piweb-conversation.png",
+    "bytes": 22670,
+    "sha256": "991e5472e43d59dd763b8dcdf2ee3af1cca5f7a147b787cf80356fece3157044",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-piweb-conversation.png"
+  },
+  {
+    "file": "review/390-dark-piweb-history.png",
+    "bytes": 39099,
+    "sha256": "ca2bb8f1149b9e79cb89e3d02ab6d8b2263a025a7c9565e2f194a8592093382c",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-piweb-history.png"
+  },
+  {
+    "file": "review/390-dark-piweb-outcomes.json.gz",
+    "bytes": 3571,
+    "sha256": "4a144c14236a232770527a85e2cc2669ebfd3a8b513b1f6d322ce816be09ac71",
+    "uncompressedBytes": 23716,
+    "uncompressedSha256": "82c42d7d766f6a63434a0c65f1cd7f921206afdcf6f2527fe3ee58e1b5c80d02",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-piweb-outcomes.json"
+  },
+  {
+    "file": "review/390-dark-piweb-settings.png",
+    "bytes": 50109,
+    "sha256": "cda72b53708cae086e4033ce4321ecee956279c7405ab2c23fb14725b547e174",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-piweb-settings.png"
+  },
+  {
+    "file": "review/390-dark-piweb-workspace.png",
+    "bytes": 12730,
+    "sha256": "4efbf685227cc9c4213c0e84d9f5988662988db5218ebfd78141a85b178230f2",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-piweb-workspace.png"
+  },
+  {
+    "file": "review/390-dark-settings-pair.png",
+    "bytes": 114553,
+    "sha256": "3dc6733a11b813362b438f8e5a374f700805848fef15b46e70b661425e6effbd",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-settings-pair.png"
+  },
+  {
+    "file": "review/390-dark-workspace-pair.png",
+    "bytes": 66907,
+    "sha256": "e0340ccc7ec11c216711af5c0b0c1981c83cf753fd3e0aed061cab8d9c89876b",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-dark-workspace-pair.png"
+  },
+  {
+    "file": "review/390-light-conversation-pair.png",
+    "bytes": 82555,
+    "sha256": "4344da7605566c82480b7e1cc130ddf60f1c747d222506337d9182da1fd35a26",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-conversation-pair.png"
+  },
+  {
+    "file": "review/390-light-history-pair.png",
+    "bytes": 110603,
+    "sha256": "51ecf91d1f7cde6f09b542e96cc48147e6c6931aff9f1babc99a0b6f8230dff9",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-history-pair.png"
+  },
+  {
+    "file": "review/390-light-native-conversation.png",
+    "bytes": 51206,
+    "sha256": "2308283b65b6e8bf2675b7840cf954af66ebc820a78cbdf6b1bf5ed0926e6443",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-native-conversation.png"
+  },
+  {
+    "file": "review/390-light-native-history.png",
+    "bytes": 61333,
+    "sha256": "93873f3153d85b133812347012cc216f9c56c52cd49bf10a2ad580cfef64f1bb",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-native-history.png"
+  },
+  {
+    "file": "review/390-light-native-outcomes.json.gz",
+    "bytes": 1291,
+    "sha256": "70dfc210e852f16c0993db81e9bb10ca5e8077a674f323eecfccdfa746ece394",
+    "uncompressedBytes": 23866,
+    "uncompressedSha256": "c1a6c30c500d2edb20cdf2355e6e7faafe31788a31e6f6db19f144fd2017ef88",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-native-outcomes.json"
+  },
+  {
+    "file": "review/390-light-native-settings.png",
+    "bytes": 53178,
+    "sha256": "a4bd68ec8a1f830418925037f1cfcf73ccba6eb00f01962a796474d470eb506f",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-native-settings.png"
+  },
+  {
+    "file": "review/390-light-native-workspace.png",
+    "bytes": 40942,
+    "sha256": "befa2aa3f76861765a905b2b58442304e70813a3f960b953a527ab30459a2546",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-native-workspace.png"
+  },
+  {
+    "file": "review/390-light-piweb-conversation.png",
+    "bytes": 24601,
+    "sha256": "458adfaf5465b9387713032a1fcc31e94c25e7aa6f44ff5d5ee5964373c9295a",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-piweb-conversation.png"
+  },
+  {
+    "file": "review/390-light-piweb-history.png",
+    "bytes": 41920,
+    "sha256": "ca4481a770fd2252cdeb967538e7b868efe9e9b9e40ac4c55d2db7bee266e8e1",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-piweb-history.png"
+  },
+  {
+    "file": "review/390-light-piweb-outcomes.json.gz",
+    "bytes": 3551,
+    "sha256": "5e80c5c269eacf8ba53ea5454ecb85d7594a2346e90073db28e32e5ff728caea",
+    "uncompressedBytes": 23530,
+    "uncompressedSha256": "3b5ff9513ca1e1434481a49496d62729ef930e178c25e46df3de72afaf25a8f3",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-piweb-outcomes.json"
+  },
+  {
+    "file": "review/390-light-piweb-settings.png",
+    "bytes": 53973,
+    "sha256": "7d5aaa1942bcd7e44f7202034336333c4771bd186913c7b318f48fbc101c5e0d",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-piweb-settings.png"
+  },
+  {
+    "file": "review/390-light-piweb-workspace.png",
+    "bytes": 12971,
+    "sha256": "41d0964b4587009669e5018443509ace1bdccb88d4f6b0c43e94e7e5a9cdc5e8",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-piweb-workspace.png"
+  },
+  {
+    "file": "review/390-light-settings-pair.png",
+    "bytes": 110861,
+    "sha256": "0aec6e758ab825f44cae0d4575f7a5352e678c6c9e1faa9ada11bd9599fe6bf5",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-settings-pair.png"
+  },
+  {
+    "file": "review/390-light-workspace-pair.png",
+    "bytes": 69896,
+    "sha256": "5c363fbe65441531ccdf5a19e40a3498768dd48345585ca75b122630b2becd89",
+    "source": "/tmp/aih-qua02-repair-20261116/review/390-light-workspace-pair.png"
+  },
+  {
+    "file": "review/820-dark-conversation-pair.png",
+    "bytes": 136681,
+    "sha256": "c176d815c0801c07b4f4e3974c75608a047d3d6da53001d53452804065f0430c",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-conversation-pair.png"
+  },
+  {
+    "file": "review/820-dark-history-pair.png",
+    "bytes": 218742,
+    "sha256": "0d5c3b94c09f80887566771d5eb8ca318f91f05a955b69e4cba8eb295a4ad19f",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-history-pair.png"
+  },
+  {
+    "file": "review/820-dark-native-conversation.png",
+    "bytes": 53951,
+    "sha256": "451afe15b649d48512fadd5ecd454380d0bb27417fd9038559a37277fbf7ec77",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-native-conversation.png"
+  },
+  {
+    "file": "review/820-dark-native-history.png",
+    "bytes": 100394,
+    "sha256": "1cdd53900e814702b24f309443abb80e5723f0d1301b3ae965d93d9a92a73faf",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-native-history.png"
+  },
+  {
+    "file": "review/820-dark-native-outcomes.json.gz",
+    "bytes": 1298,
+    "sha256": "f2a6f06ca3e6847b8c21de36c31aab08f22866fc87d4c4a6110b324de69ad2b5",
+    "uncompressedBytes": 23639,
+    "uncompressedSha256": "fab52eac479280528d0e815a5c3f75b48d0ada10972978b6631499f96a5f6596",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-native-outcomes.json"
+  },
+  {
+    "file": "review/820-dark-native-settings.png",
+    "bytes": 91980,
+    "sha256": "60fc80d67fd149221e313adff1ed8faf526fcbc0d9eacefade2c6822f97bf959",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-native-settings.png"
+  },
+  {
+    "file": "review/820-dark-native-workspace.png",
+    "bytes": 69030,
+    "sha256": "4bce21be27b409ea69d30b6cd40a6700e50964f1943323dfeb910d1140a87a44",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-native-workspace.png"
+  },
+  {
+    "file": "review/820-dark-piweb-conversation.png",
+    "bytes": 46478,
+    "sha256": "eea34025b95b97c0b45a247182e25ad5c3e83615d9498ae36e51e12dc7cb3457",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-piweb-conversation.png"
+  },
+  {
+    "file": "review/820-dark-piweb-history.png",
+    "bytes": 86067,
+    "sha256": "8ae2644f5f16625b6e66bfdfeb06806bbab49c7d95a36462c50ff5c9425b68e4",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-piweb-history.png"
+  },
+  {
+    "file": "review/820-dark-piweb-outcomes.json.gz",
+    "bytes": 3581,
+    "sha256": "80ddfeb5347664fc7aba4827344455232d36abc673abaeb4db09d4a84c6dc500",
+    "uncompressedBytes": 23743,
+    "uncompressedSha256": "fb8e748b8d51d99c45948306a12e9f3d07833e4194230d57077509345f467d71",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-piweb-outcomes.json"
+  },
+  {
+    "file": "review/820-dark-piweb-settings.png",
+    "bytes": 92749,
+    "sha256": "bdc5a92a9d9c22c751f745a89c9344eff4679a1cb45164bce77fb41e95f8e0b4",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-piweb-settings.png"
+  },
+  {
+    "file": "review/820-dark-piweb-workspace.png",
+    "bytes": 33841,
+    "sha256": "73ef2db648a9c8a2d05a66abe341dd9f40162d673ef4cd51bf663e8d4da8fafb",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-piweb-workspace.png"
+  },
+  {
+    "file": "review/820-dark-settings-pair.png",
+    "bytes": 212721,
+    "sha256": "3f06556a4c0acd232177cd9cfa67f20bb3f335b5d0de437a712eecbb10c8d4d1",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-settings-pair.png"
+  },
+  {
+    "file": "review/820-dark-workspace-pair.png",
+    "bytes": 138547,
+    "sha256": "35889f1ceacf3f3664af7e86db89067ba78e7f9b89c6b4caeb259b8508df932a",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-dark-workspace-pair.png"
+  },
+  {
+    "file": "review/820-light-conversation-pair.png",
+    "bytes": 138095,
+    "sha256": "1cb6522709867e1c26be653f0681fd61280a4492a044a9de909505d1f80b53fb",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-conversation-pair.png"
+  },
+  {
+    "file": "review/820-light-history-pair.png",
+    "bytes": 227735,
+    "sha256": "57011015562f75c95b7c942394c5dbcbf46859467d2998e32854bbc67a71e76e",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-history-pair.png"
+  },
+  {
+    "file": "review/820-light-native-conversation.png",
+    "bytes": 55142,
+    "sha256": "e56e23e4573fa3162f0b57509716de30d135ff073f39c342cbbfbd71ea8ae8db",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-native-conversation.png"
+  },
+  {
+    "file": "review/820-light-native-history.png",
+    "bytes": 101788,
+    "sha256": "e28acd8206d340683227d0bd2641a786aeac9ed6521ac18d2476c91ac60d8edb",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-native-history.png"
+  },
+  {
+    "file": "review/820-light-native-outcomes.json.gz",
+    "bytes": 1303,
+    "sha256": "36b4dbcea3db511bd659235f2734b5c4a7d161ecab236ab04e58087ddb691b6e",
+    "uncompressedBytes": 24010,
+    "uncompressedSha256": "be31dc804adc1247a05c3d295349f6f10702e88b8947ae7be3682df43f812cc0",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-native-outcomes.json"
+  },
+  {
+    "file": "review/820-light-native-settings.png",
+    "bytes": 90047,
+    "sha256": "5f8079c22c870cbdb01ad4c41592b7926e49edeb07f6bbb80137ea71449b4843",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-native-settings.png"
+  },
+  {
+    "file": "review/820-light-native-workspace.png",
+    "bytes": 70740,
+    "sha256": "f3779bbc5be1ca4221728b34d3609edf71f3b9849aaeabe8c65b81260fecd636",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-native-workspace.png"
+  },
+  {
+    "file": "review/820-light-piweb-conversation.png",
+    "bytes": 52872,
+    "sha256": "701e1ad52c90db8bce3d1b08be66cb55a47af8cb4cd77c7ebf908b67dc009cef",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-piweb-conversation.png"
+  },
+  {
+    "file": "review/820-light-piweb-history.png",
+    "bytes": 94708,
+    "sha256": "6aa5e4bb9029679c23a73940fef49d693e0d822e39f3802358b5ee3f278d7fa6",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-piweb-history.png"
+  },
+  {
+    "file": "review/820-light-piweb-outcomes.json.gz",
+    "bytes": 3579,
+    "sha256": "5287beb0f14257a940eecf69e8ccdb348e4203620d88b38111a0f7b82cca9989",
+    "uncompressedBytes": 23785,
+    "uncompressedSha256": "7e53377585a109e1e96adca15a2c6c22e49ca20cd6f4b3983745bb179f78a0af",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-piweb-outcomes.json"
+  },
+  {
+    "file": "review/820-light-piweb-settings.png",
+    "bytes": 104466,
+    "sha256": "5378963f5974ad5856f0542c3af459d42a57b2949c15c15b7ef001969c3d063d",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-piweb-settings.png"
+  },
+  {
+    "file": "review/820-light-piweb-workspace.png",
+    "bytes": 36606,
+    "sha256": "3a2086eec2caaa2d59439283bbc57893764d4caaa5e61e7b0ffce176b4f6e595",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-piweb-workspace.png"
+  },
+  {
+    "file": "review/820-light-settings-pair.png",
+    "bytes": 204092,
+    "sha256": "792eadaf09bf081ea6446e05ec73492c4d0e0953ade6eaf4d3b50432ffe6ccd5",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-settings-pair.png"
+  },
+  {
+    "file": "review/820-light-workspace-pair.png",
+    "bytes": 145725,
+    "sha256": "0609a50261cfaae53bfe7d518e49c1d20eee482b5337fe517ae33647e5d18ef6",
+    "source": "/tmp/aih-qua02-repair-20261116/review/820-light-workspace-pair.png"
+  },
+  {
+    "file": "review/coverage.json.gz",
+    "bytes": 4897,
+    "sha256": "992c55730045b1fa015aa68eddb12034727c40f3b8a8b951ce1dfa1483fda6cb",
+    "uncompressedBytes": 36350,
+    "uncompressedSha256": "e58d2915a16881957a6ba1caaa2f72270d123aec2e350fb4ef399dc6b4a51be4",
+    "source": "/tmp/aih-qua02-repair-20261116/review/coverage.json"
+  },
+  {
+    "file": "review/individual-review.json.gz",
+    "bytes": 5487,
+    "sha256": "c6b594e6baeddda3b1110d6004970851d6f96ec62935b99c38807aaf976ff4ce",
+    "uncompressedBytes": 25920,
+    "uncompressedSha256": "66e3ab37ad5b7e49cb9c41594d3626eb3a0393e627c369f00d85c619cbc9df6c",
+    "source": "/tmp/aih-qua02-repair-20261116/review/individual-review.json"
+  },
+  {
+    "file": "review/mcp/expected.png",
+    "bytes": 35606,
+    "sha256": "7614466bca832d5500462123fc57d0c5bef17c1cf8d20d52c9bd0d308d35720a",
+    "source": "e2e/mobile-keyboard.spec.ts-snapshots/keyboard-live-mcp-mobile-light-chromium-linux.png"
+  },
+  {
+    "file": "review/mcp/first-actual.png",
+    "bytes": 35622,
+    "sha256": "f0c8c191f6473f02a1755c0d726b8563cc6e0874a42ad63b57789b1f80ed216a",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2-recheck/test-results/partition-2/standard/mobile-keyboard-real-produ-a3f2a-re-intercepted-API-fixtures-chromium/keyboard-live-mcp-mobile-light-actual.png"
+  },
+  {
+    "file": "review/mcp/first-diff.png",
+    "bytes": 42145,
+    "sha256": "366bbe7cd9db691f029f4a507eb0913833f9aec16c023d37443809bc07ebf22f",
+    "source": "/tmp/aih-qua02-repair-20261116/results/partition-2-recheck/test-results/partition-2/standard/mobile-keyboard-real-produ-a3f2a-re-intercepted-API-fixtures-chromium/keyboard-live-mcp-mobile-light-diff.png"
+  },
+  {
+    "file": "review/mcp/recheck-actual.png",
+    "bytes": 35622,
+    "sha256": "f0c8c191f6473f02a1755c0d726b8563cc6e0874a42ad63b57789b1f80ed216a",
+    "source": "/tmp/aih-qua02-repair-20261116/results/keyboard-recheck/test-results/mobile-keyboard-real-produ-a3f2a-re-intercepted-API-fixtures-chromium/keyboard-live-mcp-mobile-light-actual.png"
+  },
+  {
+    "file": "review/mcp/recheck-diff.png",
+    "bytes": 42145,
+    "sha256": "366bbe7cd9db691f029f4a507eb0913833f9aec16c023d37443809bc07ebf22f",
+    "source": "/tmp/aih-qua02-repair-20261116/results/keyboard-recheck/test-results/mobile-keyboard-real-produ-a3f2a-re-intercepted-API-fixtures-chromium/keyboard-live-mcp-mobile-light-diff.png"
+  }
+]
