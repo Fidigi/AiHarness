@@ -200,6 +200,9 @@ test('clipboard metadata is inert before filtering and bounded without losing pl
 });
 
 test('newline mode continues CJK lists at the caret while IME confirmation and sending never continue', async ({ page }) => {
+  // IME settling is elapsed time: wall-clock changes must not extend it.
+  // Keep browser timers live, as in the existing visual clock fixture.
+  await page.clock.setFixedTime(new Date('2026-10-01T12:00:00.000Z'));
   await page.addInitScript(() => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, sendMode: 'mod-enter' })));
   const api = await installMockApi(page, { sessions: [mockSession('markdown-ime', 'IME lists')] });
   await page.goto('/chat/markdown-ime');

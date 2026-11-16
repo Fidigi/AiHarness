@@ -434,7 +434,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const settingMutationVersions = useRef(new Map<string, number>());
   const effectiveRefreshVersion = useRef(0);
   const composingRef = useRef(false);
-  const lastCompositionEndRef = useRef(0);
+  const lastCompositionEndRef = useRef(-Infinity);
   const scrollRestoration = useRef<(() => void) | undefined>(undefined);
   const streamContent = useRef(new Map<string, string>());
   const streamReasoning = useRef(new Map<string, string>());
@@ -1549,7 +1549,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     const enterKey = event.key === 'Enter' && !event.shiftKey;
-    const recentlyComposed = Date.now() - lastCompositionEndRef.current < 100;
+    const recentlyComposed = performance.now() - lastCompositionEndRef.current < 100;
     const isComposing = composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
     if (enterKey && (isComposing || recentlyComposed)) {
       if (recentlyComposed) event.preventDefault();
@@ -2256,7 +2256,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           onCompositionStart={() => { composingRef.current = true; }}
           onCompositionEnd={() => {
             composingRef.current = false;
-            lastCompositionEndRef.current = Date.now();
+            lastCompositionEndRef.current = performance.now();
           }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
