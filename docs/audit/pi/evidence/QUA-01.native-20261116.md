@@ -75,7 +75,25 @@ All four uninstrumented failures are whole-case **5,000 ms timeouts** in `packag
 - S0: `nvidia/nemotron-3.5-lightning`, `qwen/qwen-2.5-7b-instruct`.
 - S1: `nvidia/nemotron-3-super-120b-a12b:free`, `poolside/laguna-xs-2.1`.
 
-The single `openrouter-observation` used S1 plus a temporary phase-marker overlay, not delivered source. Hypothesis: distinguish loopback transport work from journal setup/replay and retain the complete owning file's lifetime. **384 PASS / 2 FAIL**, on `moonshotai/kimi-k2.6` and `openai/o4-mini-high`. Failure callbacks last observed direct-chat journal setup and mixed-chat journal/tool-loop respectively, following fast prior stages. This establishes neither the exact blocked operation nor the original failures' cause; callbacks may observe work after timeout. It does not diagnose filesystem, scheduling, Node/V8 or a common cause. Overlay/log retained; no second observation, deadline adjustment, optimization or additional full-root attempt follows.
+The single `openrouter-observation` used S1 plus a temporary phase-marker overlay, not delivered source. Hypothesis: distinguish loopback transport work from journal setup/replay and retain the complete owning file's lifetime. **384 PASS / 2 FAIL**, on `moonshotai/kimi-k2.6` and `openai/o4-mini-high`. Failure callbacks last observed direct-chat journal setup and mixed-chat journal/tool-loop respectively, following fast prior stages. This establishes neither the exact blocked operation nor the original failures' cause; callbacks may observe work after timeout. It does not diagnose filesystem, scheduling, Node/V8 or a common cause. Overlay/log retained; the initial campaign stopped without a second observation, deadline adjustment, optimization or additional full-root attempt.
+
+**Separately authorized Docker/storage/journal observation after `8a8dfe0a`:** the user explicitly confirmed permission, still excluding Node/V8 diagnosis, deadline changes and global reruns. One targeted attempt (`storage-observation`) executes the same existing 386-case file through `npm test -- packages/core/src/providers/openrouter-completions.test.ts`, in the same immutable S1 image with network none and disposable stores. [Command/result](./QUA-01.native-20261116/storage-command.json.gz), [full log](./QUA-01.native-20261116/storage-observation.log.gz), [source binding](./QUA-01.native-20261116/storage-source-binding.json.gz) and reproducible temporary overlay are retained.
+
+The initial formatted Docker metadata query failed on the absent `HostConfig.Tmpfs` key; that error remains in the raw log and its empty summary is not evidence. A subsequent read-only [full container inspection](./QUA-01.native-20261116/storage-container-inspection.json.gz), without restarting anything, confirms S1 image identity, no mounts/tmpfs, network none and exit0/non-OOM.
+
+The two underlying source files are unchanged since S0. The observation-only copy wraps 77 existing journal `await` sites and records acquisition/release, persistence calls, mutation-queue waits and pending operations. Ordinary async-local context tags correlate model/phase without engine hooks, profiles or runtime flags. Every original operation, exception, assertion and 5s case deadline remains; the instrumentation's extra promises/timing overhead mean this is **not equivalent uninstrumented qualification**. No instrumented source/helper is delivered as product or active tests.
+
+| Observed boundary | Result of this one attempt |
+|---|---|
+| Owning file | **386 PASS**, no timeout/native failure; Vitest reports 104.52s. This neither repairs nor supersedes the failed full-root gates |
+| Docker storage | `overlayfs` containerd snapshotter, `/tmp` on that writable filesystem; no volume/tmpfs, no storage configuration change. Free blocks/inodes available |
+| File/inventory lock acquisition | Maximum **2.168 ms**; no acquisition failure or lock-retry sleep observed |
+| Per-session mutation queue | 18,096 waits, maximum **0.109 ms** |
+| File sync / directory sync | 12,064 calls each; maxima **11.808 / 11.160 ms** |
+| Longest instrumented wait | Temporary journal-file `fs.open`: **234.173 ms**. A separate inventory release took **135.281 ms**, including its **134.188 ms** handle close; nested spans must not be summed |
+| End state and container limits | No pending instrumented operation; cgroup CPU quota `max`, zero throttling and OOM events. Counter snapshots are scoped to this run, not the earlier failures |
+
+The [aggregate spans](./QUA-01.native-20261116/storage-parsed-observation.json.gz) and [environment snapshots](./QUA-01.native-20261116/storage-environment.json.gz) show host-wide I/O pressure increasing, but no failure-time correlation exists: the timeouts did not reproduce. Host counters cannot attribute contention to this container, and await duration does not separate kernel I/O from scheduling. One passing instrumented run cannot rule out intermittent waits, cumulative per-case work, or other causes in the original failed executions. **No demonstrated storage/journal defect or mitigation follows.** No filesystem migration, tmpfs trial, durability change, second observation, full-root rerun or Node/V8 investigation was performed. Root cause remains unknown; exactly three historical acceptances remain unchanged.
 
 ### Browser import: initial unknown attribution, subsequent fixture repair
 
@@ -130,7 +148,7 @@ These are in-scope regression gates, not waived as QUA-02. Later assertions afte
 | Durable receipt, audit synchronization, links/diffs/commit | This receipt + AUDIT-5 update and indexed raw artifacts; documentation checks recorded with the delivery commit |
 | All mandatory gates green / DONE | **NOT SATISFIED. Goal remains incomplete** |
 
-No demonstrated product fix currently justifies another integrated attempt. Stop the repetition here. Remaining decisions/work are bounded attribution of journal-phase timeouts, plus capture-state/individual-reference reconciliation for the seven visuals; the import fixture now has the separate scoped repair above; any expansion into runtime/environment/Node diagnosis requires separate scope approval. Do not schedule another complete campaign merely to obtain a green run. No newly accepted gap is proposed by this receipt.
+No demonstrated product fix currently justifies another integrated attempt. Stop the repetition here. Remaining decisions/work are bounded attribution of journal-phase timeouts, plus capture-state/individual-reference reconciliation for the seven visuals; the import fixture now has the separate scoped repair above; the separately approved Docker/storage/journal observation above is complete without a causal repair, and further expansion (especially Node/V8 diagnosis) still requires separate scope approval. Do not schedule another complete campaign merely to obtain a green run. No newly accepted gap is proposed by this receipt.
 
 ## Evidence retention
 

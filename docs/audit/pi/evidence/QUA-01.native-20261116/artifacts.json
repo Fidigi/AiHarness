@@ -584,5 +584,117 @@
     "sha256": "c597b6e53b5b354684b122005a407135909162f0d0ef7942352317e3963f59b2",
     "uncompressedBytes": 124,
     "uncompressedSha256": "548b045cf795d3263631e48fe84c7fce4a3a088927fd72d21ae6c0819d8d3536"
+  },
+  {
+    "file": "storage-observation.log.gz",
+    "bytes": 2997,
+    "sha256": "0834209c5dc4d621991a49e32691f81a36c3ab98d8477b9ef2e141f2b1e45a56",
+    "uncompressedBytes": 12268,
+    "uncompressedSha256": "bc1714ef1b502e02869eba636cf2c30ad133056713d4158724603568bfa590f8"
+  },
+  {
+    "file": "storage-prepare-observation.mjs.gz",
+    "bytes": 1085,
+    "sha256": "62628cfc69cdac3b1cc28f5c0386bb342bf2acad9d630b53e2e5f02067b56a8e",
+    "uncompressedBytes": 2291,
+    "uncompressedSha256": "fddce440b54aeb0fda8450641befb5776edb0a15473a3a03a4ecdabdc0dee209"
+  },
+  {
+    "file": "storage-journal-observation.ts.gz",
+    "bytes": 882,
+    "sha256": "08ee1bf8347aca18ccb39652f9d759ec235da861dc63c3f82e482f5b871e5503",
+    "uncompressedBytes": 2039,
+    "uncompressedSha256": "83db8dd02270f3df22a7adfdbf1d4514d39f2a88cc36b38e87291ae4d926eb24"
+  },
+  {
+    "file": "storage-observe-storage.sh.gz",
+    "bytes": 427,
+    "sha256": "7a02601ee9dd0aa6aa0b89847d7dcfe3d2a30bf7b1dd7e5cd87a27c3dd8524a0",
+    "uncompressedBytes": 1136,
+    "uncompressedSha256": "69e729a38e3d6d3779945ea4bb5dc4d354a34f430125a4dcf262a26c23d3b9e5"
+  },
+  {
+    "file": "storage-storage-metadata.mjs.gz",
+    "bytes": 371,
+    "sha256": "6bf8aedf2373236ac35b076018a506aad6cd8bf29f94b97adadb258593c0c521",
+    "uncompressedBytes": 642,
+    "uncompressedSha256": "7409939139f408778bb203b7a7a8d522274dfbb1f658a56aa8e9a1a75cf7963b"
+  },
+  {
+    "file": "storage-observation.patch.gz",
+    "bytes": 8877,
+    "sha256": "d2400e360c98b2912d3ed8a76f3da75a9dfa2f6b72a3a725488ded43a62874c2",
+    "uncompressedBytes": 44852,
+    "uncompressedSha256": "1b2133b0ae040fbf6738e0effbcffb4442f94eeb337c2f98de09aa1ae0d27135"
+  },
+  {
+    "file": "storage-wrapped-operations.json.gz",
+    "bytes": 517,
+    "sha256": "e2b0cc8d24f611a86fec630c6d32b6069f852eec7423d483fadfdaf3bf565a4c",
+    "uncompressedBytes": 2896,
+    "uncompressedSha256": "b1fa0a1a0eabe4bac66436dafafaf3186817eff844eb53975cd92e3c54c081f3"
+  },
+  {
+    "file": "storage-source-binding.json.gz",
+    "bytes": 519,
+    "sha256": "7e09a07bcdd3dff76939ecd1e52d16cad50090af39e43de46c6e01272d08ff7a",
+    "uncompressedBytes": 926,
+    "uncompressedSha256": "cf9e66a395c0c45d06a2bfb23e264ffca7ca7d02a03a8aac56e65eca479a9f34"
+  },
+  {
+    "file": "storage-docker-storage.txt.gz",
+    "bytes": 93,
+    "sha256": "1a3e8fa6d6a8361c620bda627293960c4e03bee8665c561f294be6bd6d42a8ac",
+    "uncompressedBytes": 79,
+    "uncompressedSha256": "c72ee01240181deee7b6707930eb656141c204c38661069c36ae01e0918abdb9"
+  },
+  {
+    "file": "storage-container.txt.gz",
+    "bytes": 21,
+    "sha256": "34d5848c995803cfd00c2f7f02d807e2069b51ffca60a40f05d2d7229ef13b69",
+    "uncompressedBytes": 1,
+    "uncompressedSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  {
+    "file": "storage-parsed-observation.json.gz",
+    "bytes": 1682,
+    "sha256": "744b0033317a1a5468481590893cdf20cf9b2b820c143385ecb94bbf9f9c8fbf",
+    "uncompressedBytes": 10392,
+    "uncompressedSha256": "fb7282fc86adea2d7771a9948eb098e3122f7d237ee01875cc30b06912067cb2"
+  },
+  {
+    "file": "storage-environment.json.gz",
+    "bytes": 664,
+    "sha256": "6eabc1951a8c9c9ed5384a1b3b8339282c10443a656dc150596b45c4df9ebc20",
+    "uncompressedBytes": 2644,
+    "uncompressedSha256": "8ff10fa4a67c987a1b906d941c61c603c43d64a608476891e551a4ece2e9a3a0"
+  },
+  {
+    "file": "storage-command.json.gz",
+    "bytes": 362,
+    "sha256": "a10563e2f69391681a10975e02c3a0f6486dd7c41a12057819c6ea9676f45c58",
+    "uncompressedBytes": 544,
+    "uncompressedSha256": "13240332ba39e3e061fda9638d60ad8674f1bb97507d351dd9273cb71e04daa5"
+  },
+  {
+    "file": "storage-lint-docs.log.gz",
+    "bytes": 123,
+    "sha256": "887e1f3584072f4b8af875bb1b3dd272d4d6dc66900dbf8da346ea837ce521c7",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "86b925ac95b856ae2313611f4c8425616a453085924387b5a394643368ac4587"
+  },
+  {
+    "file": "storage-container-inspection.json.gz",
+    "bytes": 1861,
+    "sha256": "097a88fd1bec9038baf395770a76e8e2926e4a8c71367c08ce12b6317fb6c457",
+    "uncompressedBytes": 6763,
+    "uncompressedSha256": "bc204968c894d6d1e0073d207bc1ac77e89bb03e2c650c7407b15138173d6edb"
+  },
+  {
+    "file": "storage-final-lint-docs.log.gz",
+    "bytes": 122,
+    "sha256": "20a96c9389c43f257339b28d0a497aa4a2aac003d72aa722febfb1ba0cfa55d5",
+    "uncompressedBytes": 124,
+    "uncompressedSha256": "caa4a8e4b273cfc45d96f3f205bb05cfc80e8c46f46aac77dfc55fd4b7ba3743"
   }
 ]
