@@ -1,6 +1,6 @@
 # QUA-01 — frozen integrated campaign and IME elapsed-time repair
 
-**Status: PARTIAL.** All six required native controls were executed once on coherent frozen inputs; the browser gate fails one case. A subsequently demonstrated IME defect has an owning-file repair, not final integrated qualification. The [initial campaign](./QUA-01.native-20261116.md), its source-bound failures, [minimap maintenance](./QUA-01.minimap-references-20261116.md), [Settings maintenance](./QUA-01.settings-references-20261116.md), and exactly three historical incident acceptances remain unchanged. No remote CI or global green is claimed.
+**Status: PARTIAL.** All six required native controls were executed once on coherent frozen inputs; the browser gate fails one case. A subsequently demonstrated IME defect has an owning-file repair, not final integrated qualification. The [initial campaign](./QUA-01.native-20261116.md), its source-bound failures, [minimap maintenance](./QUA-01.minimap-references-20261116.md), [Settings maintenance](./QUA-01.settings-references-20261116.md), and exactly three historical incident acceptances remain unchanged. No remote CI or global green is claimed. The [subsequent post-IME campaign](./QUA-01.ime-integrated-20261116.md) is now the latest executed-input receipt: IME passes, but root and two other browser cases fail; production/smoke are not executed on that changed source. Results below remain bound to79cfb7a4.
 
 ## Frozen source and images
 
