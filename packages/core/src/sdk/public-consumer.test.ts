@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -24,7 +24,9 @@ async function consumer(run: (cwd: string) => Promise<void>): Promise<void> {
     await cp(path.resolve('packages/core/package.json'), path.join(installed, 'package.json'));
     await cp(path.resolve('packages/core/dist'), path.join(installed, 'dist'), { recursive: true });
     // Reuse installed dependencies, not Core source or its workspace package link.
-    for (const dependency of ['undici', 'quickjs-emscripten', '@modelcontextprotocol', '@types']) {
+    const metadata = JSON.parse(await readFile(path.join(installed, 'package.json'), 'utf8'));
+    for (const dependency of [...Object.keys(metadata.dependencies), '@types']) {
+      await mkdir(path.dirname(path.join(modules, dependency)), { recursive: true });
       await symlink(path.resolve('node_modules', dependency), path.join(modules, dependency), 'dir');
     }
     await writeFile(path.join(cwd, 'package.json'), '{"type":"module"}');

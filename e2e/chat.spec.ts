@@ -77,7 +77,7 @@ test.describe('Conversation detached agent', () => {
       ],
     });
     await page.goto('/settings');
-    await providerSection(page).locator('select').selectOption('openai');
+    await providerSection(page).getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
     const conversation = page.getByRole('link', { name: 'Conversation SSE' });
     await expect(conversation).toHaveAttribute('href', '/chat/streamed-session?cwd=%2Fworkspace');
     await conversation.click();

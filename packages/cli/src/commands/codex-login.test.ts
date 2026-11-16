@@ -88,14 +88,17 @@ it.each(['logout', 'replace', 'cancel', 'close', 'new-login'] as const)('cannot 
     ? { version: 1, type: 'api-key', apiKey: 'replacement-key' } : undefined);
 });
 
-it('saves explicit login but retains other providers when Codex cannot use the host transport', async () => {
+it('mounts explicit Codex WebSocket login with host network settings without changing the selected provider', async () => {
   const f = await fixture();
   f.handler.getContext().providerNetwork = { transport: 'websocket', httpIdleTimeoutMs: 12, websocketConnectTimeoutMs: 34,
     requestTimeoutMs: 56, maxRetries: 0, maxRetryDelayMs: 78 };
   await f.handler.execute('/login openai-codex --issuer openai-codex');
   expect(f.errors).toEqual([]); expect(f.messages.at(-1)).toContain('Authentification OAuth réussie');
   expect(f.handler.getContext().provider).toBe(f.mock);
-  expect(f.handler.getContext().providers.has('openai-codex')).toBe(false);
+  expect(f.handler.getContext().providers.get('openai-codex')?.getNetworkSettings()).toEqual({
+    ...f.handler.getContext().providerNetwork, proxyConfigured: false,
+  });
+  expect(f.calls).toHaveLength(3);
   const reader = f.reopen(); await reader.load();
   expect((await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex' }))?.credential).toMatchObject({ type: 'oauth', accessToken: token });
 });

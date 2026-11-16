@@ -20,16 +20,32 @@ const mcpRegistrationHelp = {
   fr: "    'settings.mcp.registrationHelp': 'Serveur temporaire inscrit par {extension}. Les changements dépendent de son extension ; un fichier homonyme est prioritaire.',\n",
 };
 
+// Explicit stored-Vertex mode additions; do not regenerate the historical inventory.
+const vertexCredentials = {
+  en: [
+    "    'settings.vertexCredentialMode': 'Vertex credential type to save',\n",
+    "    'settings.vertexBearerCredential': 'Access token (legacy Bearer)',\n",
+    "    'settings.vertexCloudCredential': 'Google Cloud API key',\n",
+  ],
+  fr: [
+    "    'settings.vertexCredentialMode': 'Type d’identifiant Vertex à enregistrer',\n",
+    "    'settings.vertexBearerCredential': 'Jeton d’accès (Bearer historique)',\n",
+    "    'settings.vertexCloudCredential': 'Clé API Google Cloud',\n",
+  ],
+};
+
 describe('Settings locale allocation', () => {
   it('relocates all projected inventoried EN/FR literals byte-for-byte and changes no retained key/value', () => {
     expect(inventory.moved).toHaveLength(228);
     for (const locale of ['en', 'fr'] as const) {
       const eager = entryLines(source(`../i18n/messages/${locale}.ts`));
       const lazy = entryLines(source(`./settings-locale-${locale}.ts`));
-      const moved = inventory.moved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']);
+      const withVertexCredentials = (line: string) => line.startsWith("    'settings.apiKeyForProvider':")
+        ? [line, ...vertexCredentials[locale]] : [line];
+      const moved = inventory.moved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
       expect(lazy).toEqual(moved);
       const projected = inventory.original[locale].lines.flatMap(line =>
-        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]);
+        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]).flatMap(withVertexCredentials);
       expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
       expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
     }

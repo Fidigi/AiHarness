@@ -24,8 +24,8 @@ test.describe('Settings and authentication', () => {
     await page.goto('/settings');
 
     const provider = settingsSection(page, 'AI Provider');
-    await expect(provider.locator('select')).toHaveValue('mock');
-    await provider.locator('select').selectOption('openai');
+    await expect(provider.getByLabel('Select the AI Provider', { exact: true })).toHaveValue('mock');
+    await provider.getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
     await expect(provider.getByText('✅ OpenAI configured')).toBeVisible();
     await expect(settingsSection(page, 'Model').locator('select')).toBeEnabled();
     await expect(settingsSection(page, 'Model').locator('option')).toContainText([
@@ -44,7 +44,7 @@ test.describe('Settings and authentication', () => {
       configurationScopes: { global: { provider: 'openai', model: 'gpt-4o', toolPreset: 'default' }, project: {} },
     });
     await page.goto('/settings#model');
-    await settingsSection(page, 'AI Provider').locator('select').selectOption('openai');
+    await settingsSection(page, 'AI Provider').getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
 
     const section = settingsSection(page, 'Model');
     await section.getByText('Manage model catalogue').click();
@@ -117,7 +117,7 @@ test.describe('Settings and authentication', () => {
     await editor.getByLabel('Name').fill('Acme Gateway');
     await editor.getByLabel('Base URL').fill('https://models.acme.test/v1');
     await editor.getByLabel('API dialect').selectOption('openai-completions');
-    await editor.getByLabel('API key').fill('e2e-provider-secret');
+    await editor.getByLabel('API key', { exact: true }).fill('e2e-provider-secret');
     await editor.getByLabel('Custom headers (encrypted JSON values)').fill('{"X-Tenant":"private-tenant"}');
     await editor.getByRole('button', { name: 'Save' }).click();
 

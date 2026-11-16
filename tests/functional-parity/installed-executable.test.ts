@@ -5081,8 +5081,9 @@ it('dispatches native Ant Ling through installed public declarations and capture
     const profile: AntLingProfile = ANT_LING_MODELS[2];
     const provider: AiProvider = new AntLingProvider({ type: 'operator-ant-ling', apiKey: 'disposable' });
     const version: 1 = AI_HARNESS_CORE_API_VERSION;
-    // @ts-expect-error this SDK does not add a custom-host dialect
     const dialect: ProviderDialect = 'ant-ling';
+    // @ts-expect-error custom-host dialects do not admit undeclared compatibility aliases
+    const unknownDialect: ProviderDialect = 'ant-ling-compat'; void unknownDialect;
     // @ts-expect-error reviewed profile limits are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested prices are immutable
