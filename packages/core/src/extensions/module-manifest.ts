@@ -73,7 +73,7 @@ export async function readExtensionManifest(directory: string, budget: Extension
   if (!object) return undefined;
   const fields = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown> : {};
-  const declared: unknown = { ...fields(object.pi), ...fields(object.aiHarness) }.extensions;
+  const declared: unknown = fields(object.aiHarness).extensions;
   if (declared === undefined) return undefined;
   if (!Array.isArray(declared) || declared.length > 100 || (budget.entries += declared.length) > 1_000) throw new ExtensionManifestError();
   return declared.map(entry => resolveExtensionManifestPath(directory, entry));

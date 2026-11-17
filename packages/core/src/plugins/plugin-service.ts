@@ -551,13 +551,9 @@ async function inventoryPackage(
   const rootInfo = await lstat(root);
   if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error('Plugin package root is not a safe directory');
   const manifest = standaloneFile ? {} : await readPackageManifest(root);
-  const legacyManifest = manifest.pi && typeof manifest.pi === 'object' && !Array.isArray(manifest.pi)
-    ? manifest.pi as Record<string, unknown>
-    : {};
-  const nativeManifest = manifest.aiHarness && typeof manifest.aiHarness === 'object' && !Array.isArray(manifest.aiHarness)
+  const resourceManifest = manifest.aiHarness && typeof manifest.aiHarness === 'object' && !Array.isArray(manifest.aiHarness)
     ? manifest.aiHarness as Record<string, unknown>
     : {};
-  const resourceManifest = { ...legacyManifest, ...nativeManifest };
   let files: ScannedFile[];
   let truncated = false;
   if (standaloneFile) {

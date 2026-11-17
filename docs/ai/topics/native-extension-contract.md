@@ -4,7 +4,7 @@
 
 ## Overview
 
-AiHarness is an independent product: Core API 1, extension API 1 and journal schema 2 are separate contracts. Import only the public `@ai-harness/core` root. JavaScript/TypeScript support and legacy manifest metadata do not imply foreign extension, SDK, RPC, file or renderer compatibility. Import native objects through the public root only.
+AiHarness is an independent product: Core API 1, extension API 1 and journal schema 2 are separate contracts. Import only the public `@ai-harness/core` root. JavaScript/TypeScript support does not imply foreign extension, SDK, RPC, file or renderer compatibility. Import native objects through the public root only.
 
 ## Main Entry Points
 
@@ -76,7 +76,7 @@ Private durable state uses `appendCustomEntry` and awaited `getActiveBranchEntri
 | Resource or operation | Native recipe / boundary |
 |---|---|
 | Package identity/install | Explicit `package install/check/update/remove` through Core `PluginService`: `npm:`, restricted HTTPS Git or allowed local path; native IDs/state/scopes, no foreign store synchronization |
-| Resource manifest/filter | `aiHarness` fields; legacy manifest metadata is fallback only. Package-relative per-kind include/exclude filters narrow manifest inventory; settings selectors act before executable imports |
+| Resource manifest/filter | Only `aiHarness` fields; other manifest namespaces are ignored. Package-relative per-kind include/exclude filters narrow manifest inventory; settings selectors act before executable imports |
 | Suppress discovery / explicit entry | CLI `--no-extensions` preserves explicit `-e`; independent `--no-skills`, `--no-prompt-templates`, `--no-themes` preserve their explicit selections, never bypass trust |
 | Skills/templates and arguments | Bounded native Markdown/frontmatter, ordered selectors, existing positional/default argument semantics; expansions return text. No `npx skills add` subprocess adapter |
 | Themes | Native JSON terminal palettes; no foreign color-format/CSS or browser-theme ABI promise |

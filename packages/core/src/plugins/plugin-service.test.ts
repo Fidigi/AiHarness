@@ -32,7 +32,7 @@ async function fixturePackage(root: string, version = '1.0.0'): Promise<void> {
     name: '@demo/plugin',
     version,
     description: 'Safe test plugin',
-    pi: {
+    aiHarness: {
       extensions: ['src/**/*.js'],
       skills: ['skills'],
       prompts: ['prompts/*.md'],
@@ -354,7 +354,7 @@ describe('PluginService', () => {
     await writeFile(path.join(secondSource, 'package.json'), JSON.stringify({
       name: '@demo/second',
       version: '1.0.0',
-      pi: { extensions: ['src/**/*.js'], prompts: [] },
+      other: { extensions: ['src/**/*.js'], prompts: [] },
       aiHarness: { extensions: [], prompts: ['prompts/*.md'] },
     }));
     const first = await setup(root);

@@ -28,7 +28,7 @@ ai-harness --extension ./extensions/example.mjs
 
 Multiple paths can be provided with multiple `--extension` options, or with `AI_HARNESS_EXTENSIONS` separated by the system path separator.
 
-TypeScript entries (`.ts`, `.mts`, `.cts`, `.tsx`) now run directly through Core's transpile-only loader; declarations (`.d.ts`, `.d.mts`, `.d.cts`) never execute. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` (the legacy `pi` manifest key is also accepted). Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
+TypeScript entries (`.ts`, `.mts`, `.cts`, `.tsx`) now run directly through Core's transpile-only loader; declarations (`.d.ts`, `.d.mts`, `.d.cts`) never execute. An installed package can additionally declare extensions, skills, prompts, and JSON themes through `aiHarness` only. Enabled extensions, skills, and prompts join CLI and RPC startup through the same Core catalogue used by the Web server; a selected package theme joins interactive CLI startup.
 
 Markdown discovery suppression is independent: `--no-skills` / `-ns` and `--no-prompt-templates` / `-np` omit automatic/settings/package candidates, not explicit repeatable `--skill` / `--prompt-template` selections. Trust and stable-file checks still apply; interactive reload keeps this choice and refreshes explicit contents. Core/SDK hosts use additive `discoverSkills` / `discoverPrompts`; legacy `disableSkills` / `disablePrompts` remain all-loading denials. See [SDK resource policy](./session-sdk.md#scoped-markdown-resources).
 
@@ -93,7 +93,7 @@ A discovered child folder or an explicit/settings/environment directory can sele
 { "aiHarness": { "extensions": ["src/review.ts", "src/other.mjs"] } }
 ```
 
-Legacy `pi.extensions` is also read; native fields override legacy fields individually. No extensions field preserves ordinary discovery; an empty list disables that directory's entries. A declared list replaces sibling/index autodiscovery. Outer settings selectors still apply afterward.
+Only `aiHarness.extensions` selects directory entries. Move resource declarations from any other manifest namespace into `aiHarness`; other namespaces are ignored. No extensions field preserves ordinary discovery; an empty list disables that directory's entries. A declared list replaces sibling/index autodiscovery. Outer settings selectors still apply afterward.
 
 These are **exact relative paths**, not globs or selector operators; brackets and other filename metacharacters remain literal, and backslash separators are normalized. A declared module directory resolves a confined `package.json` `main` before its supported index; absent `main` preserves JavaScript-first index priority. Nested resource manifests and exports-only directory maps are not reinterpreted. Declarations/non-executable regular files are ignored as direct declarations; unresolved/unsafe declared entries and nonexecutable main targets fail the generation, with no sibling fallback. Installed package resource globs retain their separate existing semantics.
 

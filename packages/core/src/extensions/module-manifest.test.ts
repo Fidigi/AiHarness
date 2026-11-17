@@ -23,11 +23,11 @@ async function fixture() {
 const diagnostic = 'Extension manifest is invalid or exceeds its limits.';
 
 describe('bounded directory extension manifests', () => {
-  it.each(['aiHarness', 'pi'])('loads only %s exact declared entries from a directory and not sibling factories', async field => {
+  it('loads only native exact declared entries from a directory and not sibling factories', async () => {
     const test = await fixture(); const entry = await test.file(path.join(test.pkg, 'nested/entry.ts'), test.factory('chosen'));
     await test.file(path.join(test.pkg, 'index.mjs'), 'throw new Error("Index must not run");');
     await test.file(path.join(test.pkg, 'sibling.ts'), 'throw new Error("Sibling must not run");');
-    await test.manifest({ [field]: { extensions: ['nested/entry.ts', 'nested/entry.ts'] } });
+    await test.manifest({ aiHarness: { extensions: ['nested/entry.ts', 'nested/entry.ts'] } });
     expect(await test.loader([test.pkg, entry]).loadAll()).toMatchObject({ committed: true, loaded: [entry], errors: [] });
     expect(test.registry.getCommand('chosen')).toBeDefined();
   });
@@ -36,14 +36,14 @@ describe('bounded directory extension manifests', () => {
     await test.manifest({ aiHarness: { extensions: ['src/entry.mjs'] } });
     expect(await test.loader([test.root]).loadAll()).toMatchObject({ committed: true, loaded: [entry] });
   });
-  it('native fields override legacy entries, while unrelated native resource fields preserve the legacy selection', async () => {
-    const test = await fixture(); const first = await test.file(path.join(test.pkg, 'src/first.ts'), test.factory('first'));
+  it('only uses native resource fields, preserving ordinary discovery and explicit empty selection', async () => {
+    const test = await fixture(); const first = await test.file(path.join(test.pkg, 'first.ts'), test.factory('first'));
     const second = await test.file(path.join(test.pkg, 'src/second.ts'), test.factory('second'));
-    await test.manifest({ pi: { extensions: ['src/first.ts'] }, aiHarness: { extensions: ['src/second.ts'] } });
+    await test.manifest({ other: { extensions: ['first.ts'] }, aiHarness: { extensions: ['src/second.ts'] } });
     const loader = test.loader([test.pkg]); expect((await loader.loadAll()).loaded).toEqual([second]);
-    await test.manifest({ pi: { extensions: ['src/first.ts'] }, aiHarness: { skills: [] } });
+    await test.manifest({ other: { extensions: ['src/second.ts'] }, aiHarness: { skills: [] } });
     expect((await loader.reload()).loaded).toEqual([first]); expect(test.registry.getCommand('second')).toBeUndefined();
-    await test.manifest({ pi: { extensions: ['src/first.ts'] }, aiHarness: { extensions: [] } });
+    await test.manifest({ other: { extensions: ['first.ts'] }, aiHarness: { extensions: [] } });
     expect((await loader.reload()).loaded).toEqual([]); expect(test.registry.getCommand('first')).toBeUndefined();
   });
   it('keeps index priority, portable exact paths, declaration exclusion and outer selector removals', async () => {
@@ -104,7 +104,7 @@ describe('bounded directory extension manifests', () => {
       if (kind === 'symlink') await symlink(other, target); else await link(other, target);
     } else if (kind === 'oversized') { await writeFile(target, body); await truncate(target, 5 * 1024 * 1024 + 1); }
     else if (kind === 'no-index' || kind === 'cycle') {
-      await mkdir(target); if (kind === 'cycle') await test.file(path.join(target, 'package.json'), JSON.stringify({ pi: { extensions: ['..'] } }));
+      await mkdir(target); if (kind === 'cycle') await test.file(path.join(target, 'package.json'), JSON.stringify({ aiHarness: { extensions: ['..'] } }));
     }
     await test.file(path.join(test.pkg, 'index.mjs'), 'throw new Error("Fallback must not run");');
     await test.manifest({ aiHarness: { extensions: ['entry.ts'] } });

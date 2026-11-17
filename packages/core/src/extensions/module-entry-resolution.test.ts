@@ -40,7 +40,7 @@ describe('bounded literal module-entry resolution',()=>{
   });
   it.each(['literal','source','directory'])('resolves a declared directory main %s before indexes, without interpreting nested resource arrays',async kind=>{
     const test=await fixture();const directory=path.join(test.pkg,'nested');const relative=kind==='literal'?'src/entry.cjs':kind==='source'?'src/entry.ts':'src/index.ts';const entry=await test.file(path.join(directory,relative),test.factory('main',kind==='literal'?'.cjs':'.ts'));
-    await test.json(test.pkg,{pi:{extensions:['nested']}});await test.json(directory,{main:kind==='literal'?relative:kind==='source'?'src\\entry.js':'src',aiHarness:{extensions:[]},pi:{extensions:['../forbidden.ts']}});
+    await test.json(test.pkg,{aiHarness:{extensions:['nested']}});await test.json(directory,{main:kind==='literal'?relative:kind==='source'?'src\\entry.js':'src',aiHarness:{extensions:[]},other:{extensions:['../forbidden.ts']}});
     await test.file(path.join(directory,'index.mjs'),'throw new Error("Index fallback must not run");');await test.file(path.join(test.pkg,'index.mjs'),'throw new Error("Sibling fallback must not run");');
     expect(await test.loader([test.pkg]).loadAll()).toMatchObject({committed:true,loaded:[entry],errors:[]});expect(test.registry.getCommand('main')).toBeDefined();
   });
@@ -50,7 +50,7 @@ describe('bounded literal module-entry resolution',()=>{
   });
   it('does not treat main as an automatic resource selector or recursively interpret a module directory manifest',async()=>{
     const test=await fixture();const index=await test.file(path.join(test.pkg,'index.mjs'),test.factory('ordinary','.mjs'));await test.file(path.join(test.pkg,'src/other.ts'),'throw new Error("Main is not an automatic resource selector");');await test.json(test.pkg,{main:'src/other.ts'});
-    expect((await test.loader([test.pkg]).loadAll()).loaded).toEqual([index]);await test.json(test.pkg,{aiHarness:{extensions:['src']}});await test.json(path.join(test.pkg,'src'),{pi:{extensions:['other.ts']},exports:'./other.ts'});
+    expect((await test.loader([test.pkg]).loadAll()).loaded).toEqual([index]);await test.json(test.pkg,{aiHarness:{extensions:['src']}});await test.json(path.join(test.pkg,'src'),{aiHarness:{extensions:['other.ts']},exports:'./other.ts'});
     const result=await test.loader([test.pkg]).loadAll();expect(result.committed).toBe(false);expect(result.errors.map(item=>item.error.message)).toEqual([diagnostic]);
   });
   it('does not infer module siblings for missing automatic directories or import refused project source',async()=>{
