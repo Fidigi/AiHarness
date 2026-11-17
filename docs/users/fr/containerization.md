@@ -1,16 +1,17 @@
 # Exécution conteneurisée
 
-Les images du dépôt utilisent Node.js 26 et npm 12.1.0. Les dépendances sont installées avec `npm ci` depuis le lockfile unique des workspaces.
+L’image de test utilise par défaut Node.js 24.15.0 LTS figé ; l’image de production utilise le tag flottant Node.js 26. Toutes deux installent npm 12.1.0 et utilisent `npm ci` avec le lockfile unique des workspaces. Les Dockerfiles exposent les arguments de build `NODE_VERSION` et `NPM_VERSION` ; les modifier ne vaut pas validation avec les versions par défaut.
 
 ## CLI
 
-AiHarness peut fonctionner sans écrire de session sur le disque :
+Construisez l’image de production, puis lancez le CLI sans écrire de session sur le disque :
 
 ```sh
+make build-prod
 docker run --rm -it \
   --entrypoint node \
   -e ANTHROPIC_API_KEY \
-  ai-harness:latest \
+  ai-harness:prod-latest \
   packages/cli/dist/index.js --no-session --regular
 ```
 
@@ -28,11 +29,14 @@ L’image de production démarre `ai-harness-web` sur le port 3080 sans ouvrir 
 
 ### Avec Make
 
-Depuis la racine du dépôt, construisez l’image puis démarrez le conteneur en arrière-plan :
+Depuis la racine du dépôt, fournissez un jeton d’authentification, construisez l’image puis démarrez le conteneur en arrière-plan :
 
 ```sh
-make run-prod
+export AI_HARNESS_AUTH_TOKEN="$(openssl rand -hex 32)"
+make run-prod PROD_DOCKER_ARGS='--env AI_HARNESS_AUTH_TOKEN'
 ```
+
+Conservez ce jeton en privé pour la connexion navigateur. Pour conserver aussi les credentials provider chiffrés, transmettez une `AI_HARNESS_MASTER_KEY` stable depuis votre gestionnaire de secrets à chaque démarrage.
 
 L’application est alors disponible sur `http://127.0.0.1:3080`. Le conteneur se nomme `ai-harness-prod` et les données sont conservées dans le volume `ai-harness-data`. Une nouvelle exécution de `make run-prod` reconstruit l’image et remplace le conteneur existant sans supprimer ce volume.
 
@@ -67,4 +71,4 @@ docker run --rm \
   ai-harness:latest
 ```
 
-Ouvrez ensuite `http://127.0.0.1:3080`. L’image définit `AI_HARNESS_WEB_HOSTNAME=0.0.0.0` et `AI_HARNESS_WEB_NO_OPEN=1`; `AI_HARNESS_WEB_PORT` permet de modifier le port interne.
+Ouvrez ensuite `http://127.0.0.1:3080`. L’image définit `AI_HARNESS_WEB_HOSTNAME=0.0.0.0` et `AI_HARNESS_WEB_NO_OPEN=1`; `AI_HARNESS_WEB_PORT` permet de modifier le port interne. Puisque l’application écoute sur toutes les interfaces du conteneur, fournissez `AI_HARNESS_AUTH_TOKEN` ou `AI_HARNESS_ADMIN_TOKEN` même si Docker publie seulement sur le loopback de l’hôte ; sinon le démarrage est refusé. N’utilisez pas la dérogation d’écoute distante non sécurisée comme solution de production.

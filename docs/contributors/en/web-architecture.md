@@ -27,6 +27,7 @@ The React application is organized around these main components:
 | `PluginSettings` | global/project packages, explicit installation, inventory, activation, updates, diagnostics and session-linked reload |
 | `McpSettings`, `McpImportPreview` | redacted global/trusted-project inventory, non-mutating paste/replacement preview, completion/confirmation-gated atomic import—including fresh-project trust-plus-first-write—or whole-entry replacement, atomic enable/disable and exposure selection, confirmed removal and short-lived undo without starting servers |
 | `EcosystemSettings` | provider lifecycle/OAuth, custom providers and models, defaults, tools and skill registry |
+| `SkillContentPane` | explicit bounded Markdown instruction/reference reads, separate from invocation activation |
 | `SubagentSettings`, `SubagentPanel`, `SubagentMonitor` | global/project profiles, permissions, progress, attention, global notifications, stop and parent/child navigation |
 
 `McpImportPreview` sends original text plus an explicit foreign/AiHarness syntax mode to the administrator-only Server route; parsing, secret/reference policy and scope eligibility remain in Core. Its response contains masked targets, structural fields, variable names and fixed diagnostics, not env/header/OAuth values, argument text, source excerpts or a writable normalized config. Changing text, syntax, workspace or inventory invalidates the in-flight result. A focus-trapped scope dialog collects only Core-declared missing fields, optional variable substitutions and explicit global-literal/remote-variable confirmations. For a decision-free fresh project it also requires a separate trust confirmation, then sends only `trustProject: true`; Core serializes the exact allow and first write and rolls that allow back if writing fails. Saving always resends the original text and bounded choices. Success and failure refresh authoritative workspace trust, while every failure clears stale controls and reloads inventory.
@@ -51,7 +52,7 @@ The initial list receives only metadata and the total message count. The active 
 
 ### preferences.ts
 
-Persists a validated v3 browser document synchronized between tabs, with v1/v2 migration: theme, content width, font size, expanded reasoning, volume, independent sound/local-notification/Web Push categories, selection actions, panels, last section, and `Mod+…` keybindings. It stores no credential or Push subscription.
+Persists a validated v4 browser document synchronized between tabs, with v1/v2/v3 migration: theme, Enter/Mod+Enter send mode, content width, font size, expanded reasoning, volume, independent sound/local-notification/Web Push categories, selection actions, panels, last section, and `Mod+…` keybindings. It stores no credential or Push subscription.
 
 `ChatView` reuses the bounded workspace index for the `@` palette, switches to a server request when the index is truncated, and offers a turn/tool map compatible with pages and gaps. It stores at most 24 positions per workspace in `sessionStorage` for 24 hours: raw offset, distance from the bottom, and visible-entry ID/offset. Writes are deferred, storage errors are ignored, and an absent paginated anchor is loaded with `messages?around=` before repeated virtual-measurement correction.
 
@@ -63,7 +64,7 @@ Search, content, diff, and hydration requests are cancelled or sequenced when th
 
 The `/api/sessions/:id/info` diagnostic aggregates messages, tools, usage/cost, and context without exposing secrets. The Web panel offers targeted copy actions and delegates full export to the server instead of assembling the entire journal in the browser. Each message retains its timestamp, provider/model, duration, and per-turn usage/cost. `ChatView` groups tools and reasoning into Process/Response, renders ANSI, keeps preview and context bounded, and uses `tool_result.fullContent` only after explicit expansion for copying or downloading.
 
-Extension widgets render exclusively as text. The `confirm`, `input`, `select`, `editor`, and `custom` interactions produce declarative React controls without `dangerouslySetInnerHTML`; `AgentRuntime` revalidates their structured responses. The palette, widgets, and active requests resume from the snapshot/journal after navigation.
+Extension widgets render exclusively as text. The `confirm`, `input`, `select`, `editor`, and `custom` interactions produce declarative React controls without `dangerouslySetInnerHTML`; `AgentRuntime` revalidates their structured responses. The palette, widgets, and active requests resume from the snapshot/journal after navigation. `ChatView` presents the ordered interaction head with a remaining-request count; resolving/cancelling it advances the queue. The optional form's loading/error boundary stays nonmodal and keeps chat/Stop usable.
 
 ## Accessibility and Keyboard Navigation
 
@@ -91,7 +92,7 @@ The production bundle is a PWA with an installable manifest/icon, offline fallba
 
 Vitest covers Core contracts, the agent/extension runtime, providers, JSONL, workspace/Git, commands, PTY, configuration, catalogs and registries, OAuth, priced metrics, Push, subagents, security, real routes, and Web stores. Playwright covers the interface with an intercepted deterministic API **and** an end-to-end flow through Express, the mock provider, persistence, PTY, and files. `web-server.test.ts` adds Git/worktree/diff/upload/watch, PTY, and HTTP contracts without a browser. Dedicated suites verify axe/WCAG, focus and keyboard behavior, virtualization/cache, restoration, and deferred loading.
 
-The 118 Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, MCP inventory/import preview/atomic import/whole-entry edit/exposure/local actions, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
+The versioned Light/Dark desktop/tablet/mobile baselines cover custom models/providers, the skill registry, MCP inventory/import preview/atomic import/whole-entry edit/exposure/local actions, extension process and dialogs, and established surfaces, with a maximum 2% difference threshold.
 
 The Web build runs `packages/web/scripts/check-bundle-budget.mjs` after Vite and fails beyond:
 

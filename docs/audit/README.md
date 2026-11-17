@@ -51,9 +51,9 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 
 | Audit | Scope | Status |
 |---|---|---|
-| `docs/audit/documentation/AUDIT-1` | Documentation structure, accuracy, screenshots, bilingual coverage and validation | DONE |
+| [Documentation audit 1](./documentation/AUDIT-1.md) | Documentation structure, accuracy, screenshots, bilingual coverage and validation at the pinned 2026-10-02 state | DONE for that snapshot |
 
-Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
+Historical results and inventories describe their pinned source/date, not the current checkout. Later documentation changes require fresh source checks. Use relative links for versioned reports; reserve plain paths for local-only evidence.
 
 ## Common Prefixes
 

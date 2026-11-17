@@ -39,7 +39,7 @@ The [source schema](../../../packages/cli/schemas/keybindings.schema.json) is sh
 
 ## Browse without executing
 
-Press **F1** or **Alt+K** by default. The view lists all 22 actions, their effective chords and reserved/conditional/unavailable/unbound state. A conditional marker is metadata, not proof that its predicate is currently true. Opening or filtering does not execute handlers or probe their predicates.
+Press **F1** or **Alt+K** by default. The view lists all 29 actions, their effective chords and reserved/conditional/unavailable/unbound state. A conditional marker is metadata, not proof that its predicate is currently true. Opening or filtering does not execute handlers or probe their predicates.
 
 | Input while open | Effect |
 |---|---|
@@ -62,6 +62,7 @@ The view displays at most eight actions per page, fewer on short screens. Querie
 | `app.hotkeys` | F1, Alt+K |
 | `terminal.clear` | Ctrl+L |
 | `input.submit` | Enter: submit, or steer during an active response |
+| `input.newline` | Alt+J: insert a newline without submitting |
 | `input.followUp` | Alt+Enter, Ctrl+Q |
 | `input.dequeue` | Alt+Up: restore queued input, otherwise scroll older |
 | `input.externalEditor` | Ctrl+G |
@@ -71,6 +72,12 @@ The view displays at most eight actions per page, fewer on short screens. Querie
 | `editor.right` | Right |
 | `editor.home` | Home, Ctrl+A |
 | `editor.end` | End, Ctrl+E |
+| `editor.wordLeft` | Ctrl+Left, Alt+B |
+| `editor.wordRight` | Ctrl+Right, Alt+F |
+| `editor.deleteWordLeft` | Alt+Backspace |
+| `editor.deleteWordRight` | Alt+D |
+| `editor.undo` | Ctrl+Z |
+| `editor.redo` | Alt+Z |
 | `editor.previous` | Up |
 | `editor.next` | Down |
 | `editor.backspace` | Backspace |

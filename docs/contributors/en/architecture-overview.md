@@ -49,7 +49,7 @@ For more details on Web application, see [web-architecture.md](./web-architectur
 
 The runtime manipulates `Date`. `serializeSession()` converts them to ISO 8601 for the API and `deserializeSession()` hydrates them client-side. `JsonlSessionStore` also reads legacy unversioned files. Provider keys resembling secrets are removed before write or serialization.
 
-A JSONL session contains metadata, message, command, compaction and branch_summary entries. Compactions remain in the journal even when effective history is reduced.
+A JSONL v2 journal contains `metadata`, `message`, `command`, `compaction`, `branch_summary`, `custom`, `custom_message`, `context_edit` and `loadout` entries. Compaction reduces effective history without deleting the journal. Private custom data and loadouts stay outside browser DTOs; see [session context state](../../ai/topics/session-context-state.md).
 
 ### Shared agent runtime
 
@@ -65,19 +65,19 @@ A run snapshot includes its phase, workspace, queues, last sequence number, and 
 
 Built-in providers are OpenAI/Azure, Anthropic, Google Gemini/Vertex, AWS Bedrock, local OpenAI-compatible and mock. Tool calls are normalized as well as reasoning deltas explicitly provided and input/output/cache counters. Image blocks are adapted natively to OpenAI (image_url), Anthropic (base64 source) and Gemini (inlineData) dialects.
 
-Server publishes the versioned capabilities, context-window/output limits, compatibility, and input/output/cache price catalogue in `packages/server/src/runtime/model-catalog.ts`. Core provides `AiProvider.getAvailableModels()` for bounded OpenAI-compatible, Anthropic and Gemini discovery; Azure retains no generic discovery assumption. Shared custom provider/model, OAuth status, resource registry, tool setting and extension interaction contracts remain in `packages/core/src/types/index.ts`, with no Core dependency on Server or React.
+Core owns published metadata and adapter-owned declarations in `packages/core/src/providers/{model-metadata,provider-model-metadata,model-catalog}.ts`. CLI and Server reuse that assembly; `packages/server/src/runtime/model-catalog.ts` adds host discovery/cache, operator overrides and scoped activation. A declaration is not proof of credentials or account entitlement. Core provides `AiProvider.getAvailableModels()` for bounded OpenAI-compatible, Anthropic and Gemini discovery; Azure retains no generic discovery assumption. Shared custom provider/model, OAuth status, resource registry, tool setting and extension interaction contracts remain in `packages/core/src/types/index.ts`, with no Core dependency on Server or React.
 
 ### Workspace boundary
 
 `packages/core/src/security/` provides:
 
 - `WorkspaceManager`: tilde expansion, realpath canonicalization, allowed roots, type control, Git detection and worktree operations;
-- `ProjectTrustManager`: persisted allow-list written atomically.
+- `ProjectTrustManager`: atomically persisted v2 allow/refuse decisions, resolved from the nearest canonical ancestor; legacy allow-lists migrate on mutation.
 
-An agent or command does not start before explicit cwd approval. Resolution rejects traversal, escaping symlinks, and destinations outside the allowed roots. Worktrees remain attached to a canonical workspace.
+Trust resolution gates execution separately from allowed-root validation. CLI can admit a resource-free folder for the current process without saving approval; protected project bodies stay gated by resource trust. Web execution retains its explicit operation-trust gate. Saved refusals, process overrides and fresh resource inspection remain authoritative. Resolution rejects traversal, escaping symlinks, and destinations outside allowed roots. See [workspace trust](../../ai/topics/security.md).
 
 ## CLI (packages/cli)
 
-The CLI offers classic terminal, fullscreen and RPC JSONL modes. It orchestrates sessions, providers, tools, skills, prompts, extensions and project trust. The historical tool loop now delegates to Core's shared engine so CLI and Web have the same persistence and cancellation rules.
+The CLI offers regular/fullscreen terminal, final-text print, JSON event and JSONL RPC modes. It orchestrates sessions, providers, tools, skills, prompts, extensions and project trust. The historical tool loop now delegates to Core's shared engine so CLI and Web have the same persistence and cancellation rules.
 
 Project extensions remain blocked until trust is granted. The CLI retains terminal orchestration, while Core’s bounded `ExtensionModuleLoader` is shared with Server: it rejects symlinks/modules over 5 MiB and supports managed generations with atomic replacement. Web administers packages and explicitly loads activated extensions during resource reload, never during a simple GET or installation. Loaded modules are trusted Node code in the host process; the loader is not a security sandbox.

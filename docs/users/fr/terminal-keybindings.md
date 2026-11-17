@@ -39,7 +39,7 @@ Le [schéma source](../../../packages/cli/schemas/keybindings.schema.json) est l
 
 ## Parcourir sans exécuter
 
-Appuyez par défaut sur **F1** ou **Alt+K**. La vue présente les 22 actions, leurs accords effectifs et l’état réservé/conditionnel/indisponible/non lié. Le marqueur conditionnel est une métadonnée, pas la preuve que le prédicat est actuellement vrai. Ouvrir ou filtrer n’exécute ni handler ni prédicat.
+Appuyez par défaut sur **F1** ou **Alt+K**. La vue présente les 29 actions, leurs accords effectifs et l’état réservé/conditionnel/indisponible/non lié. Le marqueur conditionnel est une métadonnée, pas la preuve que le prédicat est actuellement vrai. Ouvrir ou filtrer n’exécute ni handler ni prédicat.
 
 | Saisie dans la vue | Effet |
 |---|---|
@@ -62,6 +62,7 @@ La vue affiche au plus huit actions par page, moins sur un écran court. Requêt
 | `app.hotkeys` | F1, Alt+K |
 | `terminal.clear` | Ctrl+L |
 | `input.submit` | Entrée : envoyer, ou guider une réponse active |
+| `input.newline` | Alt+J : insérer une nouvelle ligne sans envoyer |
 | `input.followUp` | Alt+Entrée, Ctrl+Q |
 | `input.dequeue` | Alt+Haut : rappeler la file, sinon remonter l’historique |
 | `input.externalEditor` | Ctrl+G |
@@ -71,6 +72,12 @@ La vue affiche au plus huit actions par page, moins sur un écran court. Requêt
 | `editor.right` | Droite |
 | `editor.home` | Home, Ctrl+A |
 | `editor.end` | End, Ctrl+E |
+| `editor.wordLeft` | Ctrl+Gauche, Alt+B |
+| `editor.wordRight` | Ctrl+Droite, Alt+F |
+| `editor.deleteWordLeft` | Alt+Backspace |
+| `editor.deleteWordRight` | Alt+D |
+| `editor.undo` | Ctrl+Z |
+| `editor.redo` | Alt+Z |
 | `editor.previous` | Haut |
 | `editor.next` | Bas |
 | `editor.backspace` | Backspace |

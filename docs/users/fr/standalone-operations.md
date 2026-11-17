@@ -8,14 +8,26 @@ Ces commandes quittent avant le démarrage de l’agent, des providers, des exte
 ai-harness auth --help
 ai-harness auth list --json
 ai-harness auth login openai --timeout 120
+ai-harness auth login anthropic --issuer anthropic --method browser
+ai-harness auth login openai-codex --issuer openai-codex --method browser
 ai-harness auth logout openai
 ```
 
 `auth list` décrit les identifiants enregistrés et la présence d’une configuration opérateur de flux device. Aucun token/clé n’est révélé ; aucune commande d’identifiants, actualisation de token ou connexion provider n’est exécutée. Ce n’est pas une liste des identifiants effectifs issus de l’environnement ou de commandes. `--json` est réservé à `list`.
 
-La connexion réutilise le flux device HTTPS configuré par l’opérateur : pour l’identifiant provider en minuscules, définir `AI_HARNESS_OAUTH_<PROVIDER>_DEVICE_URL`, `_TOKEN_URL`, `_CLIENT_ID` et éventuellement `_SCOPE`. Aucun enregistrement provider prédéfini, ouverture automatique de navigateur, callback navigateur ou login PKCE n’est ajouté. `AI_HARNESS_MASTER_KEY` doit activer le stockage chiffré indépendant existant `credentials.enc` ; sans chiffrement durable, login/logout échouent avant tout accès réseau. La politique pré-confiance existante des dossiers de données s’applique : un dossier agent contrôlé par le projet ne fournit pas son propre magasin d’identifiants.
+Sans `--issuer`, la connexion utilise le flux device HTTPS configuré par l’opérateur : définir `AI_HARNESS_OAUTH_<PROVIDER>_DEVICE_URL`, `_TOKEN_URL`, `_CLIENT_ID` et éventuellement `_SCOPE`. L’argument provider en minuscules est un **nom de stockage**, pas un issuer déduit. Des issuers natifs explicites sont pris en charge séparément :
 
-Les instructions d’autorisation et le code utilisateur vont sur stderr, jamais stdout. Un code modifié par le formatage terminal, l’encodage UTF-8 ou le masquage d’un secret connu est refusé avant instructions, polling ou publication des identifiants ; aucun caractère silencieusement altéré n’est demandé à l’opérateur. Codes device, tokens et URL complète/paramètres d’autorisation ne sont pas affichés. stdout contient uniquement un accusé fixe après la réussite du chiffrement. Ctrl+C/SIGTERM annule l’autorisation initiale, les corps des réponses et le polling. `--timeout` accepte un entier de 1 à 300 secondes (300 par défaut), également limité par la durée de vie du code device. Le délai global de connexion utilise une horloge monotone : un recul de l’horloge civile ne le prolonge pas. Transports, timers et listeners sont nettoyés. Une écriture durable Core déjà lancée n’est pas une transaction annulable : l’annulation ne promet pas le rollback d’un état chiffré déjà publié.
+| `--issuer` | Méthode et instructions |
+|---|---|
+| `kimi-coding`, `github-copilot` | Connexion device native ; omettre `--method` |
+| `meta`, `xai` | Connexion device native ; `--method device` facultatif |
+| `openai-codex` | Device par défaut ; `--method browser` choisit PKCE avec callback sur `127.0.0.1:1455` |
+| `openrouter` | PKCE navigateur avec callback loopback sur port éphémère et collage masqué de l’adresse complète en secours ; enregistre une clé API permanente |
+| `anthropic` | PKCE navigateur par défaut, port loopback préféré 53692 avec repli sur port libre ; `--method copy-code` utilise plutôt stdin masqué |
+
+Ouvrez manuellement la page d’autorisation affichée ; ces flux autonomes n’ouvrent pas automatiquement le navigateur. La connexion native ne sélectionne aucun provider ni modèle et ne garantit pas l’accès du compte à un modèle. Un nom de stockage non canonique exige une composition hôte explicite ; il n’enregistre pas un nouveau provider CLI. `AI_HARNESS_MASTER_KEY` doit activer le stockage chiffré indépendant existant `credentials.enc` ; sans chiffrement durable, login/logout échouent avant tout accès réseau. La politique pré-confiance existante des dossiers de données s’applique : un dossier agent contrôlé par le projet ne fournit pas son propre magasin d’identifiants.
+
+Les instructions d’autorisation et codes utilisateur vont sur stderr, jamais stdout. Un code device destiné à l’utilisateur et modifié par le formatage terminal, l’encodage UTF-8 ou le masquage d’un secret connu est refusé plutôt qu’altéré silencieusement. Les codes device privés et tokens ne sont jamais affichés. Le flux device générique n’affiche que l’origine et le chemin de vérification ; les flux navigateur natifs affichent leur URL d’autorisation, avec les paramètres PKCE/callback nécessaires. Traitez les URL de callback et codes d’autorisation collés comme privés. stdout contient uniquement un accusé fixe après la réussite du chiffrement. Ctrl+C/SIGTERM annule l’autorisation initiale, les corps des réponses et le polling. `--timeout` accepte un entier de 1 à 300 secondes (300 par défaut), également limité par la durée de vie du code device. Le délai global de connexion utilise une horloge monotone : un recul de l’horloge civile ne le prolonge pas. Transports, timers et listeners sont nettoyés. Une écriture durable Core déjà lancée n’est pas une transaction annulable : l’annulation ne promet pas le rollback d’un état chiffré déjà publié.
 
 Logout supprime les identifiants provider enregistrés localement, pas les tokens côté émetteur ni les identifiants d’environnement/commande. Codes de sortie : 0 succès/aide, 2 syntaxe, 1 échec opérationnel, 124 délai, 130 annulation.
 
@@ -39,7 +51,7 @@ JSON omet par défaut les données opaques de continuation typées et avertit du
 
 Un [avertissement de confidentialité](./cli-security.md) fixe va sur stderr avant résolution/publication de la destination par l’exporteur slash. Il ne contient ni transcript, chemin ou credential et ne promet pas l’élimination des secrets inconnus. stdout contient uniquement un accusé fixe, jamais transcription/titre/chemin. Un échec retourne 1 sans confirmation de succès ; un échec de publication ne garantit pas un disque inchangé. Vérifier la destination choisie. Aide/succès retourne 0 ; arguments mal formés, inconnus ou conflictuels retournent 2 avant démarrage.
 
-Ce contrat ne fournit pas une connexion provider navigateur/PKCE, une interopérabilité provider générale, une sauvegarde complète des journaux ou des garanties de distribution multiplateforme.
+La prise en charge des connexions natives ne garantit ni interopérabilité provider générale, ni sauvegarde complète des journaux, ni distribution multiplateforme.
 
 ## Documentation associée
 

@@ -518,7 +518,7 @@ explicit CLI or POST install/update
   -> shared Core strict npm:/Git HTTPS/path parsing + workspace/scope trust
   -> immutable literal npm selection + fresh declaring-source trust at each npm/Git boundary
   -> npm without lifecycle scripts, or shallow Git clone, in staging
-  -> bounded symlink-free manifest/convention inventory + per-kind filters
+  -> bounded symlink-free aiHarness-declared resource inventory + per-kind filters
   -> heartbeat lock + refreshed state + owner-only atomic package/state replacement
 
 CLI package list / GET /api/plugins
@@ -630,7 +630,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 
 | Surface | Language | Audience | Versioning | Status and intended use |
 |---|---|---|---|---|
-| `docs/ai/index.md`, `project-map.md`, `AGENTS.md` | English | Agents | Versioned | Navigation, repository authority, and maintenance rules |
+| `docs/ai/index.md`, `project-map.md`, `AGENTS.md` | English | Agents | Versioned | Navigation, repository authority, and maintenance rules; keep the index task-oriented rather than duplicating feature status histories |
 | `docs/ai/topics/providers.md` | English | Agents | Versioned | Provider execution, catalogue, registry and OAuth |
 | `docs/ai/topics/subscription-providers.md` | English | Agents | Versioned | Bounded Copilot issuer/credential/routing, guarded Server/Settings device login, distinct emitted/installed CLI/HTTP/browser evidence and incomplete full-profile/account/Codex scope |
 | `docs/ai/topics/provider-matrix.md` | English | Agents | Versioned | Pinned factory/API/auth inventory, installed catalogue provenance, native configuration map and detached numeric host composition |
@@ -656,13 +656,13 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/native-security-contract.md` | English | Agents | Versioned | Native field/resource and instruction precedence, fresh tool trust, credential lifecycle/export policy and trusted-proxy admission |
 | `docs/ai/topics/child-agents.md` | English | Agents | Versioned | Native profiles/policy, settlement limits, linked journals, lazy scoped Web controls and WEB-06 qualification |
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
-| `docs/audit/documentation/AUDIT-1` | English | Agents + humans | Versioned | Current documentation audit; plain path intentionally omits `.md` |
+| [`docs/audit/documentation/AUDIT-1.md`](../audit/documentation/AUDIT-1.md) | English | Agents + humans | Versioned | Historical documentation audit pinned to 2026-10-02; not a current inventory or freshness guarantee |
 | `docs/users/{fr,en}/` | French/English | End users/operators | Versioned | User guides, operator runbooks, container guidance and language indexes |
 | `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture decisions, extension, session SDK, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |
 | `README.md`, `CHANGELOG.md` | English/French | Everyone | Versioned | Product overview and history; changelog planning notes are not a roadmap |
 
-Load human-facing files only when the user explicitly requests their audit or maintenance. The current documentation audit is `DONE`; reopen it only when a criterion regresses or a recorded re-examination trigger occurs.
+Load human-facing files only when the user explicitly requests their audit or maintenance. The documentation audit's `DONE` status applies to its pinned 2026-10-02 snapshot, not subsequent repository states. Recheck changed contracts and inventories against the current checkout. Historical qualification counts and receipt identifiers in this map/topics are not current acceptance evidence; the retired comparison audit/evidence tree has been removed.
 
 For public-contract work, identify the affected native contract and existing coverage, then state the precise missing acceptance before adding tests. Resolve compatibility/security decisions before changing native contracts. Keep task delivery and whole-platform qualification separate.
 

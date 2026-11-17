@@ -3,13 +3,13 @@
 | Document | Description |
 |---|---|
 | [User guide](./user-guide.md) | Installation, CLI/Web configuration, commands, sessions and security |
-| [Terminal keybindings](./terminal-keybindings.md) | File locations, all 22 actions, passive hotkey view, reload, safety keys and packaged schema |
+| [Terminal keybindings](./terminal-keybindings.md) | File locations, all 29 actions, passive hotkey view, reload, safety keys and packaged schema |
 | [CLI security](./cli-security.md) | Privacy warnings/channels, offline/proxy scope, shell aliases, Windows/terminal matrix and safe diagnostics |
 | [Operator runbook](./operations.md) | Host preparation, MCP/code mode, files/trust, session backup, settings/reload and incident recovery |
 | [Web replies and progress](./web-replies.md) | Output limits, partial failures, concurrent requests and reconnect limits |
 | [Containerization](./containerization.md) | Running the CLI and Web launcher with Docker |
 | [Package command policy](./npm-command.md) | Literal npm argv, declaring-source trust and CLI/Web failure rules |
-| [Standalone authentication/export](./standalone-operations.md) | Passive credential metadata, encrypted device flow and selected trusted session files |
+| [Standalone authentication/export](./standalone-operations.md) | Passive credential metadata, explicit native/device/browser login and selected trusted session files |
 | [Settings navigation](./settings-navigation.md) | Per-folder section/group/row and scope memory, fresh trust reload, safe focus and privacy |
 | [Settings text loading](./settings-loading.md) | Translated loading, Close, explicit reload/retry and unsent-text warning |
 | [File-pane loading](./workspace-loading.md) | Optional explorer assets, retained file intent, local Close and honest reload/retry |

@@ -8,14 +8,26 @@ These commands exit before agent, provider, extension and terminal startup. `ai-
 ai-harness auth --help
 ai-harness auth list --json
 ai-harness auth login openai --timeout 120
+ai-harness auth login anthropic --issuer anthropic --method browser
+ai-harness auth login openai-codex --issuer openai-codex --method browser
 ai-harness auth logout openai
 ```
 
 `auth list` lists stored credential metadata and whether operator device-flow configuration is present. It never reveals keys/tokens, executes credential commands, refreshes credentials or contacts a provider. It does not claim to list effective environment/command credentials. `--json` is valid only for `list`.
 
-Login uses the existing operator-configured HTTPS device flow. For the selected lowercase provider identifier, configure `AI_HARNESS_OAUTH_<PROVIDER>_DEVICE_URL`, `_TOKEN_URL`, `_CLIENT_ID`, and optionally `_SCOPE`. There are no bundled provider registrations, automatic browser opener, browser callback or PKCE login in this command. `AI_HARNESS_MASTER_KEY` must enable the existing independent encrypted `credentials.enc` store; without durable encryption, login and logout fail before network access. The existing pre-trust data-directory policy applies; project-controlled agent directories cannot supply their own credential store.
+Without `--issuer`, login uses the operator-configured HTTPS device flow: configure `AI_HARNESS_OAUTH_<PROVIDER>_DEVICE_URL`, `_TOKEN_URL`, `_CLIENT_ID`, and optionally `_SCOPE`. The lowercase provider argument is a **storage label**, not an inferred issuer. Explicit native issuers are supported separately:
 
-Authorization instructions and the user code appear on stderr, not stdout. Codes changed by terminal formatting, UTF-8 encoding or known-secret redaction are refused before instructions, polling or credential publication; the operator is never asked to enter silently altered characters. Device codes, tokens and the complete authorization URL/query are not printed. After encryption succeeds, stdout contains only a fixed success acknowledgement. Ctrl+C/SIGTERM cancels initial authorization, token response bodies and polling; `--timeout` is an integer from 1 to 300 seconds (default 300), additionally limited by the device code's lifetime. The overall login deadline uses a monotonic clock: a wall-clock rollback cannot extend it. Transport deadlines/listeners/timers are cleaned up. An already-started Core durable write is not a cancellable transaction: cancellation does not promise rollback of encrypted state that has already committed.
+| `--issuer` | Method and instructions |
+|---|---|
+| `kimi-coding`, `github-copilot` | Native device login; omit `--method` |
+| `meta`, `xai` | Native device login; optional `--method device` |
+| `openai-codex` | Device by default; `--method browser` selects PKCE with callback on `127.0.0.1:1455` |
+| `openrouter` | Browser PKCE with an ephemeral loopback callback and hidden full-callback paste fallback; saves a permanent API key |
+| `anthropic` | Browser PKCE by default, preferred loopback port 53692 with free-port fallback; `--method copy-code` uses hidden stdin instead |
+
+Open the displayed authorization page manually; these standalone flows do not open a browser automatically. Native login neither selects a provider/model nor guarantees account access to a model. A noncanonical storage label needs explicit host composition; it does not register a new CLI provider. `AI_HARNESS_MASTER_KEY` must enable the existing independent encrypted `credentials.enc` store; without durable encryption, login and logout fail before network access. The existing pre-trust data-directory policy applies; project-controlled agent directories cannot supply their own credential store.
+
+Authorization instructions and human user codes appear on stderr, not stdout. Device-flow codes changed by terminal formatting, UTF-8 encoding or known-secret redaction are refused rather than silently altered. Device codes and tokens are never printed. The generic device flow prints only the verification origin/path; native browser flows print their authorization URL, including required PKCE/callback parameters. Treat callback URLs and pasted authorization codes as private. After encryption succeeds, stdout contains only a fixed success acknowledgement. Ctrl+C/SIGTERM cancels initial authorization, token response bodies and polling; `--timeout` is an integer from 1 to 300 seconds (default 300), additionally limited by the device code's lifetime. The overall login deadline uses a monotonic clock: a wall-clock rollback cannot extend it. Transport deadlines/listeners/timers are cleaned up. An already-started Core durable write is not a cancellable transaction: cancellation does not promise rollback of encrypted state that has already committed.
 
 Logout deletes local stored provider credentials, not issuer-side tokens or environment/command credentials. Exit codes: 0 success/help, 2 usage, 1 operational failure, 124 deadline, 130 cancellation.
 
@@ -39,7 +51,7 @@ JSON omits typed opaque continuation data by default and warns when native conti
 
 A fixed [privacy warning](./cli-security.md) is emitted on stderr before the slash export's destination/publication step. It contains no transcript, path or credential values and does not claim arbitrary-secret removal. Only a fixed publication acknowledgement reaches stdout, never the transcript/title/path. Failures return 1 without success confirmation; publication failure does not imply unchanged disk. Check the selected output if publication fails. Help/success returns 0; malformed/unknown/conflicting arguments return 2 before startup.
 
-This contract does not provide browser/PKCE provider login, broader provider interoperability, complete journal backups or cross-platform distribution guarantees.
+Native login support does not establish general provider interoperability, complete journal backups or cross-platform distribution guarantees.
 
 ## Related documentation
 

@@ -3,13 +3,13 @@
 | Document | Description |
 |---|---|
 | [Guide utilisateur](./user-guide.md) | Installation, configuration CLI/Web, commandes, sessions et sécurité |
-| [Raccourcis du terminal](./terminal-keybindings.md) | Emplacements, 22 actions, vue passive, rechargement, touches de sécurité et schéma livré |
+| [Raccourcis du terminal](./terminal-keybindings.md) | Emplacements, 29 actions, vue passive, rechargement, touches de sécurité et schéma livré |
 | [Sécurité CLI](./cli-security.md) | Avertissements/canaux, portée offline/proxy, alias, matrice Windows/terminal et diagnostics sûrs |
 | [Guide opérateur](./operations.md) | Préparation de l’hôte, MCP/code mode, fichiers/confiance, sauvegarde, rechargement et incidents |
 | [Réponses Web et progression](./web-replies.md) | Limites de sortie, échecs partiels, demandes concurrentes et limites de reconnexion |
 | [Conteneurisation](./containerization.md) | Exécution du CLI et du lanceur Web avec Docker |
 | [Politique de commande des packages](./npm-command.md) | Arguments npm littéraux, confiance de la source et refus CLI/Web |
-| [Authentification/export autonomes](./standalone-operations.md) | Métadonnées passives, flux device chiffré et fichiers de session sélectionnés/approuvés |
+| [Authentification/export autonomes](./standalone-operations.md) | Métadonnées passives, connexions natives/device/navigateur explicites et fichiers de session sélectionnés/approuvés |
 | [Navigation des Paramètres](./settings-navigation.md) | Mémoire par dossier des sections/groupes/éléments et portées, confiance fraîche, focus sûr et confidentialité |
 | [Chargement des textes des réglages](./settings-loading.md) | Chargement traduit, fermeture, réessai explicite et texte non envoyé |
 | [Chargement du panneau de fichiers](./workspace-loading.md) | Ressources optionnelles, intention d’ouverture, fermeture locale et réessai explicite |
