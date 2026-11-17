@@ -5,20 +5,20 @@ import { validateReference, ROWS_SHA256, sha256 } from './provider-reference.mjs
 
 const reference = JSON.parse(readFileSync(new URL('../fixtures/provider-reference.json', import.meta.url)));
 
-describe('pinned MOD-01 typed catalogue coverage', () => {
-  it('retains all 42 providers and 1,649 API/type identities under the approved hashes', () => {
-    expect(validateReference(reference)).toEqual({ chat: 1554, classifier: 34, image: 61 });
+describe('native typed catalogue coverage', () => {
+  it('retains the frozen 41-provider selection and 1,620 API/type identities under the approved hash', () => {
+    expect(validateReference(reference)).toEqual({ chat: 1525, classifier: 34, image: 61 });
     expect(reference.rowsSha256).toBe(ROWS_SHA256);
-    expect(new Set(reference.rows.map(row => row[0])).size).toBe(42);
+    expect(new Set(reference.rows.map(row => row[0])).size).toBe(41);
   });
 
-  it('refuses missing rows, substituted identities and factory/catalogue provenance changes', () => {
+  it('refuses missing rows, substituted identities and selection schema changes', () => {
     for (const change of [
       value => value.rows.pop(),
       value => { value.rows[0][1] = 'substituted-model'; value.rowsSha256 = sha256(JSON.stringify(value.rows)); },
-      value => { value.files.openai.factory = '0'.repeat(64); },
+      value => { value.rowsSha256 = '0'.repeat(64); },
       value => { value.files.openai.catalogue = '0'.repeat(64); },
-      value => { value.manifestJson += ' '; },
+      value => { value.schema = 'unknown-schema'; },
     ]) {
       const changed = structuredClone(reference); change(changed);
       expect(() => validateReference(changed)).toThrow();
@@ -31,8 +31,8 @@ describe('pinned MOD-01 typed catalogue coverage', () => {
       const report = await createProviderCoverage(reference);
       expect(report.rows.map(({ provider, model, api, type, declaredImages }) =>
         [provider, model, api, type, declaredImages])).toEqual(reference.rows);
-      expect(Object.values(report.summary).slice(2).reduce((sum, count) => sum + count, 0)).toBe(1649);
-      expect(report.summary.providers).toBe(42);
+      expect(Object.values(report.summary).slice(2).reduce((sum, count) => sum + count, 0)).toBe(1620);
+      expect(report.summary.providers).toBe(41);
       const row = (provider, model, type) => report.rows.find(item => item.provider === provider && item.model === model && item.type === type);
       const chat = row('openai', 'gpt-6-luna', 'chat'), classifier = row('openai', 'gpt-6-luna', 'classifier');
       expect(chat.metadata).toMatchObject({ api: 'openai-responses', contextWindow: 272000 });

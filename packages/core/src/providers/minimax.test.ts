@@ -139,7 +139,7 @@ describe('native MiniMax private continuation', () => {
     });
 
   it('binds the six physical profiles and complete replay arrays to fresh pinned SDK execution', () => {
-    expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('6671155239d400520bb007617f1e014a244e5aa6331fe8d080081d70c747ad9b');
+    expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('35ed7f0f601daaea5ac76682cf39fc382dac05c6c1a205212ba32956f74c05cb');
     expect(continuation).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff',
       captureSha256: '8e9fd562ef800e77ec18aee132198b53cbb44543c3a8894080966a264b3830d2', profiles: 6, replayProjections: 72, freshSdkRequests: 78 });
     expect(continuation.rows.map(row => [row.scope, row.model])).toEqual(['minimax', 'minimax-cn'].flatMap(scope => providers.MINIMAX_MODELS.map(row => [scope, row.id])));
@@ -300,7 +300,7 @@ describe('native MiniMax private continuation', () => {
 
 describe('native MiniMax simple allocation', () => {
   it('binds all scalar vectors to the retained independent SDK capture without rewriting unsafe allocations', () => {
-    expect(createHash('sha256').update(numericBytes).digest('hex')).toBe('53f3b8ad65cadd59b084b14da965f9e73ea40676240579d8f8ccff067f63fbb2');
+    expect(createHash('sha256').update(numericBytes).digest('hex')).toBe('ae20b35c013039288a4aa93dcd87737d72e8c2a3ba1fe558a76f372150a7f3fa');
     expect(numeric).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff', originalSdkRequests: 102, newSdkRequests: 0,
       captureSha256: '7f195456c402f7d528fe862fbee603eda354564baa50a3e266f6fcc0a8076136' });
     expect(numeric.vectors).toHaveLength(102);
@@ -347,7 +347,7 @@ describe('native MiniMax simple allocation', () => {
 
 describe('native MiniMax context allocation', () => {
   it('binds system/tool/history/media/usage vectors to independent pinned HTTPS requests', () => {
-    expect(createHash('sha256').update(contextBytes).digest('hex')).toBe('cfe6343ad9e458242ae7b0133923de1bd2e931efd5ca1d0816a4b24f6ea0d3f9');
+    expect(createHash('sha256').update(contextBytes).digest('hex')).toBe('ef2d7c064d9eeb571aa5f1749899b58ed7f3684e3a70f64f9d303e9ba2893a33');
     expect(contextReference).toMatchObject({ pinnedCommit: '06a466935536f8c9bcacb2d5efc0fc021be1bdff', profiles: 6,
       scenariosPerProfile: 34, selectedVectors: 204, freshSdkRequests: 222 });
     expect(contextReference.rows).toHaveLength(204);

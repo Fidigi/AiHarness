@@ -3895,5 +3895,5 @@
       ]
     }
   ],
-  "limits": "Raw tool schema projection only. Actual pinned normalizeContext is required by Provider.stream; the earlier unnormalized105-request preparation transmitted no tools/system and is uncredited for those facets. SDK Vertex API-key auth is distinct from Core Bearer. No strict/constrained sampling, tool choice, full defaults/context/reasoning/media/replay/host, Pi JSON-entrypoint or service/account/invoice/TLS/cap feasibility certificate; zero-only prices are not free-service evidence."
+  "limits": "Raw tool schema projection only. Actual pinned normalizeContext is required by Provider.stream; the earlier unnormalized105-request preparation transmitted no tools/system and is uncredited for those facets. SDK Vertex API-key auth is distinct from Core Bearer. No strict/constrained sampling, tool choice, full defaults/context/reasoning/media/replay/host, a separate JSON-entrypoint or service/account/invoice/TLS/cap feasibility certificate; zero-only prices are not free-service evidence."
 }

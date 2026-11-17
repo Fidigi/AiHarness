@@ -43281,5 +43281,5 @@
       }
     }
   ],
-  "limits": "Raw grammar/custom versus fallback function declaration fields only; lark/regex precedence, input-property shapes and fixed pretransport refusal. No grammar parsing/fulfilment or service/schema/choice acceptance, typed Pi TSchema caller, response lifecycle/replay/media/context/default/host/account or numeric-policy certificate."
+  "limits": "Raw grammar/custom versus fallback function declaration fields only; lark/regex precedence, input-property shapes and fixed pretransport refusal. No grammar parsing/fulfilment or service/schema/choice acceptance, typed schema caller, response lifecycle/replay/media/context/default/host/account or numeric-policy certificate."
 }

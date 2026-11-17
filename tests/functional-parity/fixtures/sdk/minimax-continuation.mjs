@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 const bytes = readFileSync(new URL('./minimax-continuation-reference.json', import.meta.url));
-assert.equal(createHash('sha256').update(bytes).digest('hex'), '6671155239d400520bb007617f1e014a244e5aa6331fe8d080081d70c747ad9b');
+assert.equal(createHash('sha256').update(bytes).digest('hex'), '35ed7f0f601daaea5ac76682cf39fc382dac05c6c1a205212ba32956f74c05cb');
 const reference = JSON.parse(bytes);
 let mode;
 

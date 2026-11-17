@@ -610,7 +610,7 @@ describe('emitted original Responses encrypted continuation', () => {
         const replay = responsesAssistant(test.bodies[5]!);
         expect(replay.slice(0, 10)).toEqual([
           { type: 'function_call', id: 'fc_native', call_id: 'native-call', name: 'continuation_echo', arguments: '{"value":1}' },
-          { type: 'message', role: 'assistant', id: 'msg_pi_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] },
+          { type: 'message', role: 'assistant', id: 'msg_aih_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] },
           ...[2, 3].flatMap(responsesReplay),
         ]);
         expect(replay.slice(10).filter(item => item.role === 'assistant').map(item => item.content)).toEqual([4, 5].flatMap(turn =>

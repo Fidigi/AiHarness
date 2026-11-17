@@ -1,4 +1,5 @@
 {
+  "fixtureNormalization": "Application-specific correlation IDs and reserved tool names are normalized to AiHarness. Historical capture hashes identify the original acquisition, not the normalized fixture.",
   "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
   "captureSha256": "9d5679fd0dbe3b36354439fd4226e0b0eea00293e34582f1097fe4b2dae7e66c",
   "programSha256": "acad0ea3de2b38b236820d38bb8e01cf4ff7d0f626b2deeb416d5bc46628ce60",
@@ -87,7 +88,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -99,7 +100,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -200,7 +201,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -212,7 +213,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -276,7 +277,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -288,7 +289,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -369,7 +370,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -381,7 +382,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -482,7 +483,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -494,7 +495,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -558,7 +559,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -570,7 +571,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1089,7 +1090,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1101,7 +1102,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1202,7 +1203,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1214,7 +1215,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1278,7 +1279,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -1290,7 +1291,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2247,7 +2248,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2259,7 +2260,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2360,7 +2361,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2372,7 +2373,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2436,7 +2437,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2448,7 +2449,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2529,7 +2530,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2541,7 +2542,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2642,7 +2643,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2654,7 +2655,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2718,7 +2719,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2730,7 +2731,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2811,7 +2812,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2823,7 +2824,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2924,7 +2925,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -2936,7 +2937,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -3000,7 +3001,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -3012,7 +3013,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -3969,7 +3970,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -3981,7 +3982,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -4082,7 +4083,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -4094,7 +4095,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -4158,7 +4159,7 @@
           }
         },
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -4170,7 +4171,7 @@
       ],
       "capturedDeferredDeclarations": [
         {
-          "name": "__pi_deferred_placeholder__",
+          "name": "__aih_deferred_placeholder__",
           "description": "Reserved placeholder. Never available. Never call this.",
           "input_schema": {
             "type": "object",
@@ -4183,5 +4184,5 @@
       "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
     }
   ],
-  "limits": "Bounded raw non-strict caller-declaration projection only: owned name/description/eager_input_streaming/input_schema, absent strict/tool_choice, no tools, required object, optional union and optional-only. Complete captured tools/betas remain retained;21 native inline-tools deferred placeholders across seven models are explicit UNBOUND counter-evidence, not removed from SDK evidence or claimed as Core full-tools/default equivalence. Core comparisons must compare its whole tools array with callerDeclarations, not silently filter unexpected Core tools. No strict/choice/grammar/deferred/inline tool changes, full defaults/context/reasoning/tool/media/replay/host/auth/account/service/schema acceptance, Pi typed TSchema or numeric qualification. Raw SDK SSE is not a separate upstream nonstreaming JSON service capture."
+  "limits": "Bounded raw non-strict caller-declaration projection only: owned name/description/eager_input_streaming/input_schema, absent strict/tool_choice, no tools, required object, optional union and optional-only. Complete captured tools/betas remain retained;21 native inline-tools deferred placeholders across seven models are explicit UNBOUND counter-evidence, not removed from SDK evidence or claimed as Core full-tools/default equivalence. Core comparisons must compare its whole tools array with callerDeclarations, not silently filter unexpected Core tools. No strict/choice/grammar/deferred/inline tool changes, full defaults/context/reasoning/tool/media/replay/host/auth/account/service/schema acceptance, typed schema or numeric qualification. Raw SDK SSE is not a separate upstream nonstreaming JSON service capture."
 }

@@ -160,7 +160,7 @@ describe('pinned original Google/Vertex declarations and observed accounting', (
         { source: 'empty-reference', captureSha256: '10651e9881f2890c9b2f51e700e961a78051f79548b5d51fec74d7fcf3b9d221', reusedExecution: false, selectedVectors: 70, selectedRequests: 140 },
       ]);
       expect([...new Set(imageReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(profiles.map(row => row.id));
-      expect(createHash('sha256').update(userImageBytes).digest('hex')).toBe('6faa47170d4abe9000f3fa96ad450ecf20321ea81c2a053559d3d6af3d7fc12d');
+      expect(createHash('sha256').update(userImageBytes).digest('hex')).toBe('46a6fa98a5c33590d83d9ec6b2570342dd8d063c903978428606bf437fd6b9ca');
       expect(userImageReference.pinnedCommit).toBe(toolReference.pinnedCommit); expect(userImageReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       expect(userImageReference.captureSha256).toBe('595ef1fdd4173ce0c4f3b0ffa9de8df2729959a49dc04333101943daab00e9cb');
       expect(userImageReference.modelProjections).toBe(35); expect(userImageReference.vectors).toBe(140); expect(userImageReference.freshSdkRequests).toBe(140);

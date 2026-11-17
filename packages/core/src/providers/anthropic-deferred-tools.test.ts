@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AnthropicProvider, type AnthropicChatOptions, type ChatResponse, type Message } from '../../dist/index.js';
-const placeholder = { name: '__pi_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.', input_schema: { type: 'object', properties: {}, required: [] }, defer_loading: true };
+const placeholder = { name: '__aih_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.', input_schema: { type: 'object', properties: {}, required: [] }, defer_loading: true };
 const beta = 'inline-tools-2026-09-15', model = 'claude-fable-5', config = { type: 'native-deferred-label', apiKey: 'synthetic-deferred-key', baseUrl: 'https://anthropic.synthetic', model };
 const input: Message[] = [{ id: 'u', role: 'user', timestamp: new Date(0), content: 'deferred probe' }];
 function response(stream: boolean) { const data = { type: 'message', role: 'assistant', model, content: [{ type: 'text', text: 'deferred-ready' }], stop_reason: 'end_turn', usage: { input_tokens: 8, output_tokens: 2 } }; return stream ? new Response([{ type: 'message_start', message: data }, { type: 'content_block_start', index: 0, content_block: data.content[0] }, { type: 'content_block_stop', index: 0 }, { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: data.usage }, { type: 'message_stop' }].map(value => 'data: ' + JSON.stringify(value) + '\n\n').join(''), { headers: { 'content-type': 'text/event-stream' } }) : Response.json(data); }

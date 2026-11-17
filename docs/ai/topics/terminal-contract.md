@@ -4,7 +4,7 @@
 
 ## Overview and owners
 
-This is AiHarness's terminal contract, not Pi's component, settings or keyboard ABI. `packages/cli/src/index.ts` composes both hosts; Core still owns prompts, tools, queues, trust and persistence. Print/JSON/RPC do not enable terminal paste or load keybindings. CLI-04 installation/update remains separate.
+This is AiHarness's terminal contract. `packages/cli/src/index.ts` composes both hosts; Core still owns prompts, tools, queues, trust and persistence. Print/JSON/RPC do not enable terminal paste or load keybindings. CLI-04 installation/update remains separate.
 
 | Owner | Responsibility |
 |---|---|
@@ -33,11 +33,11 @@ This is AiHarness's terminal contract, not Pi's component, settings or keyboard 
 | Images / links / overlays | Inert text/ordinary terminal output | Plain-text host panels and passive hotkeys | No Kitty/iTerm2 inline images, OSC 8 links, arbitrary component/overlay renderer or extension executable TUI |
 | Terminal protocols | Standard readline/xterm escape decoding | Same decoder and native ANSI alternate screen | No negotiated Kitty keyboard/CSI-u/modifyOtherKeys, cursor-position/IME protocol or universal terminal/Windows qualification |
 
-The Linux Docker PTYs use `TERM=xterm-256color`; committed Unicode is injected as actual UTF-8 bytes. This is not side-by-side upstream, physical keyboard, Safari, Windows, macOS or arbitrary emulator acceptance. See the audit receipt for executed rather than merely available scenarios.
+The Linux Docker PTYs use `TERM=xterm-256color`; committed Unicode is injected as actual UTF-8 bytes. This is not side-by-side upstream, physical keyboard, Safari, Windows, macOS or arbitrary emulator acceptance. See the associated tests below for executable scenarios.
 
 ## Named action map
 
-All entries below have callbacks in **both** hosts. Default chords remain independently configurable except driver-owned safety keys. A configured chord overrides matching defaults, not every binding for an action. Native fall-through is deliberate only with `preventDefault:false`. Unknown action names are inert, not Pi aliases.
+All entries below have callbacks in **both** hosts. Default chords remain independently configurable except driver-owned safety keys. A configured chord overrides matching defaults, not every binding for an action. Native fall-through is deliberate only with `preventDefault:false`. Unknown action names are inert.
 
 | Action(s) | Default(s) / actual effect |
 |---|---|
@@ -55,34 +55,6 @@ All entries below have callbacks in **both** hosts. Default chords remain indepe
 | `editor.backspace`, `editor.delete`, `editor.clear`, `editor.complete` | Backspace, Delete, Ctrl+U, Tab; grapheme deletion, clear, completion |
 
 Hotkeys retain exact underlying draft/caret **and undo history**; modal queries have separate edit history and cannot become provider input through undo. There is no general action executor in the passive view. `/help` in both renderers documents new editing keys, paste bounds and unsupported capabilities directly to users.
-
-## Pinned Pi action adaptation inventory
-
-Static comparison uses Pi commit `06a466935536f8c9bcacb2d5efc0fc021be1bdff`, `packages/coding-agent/src/core/keybindings.ts` (43 application actions) plus `packages/tui/src/keybindings.ts` (47 TUI actions). The following 90-name inventory maps **intent**, not key/config imports. Native defaults, reserved Ctrl+C/Escape behavior, platform-specific chords and configuration-array grammar are independent. Every listed unsupported action remains a retained difference, not a hidden alias or an upstream acceptance claim.
-
-| Pinned action name(s) | Native outcome or unsupported difference |
-|---|---|
-| `app.interrupt`, `app.clear`, `app.exit` | `app.escape`/`app.interrupt`, `editor.clear`, `app.exit`; Ctrl+C is not Pi's clear binding |
-| `app.suspend` | Unsupported suspend action; Ctrl+Z is native draft undo |
-| `app.thinking.cycle`, `app.thinking.save` | Explicit `/thinking <level>`; no cycle/save selector action |
-| `app.model.cycleForward`, `app.model.cycleBackward`, `app.model.select` | `/model cycle`, `/model <reference>`; no reverse-cycle or model-picker keyboard action |
-| `app.tools.expand`, `app.thinking.toggle`, `app.session.toggleNamedFilter` | Unsupported toggle/filter UI |
-| `app.editor.external`, `app.message.followUp`, `app.message.dequeue` | `input.externalEditor`, `input.followUp`, `input.dequeue` |
-| `app.message.copy`, `app.clipboard.pasteImage` | Explicit `/copy` of last assistant; bounded `@file` images/text, not selection-copy/image-clipboard actions |
-| `app.session.new`, `app.session.tree`, `app.session.fork`, `app.session.resume` | Explicit `/new`, `/tree` + `/navigate`, `/fork`, `/list` + `/switch`; no equivalent picker actions |
-| `app.tree.foldOrUp`, `app.tree.unfoldOrDown`, `app.tree.editLabel`, `app.tree.toggleLabelTimestamp` | Unsupported interactive tree folding/entry-label/timestamp controls |
-| `app.session.togglePath`, `app.session.toggleSort`, `app.session.rename`, `app.session.delete`, `app.session.deleteNoninvasive` | `/session`, `/name`, inactive `/delete`; no picker path/sort/conditional deletion actions |
-| `app.models.save`, `app.models.enableAll`, `app.models.clearAll`, `app.models.toggleProvider`, `app.models.reorderUp`, `app.models.reorderDown` | Unsupported terminal model-batch selector actions; native configured scopes and explicit model commands remain |
-| `app.tree.filter.default`, `app.tree.filter.noTools`, `app.tree.filter.userOnly`, `app.tree.filter.labeledOnly`, `app.tree.filter.all`, `app.tree.filter.cycleForward`, `app.tree.filter.cycleBackward` | Unsupported terminal tree-filter actions |
-| `tui.editor.cursorUp`, `tui.editor.cursorDown`, `tui.editor.historyPrevious`, `tui.editor.historyNext` | Native `editor.previous`/`editor.next` history, not vertical multiline cursor navigation |
-| `tui.editor.cursorLeft`, `tui.editor.cursorRight`, `tui.editor.cursorWordLeft`, `tui.editor.cursorWordRight`, `tui.editor.cursorLineStart`, `tui.editor.cursorLineEnd` | `editor.left`, `editor.right`, `editor.wordLeft`, `editor.wordRight`, `editor.home`, `editor.end` |
-| `tui.editor.jumpForward`, `tui.editor.jumpBackward`, `tui.editor.pageUp`, `tui.editor.pageDown` | No character-search jump or editor page navigation; native page actions scroll transcript |
-| `tui.editor.deleteCharBackward`, `tui.editor.deleteCharForward`, `tui.editor.deleteWordBackward`, `tui.editor.deleteWordForward` | `editor.backspace`, `editor.delete`, `editor.deleteWordLeft`, `editor.deleteWordRight` |
-| `tui.editor.deleteToLineStart`, `tui.editor.deleteToLineEnd`, `tui.editor.yank`, `tui.editor.yankPop` | No shared kill-ring/yank or delete-to-line action; `editor.clear` clears the entire draft |
-| `tui.editor.undo`, `tui.input.newLine`, `tui.input.submit`, `tui.input.tab`, `tui.input.copy` | `editor.undo`, `input.newline`, `input.submit`, `editor.complete`; selection copy unsupported |
-| `tui.select.up`, `tui.select.down`, `tui.select.pageUp`, `tui.select.pageDown`, `tui.select.confirm`, `tui.select.cancel` | Native passive hotkeys browse pages/filter/close; no generic configurable selection-component protocol |
-| `tui.altScreen.pageUp`, `tui.altScreen.pageDown`, `tui.altScreen.halfPageUp`, `tui.altScreen.halfPageDown`, `tui.altScreen.lineUp`, `tui.altScreen.lineDown` | `transcript.up`/`transcript.down` use host-native increments, not separate page/half/line actions |
-| `tui.altScreen.previousPrompt`, `tui.altScreen.nextPrompt`, `tui.altScreen.search`, `tui.altScreen.searchNext`, `tui.altScreen.searchPrevious`, `tui.altScreen.searchClose`, `tui.altScreen.top`, `tui.altScreen.bottom` | Explicit `/search`; no semantic prompt jumps, match-selection/search overlay or viewport top/bottom actions |
 
 ## Per-setting native support map
 
@@ -104,14 +76,14 @@ The following inventory covers every canonical `AgentSettings` top-level field; 
 | `hideThinkingBlock`, `doubleEscapeAction`, `treeFilterMode` | Unsupported stored-only; no toggle/tree UI consumer |
 | `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, `fullscreenWheelScrollLines` | Unsupported stored-only; no implied mouse/selection/exit-transcript implementation |
 | `editorPaddingX`, `outputPad`, `autocompleteMaxVisible`, `showHardwareCursor` | Unsupported stored-only; native fixed layout/cursor behavior remains |
-| `images.autoResize` | Effective for new model-owned prompt/post-hook tool data-images before persistence; false preserves supported-format original data. Virtual prompts use [last-successful physical/default limits](./providers.md#routed-image-policy-04b-partial), tools the current physical responder. [04b preparation is delivered](../../audit/pi/evidence/MOD-01-image-preparation-closure.json), data-backed native inputs only; no URL fetch/history rewrite/terminal rendering authority |
+| `images.autoResize` | Effective for new model-owned prompt/post-hook tool data-images before persistence; false preserves supported-format original data. Virtual prompts use [last-successful physical/default limits](./providers.md#routed-image-policy-04b-partial), tools the current physical responder. 04b preparation is delivered, data-backed native inputs only; no URL fetch/history rewrite/terminal rendering authority |
 | `images.blockImages` | Effective for outgoing user/tool conversation images, before routing and after provider hooks; disabled-text placeholders, unchanged prepared history and later re-enable. [Scope/evidence](./providers.md#conversation-image-blocking), not global image-service/network blocking |
 | `terminal` (showImages, imageWidthCells, clearOnShrink, showTerminalProgress, hyperlinks, images, trueColor), `markdown` (codeBlockIndent, mermaid) | Unsupported stored-only fields/groups; no protocol negotiation/rendering/image blocking authority |
 | `cacheWarming` | Consumed per provider turn; default `streaming`, optional `off`/`idle`, potentially billable economic/time-bounded replay; see [dispatch policies](./model-dispatch-policies.md) |
 | `showCacheMissNotices` | Consumed for bounded active-branch historical cache notices at startup and idle prompt boundaries in both hosts; reload affects subsequent presentation, never erases regular scrollback or disables billable warming |
 | `lastChangelogVersion`, `collapseChangelog`, `enableInstallTelemetry`, `enableAnalytics`, `trackingId`, `deviceId`, `warnings.anthropicExtraUsage` | Unsupported stored-only; no implied update, telemetry or billing-warning implementation |
 
-Pinned Pi `src/core/settings-schema.ts` uses these same presentation-field names; common spelling does not transfer defaults, transport timeouts, privilege or executable authority. Its `queueMode`/`websockets` legacy intent has the documented native migrations; `$schema` is editor metadata, not behavior. Pi's `"disabled"` timeout literal is not native validation, and native bounds/global-only rules and package/resource dialects still apply. No Pi settings-file import is added.
+`queueMode`/`websockets` legacy intent has the documented native migrations; `$schema` is editor metadata, not behavior. Native timeout bounds/global-only rules and package/resource dialects still apply.
 
 Each configured unsupported top-level field produces a fixed value-free warning on interactive startup/reload, even when set to `false`; nested values are never printed. `/settings` marks it `unsupported by CLI (stored only)` with source scope. The command distinguishes the **saved** theme/mode from the actual active palette and startup-selected renderer. Headless channels receive no new unsupported-terminal banner. Unknown/invalid field diagnostics, project trust and schema behavior are unchanged; no settings are deleted or rewritten.
 

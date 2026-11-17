@@ -251,8 +251,8 @@ describe('OpenAI Responses real WebSocket transport', () => {
       await foreign.chat(history, options); owner.setConfiguredModel('gpt-4o');
       expect((await owner.chat(history, options)).usage?.costUsd).toBeCloseTo(0.0000075, 12);
       const visibleInput = [{ role: 'user', content: 'start' },
-        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'visible', annotations: [] }], status: 'completed', id: 'msg_pi_1' },
-        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_pi_1_1' },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'visible', annotations: [] }], status: 'completed', id: 'msg_aih_1' },
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'answer', annotations: [] }], status: 'completed', id: 'msg_aih_1_1' },
         { role: 'user', content: 'next' }];
       expect(requests).toHaveLength(7); expect(requests[5].input).toEqual(visibleInput); expect(requests[6].input).toEqual(visibleInput);
       expect(requests.slice(3).map(body => body.model)).toEqual(['gpt-5', 'gpt-5', 'gpt-5', 'gpt-4o']);

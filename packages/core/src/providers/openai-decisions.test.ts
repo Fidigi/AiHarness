@@ -84,7 +84,7 @@ describe('native OpenAI Decisions', () => {
   });
 
   it('binds complete native requests and observed results to the pinned original classifier capture', async () => {
-    expect(createHash('sha256').update(referenceBytes).digest('hex')).toBe('4817a0f3d739fbbac99c13c39e6a90c1b869cf1bea6f755406695a21cd4d8ec7');
+    expect(createHash('sha256').update(referenceBytes).digest('hex')).toBe('0580738b2b8fe40f173f6cebab58be5426bee5ce07fa9e6c4932418002cdde59');
     expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
     expect(reference.sourceCaptureSha256).toBe('84abbac9c2c8dc864f8953f976774be375181857cb3383841fd6c69b888d7d84');
     expect(reference.identity).toEqual({ provider: 'openai', model, api: 'openai-decisions', type: 'classifier' });

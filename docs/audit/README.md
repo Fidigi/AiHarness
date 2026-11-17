@@ -52,13 +52,8 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 | Audit | Scope | Status |
 |---|---|---|
 | `docs/audit/documentation/AUDIT-1` | Documentation structure, accuracy, screenshots, bilingual coverage and validation | DONE |
-| `docs/audit/pi/AUDIT-5` | Pinned Pi 1.2.0 / Pi Web 0.12.2 comparison: 43 stable criteria, compatibility decisions, evidence and prioritized work packages | IN PROGRESS — sole active parity tracker |
 
 Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
-
-## Execution Boards
-
-[MOD-01 execution board](./pi/MOD-01-tracking.md) is the short resumption index for the existing [MOD-01 delivery register](./pi/MOD-01.md): work packages, exact-candidate evidence, blockers, exit criteria and the next bounded action. Update it after each batch; do not treat technical gate success as whole-criterion closure. It supplements, rather than replaces, AUDIT-5's sole active parity status.
 
 ## Common Prefixes
 

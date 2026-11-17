@@ -1,8 +1,6 @@
 {
   "schema": "minimax-simple-allocation-reference-v1",
   "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
-  "sourceReceipt": "docs/audit/pi/evidence/MOD-03-minimax-numeric-review.json",
-  "sourceReceiptSha256": "4c377b64f8f83e9948e43216e1e49751afd6b532fd577eadf09ab888096c4ded",
   "captureSha256": "7f195456c402f7d528fe862fbee603eda354564baa50a3e266f6fcc0a8076136",
   "originalSdkRequests": 102,
   "newSdkRequests": 0,

@@ -2,7 +2,7 @@
   "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
   "constructionCaptureSha256": "2d160e9fa168b2eb2165c84a75e65cc09f0dda89acae34198266d690142aaca5",
   "successfulUsageCaptureSha256": "6b27c0226ae372bde56def095c5ee06873385ff3ab52909add2f3db3f026b2bd",
-  "scope": "Raw omitted-output projection for 193 approved Bedrock models: 193 of 1544 intentional-400 construction observations, corroborated by all666 successful synthetic AWS SDK usage requests. Null means the wire property is absent. This is not full streamSimple/context/reasoning/default-model policy, a Pi JSON entrypoint, AWS acceptance, cap feasibility or account qualification.",
+  "scope": "Raw omitted-output projection for 193 approved Bedrock models: 193 of 1544 intentional-400 construction observations, corroborated by all666 successful synthetic AWS SDK usage requests. Null means the wire property is absent. This is not full streamSimple/context/reasoning/default-model policy, a separate JSON entrypoint, AWS acceptance, cap feasibility or account qualification.",
   "rows": [
     {
       "id": "amazon.nova-2-lite-v1:0",

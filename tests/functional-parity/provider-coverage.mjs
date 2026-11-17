@@ -153,9 +153,8 @@ export async function createProviderCoverage(reference, root = process.cwd()) {
     sources.push('packages/core/src/types/index.ts', 'packages/cli/src/providers/configured-providers.ts',
       'packages/server/src/runtime/provider-registry.ts');
     const sourceHashes = Object.fromEntries(sources.sort().map(file => [file, sha256(readFileSync(path.join(root, file)))]));
-    return { reference: { sourceCommit: reference.sourceCommit, manifestSha256: reference.manifestSha256,
-      rowsSha256: reference.rowsSha256, files: reference.files }, sourceHashes,
-      summary: { providers: Object.keys(reference.files).length, entries: rows.length,
+    return { reference: { schema: reference.schema, rowsSha256: reference.rowsSha256 }, sourceHashes,
+      summary: { providers: new Set(reference.rows.map(row => row[0])).size, entries: rows.length,
         ...Object.fromEntries(['native-declaration', 'transport-only-or-partial-profile', 'missing']
           .map(state => [state, rows.filter(row => row.coverage === state).length])) },
       limitations: ['Declarations/admission are not a wire, entitlement, price-freshness or full-profile certificate.',

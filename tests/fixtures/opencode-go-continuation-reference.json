@@ -1,4 +1,5 @@
 {
+  "fixtureNormalization": "Application-specific correlation IDs and reserved tool names are normalized to AiHarness. Historical capture hashes identify the original acquisition, not the normalized fixture.",
   "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
   "captureSha256": "f879b442d70a4a90aa37fb0d0a6a6923839a0c59e83b737552b61e0865d48984",
   "programSha256": "fde2059a3b8958ca70eb19e3914aa3b04101bff99ba4f6b368592cd995fb2c63",
@@ -15490,7 +15491,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -15503,7 +15504,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -15522,7 +15523,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -15770,7 +15771,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -15783,7 +15784,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -15802,7 +15803,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -16050,7 +16051,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -16063,7 +16064,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -16082,7 +16083,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -16329,7 +16330,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -16342,7 +16343,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -16361,7 +16362,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -16605,7 +16606,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -16625,7 +16626,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",
@@ -17868,7 +17869,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -17881,7 +17882,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -17900,7 +17901,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -18148,7 +18149,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -18161,7 +18162,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -18180,7 +18181,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -18428,7 +18429,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -18441,7 +18442,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -18460,7 +18461,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -18707,7 +18708,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -18720,7 +18721,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -18739,7 +18740,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -18983,7 +18984,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -19003,7 +19004,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",
@@ -20244,7 +20245,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -20257,7 +20258,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -20276,7 +20277,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -20524,7 +20525,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -20537,7 +20538,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -20556,7 +20557,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -20804,7 +20805,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -20817,7 +20818,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -20836,7 +20837,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -21083,7 +21084,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -21096,7 +21097,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -21115,7 +21116,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -21359,7 +21360,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -21379,7 +21380,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",
@@ -22620,7 +22621,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -22633,7 +22634,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -22652,7 +22653,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -22900,7 +22901,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -22913,7 +22914,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -22932,7 +22933,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -23180,7 +23181,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -23193,7 +23194,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -23212,7 +23213,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -23459,7 +23460,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -23472,7 +23473,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -23491,7 +23492,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -23735,7 +23736,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -23755,7 +23756,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",
@@ -24987,7 +24988,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -25000,7 +25001,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -25019,7 +25020,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -25267,7 +25268,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -25280,7 +25281,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -25299,7 +25300,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -25547,7 +25548,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -25560,7 +25561,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -25579,7 +25580,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -25826,7 +25827,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -25839,7 +25840,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -25858,7 +25859,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -26102,7 +26103,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -26122,7 +26123,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",
@@ -27354,7 +27355,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -27367,7 +27368,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -27386,7 +27387,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -27634,7 +27635,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -27647,7 +27648,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -27666,7 +27667,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -27914,7 +27915,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -27927,7 +27928,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -27946,7 +27947,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -28193,7 +28194,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "message",
@@ -28206,7 +28207,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call",
@@ -28225,7 +28226,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_2"
+                "id": "msg_aih_1_2"
               },
               {
                 "type": "function_call_output",
@@ -28469,7 +28470,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1"
+                "id": "msg_aih_1"
               },
               {
                 "type": "function_call",
@@ -28489,7 +28490,7 @@
                   }
                 ],
                 "status": "completed",
-                "id": "msg_pi_1_1"
+                "id": "msg_aih_1_1"
               },
               {
                 "type": "function_call_output",

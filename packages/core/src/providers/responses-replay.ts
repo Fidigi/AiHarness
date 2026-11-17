@@ -149,7 +149,7 @@ export function applyResponsesReplay(body: { input: Item[] }, messages: Message[
       }
       // Wire correlation IDs are not fabricated opaque signatures.
       if (id && id.length > 64) id = `msg_${responseItemHash(id)}`;
-      if (!id) id = `msg_pi_${messageIndex}${textIndex ? `_${textIndex}` : ''}`;
+      if (!id) id = `msg_aih_${messageIndex}${textIndex ? `_${textIndex}` : ''}`;
       textIndex++;
       input.push({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: value, annotations: [] }], status: 'completed', id,
         ...(['commentary', 'final_answer'].includes(String(phase)) ? { phase } : {}) });

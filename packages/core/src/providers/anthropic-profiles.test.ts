@@ -501,13 +501,13 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
     expect(continuationFixture.rows.map(row => row.model)).toEqual(profiles.map(profile => profile.id));
     for (const row of continuationFixture.rows) expect(row.projections.map(projection => projection.case))
       .toEqual(['same', 'provider', 'api', 'model', 'missing-api', 'failed']);
-    expect(createHash('sha256').update(imageBytes).digest('hex')).toBe('aeaf539973d6a9c0de9046045c8def52182ec515d4dcea3d85589e2c99cbb6f2');
+    expect(createHash('sha256').update(imageBytes).digest('hex')).toBe('a0cad515444246be9718558fe308ae13f082dd0d041e914d60d76f005305ec86');
     expect(imageFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect([imageFixture.modelProjections, imageFixture.vectors, imageFixture.freshSdkRequests]).toEqual([17, 68, 68]);
     expect(imageFixture.rows.map(row => [row.model, row.case])).toEqual(profiles.flatMap(profile =>
       ['text-image', 'image-only', 'whitespace-image', 'text-two-images'].map(name => [profile.id, name])));
     expect(imageFixture.rows.flatMap(row => row.expectedMessages).filter(message => message.role === 'system')).toHaveLength(20);
-    expect(createHash('sha256').update(resultBytes).digest('hex')).toBe('c844343d76116f68b29ec95b732a8fe8b545c0701467675f54d69c323bc13564');
+    expect(createHash('sha256').update(resultBytes).digest('hex')).toBe('98be33a0685fef266d88d254a9b88d5f421a71f62ce685a32afa4d2d341e9e5c');
     expect(resultFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect([resultFixture.modelProjections, resultFixture.vectors, resultFixture.requests, resultFixture.textCases, resultFixture.imageCases,
       resultFixture.capturedDeferredDeclarations]).toEqual([17, 204, 408, 136, 68, 168]);
@@ -516,7 +516,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
         'image-success', 'image-error', 'image-only-success', 'image-only-error'].map(name => [profile.id, name])));
     expect(resultFixture.rows.flatMap(row => row.capturedDeferredDeclarations.flat())).toHaveLength(168);
     expect(adaptiveProfiles.map(profile => profile.id).sort()).toEqual(Object.keys(efforts).sort());
-    expect(createHash('sha256').update(toolBytes).digest('hex')).toBe('b0fae1bf6ca652a5d4ea6ffc73fbfff4415620a559dae234265923cf63773dcc');
+    expect(createHash('sha256').update(toolBytes).digest('hex')).toBe('cb386a112bf4bfc09a3215fbb89c4f5cd66e889f6c348f55cda0c6b1c6eeb0e9');
     expect(toolFixture.catalogueSha256).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect(toolFixture.requests).toBe(68); expect(toolFixture.callerDeclarations).toBe(51); expect(toolFixture.capturedDeferredDeclarations).toBe(21);
     expect(toolFixture.rows.map(row => [row.model, row.case])).toEqual(profiles.flatMap(profile =>
@@ -525,7 +525,7 @@ describe('pinned original Anthropic metadata and observed accounting', () => {
       ...(vector.callerDeclarations ?? []), ...vector.capturedDeferredDeclarations,
     ]); // Whole pinned request arrays bind caller and deferred declarations together.
     expect(policyFixtures.map(fixture => createHash('sha256').update(fixture.bytes).digest('hex'))).toEqual([
-      '905454a70d75291e56a6d4be82f0c7609085329085f4606c06569ce2b7075d86', 'a66743b54cfb3fad04463f11dc70943f5a5ee2f474415b1839cbbaa2dafba966',
+      '937d8b5e70fedb26a9b1dc41e723ea7b6a7f116588d9f9c311b7f06c163a4345', '38944db3c7361faa9ff17b2d9c220eae3a5cdd7c0d6c9f1fb3e2150d43295bca',
     ]);
     expect(policyFixtures.map(fixture => [fixture.data.modelProjections, fixture.data.vectors, fixture.data.requests, fixture.data.refusals, fixture.data.capturedDeferredDeclarations]))
       .toEqual([[17, 306, 272, 34, 105], [2, 272, 172, 100, 86]]);

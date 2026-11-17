@@ -324,7 +324,7 @@ try {
     await process.command({ type: 'context_edit', id: 'edit', targetEntryId: original[0].id, replacement: 'edited answer' }); await process.prompt(5);
     const projected = assistants(bodies[5]);
     assert.deepEqual(projected.slice(0, 10), [{ type: 'function_call', id: 'fc_native', call_id: 'native-call', name: 'continuation_echo', arguments: '{"value":1}' },
-      { type: 'message', role: 'assistant', id: 'msg_pi_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] }, ...[2, 3].flatMap(replay)]);
+      { type: 'message', role: 'assistant', id: 'msg_aih_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] }, ...[2, 3].flatMap(replay)]);
     assert.deepEqual(projected.slice(10).filter(item => item.role === 'assistant').map(item => item.content), [4, 5].flatMap(turn =>
       [`native-${turn}-left`, `visible-${turn}`, `native-${turn}-right`].map(text => [{ type: 'output_text', text, annotations: [] }])));
     assert(!JSON.stringify(projected.slice(10)).includes('opaque-'));

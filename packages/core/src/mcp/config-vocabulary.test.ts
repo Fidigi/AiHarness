@@ -21,7 +21,7 @@ describe('MCP-01 native configuration vocabulary', () => {
     expect(mcpRequestTimeout({ ...config, timeout: 300 }, 15_000)).toBe(15_000);
   });
 
-  it('supports operator-owned CIMD without borrowing Pi client identity', () => {
+  it('supports operator-owned CIMD without borrowing another client identity', () => {
     expect(describeMcpConfigEntry('docs', { url: 'https://mcp.example', oauth: {
       clientRegistration: 'cimd', clientMetadataUrl: 'https://operator.example/oauth/client.json',
     } }).valid).toBe(true);

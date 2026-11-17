@@ -3005,7 +3005,7 @@
     "tariff": "Native known classifier tariff: input 0.1/million, strictly above 272000 input tokens all-input 0.2/million; output/cache zero tariffs do not imply cache support.",
     "images": "One supplied PNG-header byte sequence is serialized, not decoded/resized or accepted by a service. Existing Core safety bounds are unchanged.",
     "requestDefaults": "Complete native request objects retained; typed classifier temperature 0.2 is ignored by the captured SDK. No chat output/reasoning/tool contract is invented.",
-    "execution": "Runtime JS through original factory over owned verified HTTPS loopback with disposable credentials in Docker network none; not typed Pi, Core, installed consumer, platform, issuer/account or all-policy qualification.",
+    "execution": "Runtime JS through original factory over owned verified HTTPS loopback with disposable credentials in Docker network none; not complete typed-caller support, Core, installed consumer, platform, issuer/account or all-policy qualification.",
     "review": "No complete prerequisite/manual-reading assurance, generated-fixture review exception or Bedrock numeric contract selection."
   }
 }

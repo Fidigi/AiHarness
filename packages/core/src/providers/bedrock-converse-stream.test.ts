@@ -52,7 +52,7 @@ const signedReference = JSON.parse(signedReferenceBytes.toString()) as {
 
 describe('native Bedrock ConverseStream', () => {
   it.each(signedReference.rows)('captures and replays the E13 Opus4.6 signed carrier ($case)', async row => {
-    expect(createHash('sha256').update(signedReferenceBytes).digest('hex')).toBe('a138fd394df5928e9f8e633852f7818002d9e4814ac2a154b7d30f68c252150d');
+    expect(createHash('sha256').update(signedReferenceBytes).digest('hex')).toBe('47cd20ee440e6a5aa334e8dc1367f2ea83b81ec3d23185f1f8a530721237366d');
     expect(signedReference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
     const expected = row.turns[0].result.content.map(block => block.type === 'text'
       ? { type: 'text', text: block.text } : { type: 'reasoning', text: block.redacted ? '' : block.thinking,
@@ -592,19 +592,19 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
     expect(simpleDefaults.rows.map(row => row.observed.model)).toEqual(reference.models.map(model => model.id));
     expect(simpleNumeric.rows).toHaveLength(690); expect(simpleNumeric.rows.filter(row => row.expectedCoreRefusal)).toHaveLength(46);
     expect(simpleContext.rows).toHaveLength(211); expect(simpleContext.rows.filter(row => row.expectedCoreRefusal)).toHaveLength(47);
-    expect(createHash('sha256').update(outputBoundaryBytes).digest('hex')).toBe('716ec438933f21d1579054d122f95c089985553fbb17c02dcc9adabff6c8327c');
+    expect(createHash('sha256').update(outputBoundaryBytes).digest('hex')).toBe('4c48881e355600cc5bc9216f6ddf7d318fac0a86fe667ae6000fc9efb9be659c');
     expect(outputBoundaryReference.pinnedCommit).toBe(reference.pinnedCommit); expect(outputBoundaryReference.catalogueSha256).toBe(reference.catalogueSha256);
     expect(outputBoundaryReference.captureSha256).toBe('23e552940581dfd233e7c617f337481803f34f091a71a23dfd5ef79808dd4e2a');
     expect(outputBoundaryReference.modelProjections).toBe(193); expect(outputBoundaryReference.vectors).toBe(1351); expect(outputBoundaryReference.freshSdkRequests).toBe(1351);
     expect(outputBoundaryReference.rows).toHaveLength(1351); expect([...new Set(outputBoundaryReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
-    expect(createHash('sha256').update(toolSchemaBytes).digest('hex')).toBe('6d7f9341b36b41049e85a12a6a814c40952b6d2395a5fd79c8807cec43ac6ae1');
+    expect(createHash('sha256').update(toolSchemaBytes).digest('hex')).toBe('c684b713c03905a0ec4afbc5131aa4590138f6774f787efb40c5bc4b9a2d9a64');
     expect(toolSchemaReference.pinnedCommit).toBe(reference.pinnedCommit); expect(toolSchemaReference.catalogueSha256).toBe(reference.catalogueSha256);
     expect(toolSchemaReference.captureSha256).toBe('f00528ffdfe80c91aeb74378d014c378b74293b4e17fc540d77f617bb9d73bc7');
     expect(toolSchemaReference.reuseCaptureSha256).toBe(outputBoundaryReference.captureSha256);
     expect(toolSchemaReference.modelProjections).toBe(193); expect(toolSchemaReference.vectors).toBe(579);
     expect(toolSchemaReference.freshSdkRequests).toBe(386); expect(toolSchemaReference.reusedSdkRequests).toBe(193);
     expect(toolSchemaReference.rows).toHaveLength(579); expect([...new Set(toolSchemaReference.rows.map(row => row.model))]).toEqual(reference.models.map(model => model.id));
-    expect(createHash('sha256').update(reasoningBytes).digest('hex')).toBe('ed379ba9463355e2f6d1eb1814185d33b3c08b6253499402391632673e3b63aa');
+    expect(createHash('sha256').update(reasoningBytes).digest('hex')).toBe('f0b42691e04ef55e69520f0597f15057a5bf32be7cffba87cb59bcf6d76239c6');
     expect(reasoningReference.pinnedCommit).toBe(reference.pinnedCommit); expect(reasoningReference.catalogueSha256).toBe(reference.catalogueSha256);
     expect(reasoningReference.priorCaptureSha256).toBe('e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256');
     expect(reasoningReference.captureSha256).toBe('9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb');
@@ -951,7 +951,7 @@ describe('owned original Bedrock declarations, observed accounting and explicit 
       expect(JSON.parse(fetch.mock.calls[0][1]!.body as string)).toEqual(expected);
       expect(Object.getOwnPropertyDescriptor(selectedOptions, 'thinkingBudgets')?.get).toBe(unused);
     }
-    // Source-reviewed Pi GovCloud branch, not additional SDK wire observations.
+    // Source-reviewed GovCloud branch, not additional SDK wire observations.
     for (const model of [target.id, 'anthropic.claude-sonnet-4-6']) for (const binary of [false, true]) {
       const vector = remainingReasoning.find(row => row.model === model && row.thinking === 'high')!;
       const expected = structuredClone(vector.expectedBody) as { additionalModelRequestFields: { thinking: Record<string, unknown>; anthropic_beta?: unknown } };

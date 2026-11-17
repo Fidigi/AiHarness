@@ -77,7 +77,7 @@ it('uses a compaction checkpoint as the new root instead of reviving compacted t
 });
 it('does not give superseded unobserved loadouts permanent initial-tool authority', async () => {
   const manager = new SessionManager(), session = await manager.create(), value = provider(), calls: Array<Record<string, any>> = []; vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => { calls.push(JSON.parse(String(init.body))); return response(); }); await manager.addMessage(session.id, { role: 'user', content: 'recover' });
-  await manager.recordSessionLoadout(session.id, { provider: owner, model, tools: [{ ...a[0], name: '__pi_deferred_placeholder__' }], systemPrompt: '', thinking: 'high' }); await turn(manager, session.id, value, b);
+  await manager.recordSessionLoadout(session.id, { provider: owner, model, tools: [{ ...a[0], name: '__aih_deferred_placeholder__' }], systemPrompt: '', thinking: 'high' }); await turn(manager, session.id, value, b);
   expect(calls).toHaveLength(1); expect(calls[0].tools.slice(0, -1)).toEqual(b.map(declaration)); expect(JSON.stringify(calls[0].messages)).not.toContain('tool_addition');
 });
 it.each(['abort', 'branch'] as const)('retires the additional history read without publishing a late request or retrying on a new branch (%s)', async mode => {

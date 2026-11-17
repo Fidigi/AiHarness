@@ -99,8 +99,8 @@ export function applyAnthropicProfileToolDeclarations(body: Record<string, unkno
       input_schema: { ...(strict ? parameters : {}), type: 'object', properties: parameters.properties ?? {}, required: parameters.required ?? [] } };
   });
   if (scaffold && admitted && anthropicInlineTools(String(body.model), declarations.length)) {
-    if (declarations.some(tool => tool.name === '__pi_deferred_placeholder__')) invalid();
-    declarations.push({ name: '__pi_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.',
+    if (declarations.some(tool => tool.name === '__aih_deferred_placeholder__')) invalid();
+    declarations.push({ name: '__aih_deferred_placeholder__', description: 'Reserved placeholder. Never available. Never call this.',
       input_schema: { type: 'object', properties: {}, required: [] }, defer_loading: true });
   }
   body.tools = declarations;

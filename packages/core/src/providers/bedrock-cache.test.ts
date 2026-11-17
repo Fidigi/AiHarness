@@ -25,7 +25,7 @@ async function call(provider: BedrockProvider, messages: Message[], options: Bed
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 it('applies native Bedrock cache defaults and explicit short/long/none to fresh system and final-user blocks on JSON/binary requests', async () => {
-  const { bodies, fetch } = transport(); vi.stubEnv('PI_CACHE_RETENTION', 'long');
+  const { bodies, fetch } = transport(); vi.stubEnv('UNRELATED_CACHE_RETENTION', 'long');
   for (const selected of [model, 'global.anthropic.claude-fable-5']) for (const cacheRetention of [undefined, 'short', 'long', 'none'] as const) for (const stream of [false, true]) {
     const messages = [structuredClone(user), { ...structuredClone(user), id: 's', role: 'system' as const, content: 'plain instruction' }], options: BedrockChatOptions = { systemPrompt: 'leading instruction', ...(cacheRetention === undefined ? {} : { cacheRetention }), maxTokens: 64 }, before = structuredClone({ messages, options });
     expect((await call(create(selected), messages, options, stream)).usage?.totalTokens).toBe(10);

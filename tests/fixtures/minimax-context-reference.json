@@ -24113,5 +24113,5 @@
       "wireSha256": "a6904ef3f8e602a61144487d71ac35e3e4ac8b4fcc5bdd80cf5fa2390b273ce4"
     }
   ],
-  "limits": "Whole request arrays/fields use only exact replacement of the long initial user string by __INITIAL_USER_PADDING__. Pi estimates remain heuristics; unsafe budgets and metadata-incompatible media are retained,not authorization to weaken Core refusal. No image-resize/vendor/account/billing or host acceptance."
+  "limits": "Whole request arrays/fields use only exact replacement of the long initial user string by __INITIAL_USER_PADDING__. Context estimates remain heuristics; unsafe budgets and metadata-incompatible media are retained,not authorization to weaken Core refusal. No image-resize/vendor/account/billing or host acceptance."
 }

@@ -82,7 +82,7 @@ await extensions.load('review', api => {
   api.before('before:turn:end', data => data.trigger.kind === 'user'
     ? { continuation: { type: 'review:check', content: 'Check again' } } : undefined);
   api.before('before:agent:settle', () => ({ continuation: null }));
-  // @ts-expect-error foreign Pi event names are not native lifecycle listeners
+  // @ts-expect-error unsupported event names are not native lifecycle listeners
   api.on('turn_end', () => undefined);
   // @ts-expect-error hooks cannot replace authentic provider usage
   api.before('before:message', () => ({ usage: { totalTokens: 999 } }));

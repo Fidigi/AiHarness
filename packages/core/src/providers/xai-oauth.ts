@@ -37,7 +37,7 @@ export async function beginXaiDeviceLogin(options: XaiOAuthOptions = {}): Promis
   options = { signal: options.signal, fetcher: options.fetcher, redactor: options.redactor };
   const controller = new AbortController(), signal = AbortSignal.any([controller.signal, AbortSignal.timeout(LOGIN_MS), ...(options.signal ? [options.signal] : [])]), redactor = options.redactor ?? new CredentialRedactor();
   try {
-    const { response, data } = await post(DEVICE, { client_id: CLIENT, scope: SCOPE, referrer: 'pi' }, { ...options, signal }); redactor.add(typeof data.device_code === 'string' ? data.device_code : undefined);
+    const { response, data } = await post(DEVICE, { client_id: CLIENT, scope: SCOPE, referrer: 'ai-harness' }, { ...options, signal }); redactor.add(typeof data.device_code === 'string' ? data.device_code : undefined);
     if (!response.ok || !text(data.device_code, 4000) || !text(data.user_code, 500) || typeof data.expires_in !== 'number' || !Number.isFinite(data.expires_in) || data.expires_in <= 0) throw new Error();
     const base = verification(data.verification_uri), verificationUri = typeof data.verification_uri_complete === 'string' && data.verification_uri_complete ? verification(data.verification_uri_complete) : base;
     if (redactor.redact(verificationUri) !== verificationUri || redactor.redact(data.user_code) !== data.user_code) throw new Error();

@@ -993,5 +993,5 @@
       ]
     }
   ],
-  "limits": "Declared synthetic, non-cryptographic signature/blob inputs over owned HTTP2 TLS and genuine pinned Pi/AWS SDK; real physical framed replies and actual next-turn requests. Not a service-issued signature, cryptographic binding/validation, vendor/account qualification, arbitrary image-byte proof, Core contract/implementation or application acceptance. No adaptive block_binding is added for Opus4.6."
+  "limits": "Declared synthetic, non-cryptographic signature/blob inputs over owned HTTP2 TLS and genuine pinned Bedrock SDK; real physical framed replies and actual next-turn requests. Not a service-issued signature, cryptographic binding/validation, vendor/account qualification, arbitrary image-byte proof, Core contract/implementation or application acceptance. No adaptive block_binding is added for Opus4.6."
 }

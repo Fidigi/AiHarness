@@ -174,7 +174,7 @@ export default function exampleExtension(api) {
 
 ## Available API
 
-Use the [native extension/embedding contract v1](../../ai/topics/native-extension-contract.md) for the complete imports/events/results/UI host matrix, package/resource adaptation and unsupported Pi contracts. Runtime `on`/`before` refuses unknown event names; registration APIs captured from an unloaded generation refuse late registrations. The public root is `@ai-harness/core`, not a Pi/private/TUI peer alias.
+Use the [native extension/embedding contract v1](../../ai/topics/native-extension-contract.md) for the complete imports/events/results/UI host matrix, package/resource adaptation and unsupported contracts. Runtime `on`/`before` refuses unknown event names; registration APIs captured from an unloaded generation refuse late registrations. The public root is `@ai-harness/core`, not a private/TUI peer alias.
 
 Every factory receives `api.version`. Version `1` is also exported as `AI_HARNESS_EXTENSION_API_VERSION` from `@ai-harness/core`; extensions should reject an unsupported major before registering behavior.
 

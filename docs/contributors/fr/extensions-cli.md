@@ -174,7 +174,7 @@ export default function exampleExtension(api) {
 
 ## API disponible
 
-Le [contrat natif extensions/SDK v1](../../ai/topics/native-extension-contract.md) décrit les imports/événements/résultats/UI par hôte, l’adaptation des packages/ressources et les contrats Pi non pris en charge. `on`/`before` refuse les noms inconnus ; une API capturée d’une génération déchargée refuse les enregistrements tardifs. L’import public est `@ai-harness/core`, sans alias Pi/privé/TUI.
+Le [contrat natif extensions/SDK v1](../../ai/topics/native-extension-contract.md) décrit les imports/événements/résultats/UI par hôte, l’adaptation des packages/ressources et les contrats non pris en charge. `on`/`before` refuse les noms inconnus ; une API capturée d’une génération déchargée refuse les enregistrements tardifs. L’import public est `@ai-harness/core`, sans alias privé/TUI.
 
 Chaque factory reçoit `api.version`. La version `1` est aussi exportée sous le nom `AI_HARNESS_EXTENSION_API_VERSION` par `@ai-harness/core` ; une extension doit refuser une version majeure non prise en charge avant d’enregistrer son comportement.
 

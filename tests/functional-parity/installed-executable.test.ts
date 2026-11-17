@@ -3047,7 +3047,7 @@ it('dispatches native OpenAI Decisions through installed declarations, images an
     import { OpenAiDecisionsProvider, OPENAI_DECISIONS_MODEL, SpecializedModels, SpecializedModelError, runCodemode, closeProviderNetworkDispatchers } from '@ai-harness/core';
     assert.ok(fileURLToPath(import.meta.resolve('@ai-harness/core')).startsWith(${JSON.stringify(path.join(consumer, 'node_modules', '@ai-harness', 'core') + path.sep)}));
     const referenceBytes = readFileSync(new URL('./decisions-reference.json', import.meta.url));
-    assert.equal(createHash('sha256').update(referenceBytes).digest('hex'), '4817a0f3d739fbbac99c13c39e6a90c1b869cf1bea6f755406695a21cd4d8ec7');
+    assert.equal(createHash('sha256').update(referenceBytes).digest('hex'), '0580738b2b8fe40f173f6cebab58be5426bee5ce07fa9e6c4932418002cdde59');
     const reference = JSON.parse(referenceBytes.toString());
     assert.equal(reference.pinnedCommit, '06a466935536f8c9bcacb2d5efc0fc021be1bdff');
     assert.equal(reference.sourceCaptureSha256, '84abbac9c2c8dc864f8953f976774be375181857cb3383841fd6c69b888d7d84');

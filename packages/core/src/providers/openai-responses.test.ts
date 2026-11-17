@@ -156,7 +156,7 @@ describe('original Responses encrypted continuation', () => {
           const before = structuredClone({ messages, options });
           expect(await f.call(stream, messages, options)).toMatchObject({ content: 'ok', model: vector.model, api: vector.api });
           const body = JSON.parse(String(f.fetch.mock.calls.at(-1)![1]?.body));
-          // Core's existing plain-user representation differs from Pi; native continuation items are not normalized.
+          // Keep Core's plain-user representation; native continuation items are not normalized.
           expect(projection.expected.filter(item => item.role === 'user').map(item => item.content))
             .toEqual(['probe', 'continue'].map(text => [{ type: 'input_text', text }]));
           const expected = projection.expected.map(item => item.role === 'user'
@@ -239,7 +239,7 @@ describe('original Responses encrypted durability', () => {
       await f.call(stream, projected, { maxTokens: 64 });
       const edited = body().input.filter((item: Record<string, unknown>) => item.type === 'reasoning' || item.role === 'assistant' || item.type === 'function_call');
       expect(edited).toEqual([{ type: 'function_call', call_id: 'call_native', id: 'fc_native', name: 'echo', arguments: '{"x":1}' },
-        { type: 'message', role: 'assistant', id: 'msg_pi_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] },
+        { type: 'message', role: 'assistant', id: 'msg_aih_1', status: 'completed', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }] },
         ...redactJson(encryptedItems(false))]);
       expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
       expect((await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message' && entry.role === 'assistant').map(entry => entry.blocks)).toEqual(history.map(message => message.blocks));
@@ -332,7 +332,7 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       expect(reference.pinnedCommit).toBe('06a466935536f8c9bcacb2d5efc0fc021be1bdff');
       expect(reference.captureSha256).toBe('bd2ecd7d1f31612c828ce3a486352f4e501fa46a42e52a24012ab4498412e4bd');
       expect(reference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
-      expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('a8c7e448eb286ab48f147610598ac0abd8a2141578ac06f27b8046926cbc6ea6');
+      expect(createHash('sha256').update(continuationBytes).digest('hex')).toBe('2ac002f210a017824083f9302045b873ecc1e9733e081f37e112af6f1c319b26');
       expect(continuationReference.pinnedCommit).toBe(reference.pinnedCommit);
       expect(continuationReference.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       expect([continuationReference.modelProjections, continuationReference.replayCases, continuationReference.requests]).toEqual([88, 616, 704]);
@@ -342,7 +342,7 @@ describe('original OpenAI/Azure Responses unsigned call/item IDs and paired tool
       for (const fixture of [policy, boundaries, generation, imageReference, outputReference]) {
         expect(fixture.pinnedCommit).toBe(reference.pinnedCommit); expect(fixture.catalogueSha256[scope]).toBe(pin.files[scope].catalogue);
       }
-      expect(createHash('sha256').update(outputBytes).digest('hex')).toBe('c23c5d2a68486f451e21f32ba5d9e721ba621b38a8302ee8d905dd96530822cd');
+      expect(createHash('sha256').update(outputBytes).digest('hex')).toBe('a2eb60ee88b9deedc9e0f448b9376d406518e8dd6fc792b0062ddde267cb5679');
       expect(outputReference.captureSha256).toBe('1711a9c726114bc8490f2c790e372c1f061a73c9845e3f93290908243a876b10');
       expect([outputReference.modelProjections, outputReference.cases, outputReference.freshSdkRequests, outputReference.rows.length]).toEqual([88, 616, 616, 616]);
       expect([...new Set(outputReference.rows.filter(row => row.scope === scope).map(row => row.model))]).toEqual(models);

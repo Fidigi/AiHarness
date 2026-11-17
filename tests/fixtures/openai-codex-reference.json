@@ -1,4 +1,5 @@
 {
+  "fixtureNormalization": "Client-identifying headers are omitted; native request-body regression vectors are unchanged.",
   "sourceCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
   "sourceSha256": "41a0095ce395f6ddf50ce3adbe7d03960bf183fb0f2f94412c88923adaa013b0",
   "packageVersion": "1.2.0",
@@ -538,9 +539,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.3-codex-spark",
@@ -616,9 +615,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.3-codex-spark",
@@ -696,9 +693,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.3-codex-spark",
@@ -794,9 +789,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.5",
@@ -872,9 +865,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.5",
@@ -952,9 +943,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.5",
@@ -1050,9 +1039,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-luna",
@@ -1128,9 +1115,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-luna",
@@ -1208,9 +1193,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-luna",
@@ -1306,9 +1289,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-sol",
@@ -1384,9 +1365,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-sol",
@@ -1464,9 +1443,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-sol",
@@ -1562,9 +1539,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-terra",
@@ -1640,9 +1615,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-terra",
@@ -1720,9 +1693,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-5.6-terra",
@@ -1818,9 +1789,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-astra",
@@ -1893,9 +1862,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-astra",
@@ -1973,9 +1940,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-astra",
@@ -2068,9 +2033,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-luna",
@@ -2146,9 +2109,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-luna",
@@ -2226,9 +2187,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-luna",
@@ -2324,9 +2283,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-sol",
@@ -2402,9 +2359,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-sol",
@@ -2482,9 +2437,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6-sol",
@@ -2580,9 +2533,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6.1-sol",
@@ -2655,9 +2606,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6.1-sol",
@@ -2735,9 +2684,7 @@
           "chatgpt-account-id": "fixture-codex-account",
           "content-encoding": "zstd",
           "content-type": "application/json",
-          "openai-beta": "responses=experimental",
-          "originator": "pi",
-          "user-agent": "pi (linux 6.18.33.2-microsoft-standard-WSL2; x64)"
+          "openai-beta": "responses=experimental"
         },
         "body": {
           "model": "gpt-6.1-sol",

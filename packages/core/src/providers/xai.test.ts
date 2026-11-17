@@ -214,7 +214,7 @@ describe('explicit native xAI Responses SDK', () => {
         await restarted.appendContextEdit(session.id, { targetEntryId: history[0].id, replacement: 'edited answer' });
         const clone = (await restarted.cloneSession(session.id))!; expect(clone).toBeTruthy(); await invoke(getCompactionModelMessages(restarted, clone.id));
         expect(native()).toEqual([{ type: 'function_call', call_id: 'call_native', id: 'fc_native', name: 'echo', arguments: '{"x":1}' },
-          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }], status: 'completed', id: 'msg_pi_1' }, finalItem]);
+          { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'edited answer', annotations: [] }], status: 'completed', id: 'msg_aih_1' }, finalItem]);
         const raw = (await restarted.getRawEntries(session.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(raw).toHaveLength(2); expect(raw.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(message => message.blocks)));
         expect(clone.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual(history.map(message => message.blocks));
         const canonical = getCompactionModelMessages(restarted, clone.id), beforeSummary = structuredClone(canonical);

@@ -29,7 +29,7 @@ async function fixture(decide?: ConstructorParameters<typeof CacheWarmer>[2], on
   return { manager, session, stream, warmer, request, retire: () => { current = false; } };
 }
 
-describe('Pi-policy native prompt-cache warming', () => {
+describe('Native prompt-cache warming policy', () => {
   it('uses the 90% delay, minimum margin and $0.05 expected-savings rule', () => {
     expect(getCacheWarmingDelayMs(300_000)).toBe(270_000);
     expect(getCacheWarmingDelayMs(30_000)).toBe(20_000);
