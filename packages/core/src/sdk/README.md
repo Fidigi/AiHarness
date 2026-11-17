@@ -301,7 +301,7 @@ private loadout/file-operation checkpoints. Trusted `history()` can contain
 private instructions/schemas: it is not a browser/RPC share DTO. Native
 `onBeforeCompaction` / extension `before:session:compaction` permit only final
 `{summary}` replacement or veto; original cut/source/usage remain authoritative.
-No Pi import, historical-tool registration or implicit summary generation is added.
+No foreign journal import, historical-tool registration or implicit summary generation is added.
 
 `rename`, `setModel`, `setThinking`, `branchBefore(userEntryId)` and
 `applyCompaction(summary, firstKeptMessageId, details)` await Core persistence.
@@ -337,9 +337,9 @@ not another host's lifecycle or summary binding. Labels, arbitrary payload-ID
 rewriting and cross-process coordination remain separate. Related handles share
 one runtime/manager/provider group.
 
-### Native extension and Pi adaptation
+### Native extension integration
 
-This SDK uses the [native host/import/event/result/UI/package map](../../../../docs/ai/topics/native-extension-contract.md), not Pi signatures or automatic configured persistence. Supply `extensionRegistry` explicitly; its shared-loop hooks include `before:message` (text only), `before:tool:result` (public top-level result only), `before:turn:end` and `before:agent:settle` (bounded custom continuation). Context transformation remains `before:provider`; private state uses the selected manager ancestry. Unknown foreign event names and retired registration APIs refuse.
+This SDK uses the [native host/import/event/result/UI/package map](../../../../docs/ai/topics/native-extension-contract.md), not foreign signatures or automatic configured persistence. Supply `extensionRegistry` explicitly; its shared-loop hooks include `before:message` (text only), `before:tool:result` (public top-level result only), `before:turn:end` and `before:agent:settle` (bounded custom continuation). Context transformation remains `before:provider`; private state uses the selected manager ancestry. Unknown foreign event names and retired registration APIs refuse.
 
 ```ts
 await session.promptAndWait('Scheduled review context', {
@@ -347,7 +347,7 @@ await session.promptAndWait('Scheduled review context', {
 });
 ```
 
-Default prompts are user-triggered. Explicit custom starts accept text only and append native model-visible `custom_message`, not a fabricated user message. A turn/settlement hook may return `{continuation:{type,content}}`; last defined wins, null clears, and continuations share `maxToolRounds` with tools. Stop/dispose retires pending hook authority, not privileged Node code. Message veto/error conserves completed provider usage without executing pending tool calls; output replacement is not a streaming secret filter. All existing ownership, queue, copy, supplied-summary compaction and explicit resource methods retain their contracts. No executable/auth/MCP discovery or Pi methods are synthesized.
+Default prompts are user-triggered. Explicit custom starts accept text only and append native model-visible `custom_message`, not a fabricated user message. A turn/settlement hook may return `{continuation:{type,content}}`; last defined wins, null clears, and continuations share `maxToolRounds` with tools. Stop/dispose retires pending hook authority, not privileged Node code. Message veto/error conserves completed provider usage without executing pending tool calls; output replacement is not a streaming secret filter. All existing ownership, queue, copy, supplied-summary compaction and explicit resource methods retain their contracts. No executable/auth/MCP discovery or unsupported facade methods are synthesized.
 
 ### Ownership, persistence and limitations
 
@@ -496,7 +496,7 @@ refusés jusqu'au règlement durable. Les erreurs d'exécution donnent un snapsh
 `failed` ; les erreurs de démarrage/confiance/stockage peuvent rejeter l'appel.
 `steer`, `followUp`, `clearQueue` et `respondToInteraction` reprennent Core.
 
-L’adaptation suit le [contrat natif par hôte](../../../../docs/ai/topics/native-extension-contract.md), pas les signatures Pi. Un registre fourni explicitement peut utiliser `before:message` (texte seul), `before:tool:result` (résultat public externe), `before:turn:end` et `before:agent:settle`. Les deux derniers retournent éventuellement `{continuation:{type,content}}` ; dernière valeur définie retenue, null pour effacer, avec le même budget `maxToolRounds`. `promptAndWait(texte,{trigger:{kind:'custom',type:'automation:review'}})` accepte du texte seul et ajoute un `custom_message` visible au modèle, pas un faux message utilisateur. Par défaut le déclencheur reste utilisateur. Un veto/échec conserve l’usage fournisseur terminé sans lancer ses appels d’outils en attente ; les deltas déjà affichés ne sont pas effacés. Stop/dispose retire l’autorité des callbacks tardifs, sans sandbox Node. Les noms d’événements étrangers et API d’enregistrement retirées sont refusés ; aucune découverte exécutable/auth/MCP implicite n’est ajoutée.
+L’adaptation suit le [contrat natif par hôte](../../../../docs/ai/topics/native-extension-contract.md), pas des signatures étrangères. Un registre fourni explicitement peut utiliser `before:message` (texte seul), `before:tool:result` (résultat public externe), `before:turn:end` et `before:agent:settle`. Les deux derniers retournent éventuellement `{continuation:{type,content}}` ; dernière valeur définie retenue, null pour effacer, avec le même budget `maxToolRounds`. `promptAndWait(texte,{trigger:{kind:'custom',type:'automation:review'}})` accepte du texte seul et ajoute un `custom_message` visible au modèle, pas un faux message utilisateur. Par défaut le déclencheur reste utilisateur. Un veto/échec conserve l’usage fournisseur terminé sans lancer ses appels d’outils en attente ; les deltas déjà affichés ne sont pas effacés. Stop/dispose retire l’autorité des callbacks tardifs, sans sandbox Node. Les noms d’événements étrangers et API d’enregistrement retirées sont refusés ; aucune découverte exécutable/auth/MCP implicite n’est ajoutée.
 
 `subscribe` et `events(after)` exposent le journal séquencé Core v1, données
 `unknown`, replay borné et indicateur `reset`. Une erreur d'observateur ne casse
@@ -575,7 +575,7 @@ checkpoint et les opérations déclarées des outils fichiers. `history()` est u
 lecture privilégiée pouvant contenir des instructions/schémas privés, pas un DTO
 public. `onBeforeCompaction` / `before:session:compaction` autorisent seulement le
 remplacement final `{summary}` ou le veto, sans changer source/borne/usage. Aucun
-import Pi, enregistrement d’outil historique ou appel de résumé implicite n’est ajouté.
+import de journal étranger, enregistrement d’outil historique ou appel de résumé implicite n’est ajouté.
 
 `rename`, `setModel`, `setThinking`, `branchBefore` et `applyCompaction` attendent
 la persistance Core. La compaction manuelle exige un résumé fourni et une borne

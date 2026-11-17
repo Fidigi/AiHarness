@@ -20,7 +20,7 @@ Existing facade fork/branchBefore/clone now use Core ordered cancellation throug
 
 ## Native embedding adaptation
 
-Use the [host/SDK adaptation map](../../ai/topics/native-extension-contract.md), not Pi method aliases. The explicit registry can provide bounded output/turn/settlement hooks; `prompt(text,{trigger:{kind:'custom',type:'automation:review'}})` persists custom model-visible context instead of a user message. Continuations share the existing round budget and durable stop/ownership rules. Constructor/reads remain passive; provider switching, executable/auth/MCP discovery and custom renderers are not silently added. The genuine public declaration/runtime consumer covers these additions alongside existing queue/copy/compaction/borrowed-resource controls.
+Use the [host/SDK adaptation map](../../ai/topics/native-extension-contract.md), not foreign method aliases. The explicit registry can provide bounded output/turn/settlement hooks; `prompt(text,{trigger:{kind:'custom',type:'automation:review'}})` persists custom model-visible context instead of a user message. Continuations share the existing round budget and durable stop/ownership rules. Constructor/reads remain passive; provider switching, executable/auth/MCP discovery and custom renderers are not silently added. The genuine public declaration/runtime consumer covers these additions alongside existing queue/copy/compaction/borrowed-resource controls.
 
 ## Scoped Markdown resources
 

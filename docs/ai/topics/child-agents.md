@@ -6,7 +6,7 @@
 
 Child agents delegate a bounded task to the shared `AgentRuntime` under a reusable global/project profile. Each run creates a persisted child session linked to its parent; the in-memory run registry provides progress, stop, result, and attention state.
 
-Child execution reuses session, provider, tool, trust, extension, and cancellation contracts. The [WEB-06 native contract](../../audit/pi/WEB-06.md) retains version-1 `subagents.json`; it does not load Pi Web profiles. See [`sessions.md`](./sessions.md) for lineage and [`extensions.md`](./extensions.md) for the built-in `spawn_subagent` tool.
+Child execution reuses session, provider, tool, trust, extension, and cancellation contracts. Profiles use version-1 `subagents.json`; foreign profile files are not loaded. See [`sessions.md`](./sessions.md) for lineage and [`extensions.md`](./extensions.md) for the built-in `spawn_subagent` tool.
 
 ## Main Entry Points
 

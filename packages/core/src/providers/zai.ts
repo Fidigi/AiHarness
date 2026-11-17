@@ -20,7 +20,7 @@ export interface ZaiProfile {
 const thinking52 = Object.freeze({ off: 'none', minimal: null, low: null, medium: null, high: 'high', xhigh: null, max: 'max' });
 const thinking53 = Object.freeze({ off: null, minimal: null, low: 'low', medium: null, high: 'high', xhigh: null, max: 'max' });
 const resize = Object.freeze({ images: Object.freeze({ resize: Object.freeze({ maxWidth: 2000, maxHeight: 2000, maxBytes: 4718592, jpegQuality: 80 }) }) });
-// Reviewed Pi 1.2.0 zai.json projection. Zero-only highspeed prices stay unknown; resize is declarative.
+// Reviewed zai.json catalogue projection. Zero-only highspeed prices stay unknown; resize is declarative.
 export const ZAI_MODELS: readonly ZaiProfile[] = Object.freeze([
   { id: 'glm-4.7', name: 'GLM-4.7', contextWindow: 204800, supportsReasoningEffort: false, declaredInput: ['text'] as const,
     declaredPricing: { inputPerMillion: 0.6, outputPerMillion: 2.2, cacheReadPerMillion: 0.11, cacheWritePerMillion: 0 } },

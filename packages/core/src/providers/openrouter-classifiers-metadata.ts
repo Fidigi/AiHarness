@@ -9,7 +9,7 @@ export interface OpenRouterClassifierProfile {
   /** Zero-only fallback tables do not establish free calls. */
   readonly pricing?: Readonly<Required<ModelPricing>>;
 }
-// Reviewed installed Pi 1.2.0 data/openrouter.json projection, not live availability or complete effective profiles.
+// Reviewed frozen openrouter.json catalogue projection, not live availability or complete effective profiles.
 const rows: ReadonlyArray<readonly [string, string, number, boolean, number, number?]> = [
   ['~perplexity/pplx-decider-27b-latest', 'Perplexity: Decider 27B Latest', 262144, true, 0.02],
   ['~typesafe/jev-latest', 'TypeSafe: Jev Latest', 64000, false, 0.042],

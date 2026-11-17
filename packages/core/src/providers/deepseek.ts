@@ -16,7 +16,7 @@ export interface DeepSeekProfile {
   readonly declaredInputLimits?: Readonly<{ images: Readonly<{ resize: Readonly<{ maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }> }> }>;
 }
 
-// Reviewed Pi 1.2.0 deepseek.json projection; image resize declarations are not an effective resizer.
+// Reviewed deepseek.json catalogue projection; image resize declarations are not an effective resizer.
 export const DEEPSEEK_MODELS: readonly DeepSeekProfile[] = Object.freeze([
   { id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash', declaredInput: Object.freeze(['text', 'image'] as const),
     pricing: Object.freeze({ inputPerMillion: 0.3, outputPerMillion: 1.2, cacheReadPerMillion: 0.006, cacheWritePerMillion: 0 }),

@@ -69,7 +69,7 @@ export function evaluateCacheWarming(promptTokens: number, pricing: ModelPricing
     action: economicsAvailable && expectedSavings >= 0.05 ? 'warm' : 'stop' };
 }
 
-/** One request prefix, one timer, no tools or model-context entries. Mirrors Pi 1.2.0's policy. */
+/** One request prefix, one timer, no tools or model-context entries. */
 export class CacheWarmer {
   private active?: ActiveWarm;
   private inactive: CacheWarmingStatus = { state: 'inactive', reason: 'waiting for first request' };

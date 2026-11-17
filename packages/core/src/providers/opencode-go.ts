@@ -87,7 +87,7 @@ export function prepareOpenCodeGoMessage(body: Record<string, unknown>, options?
   }
   return body;
 }
-/** SDK explicit caps and physical output admission; not Pi simple-options/context-reserve equivalence. */
+/** SDK explicit caps and physical output admission; no general simple-options/context-reserve equivalence guarantee. */
 export function prepareOpenCodeGoOutputBudget(owned: ChatOptions, configuredModel: string): Readonly<PreparedNativeOutputBudget> {
   const options: ChatOptions = { ...owned, model: owned.model || configuredModel };
   try { const profile = opencodeGoProfile(options.model!); opencodeGoThinking(profile.id, options);

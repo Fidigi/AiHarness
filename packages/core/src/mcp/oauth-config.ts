@@ -9,7 +9,7 @@ export interface McpOAuthConfig {
   callbackPort?: number;
   callbackUrl?: string;
   authServerMetadataUrl?: string;
-  /** CIMD uses an operator-owned document, never Pi's public client identity. */
+  /** CIMD uses an operator-owned document, never a third-party public client identity. */
   clientRegistration?: 'dynamic' | 'cimd';
   clientMetadataUrl?: string;
 }

@@ -1,6 +1,6 @@
 # Décisions d’architecture : runtime partagé et évolutions Web
 
-Date : **2026-10-17**. Portée : contrats AiHarness implémentés à `6903145` et documentation opérateur/développeur associée. Ce registre décrit décisions et limites, sans certifier parité Pi complète, santé de production, publication distante ou appareils physiques.
+Date : **2026-10-17**. Portée : contrats AiHarness implémentés à `6903145` et documentation opérateur/développeur associée. Ce registre décrit décisions et limites, sans certifier compatibilité tierce complète, santé de production, publication distante ou appareils physiques.
 
 Lire ensemble la [vue d’ensemble](./architecture-overview.md), l’[architecture serveur](./server-architecture.md) et le [guide opérateur](../../users/fr/operations.md). La navigation d’implémentation reste dans la [carte du projet](../../ai/project-map.md).
 

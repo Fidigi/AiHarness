@@ -20,7 +20,7 @@ Welcome to AiHarness's technical documentation, designed for AI agents. Each fil
 | Extensions System | [`topics/extensions.md`](./topics/extensions.md) | ~270 lines — owned MCP registration and generation retirement |
 | Native Extension / SDK Contract | [`topics/native-extension-contract.md`](./topics/native-extension-contract.md) | ~110 lines — host/import/event/UI/package adaptation |
 | CLI Interface | [`topics/cli-reference.md`](./topics/cli-reference.md) | ~463 lines |
-| CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~150 lines — explicit issuer/storage-label separation and post-loading authorization deadline |
+| CLI Invocation Contract | [`topics/cli-invocation-contract.md`](./topics/cli-invocation-contract.md) | ~130 lines — explicit issuer/storage-label separation and post-loading authorization deadline |
 | Native Terminal Contract | [`topics/terminal-contract.md`](./topics/terminal-contract.md) | ~140 lines — capabilities, 90 pinned/29 native actions, stored-only settings and PTY boundaries |
 | Terminal Themes | [`topics/themes.md`](./topics/themes.md) | ~80 lines |
 | Native Editor Schemas | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |

@@ -17,7 +17,7 @@ export interface GroqProfile {
 }
 const gptThinking = Object.freeze({ off: null, minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null });
 const resize = Object.freeze({ images: Object.freeze({ resize: Object.freeze({ maxWidth: 2000, maxHeight: 2000, maxBytes: 4718592, jpegQuality: 80 }) }) });
-// Reviewed Pi 1.2.0 groq.json projection; resize declarations are not an effective resizer.
+// Reviewed groq.json catalogue projection; resize declarations are not an effective resizer.
 export const GROQ_MODELS: readonly GroqProfile[] = Object.freeze([
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', contextWindow: 131072, maxOutputTokens: 131072, reasoning: false, declaredInput: ['text'] as const,
     pricing: { inputPerMillion: 0.05, outputPerMillion: 0.08, cacheReadPerMillion: 0, cacheWritePerMillion: 0 } },

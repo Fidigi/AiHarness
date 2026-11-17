@@ -1,6 +1,6 @@
 # RPC extension UI
 
-AiHarness owns this additive RPC contract; it is not a Pi wire/API compatibility layer. Start with `ai-harness --mode rpc`. Read stdout continuously as LF-framed JSONL; write replies to stdin. Diagnostics use stderr.
+AiHarness owns this additive RPC contract; it is not a foreign wire/API compatibility layer. Start with `ai-harness --mode rpc`. Read stdout continuously as LF-framed JSONL; write replies to stdin. Diagnostics use stderr.
 
 ## Extension context
 

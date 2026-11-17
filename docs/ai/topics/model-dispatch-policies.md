@@ -4,7 +4,7 @@
 
 ## Overview
 
-Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs following the approved Pi 1.2.0 policy, not a Pi extension ABI or full provider-parity certificate. MOD-04 routing and MOD-05 cache delivery are tracked separately from whole-platform qualification in `docs/audit/pi/AUDIT-5.md`.
+Core separates selectable virtual chat models from their physical provider requests and owns a session-local prompt-cache warmer. These are native APIs, not a foreign extension ABI or a complete provider-compatibility certificate. Routing and cache behavior remain separate from whole-platform qualification.
 
 ## Main Entry Points
 
@@ -42,7 +42,7 @@ On a physical provider/model change, keep public assistant text/images/tool call
 
 Child agents reuse the same loop with fresh child-local state, never the parent's private router state. Server legacy SSE aliases, direct JSON adapter calls and tool-free summaries route through the same registry without session-state/warming authority. Their usage and optional terminal provider/model identify physical work; ordinary non-routed legacy framing is unchanged. Completed transports and visible output cannot trigger another routed paid attempt. Failed visible Core/RPC output is stored under its physical identity.
 
-[IMPORTANT] Fallback never loads missing extension code, discovers models or selects another account. Installed and real HTTP/browser controls below establish native routing boundaries only; exact execution receipts and independent provider/platform gaps remain in AUDIT-5.
+[IMPORTANT] Fallback never loads missing extension code, discovers models or selects another account. Installed and real HTTP/browser controls below establish native routing boundaries only; provider/platform qualification remains independent.
 
 ### Prompt cache policy
 
@@ -90,7 +90,7 @@ Web's independent administrator-owned `config.json` global boolean defaults to t
 - `packages/core/src/providers/cache-notices.test.ts`: significant miss derivation including long-retention cost, stable replay and passive usage validation.
 - `packages/core/src/sessions/session-accounting.test.ts`: non-message usage totals, memory/durable reload and independent clone without model-context pollution.
 - `packages/core/src/providers/anthropic-thinking.test.ts`: actual loopback chat/stream cache-retention payloads alongside reasoning dialects.
-- Existing Core provider-output/request guards and CLI/RPC/HTTP compaction lifecycle tests remain separate regression controls. Test presence is not a successful execution receipt; consult AUDIT-5.
+- Existing Core provider-output/request guards and CLI/RPC/HTTP compaction lifecycle tests remain separate regression controls. Test presence is not a successful execution receipt.
 
 ## Common Changes
 

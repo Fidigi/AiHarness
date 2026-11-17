@@ -1,6 +1,6 @@
 import type { Message, MessageContentBlock } from '../types/index.js';
 
-/** Pi-style request projection only: raw history is never edited or authenticated here. */
+/** Request projection only: raw history is never edited or authenticated here. */
 export function projectAssistantReplay(message: Message, provider: string, model: string, api?: string): Message {
   if (message.role !== 'assistant'
     || message.provider === provider && message.model === model && message.api === api) return message;

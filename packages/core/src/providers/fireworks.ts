@@ -83,7 +83,7 @@ export function prepareFireworksMessage(body: Record<string, unknown>, options?:
   if (Array.isArray(body.messages)) for (const message of body.messages) if (record(message) && Array.isArray(message.content)) for (const block of message.content) if (record(block) && block.cache_control) { if (control) block.cache_control = control; else delete block.cache_control; }
   return body;
 }
-/** Exact SDK caps and conservative native admission; not Pi context estimation or cap-expansion equivalence. */
+/** Exact SDK caps and conservative native admission; no general context-estimation or cap-expansion guarantee. */
 export function prepareFireworksOutputBudget(owned: ChatOptions, configuredModel: string): Readonly<PreparedNativeOutputBudget> {
   const options: ChatOptions = { ...owned, model: owned.model ?? configuredModel };
   try { const profile = fireworksProfile(options.model!); if (profile.thinkingMode === 'numeric' && fireworksThinking(profile.id, options) !== 'off') {

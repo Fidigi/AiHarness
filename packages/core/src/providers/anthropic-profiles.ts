@@ -3,7 +3,7 @@ import type { Message } from '../types/index.js';
 import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 import type { PublishedModelMetadata, PublishedThinkingLevel } from './model-metadata.js';
 
-// Pi 1.2.0 / 06a466935536f8c9bcacb2d5efc0fc021be1bdff, generated catalogue
+// Frozen generated catalogue, source revision 06a466935536f8c9bcacb2d5efc0fc021be1bdff.
 // The anthropic.json digest is checked against the pinned manifest in the independent fixture.
 // These are owned declarations and observed prices, not complete request/media policies.
 type Row = readonly [id: string, name: string, context: number, output: number,

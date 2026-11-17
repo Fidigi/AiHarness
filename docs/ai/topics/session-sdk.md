@@ -31,7 +31,7 @@ Queues, useful bounded overflow/length recovery, trusted readonly batches and op
 
 ## Extension adaptation
 
-The [native host/SDK adaptation map](./native-extension-contract.md) specifies supported imports, hooks/results/UI and unavailable Pi methods. `prompt(text,{trigger:{kind:'custom',type:'review:check'}})` explicitly starts model-visible custom context instead of a user journal message; default prompts remain user-triggered. Borrowed registry output hooks and turn/settlement continuations run in Core with the same round budget, cancellation and authentic accounting. The factory still loads no executable/auth/MCP resources. `sdk/execution-hooks.test.ts` and the external `sdk/public-consumer.test.ts` cover these additions; the manager's additive fourth `appendCustomMessage` admission argument supplies cancellation without changing v2/store requirements.
+The [native host/SDK adaptation map](./native-extension-contract.md) specifies supported imports, hooks/results/UI and unsupported facade operations. `prompt(text,{trigger:{kind:'custom',type:'review:check'}})` explicitly starts model-visible custom context instead of a user journal message; default prompts remain user-triggered. Borrowed registry output hooks and turn/settlement continuations run in Core with the same round budget, cancellation and authentic accounting. The factory still loads no executable/auth/MCP resources. `sdk/execution-hooks.test.ts` and the external `sdk/public-consumer.test.ts` cover these additions; the manager's additive fourth `appendCustomMessage` admission argument supplies cancellation without changing v2/store requirements.
 
 ## Pending prompt ownership
 

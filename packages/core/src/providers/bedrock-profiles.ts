@@ -5,7 +5,7 @@ import type { PublishedModelMetadata } from './model-metadata.js';
 import { copyThinkingBudgets } from './thinking-budgets.js';
 import { ProviderOutputBudgetError, type PreparedNativeOutputBudget } from './provider-output-budget.js';
 
-// Pi 1.2.0 / 06a4669, approved amazon-bedrock.json; the independent fixture binds
+// Frozen amazon-bedrock.json, source revision 06a4669; the independent fixture binds
 // its digest and executed AWS SDK observations. Declarations are not availability.
 interface Rates { readonly input: number; readonly output: number; readonly cacheRead: number; readonly cacheWrite: number }
 interface Cost extends Rates { readonly tiers?: readonly (Rates & { readonly inputTokensAbove: number })[] }

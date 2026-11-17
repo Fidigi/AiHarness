@@ -31,7 +31,7 @@ function contextScalar(value: object, key: string): unknown {
   return field;
 }
 
-/** Pi's approximate transcript estimate, not vendor tokenization or observed billing. */
+/** Approximate transcript estimate, not vendor tokenization or observed billing. */
 export function simpleContextTokens(messages: readonly Message[], options: ChatOptions | undefined): number {
   const initialSystem = Boolean(options?.systemPrompt || options?.tools?.length);
   let tokens = initialSystem ? Math.ceil((options?.systemPrompt?.length ?? 0) / 3.5)

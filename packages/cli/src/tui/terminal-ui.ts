@@ -392,7 +392,7 @@ ${chalk.bold('Input')}
   ${chalk.cyan('Alt+Backspace / Alt+D')}          Delete previous/next word
   ${chalk.cyan('Ctrl+Z / Alt+Z')}                Undo/redo draft edits (bounded, not submitted messages)
   Bracketed paste is inert until Enter (64 KiB maximum); unbracketed input is ordinary typing.
-  Native terminal selection only; no application mouse, inline images or Pi component protocol.
+  Native terminal selection only; no application mouse, inline images or custom terminal component protocol.
   Stored unsupported preferences are reported by /settings, not silently applied.
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
   ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor

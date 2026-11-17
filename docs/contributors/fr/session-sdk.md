@@ -20,7 +20,7 @@ Les méthodes existantes fork/branchBefore/clone utilisent désormais l’admiss
 
 ## Adaptation de l’intégration native
 
-Utilisez la [matrice hôtes/SDK](../../ai/topics/native-extension-contract.md), pas des alias des méthodes Pi. Le registre explicite fournit des hooks bornés de sortie/tour/pré-settlement ; `prompt(texte,{trigger:{kind:'custom',type:'automation:review'}})` persiste un contexte personnalisé visible au modèle au lieu d’un message utilisateur. Les continuations partagent budget de tours, arrêt durable et propriété existants. Fabrique/lectures restent passives ; changement de provider, découverte exécutable/auth/MCP et renderers arbitraires ne sont pas ajoutés implicitement. Le véritable consommateur public de déclarations/runtime couvre ces ajouts avec les contrôles existants de files/copies/compactage/ressources prêtées.
+Utilisez la [matrice hôtes/SDK](../../ai/topics/native-extension-contract.md), pas des alias de méthodes étrangères. Le registre explicite fournit des hooks bornés de sortie/tour/pré-settlement ; `prompt(texte,{trigger:{kind:'custom',type:'automation:review'}})` persiste un contexte personnalisé visible au modèle au lieu d’un message utilisateur. Les continuations partagent budget de tours, arrêt durable et propriété existants. Fabrique/lectures restent passives ; changement de provider, découverte exécutable/auth/MCP et renderers arbitraires ne sont pas ajoutés implicitement. Le véritable consommateur public de déclarations/runtime couvre ces ajouts avec les contrôles existants de files/copies/compactage/ressources prêtées.
 
 ## Ressources Markdown contextualisées
 

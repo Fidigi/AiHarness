@@ -15,7 +15,7 @@ export interface XiaomiProfile {
   readonly thinkingLevelMap: Readonly<Record<PublishedThinkingLevel, string | null>>;
   readonly declaredInputLimits?: Readonly<{ images: Readonly<{ resize: Readonly<{ maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }> }> }>;
 }
-// Reviewed Pi 1.2.0 direct Xiaomi declarations,not regional token-plan or routed profiles.
+// Reviewed direct Xiaomi catalogue declarations,not regional token-plan or routed profiles.
 const reviewed: readonly Pick<XiaomiProfile, 'id' | 'name' | 'declaredInput' | 'pricing'>[] = [
   { id: 'mimo-v2.5', name: 'MiMo-V2.5', declaredInput: ['text', 'image'], pricing: { inputPerMillion: 0.14, outputPerMillion: 0.28, cacheReadPerMillion: 0.0028, cacheWritePerMillion: 0 } },
   { id: 'mimo-v2.5-pro', name: 'MiMo-V2.5-Pro', declaredInput: ['text'], pricing: { inputPerMillion: 0.435, outputPerMillion: 0.87, cacheReadPerMillion: 0.0036, cacheWritePerMillion: 0 } },

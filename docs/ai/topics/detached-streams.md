@@ -4,7 +4,7 @@
 
 ## Overview
 
-Core owns provider/tool execution, journal identity and durable evidence. Server owns the detached SSE delivery buffer. Web owns projections and optional controls, never execution, accounting or persisted context. These are AiHarness contracts, not Pi wire compatibility.
+Core owns provider/tool execution, journal identity and durable evidence. Server owns the detached SSE delivery buffer. Web owns projections and optional controls, never execution, accounting or persisted context. These are native AiHarness contracts, not a foreign wire compatibility layer.
 
 ## Main Entry Points
 

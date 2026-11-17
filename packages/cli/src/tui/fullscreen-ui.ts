@@ -180,7 +180,7 @@ export class FullscreenUI extends TerminalUI {
       'Alt+J : nouvelle ligne · Ctrl+←/→ ou Alt+B/F : mots · Alt+Backspace/D : supprimer un mot',
       'Ctrl+Z / Alt+Z : annuler/rétablir le brouillon (historique borné, pas les messages envoyés)',
       'Collage bracketed paste : inerte avant Entrée, maximum 64 Kio ; sinon saisie ordinaire.',
-      'Sélection native du terminal seulement ; pas de souris applicative, images inline ou composants Pi.',
+      'Sélection native du terminal seulement ; pas de souris applicative, images inline ou composants terminal personnalisés.',
       '/settings distingue les préférences stockées non prises en charge du comportement actif.',
     ].join('\n'));
   }

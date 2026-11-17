@@ -16,7 +16,7 @@ export interface CerebrasProfile {
   readonly declaredInputLimits?: Readonly<{ images: Readonly<{ resize: Readonly<{ maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }> }> }>;
 }
 
-// Reviewed Pi 1.2.0 cerebras.json projection; resize declarations are not an effective resizer.
+// Reviewed cerebras.json catalogue projection; resize declarations are not an effective resizer.
 export const CEREBRAS_MODELS: readonly CerebrasProfile[] = Object.freeze([
   { id: 'gpt-oss-120b', name: 'GPT OSS 120B', declaredInput: Object.freeze(['text'] as const),
     pricing: Object.freeze({ inputPerMillion: 0.35, outputPerMillion: 0.75, cacheReadPerMillion: 0, cacheWritePerMillion: 0 }),

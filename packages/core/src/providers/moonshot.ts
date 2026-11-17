@@ -18,7 +18,7 @@ export interface MoonshotProfile {
   readonly thinkingLevelMap?: Readonly<Partial<Record<PublishedThinkingLevel, string | null>>>;
   readonly declaredInputLimits?: Readonly<{ images: Readonly<{ resize: Readonly<{ maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }> }> }>;
 }
-// Reviewed Pi 1.2.0 moonshotai.json projection; image resize limits remain declarative.
+// Reviewed moonshotai.json catalogue projection; image resize limits remain declarative.
 export const MOONSHOT_MODELS: readonly MoonshotProfile[] = Object.freeze(([
 {"id":"kimi-k2.6","name":"Kimi K2.6","api":"openai-completions","contextWindow":262144,"maxOutputTokens":262144,"reasoning":true,"declaredInput":["text","image"],"pricing":{"inputPerMillion":0.95,"outputPerMillion":4,"cacheReadPerMillion":0.16,"cacheWritePerMillion":0},"thinkingFormat":"deepseek","requiresReasoningContent":false,"supportsReasoningEffort":false,"declaredInputLimits":{"images":{"resize":{"maxWidth":2000,"maxHeight":2000,"maxBytes":4718592,"jpegQuality":80}}}},
 {"id":"kimi-k2.7-code","name":"Kimi K2.7 Code","api":"openai-completions","contextWindow":262144,"maxOutputTokens":262144,"reasoning":true,"declaredInput":["text","image"],"pricing":{"inputPerMillion":0.95,"outputPerMillion":4,"cacheReadPerMillion":0.19,"cacheWritePerMillion":0},"thinkingFormat":"deepseek","requiresReasoningContent":false,"supportsReasoningEffort":false,"thinkingLevelMap":{"off":null},"declaredInputLimits":{"images":{"resize":{"maxWidth":2000,"maxHeight":2000,"maxBytes":4718592,"jpegQuality":80}}}},

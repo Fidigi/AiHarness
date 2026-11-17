@@ -8,7 +8,7 @@ export interface OpenRouterImageProfile {
   readonly input: readonly ('text' | 'image')[]; readonly output: readonly ('text' | 'image')[];
   readonly pricing: Readonly<Required<ModelPricing>>; readonly inputLimits?: typeof imageLimits;
 }
-// Reviewed projection of installed Pi 1.2.0 data/openrouter.json, not live availability or effective resize policy.
+// Reviewed projection of the frozen openrouter.json catalogue, not live availability or effective resize policy.
 // Zero-only tables are ambiguous: upstream also uses zero for missing/invalid/router prices, not proof of free images.
 const rows: ReadonlyArray<readonly [string, string, string, string, (readonly [number, number, number, number])?]> = [
   ["black-forest-labs/flux-3-image","Black Forest Labs: FLUX.3 Image","ti","i"],

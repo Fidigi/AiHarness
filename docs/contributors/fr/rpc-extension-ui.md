@@ -1,6 +1,6 @@
 # UI des extensions en RPC
 
-Ce contrat additif appartient à AiHarness : ce n’est pas une couche de compatibilité avec l’API ou le protocole Pi. Démarrer avec `ai-harness --mode rpc`. Lire stdout continuellement en JSONL délimité par LF ; envoyer les réponses sur stdin. Les diagnostics utilisent stderr.
+Ce contrat additif appartient à AiHarness : ce n’est pas une couche de compatibilité avec une API ou un protocole tiers. Démarrer avec `ai-harness --mode rpc`. Lire stdout continuellement en JSONL délimité par LF ; envoyer les réponses sur stdin. Les diagnostics utilisent stderr.
 
 ## Contexte d’extension
 

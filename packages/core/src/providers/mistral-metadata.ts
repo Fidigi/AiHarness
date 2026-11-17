@@ -1,6 +1,6 @@
 import type { PublishedModelMetadata } from './model-metadata.js';
 
-// Native projection of dist/providers/data/mistral.json from Pi AI 1.2.0.
+// Native projection of the frozen mistral.json catalogue.
 // Provenance and refresh/qualification limits: docs/ai/topics/provider-matrix.md.
 // No source or vendor fetch occurs at runtime; aliases retain their pinned meaning.
 type Row = [id: string, name: string, context: number, output: number, inputPrice: number,

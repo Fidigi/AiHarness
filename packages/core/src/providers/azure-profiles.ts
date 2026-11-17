@@ -4,7 +4,7 @@ import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool
 import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS, type PublishedModelMetadata, type PublishedThinkingLevel } from './model-metadata.js';
 import { nativeResponsesUsage, prepareNativeResponses, type NativeResponsesProfile } from './openai-responses.js';
 
-// Independent approved Azure data, Pi 1.2.0 / 06a4669 / 46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727.
+// Independent frozen Azure data, source revision 06a4669 / 46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727.
 // Sparse maps and C tariffs belong to Azure, not same-ID OpenAI/DeepSeek declarations.
 type Api = 'azure-openai-responses' | 'openai-completions';
 interface Rates { readonly input: number; readonly output: number; readonly cacheRead: number; readonly cacheWrite: number }

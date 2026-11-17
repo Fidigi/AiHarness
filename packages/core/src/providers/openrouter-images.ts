@@ -23,7 +23,7 @@ export function copyNativeImageRequest(value: NativeImageRequest): NativeImageRe
     if (!record(part)) throw new Error('Invalid native image request.');
     if (part.type === 'text' && typeof part.text === 'string' && part.text.length && Object.keys(part).every(key => ['type', 'text'].includes(key))) {
       textBytes += Buffer.byteLength(part.text);
-      // Same native wire sanitation as pinned Pi: remove unpaired surrogates, retain valid pairs.
+      // Native wire sanitation: remove unpaired surrogates, retain valid pairs.
       return { type: 'text', text: part.text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '') };
     }
     if (part.type !== 'image' || Object.keys(part).some(key => !['type', 'mediaType', 'data'].includes(key))) throw new Error('Invalid native image request.');

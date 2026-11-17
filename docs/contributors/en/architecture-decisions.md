@@ -1,6 +1,6 @@
 # Architecture decisions: shared runtime and Web delta
 
-Decision date: **2026-10-17**. Scope: the implemented AiHarness contracts at `6903145` and their operator/developer documentation. This register records decisions and their limits; it does not declare complete Pi parity, healthy production, remote publication or physical-device acceptance.
+Decision date: **2026-10-17**. Scope: the implemented AiHarness contracts at `6903145` and their operator/developer documentation. This register records decisions and their limits; it does not declare complete third-party compatibility, healthy production, remote publication or physical-device acceptance.
 
 Read the [architecture overview](./architecture-overview.md), [server architecture](./server-architecture.md) and [operator runbook](../../users/en/operations.md) together. Detailed implementation navigation lives in the [project map](../../ai/project-map.md).
 

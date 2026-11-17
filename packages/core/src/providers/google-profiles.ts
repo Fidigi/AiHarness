@@ -4,7 +4,7 @@ import { clampPublishedThinkingLevel, PUBLISHED_THINKING_LEVELS, type PublishedM
 import { copyThinkingBudgets, resolveThinkingBudget } from './thinking-budgets.js';
 import { makeStrictToolSchema, UnsupportedStrictToolSchema } from './strict-tool-schema.js';
 
-// Pi 1.2.0 / 06a466935536f8c9bcacb2d5efc0fc021be1bdff approved package catalogues.
+// Frozen package catalogues, source revision 06a466935536f8c9bcacb2d5efc0fc021be1bdff.
 // Owned declarations, native controls and observed tariffs; independent fixtures bind both complete byte hashes.
 export type GoogleNativeScope = 'google' | 'google-vertex';
 type Price = Readonly<{ input: number; output: number; cacheRead: number; cacheWrite: number }>;

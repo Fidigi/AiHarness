@@ -65,7 +65,7 @@ export function applyNativeAnthropicOutputPolicy(body: Record<string, unknown>, 
 }
 
 const NATIVE_NUMERIC_BUDGETS = { minimal: 1024, low: 2048, medium: 8192, high: 16384 } as const;
-/** Pinned Pi estimate on Core's text/image/tool transcript; not a vendor tokenizer. */
+/** Approximate Core text/image/tool transcript estimate; not a vendor tokenizer. */
 export function numericContextTokens(messages: readonly Message[], options?: ChatOptions): number {
   const tokens = (chars: number) => Math.ceil(chars / 3.5);
   let total = tokens(options?.systemPrompt?.length ?? 0)
@@ -91,7 +91,7 @@ export function numericContextTokens(messages: readonly Message[], options?: Cha
   }
   return total;
 }
-/** Full Pi streamSimple allocation: base context clamp, thinking expansion, final context/answer clamp. */
+/** Simple-stream allocation: base context clamp, thinking expansion, final context/answer clamp. */
 function applyNumericAnthropicThinking(body: Record<string, unknown>, options: ChatOptions | undefined, model: string, messages: readonly Message[]): void {
   const policy = anthropicNumericPolicy(model)!;
   const available = Math.max(1, policy.contextWindow - numericContextTokens(messages, options) - 4096);

@@ -4,7 +4,7 @@
 
 ## Overview
 
-Core separates the immutable conversation/billing record from future model input and private historical request provenance. These are native AiHarness contracts, not Pi session import or a Pi extension ABI. Current configuration/trust remains execution authority; recorded prompts and schemas never load code, credentials or tools on resume.
+Core separates the immutable conversation/billing record from future model input and private historical request provenance. These are native AiHarness contracts, not a foreign session import or extension ABI. Current configuration/trust remains execution authority; recorded prompts and schemas never load code, credentials or tools on resume.
 
 ## Main Entry Points
 
@@ -53,11 +53,11 @@ File provenance accumulates successful declared `read`/`write`/`edit` tool-call 
 
 Core `onBeforeCompaction` and extension `before:session:compaction` run ordered hooks after a supplied/generated summary exists, outside the mutation queue. Their frozen event contains only session/cut IDs, proposed summary, output byte limit and signal. Return undefined to continue, false to veto, or `{summary}` to replace output; extensions also accept the existing `{cancel:true,reason?}` cancellation form. Last defined validated output wins; a later veto cancels. No source/cut transformation, accounting replacement, implicit provider request or private checkpoint access is granted.
 
-Original summary-call usage stays attributed even when text is replaced. CLI manual and HTTP manual adapters now retain normalized provider/model/summary usage like RPC/automatic compaction. Their displayed/published summary uses the admitted override. Overrides retain native output limits/redaction, source/signal/store revalidation, hook-generation retirement and admitted-save conservation. Non-cooperative privileged callbacks may delay settlement; this is not physical termination or rollback. Native hooks transform final output, not a Pi-compatible pre-generation override API.
+Original summary-call usage stays attributed even when text is replaced. CLI manual and HTTP manual adapters now retain normalized provider/model/summary usage like RPC/automatic compaction. Their displayed/published summary uses the admitted override. Overrides retain native output limits/redaction, source/signal/store revalidation, hook-generation retirement and admitted-save conservation. Non-cooperative privileged callbacks may delay settlement; this is not physical termination or rollback. Native hooks transform final output, not pre-generation input.
 
 ## Format and Migration
 
-The format stays native JSONL v2, Core/extension API major 1. Old unversioned/v2 histories remain readable without fabricated loadouts/checkpoints; new fields/entry variants are additive. Do not downgrade a journal containing these entries to an older reader that skips unknown parent nodes. JSON/HTML conversation exports remain display projections, not backups of the private journal. No Pi import/converter/writer is introduced.
+The format stays native JSONL v2, Core/extension API major 1. Old unversioned/v2 histories remain readable without fabricated loadouts/checkpoints; new fields/entry variants are additive. Do not downgrade a journal containing these entries to an older reader that skips unknown parent nodes. JSON/HTML conversation exports remain display projections, not backups of the private journal. No foreign journal import/converter/writer is introduced.
 
 ## SES Scenario Map
 

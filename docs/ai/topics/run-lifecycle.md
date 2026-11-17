@@ -4,7 +4,7 @@
 
 ## Overview
 
-RUN-01–RUN-04 define one native lifetime, queue, recovery and tool-result model for interactive/print/JSON CLI, JSONL RPC, the Core SDK and detached HTTP runs. Wire formats remain native: Pi's events and Pi Web's run protocol are not compatibility targets. A cancellation acknowledgement is not durable settlement.
+RUN-01–RUN-04 define one native lifetime, queue, recovery and tool-result model for interactive/print/JSON CLI, JSONL RPC, the Core SDK and detached HTTP runs. Wire formats remain native; foreign events and run protocols are not compatibility targets. A cancellation acknowledgement is not durable settlement.
 
 ## Main Entry Points
 
@@ -59,7 +59,7 @@ Core records an owned-cleanup failure as `failed`, not successful/stopped settle
 
 Core owns bounded steering/follow-up queues and both `all` / `one-at-a-time` modes. Steering precedes follow-up. `all` consumes one entire current batch; `one-at-a-time` consumes one item per admitted boundary. Initial/queued turns already own their scheduler-selected batch: do not dequeue again on round zero. A post-tool turn may admit steering; a network retry or context-recovery attempt does not admit another batch. Clear and stale/terminal replies grant no new run authority.
 
-CLI and detached runtime retain distinct user entries within an all-mode batch. RPC conserves its existing native combined user message, joining batch text with two newlines and combining blocks. This is delivery-policy equivalence, not identical histories or Pi wire compatibility. SDK `steer()` / `followUp()` use the same scheduler with explicit run-default modes; they register no tools or summary provider implicitly.
+CLI and detached runtime retain distinct user entries within an all-mode batch. RPC conserves its existing native combined user message, joining batch text with two newlines and combining blocks. This is delivery-policy equivalence, not identical histories or foreign wire compatibility. SDK `steer()` / `followUp()` use the same scheduler with explicit run-default modes; they register no tools or summary provider implicitly.
 
 Browser queue recall edits the session-owned draft without silently delivering it. Clear removes pending items, not an unsent draft. View switching closes/reopens the genuine session stream and rehydrates canonical queues; remote-session unsent drafts remain view-local, **not cold-reload durable**. Bind the active conversation again when its route-matching metadata arrives after workspace/cache hydration, so a cached selection cannot make another visible conversation's completion look foreground. Background failures mark attention; opening that conversation clears the mark without changing another draft. Preserve the existing sequenced/correlation guards for late responses and replacement runs.
 
@@ -92,7 +92,7 @@ The host may issue optional `context.executeTool(name, input)` **during a real i
 
 Own/redact results before nesting, persistence and model projection. Nested records retain real IDs/parents, outcomes/duration, results and bounded correlated progress, not authenticated usage. Arbitrary `usage` in details/progress/structured JSON stays display data. Preserve existing authenticated outer provider/code-mode accounting exactly once. Retain accepted truncated full text through the existing native full-output path; rejected oversized nested output is an error, not downloadable original content. Parallel/nested contexts do not share the legacy single-process raw output sink/path.
 
-OpenAI chat, Responses, Anthropic, Gemini and Bedrock project tool images as separate attributed user attachments **after the complete contiguous result batch**, never between call/result pairs and never as persisted synthetic messages. Native JSON/RPC carries image data and structured details; Web reuses its ordinary image renderer. Historical metadata and display blocks still grant no execution authority. MCP's existing tool-result normalization and code-mode's text-oriented guest bridge are not a claim of Pi result/renderer compatibility.
+OpenAI chat, Responses, Anthropic, Gemini and Bedrock project tool images as separate attributed user attachments **after the complete contiguous result batch**, never between call/result pairs and never as persisted synthetic messages. Native JSON/RPC carries image data and structured details; Web reuses its ordinary image renderer. Historical metadata and display blocks still grant no execution authority. MCP's existing tool-result normalization and code-mode's text-oriented guest bridge are not a promise of foreign result/renderer compatibility.
 
 ## Critical Flows
 
