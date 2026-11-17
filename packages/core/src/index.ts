@@ -34,12 +34,7 @@ export { resolveBedrockProfileEnvironment } from './providers/bedrock-profile.js
 export { resolveBedrockCredentialsEnvironment } from './providers/bedrock-config.js';
 export type { AnthropicFederationConfig } from './providers/anthropic-federation.js';
 export type { CloudflareWorkersAiConfig } from './providers/index.js';
-export type { RadiusChatOptions } from './providers/radius.js';
-export type { RadiusProviderConfig, RadiusDiscoveryOptions } from './providers/radius-catalogue.js';
-export { getRadiusOAuthConfig, beginRadiusDeviceLogin, beginRadiusBrowserLogin, refreshRadiusToken } from './providers/radius-oauth.js';
-export type { RadiusOAuthIdentity, RadiusOAuthCredential, RadiusOAuthCredentialSource, RadiusOAuthOptions, RadiusDeviceLogin, RadiusBrowserLogin } from './providers/radius-oauth.js';
 export type { AiGatewayConfig } from './providers/ai-gateways.js';
-export { RadiusProtocolError } from './providers/radius.js';
 export * from './providers/specialized-models.js';
 export type { ClassificationQuestion, QuestionClassificationRequest, QuestionClassificationResult } from './providers/classification-questions.js';
 export type { NativeClassifierQuestion, NativeClassifierRequest, NativeClassifierAnswer, NativeClassifierResult } from './providers/native-classification.js';
@@ -86,8 +81,6 @@ export {
   OpenAiResponsesProvider,
   OpenAiMixedProvider,
   OPENAI_RESPONSE_MODELS,
-  RadiusProvider,
-  RADIUS_MODELS,
   CloudflareAiGatewayProvider, VercelAiGatewayProvider,
   CLOUDFLARE_AI_GATEWAY_MODELS, VERCEL_AI_GATEWAY_MODELS, VERCEL_AI_GATEWAY_CLASSIFIER_MODELS,
   AzureProvider,

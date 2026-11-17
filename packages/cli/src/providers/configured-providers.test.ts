@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProviderOAuthCredential } from '@ai-harness/core';
 import { OpenAiProvider, OpenAiMixedProvider, BedrockProvider, CerebrasProvider, DeepSeekProvider, GroqProvider, ZaiProvider, NvidiaProvider, MiniMaxProvider, MiniMaxCnProvider, KimiCodingProvider, KimiCodingOAuthProvider, MoonshotProvider, MoonshotCnProvider, AntLingProvider, BasetenProvider, TogetherProvider, HuggingFaceProvider, XiaomiProvider, MetaProvider, XaiProvider, FireworksProvider, OpenCodeProvider, OpenCodeGoProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
-  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, RadiusProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
+  XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider, MistralProvider, MockProvider, ProviderFactory, TypesafeProvider, CloudflareAiGatewayProvider, VercelAiGatewayProvider, collectProviderModelCatalog, SpecializedModels } from '@ai-harness/core';
 import {
   applyAgentModelSettings,
   createConfiguredProviders,
@@ -39,43 +39,18 @@ describe('configured CLI providers', () => {
     const unregister = ProviderFactory.register('kimi-coding', config => new MockProvider({ ...config, model: 'operator-chat' }));
     try { const provider = createConfiguredProviders(env, options).get('kimi-coding')!; expect(provider).toBeInstanceOf(MockProvider); expect((provider as unknown as { config: { apiKey?: string } }).config.apiKey).toBeUndefined(); expect(source).not.toHaveBeenCalled(); } finally { unregister(); }
   });
-  it('composes Radius with independent gateway/key hints and keeps explicit extension factories authoritative', async () => {
-    expect(createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-other' }).has('radius')).toBe(false);
-    const native = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-second', AI_HARNESS_RADIUS_API_KEY: 'synthetic-first',
-      RADIUS_GATEWAY: 'http://127.0.0.1:1', RADIUS_BASE_URL: 'http://127.0.0.1:2/inference/v1' });
-    expect(native.get('radius')).toBeInstanceOf(RadiusProvider);
-    expect((native.get('radius') as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-first', gateway: 'http://127.0.0.1:1' });
-    expect((await collectProviderModelCatalog(native, { discover: false })).find(provider => provider.provider === 'radius')?.models).toEqual([]);
-    const cold = await resolveStartupProvider(createConfiguredProviders({}), { provider: 'radius', model: 'balanced', apiKey: 'synthetic-cold', offline: true },
-      { RADIUS_BASE_URL: 'http://127.0.0.1:2/inference/v1' }, undefined, { network: { transport: 'sse', requestTimeoutMs: 123, maxRetries: 0,
-        httpIdleTimeoutMs: 100, websocketConnectTimeoutMs: 100, maxRetryDelayMs: 100 } });
-    expect(cold.provider).toBeInstanceOf(RadiusProvider); expect(cold.model).toBe('balanced');
-    expect(cold.provider.getNetworkSettings()).toMatchObject({ requestTimeoutMs: 123, maxRetries: 0 });
-    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
-      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer synthetic-invocation');
-      return Response.json({ baseUrl: 'http://127.0.0.1:1/v1', models: [{ id: 'owned-new', name: 'Invocation account', reasoning: false,
-        input: ['text'], cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024 }] });
-    });
+  it('ignores retired gateway credentials without disabling the remaining providers', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
     try {
-      expect((await resolveStartupProvider(native, { provider: 'radius', models: ['radius/*'], apiKey: 'synthetic-invocation' }, {})).model).toBe('owned-new');
-      expect(fetch).toHaveBeenCalledTimes(1);
-    } finally { fetch.mockRestore(); }
-    const credential: ProviderOAuthCredential = { version: 1, type: 'oauth', accessToken: 'private-configured-radius', refreshToken: 'private-configured-refresh', expiresAt: Date.now() + 120000,
-      subscription: { provider: 'radius', gateway: 'https://radius.pi.dev', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } };
-    const source = vi.fn(async () => credential), options = { radiusOAuth: { credential, credentialSource: source } };
-    const oauth = createConfiguredProviders({}, options); expect(oauth.get('radius')).toBeInstanceOf(RadiusProvider);
-    await expect(resolveStartupProvider(oauth, { provider: 'radius', model: 'balanced', offline: true }, {})).rejects.toThrow('Radius model is not available.');
-    const invocation = await resolveStartupProvider(oauth, { provider: 'radius', model: 'balanced', offline: true, apiKey: 'synthetic-api-override' }, {});
-    expect((invocation.provider as unknown as { config: object }).config).toMatchObject({ apiKey: 'synthetic-api-override' }); expect(source).not.toHaveBeenCalled();
-    expect(ProviderFactory.has('radius')).toBe(false);
-    const unregister = ProviderFactory.register('radius', config => new MockProvider({ ...config, model: 'operator-chat' }));
-    try {
-      const overridden = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-override' });
-      expect(overridden.get('radius')).toBeInstanceOf(MockProvider);
-      const nativeOverride = createConfiguredProviders({}, options).get('radius'); expect(nativeOverride).toBeInstanceOf(MockProvider);
-      expect((nativeOverride as unknown as { config: { apiKey?: string } }).config.apiKey).toBeUndefined(); expect(source).not.toHaveBeenCalled();
-      expect((await resolveStartupProvider(overridden, { provider: 'radius', model: 'operator-chat', offline: true }, {})).model).toBe('operator-chat');
-    } finally { unregister(); }
+      const providers = createConfiguredProviders({ RADIUS_API_KEY: 'synthetic-retired', RADIUS_GATEWAY: 'http://127.0.0.1:1',
+        OPENAI_API_KEY: 'synthetic-openai', ANTHROPIC_API_KEY: 'synthetic-anthropic', GOOGLE_API_KEY: 'synthetic-google' });
+      expect(providers.has('radius')).toBe(false);
+      expect(providers.get('openai')).toBeInstanceOf(OpenAiProvider);
+      expect(providers.get('anthropic')?.getModelApi()).toBe('anthropic-messages');
+      expect(providers.get('google')?.getModelApi()).toBe('google-generative-ai');
+      await expect(resolveStartupProvider(providers, { provider: 'radius', model: 'balanced', apiKey: 'synthetic-retired', offline: true }, {})).rejects.toThrow('Provider unavailable');
+      expect(transport).not.toHaveBeenCalled();
+    } finally { transport.mockRestore(); }
   });
   it('keeps explicit native OpenAI R/D separate from legacy C, subscription labels and registered factories', async () => {
     const legacy = createConfiguredProviders({ OPENAI_API_KEY: 'synthetic-legacy', OPENAI_CODEX_API_KEY: 'synthetic-foreign' });

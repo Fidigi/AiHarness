@@ -41,15 +41,15 @@ describe('ProviderCredentialService', () => {
   });
   it('copies expired stored administration snapshots without environment, commands, refresh or availability authority', async () => {
     const { service: credentials, filePath } = await service();
-    await credentials.setOAuth('radius-admin', { accessToken: 'private-expired-radius', refreshToken: 'private-radius-refresh', expiresAt: 1,
-      subscription: { provider: 'radius', gateway: 'https://synthetic-radius.test', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } });
+    await credentials.setOAuth('anthropic-admin', { accessToken: 'private-expired-access', refreshToken: 'private-refresh', expiresAt: 1,
+      subscription: { provider: 'anthropic', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } });
     const before = await readFile(filePath), fetch = vi.spyOn(globalThis, 'fetch');
-    const snapshot = credentials.readStoredCredential('radius-admin'); expect(snapshot).toMatchObject({ type: 'oauth', expiresAt: 1 });
+    const snapshot = credentials.readStoredCredential('anthropic-admin'); expect(snapshot).toMatchObject({ type: 'oauth', expiresAt: 1 });
     if (snapshot?.type !== 'oauth') throw new Error('Expected synthetic snapshot'); snapshot.accessToken = 'caller-mutated';
-    expect(credentials.readStoredCredential('radius-admin')).toMatchObject({ accessToken: 'private-expired-radius' });
-    expect(await credentials.resolve('radius-admin', { env: {}, subscriptionProvider: 'radius', allowRefresh: false })).toBeUndefined();
+    expect(credentials.readStoredCredential('anthropic-admin')).toMatchObject({ accessToken: 'private-expired-access' });
+    expect(await credentials.resolve('anthropic-admin', { env: {}, subscriptionProvider: 'anthropic', allowRefresh: false })).toBeUndefined();
     expect(fetch).not.toHaveBeenCalled(); expect(await readFile(filePath)).toEqual(before);
-    expect(JSON.stringify(credentials.list())).not.toContain('private-expired-radius');
+    expect(JSON.stringify(credentials.list())).not.toContain('private-expired-access');
   });
   it('reports whether successful writes can be made durable', async () => {
     expect(new ProviderCredentialService().hasPersistentStore()).toBe(false);

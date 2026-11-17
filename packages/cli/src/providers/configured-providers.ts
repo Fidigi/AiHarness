@@ -35,9 +35,7 @@ import {
   OPENROUTER_COMPLETION_MODELS, OPENROUTER_MESSAGE_MODELS,
   CloudflareWorkersAiMixedProvider,
   TypesafeProvider,
-  RadiusProvider,
   CloudflareAiGatewayProvider, VercelAiGatewayProvider,
-  discoverProviderModelIds,
   QwenTokenPlanProvider, QwenTokenPlanCnProvider, QwenTokenPlanIndividualProvider,
   XiaomiTokenPlanAmsProvider, XiaomiTokenPlanCnProvider, XiaomiTokenPlanSgpProvider, ZaiCodingCnProvider,
   GitHubCopilotProvider,
@@ -55,7 +53,7 @@ import {
   type VirtualModelRegistry,
 } from '@ai-harness/core';
 
-import type { CliGitHubCopilotSubscription, CliSubscription, CliRadiusOAuth, CliKimiOAuth, CliAnthropicOAuth, CliProviderRuntime } from './provider-runtime.js';
+import type { CliGitHubCopilotSubscription, CliSubscription, CliKimiOAuth, CliAnthropicOAuth, CliProviderRuntime } from './provider-runtime.js';
 
 export interface StartupProviderSelection {
   offline?: boolean;
@@ -126,7 +124,7 @@ const NATIVE_PROVIDERS = {
   'qwen-token-plan-individual': QwenTokenPlanIndividualProvider,
   'xiaomi-token-plan-ams': XiaomiTokenPlanAmsProvider, 'xiaomi-token-plan-cn': XiaomiTokenPlanCnProvider,
   'xiaomi-token-plan-sgp': XiaomiTokenPlanSgpProvider, 'zai-coding-cn': ZaiCodingCnProvider,
-  typesafe: TypesafeProvider, 'openai-native': OpenAiMixedProvider, radius: RadiusProvider,
+  typesafe: TypesafeProvider, 'openai-native': OpenAiMixedProvider,
   'cloudflare-ai-gateway': CloudflareAiGatewayProvider, 'vercel-ai-gateway': VercelAiGatewayProvider,
 };
 
@@ -163,8 +161,6 @@ export interface CreateConfiguredProvidersOptions {
   vertexAdc?: CliProviderRuntime['vertexAdc'];
   vertexAuthMode?: CliProviderRuntime['vertexAuthMode'];
   bedrockProfile?: CliProviderRuntime['bedrockProfile'];
-  radiusCatalogueDirectory?: string;
-  radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
   metaOAuth?: CliProviderRuntime['metaOAuth'];
   xaiOAuth?: CliProviderRuntime['xaiOAuth'];
@@ -187,7 +183,7 @@ function configuredCredential(
   return (credentials as Readonly<Record<string, string>>)[provider];
 }
 
-function nativeEnvironmentHints(name: string, env: NodeJS.ProcessEnv, catalogueDirectory?: string): Partial<ProviderConfig> {
+function nativeEnvironmentHints(name: string, env: NodeJS.ProcessEnv): Partial<ProviderConfig> {
   if (name === 'bedrock') return { region: env.AWS_REGION || env.AWS_DEFAULT_REGION, baseUrl: env.BEDROCK_BASE_URL, model: env.BEDROCK_MODEL };
   if (name === 'vertex') return { project: env.GOOGLE_CLOUD_PROJECT || env.GCLOUD_PROJECT, location: env.GOOGLE_CLOUD_LOCATION,
     baseUrl: env.VERTEX_BASE_URL, model: env.VERTEX_MODEL, vertexAuthMode: env.GOOGLE_VERTEX_ACCESS_TOKEN || !env.GOOGLE_CLOUD_API_KEY ? 'bearer' : 'api-key' };
@@ -195,8 +191,7 @@ function nativeEnvironmentHints(name: string, env: NodeJS.ProcessEnv, catalogueD
   const prefix = name.toUpperCase().replace(/-/g, '_');
   return { model: env[`${prefix}_MODEL`], baseUrl: env[`${prefix}_BASE_URL`],
     ...(name === 'cloudflare-workers-ai' || name === 'cloudflare-ai-gateway' ? { accountId: env.CLOUDFLARE_ACCOUNT_ID } : {}),
-    ...(name === 'cloudflare-ai-gateway' ? { gatewayId: env.CLOUDFLARE_GATEWAY_ID } : {}),
-    ...(name === 'radius' ? { gateway: env.RADIUS_GATEWAY, catalogueDirectory } : {}) };
+    ...(name === 'cloudflare-ai-gateway' ? { gatewayId: env.CLOUDFLARE_GATEWAY_ID } : {}) };
 }
 
 function networkConfig(network?: AgentProviderNetworkSettings): Partial<ProviderConfig> {
@@ -283,15 +278,8 @@ export function createConfiguredProviders(
       catch { /* Invalid or foreign issuer state does not disable other providers. */ }
       continue;
     }
-    if (name === 'radius' && !key && options.radiusOAuth) {
-      const config = { ...network, ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory), type: name,
-        gateway: env.RADIUS_GATEWAY ?? (options.radiusOAuth.credential.subscription?.provider === 'radius' ? options.radiusOAuth.credential.subscription.gateway : undefined) };
-      try { providers.set(name, ProviderFactory.has(name) ? createProvider(config) : new RadiusProvider(config, options.radiusOAuth.credentialSource, options.radiusOAuth.credential)); }
-      catch { /* Invalid or foreign issuer state does not disable other providers. */ }
-      continue;
-    }
     attempt(providers, name, key ? { ...network, type: name, apiKey: key,
-      ...nativeEnvironmentHints(name, env, options.radiusCatalogueDirectory),
+      ...nativeEnvironmentHints(name, env),
       ...(name === 'kimi-coding' ? { kimiAuthMode: providerCredentialEnvironmentKeys(name).some(key => env[key]) ? 'api-key' : options.kimiCodingAuthMode ?? 'api-key' } : {}),
     } : undefined);
   }
@@ -337,7 +325,7 @@ export async function resolveStartupProvider(
   selection: StartupProviderSelection,
   env: NodeJS.ProcessEnv = process.env,
   virtualModels?: VirtualModelRegistry,
-  nativeOptions: Pick<CreateConfiguredProvidersOptions, 'radiusCatalogueDirectory' | 'network'> & { signal?: AbortSignal } = {},
+  nativeOptions: Pick<CreateConfiguredProvidersOptions, 'network'> & { signal?: AbortSignal } = {},
 ): Promise<ResolvedStartupProvider> {
   const requestedProvider = selection.provider?.trim().toLowerCase();
   const requestedModel = selection.model?.trim();
@@ -358,10 +346,10 @@ export async function resolveStartupProvider(
     const matched = resolveModelScope([`${scopedKeyName}/*`], names.map(provider => ({ provider, id: '_scope_' }))).models;
     const unique = [...new Set(matched.map(item => item.model.provider))]; scopedKeyName = unique.length === 1 ? unique[0] : undefined;
   }
-  if (selection.apiKey && selection.models?.length && scopedKeyName && (['anthropic', 'radius', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'openrouter'].includes(scopedKeyName) || providers.get(scopedKeyName) instanceof OpenRouterProvider)) {
+  if (selection.apiKey && selection.models?.length && scopedKeyName && (['anthropic', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'openrouter'].includes(scopedKeyName) || providers.get(scopedKeyName) instanceof OpenRouterProvider)) {
     const previous = providers.get(scopedKeyName);
     scopedKeyProvider = createProvider({ ...(previous ? providerConfig(previous) : {
-      ...networkConfig(nativeOptions.network), ...nativeEnvironmentHints(scopedKeyName, env, nativeOptions.radiusCatalogueDirectory),
+      ...networkConfig(nativeOptions.network), ...nativeEnvironmentHints(scopedKeyName, env),
     }), type: scopedKeyName, apiKey: selection.apiKey, ...(scopedKeyName === 'anthropic' ? { anthropicAuthMode: 'api-key' } : {}) });
     providers.set(scopedKeyName, scopedKeyProvider);
   }
@@ -394,7 +382,7 @@ export async function resolveStartupProvider(
             .filter(provider => !providers.has(provider))
             .map(provider => ({ provider, configured: false })),
         ])
-      : await collectProviderModelCatalog(scopedKeyProvider instanceof AnthropicProvider || scopedKeyProvider instanceof RadiusProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider || scopedKeyProvider instanceof OpenRouterProvider
+      : await collectProviderModelCatalog(scopedKeyProvider instanceof AnthropicProvider || scopedKeyProvider instanceof CloudflareAiGatewayProvider || scopedKeyProvider instanceof VercelAiGatewayProvider || scopedKeyProvider instanceof OpenRouterProvider
         ? new Map([[scopedKeyName!, scopedKeyProvider]]) : providers, {
           includePublishedProviders: true,
           discover: selection.offline !== true,
@@ -473,7 +461,7 @@ export async function resolveStartupProvider(
   if (selection.apiKey && (!scopedKeyProvider || provider !== scopedKeyProvider)) {
     const base = provider ? providerConfig(provider) : {
       ...networkConfig(nativeOptions.network), type: providerName as ProviderConfig['type'],
-      ...nativeEnvironmentHints(providerName, env, nativeOptions.radiusCatalogueDirectory),
+      ...nativeEnvironmentHints(providerName, env),
     };
     try {
       provider = createProvider({
@@ -491,9 +479,6 @@ export async function resolveStartupProvider(
   }
   if (!provider) {
     throw new Error(`Provider unavailable: ${providerName}. Configured providers: ${[...providers.keys()].join(', ')}.`);
-  }
-  if (provider instanceof RadiusProvider && !selection.offline && (!selection.models?.length || selection.apiKey && provider !== scopedKeyProvider)) {
-    await discoverProviderModelIds(provider, { timeoutMs: 2_000, retries: 0, signal: nativeOptions.signal });
   }
   if (provider instanceof OpenRouterProvider && !selection.offline && !personalized.has(provider)) await provider.refreshUserModels({ signal: nativeOptions.signal });
   if (model) provider.setConfiguredModel(model);

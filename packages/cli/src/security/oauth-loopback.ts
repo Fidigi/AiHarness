@@ -6,10 +6,10 @@ interface BrowserLogin<T> {
   complete(redirectUrl: string, signal?: AbortSignal): Promise<T>;
   cancel(): void;
 }
-/** Internal CLI transport for the two fixed Core callback contracts; no operator bind override. */
-export async function completeOAuthLoopback<T>(flow: BrowserLogin<T>, redirectUri: string, provider: 'OpenAI Codex' | 'Radius',
+/** Internal CLI transport for the fixed Codex callback contract; no operator bind override. */
+export async function completeOAuthLoopback<T>(flow: BrowserLogin<T>, redirectUri: string, provider: 'OpenAI Codex',
   instructions: (url: string) => void, signal: AbortSignal, publish: (credential: T) => Promise<unknown>): Promise<T> {
-  if (!['http://localhost:1455/auth/callback', 'http://127.0.0.1:1456/oauth/callback'].includes(redirectUri)) throw new Error('Invalid OAuth callback endpoint.');
+  if (redirectUri !== 'http://localhost:1455/auth/callback') throw new Error('Invalid OAuth callback endpoint.');
   return runLoopback(() => flow, () => redirectUri, Number(new URL(redirectUri).port), provider, true, instructions, signal, publish, flow);
 }
 /** OpenRouter has no returned state; a generated path plus PKCE owns its ephemeral callback. */

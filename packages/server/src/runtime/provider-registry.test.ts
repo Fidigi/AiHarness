@@ -29,6 +29,30 @@ afterEach(async () => {
 });
 
 describe('ProviderRegistryService', () => {
+  it('ignores retired gateway records on reload without losing other providers or rewriting files', async () => {
+    const { root, service } = await fixture();
+    await service.upsertProvider({ id: 'retained', name: 'Retained provider', dialect: 'openai-completions', baseUrl: 'http://127.0.0.1/v1', apiKey: 'synthetic-retained-key' });
+    await service.upsertModel({ provider: 'retained', id: 'synthetic-model', name: 'Retained model' });
+    const file = path.join(root, 'providers.json'), secretsFile = path.join(root, 'secrets.enc');
+    const state = JSON.parse(await readFile(file, 'utf8'));
+    state.providers.push({ ...state.providers[0], id: 'retired-gateway', credentialId: 'retired-credentials', dialect: 'radius' });
+    state.models.push({ ...state.models[0], key: 'retired-gateway:balanced', provider: 'retired-gateway', id: 'balanced' });
+    await writeFile(file, JSON.stringify(state));
+    const store = new EncryptedCredentialStore(secretsFile, 'test-master-key-with-32-characters'); await store.load();
+    await store.set('provider:retired-credentials', JSON.stringify({ version: 1, type: 'oauth', accessToken: 'synthetic-retired-access', refreshToken: 'synthetic-retired-refresh', expiresAt: Date.now() + 3600000,
+      subscription: { provider: 'radius', gateway: 'http://127.0.0.1/v1', grantId: '293da824-4f8b-4d80-84b9-e542c22215eb' } }));
+    const before = await readFile(file), secrets = await readFile(secretsFile);
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected network'));
+    const proxy = new AiProxyServer(), restored = new ProviderRegistryService(file, proxy, secretsFile, 'test-master-key-with-32-characters');
+    await restored.load();
+    expect(restored.listProviders().map(provider => provider.id)).toEqual(['retained']);
+    expect(restored.getModels().map(model => model.provider)).toEqual(['retained']);
+    expect(proxy.getAgentProvider('retained')).toBeDefined();
+    expect(proxy.getAgentProvider('retired-gateway')).toBeUndefined();
+    await expect(restored.upsertProvider({ id: 'removed', name: 'Removed', dialect: 'radius', baseUrl: 'http://127.0.0.1/v1', apiKey: 'synthetic-unused' })).rejects.toMatchObject({ status: 400 });
+    expect(await readFile(file)).toEqual(before); expect(await readFile(secretsFile)).toEqual(secrets);
+    expect(transport).not.toHaveBeenCalled();
+  });
   it('admits native TypeSafe credentials without inventing conversational models or discovery', async () => {
     const { root, proxy, service } = await fixture();
     const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected discovery'));

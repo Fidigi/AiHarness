@@ -3,7 +3,7 @@ import type { ProviderAuthStatus, ProviderCredentialService } from '@ai-harness/
 import type { AiProxyServer } from './proxy.js';
 import type { RuntimeServices } from '../runtime/services.js';
 import { requireCapability } from '../security/request-security.js';
-import { ProviderOAuthService, customRadiusOAuthContext } from '../runtime/provider-oauth.js';
+import { ProviderOAuthService, customProviderOAuthContext } from '../runtime/provider-oauth.js';
 import { providerAdministration, providerOperation } from '../runtime/provider-administration.js';
 import { sessionCopyRequest as requestLifetime } from './session-copy-request.js';
 
@@ -31,7 +31,7 @@ export function createProviderRegistryRouter(
   servicesPromise: Promise<RuntimeServices>,
   proxy: AiProxyServer,
   credentialService: () => ProviderCredentialService | undefined,
-  oauth = new ProviderOAuthService(proxy, credentialService, undefined, undefined, customRadiusOAuthContext(servicesPromise)),
+  oauth = new ProviderOAuthService(proxy, credentialService, undefined, undefined, customProviderOAuthContext(servicesPromise)),
 ): Router {
   const router = Router();
   const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
@@ -71,7 +71,7 @@ export function createProviderRegistryRouter(
         type: provider.id,
         name: provider.name,
         configured: provider.configured,
-        connected: ['radius', 'kimi-coding', 'openrouter', 'anthropic', 'meta', 'xai'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
+        connected: ['kimi-coding', 'openrouter', 'anthropic', 'meta', 'xai'].includes(provider.dialect) ? provider.configured : proxy.isConfigured(provider.id),
         method: services.providerRegistry.hasNativeOAuth(provider.id) ? 'oauth' : services.providerRegistry.hasCredentials(provider.id) ? 'api-key' : 'none',
         reconnectSupported: true,
         disconnectSupported: provider.configured,

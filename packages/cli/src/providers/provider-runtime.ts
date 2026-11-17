@@ -14,7 +14,6 @@ import {
   type ExtensionProvider,
   type ProviderOAuthRefreshConfig,
   type ProviderOAuthCredential,
-  type RadiusOAuthCredentialSource,
   type KimiCodingOAuthCredentialSource,
   type AnthropicOAuthCredentialSource,
   type AnthropicFederationConfig,
@@ -31,7 +30,7 @@ export const CLI_CREDENTIAL_PROVIDERS = [
   'minimax', 'minimax-cn', 'kimi-coding', 'moonshotai', 'moonshotai-cn', 'ant-ling', 'baseten', 'together',
   'huggingface', 'xiaomi', 'meta', 'xai', 'fireworks', 'opencode', 'opencode-go', 'openrouter',
   'cloudflare-workers-ai', 'cloudflare-ai-gateway', 'vercel-ai-gateway', 'qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual',
-  'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'typesafe', 'radius', 'azure', 'vertex', 'bedrock', 'local',
+  'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai-coding-cn', 'typesafe', 'azure', 'vertex', 'bedrock', 'local',
 ] as const;
 
 export interface CliSubscription {
@@ -40,11 +39,6 @@ export interface CliSubscription {
 }
 
 export type CliGitHubCopilotSubscription = CliSubscription;
-export interface CliRadiusOAuth {
-  credential: ProviderOAuthCredential;
-  credentialSource: RadiusOAuthCredentialSource;
-}
-
 export interface CliAnthropicOAuth {
   credential: ProviderOAuthCredential;
   credentialSource: AnthropicOAuthCredentialSource;
@@ -75,8 +69,6 @@ export interface CliProviderRuntime {
   vertexAdc?: VertexProviderConfig;
   vertexAuthMode?: 'api-key' | 'bearer';
   bedrockProfile?: BedrockProviderConfig;
-  radiusCatalogueDirectory?: string;
-  radiusOAuth?: CliRadiusOAuth;
   kimiOAuth?: CliKimiOAuth;
   metaOAuth?: CliMetaOAuth;
   xaiOAuth?: CliXaiOAuth;
@@ -116,7 +108,7 @@ export function cliGitHubCopilotCredentialSource(credentials: ProviderCredential
 
 export function cliSubscriptionCredentialSource(
   credentials: ProviderCredentialService,
-  issuer: 'github-copilot' | 'openai-codex' | 'radius' | 'kimi-coding' | 'anthropic' | 'meta' | 'xai',
+  issuer: 'github-copilot' | 'openai-codex' | 'kimi-coding' | 'anthropic' | 'meta' | 'xai',
   lifetime?: AbortSignal,
   allowRefresh = true,
   issuerRealm?: string,
@@ -126,7 +118,7 @@ export function cliSubscriptionCredentialSource(
     requestSignal?.throwIfAborted();
     const resolved = await credentials.resolve(issuer, { env: {}, subscriptionProvider: issuer,
       allowCommands: false, allowRefresh: allowRefresh && requestAllowRefresh, signal: requestSignal,
-      ...(issuer === 'radius' ? { radiusGateway: issuerRealm } : issuer === 'kimi-coding' ? { kimiOAuthHost: issuerRealm } : {}) });
+      ...(issuer === 'kimi-coding' ? { kimiOAuthHost: issuerRealm } : {}) });
     requestSignal?.throwIfAborted();
     return resolved?.credential.type === 'oauth' ? resolved.credential : undefined;
   };
@@ -209,8 +201,6 @@ export async function createCliProviderRuntime(
   const model = subscription && GITHUB_COPILOT_MODELS.find(model => subscription.subscription?.provider === 'github-copilot' && subscription.subscription.availableModelIds.includes(model.id));
   const codexSource = cliSubscriptionCredentialSource(credentials, 'openai-codex', lifetime, !offline);
   const codex = await codexSource();
-  const radiusSource = cliSubscriptionCredentialSource(credentials, 'radius', lifetime, !offline, env.RADIUS_GATEWAY);
-  const radius = present.has('radius') && !values.has('radius') && !commandEnv[commandVariable('radius')] ? await radiusSource() : undefined;
   const kimiHost = env.KIMI_CODE_OAUTH_HOST || env.KIMI_OAUTH_HOST;
   const kimiSource = cliSubscriptionCredentialSource(credentials, 'kimi-coding', lifetime, !offline, kimiHost);
   const storedKimi = present.has('kimi-coding') && !values.has('kimi-coding') && !commandEnv[commandVariable('kimi-coding')] ? credentials.readStoredCredential('kimi-coding') : undefined;
@@ -253,13 +243,11 @@ export async function createCliProviderRuntime(
     ...(kimi ? { kimiOAuth: { credential: kimi, credentialSource: kimiSource } } : {}),
     ...(model ? { githubCopilot: { model: model.id, credentialSource } } : {}),
     ...(codex ? { openaiCodex: { model: OPENAI_CODEX_MODELS[0]!.id, credentialSource: codexSource } } : {}),
-    ...(radius ? { radiusOAuth: { credential: radius, credentialSource: radiusSource } } : {}),
     credentials,
     values,
     ...(kimiCodingAuthMode ? { kimiCodingAuthMode } : {}),
     network: resolveAgentProviderNetworkSettings(settings),
     redactor,
-    ...(persistCredentials ? { radiusCatalogueDirectory: path.join(agentDir, 'radius-models') } : {}),
     credentialStoreId: `${persistCredentials ? 'persistent' : 'memory'}:${path.resolve(agentDir)}`,
     signal: lifetime,
     close: () => controller.abort(),

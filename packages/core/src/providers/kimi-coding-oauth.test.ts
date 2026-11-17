@@ -50,7 +50,7 @@ it('refreshes native Kimi against its persisted issuer rather than generic OAuth
 });
 it('refuses foreign issuers, changed Kimi realms, offline expiry and generic/label/API-key substitution before refresh I/O', async () => {
   const f = await fixture(); await f.service.setOAuth('kimi-coding', expired()); const fetcher = vi.fn<typeof fetch>(), bytes = await readFile(f.file);
-  for (const options of [{}, { subscriptionProvider: 'radius' as const }, { subscriptionProvider: 'kimi-coding' as const, kimiOAuthHost: 'https://foreign.kimi.test' }, { subscriptionProvider: 'kimi-coding' as const, allowRefresh: false }]) expect(await f.service.resolve('kimi-coding', { ...options, env: {}, fetcher })).toBeUndefined();
+  for (const options of [{}, { subscriptionProvider: 'openai-codex' as const }, { subscriptionProvider: 'kimi-coding' as const, kimiOAuthHost: 'https://foreign.kimi.test' }, { subscriptionProvider: 'kimi-coding' as const, allowRefresh: false }]) expect(await f.service.resolve('kimi-coding', { ...options, env: {}, fetcher })).toBeUndefined();
   expect(await readFile(f.file)).toEqual(bytes);
   await f.service.setOAuth('generic', { accessToken: 'generic-access', refreshToken: 'generic-refresh', expiresAt: Date.now() + 3600000 });
   expect(await f.service.resolve('generic', { env: {}, subscriptionProvider: 'kimi-coding', fetcher })).toBeUndefined();

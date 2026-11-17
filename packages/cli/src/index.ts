@@ -339,8 +339,6 @@ async function main(): Promise<void> {
         vertexAdc: providerRuntime.vertexAdc,
         vertexAuthMode: providerRuntime.vertexAuthMode,
         bedrockProfile: providerRuntime.bedrockProfile,
-        radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
-        radiusOAuth: providerRuntime.radiusOAuth,
         kimiOAuth: providerRuntime.kimiOAuth,
         metaOAuth: providerRuntime.metaOAuth,
         xaiOAuth: providerRuntime.xaiOAuth,
@@ -861,8 +859,6 @@ async function main(): Promise<void> {
       vertexAdc: refreshedRuntime.vertexAdc,
       vertexAuthMode: refreshedRuntime.vertexAuthMode,
       bedrockProfile: refreshedRuntime.bedrockProfile,
-      radiusCatalogueDirectory: refreshedRuntime.radiusCatalogueDirectory,
-      radiusOAuth: refreshedRuntime.radiusOAuth,
       kimiOAuth: refreshedRuntime.kimiOAuth,
       metaOAuth: refreshedRuntime.metaOAuth,
       xaiOAuth: refreshedRuntime.xaiOAuth,
@@ -879,7 +875,6 @@ async function main(): Promise<void> {
     commandContext.credentialService = refreshedRuntime.credentials;
     commandContext.providerCredentialValues = refreshedRuntime.values;
     commandContext.providerNetwork = refreshedRuntime.network;
-    commandContext.radiusCatalogueDirectory = refreshedRuntime.radiusCatalogueDirectory;
     const refreshedModelSettings = applyAgentModelSettings({
       provider: cliArguments.provider,
       model: cliArguments.model,
@@ -1025,8 +1020,6 @@ async function main(): Promise<void> {
     vertexAdc: providerRuntime.vertexAdc,
     vertexAuthMode: providerRuntime.vertexAuthMode,
     bedrockProfile: providerRuntime.bedrockProfile,
-    radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
-    radiusOAuth: providerRuntime.radiusOAuth,
     kimiOAuth: providerRuntime.kimiOAuth,
     metaOAuth: providerRuntime.metaOAuth,
     xaiOAuth: providerRuntime.xaiOAuth,
@@ -1052,7 +1045,6 @@ async function main(): Promise<void> {
       providers: configuredProviders,
       credentialService: providerRuntime.credentials,
       providerLifetime: providerRuntime.signal,
-      radiusCatalogueDirectory: providerRuntime.radiusCatalogueDirectory,
       providerCredentialValues: providerRuntime.values,
       allowCredentialReveal: applicationMode === 'interactive'
         && process.stdin.isTTY === true && process.stdout.isTTY === true,
