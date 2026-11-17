@@ -657,6 +657,7 @@ Formatting is defined by `.editorconfig` and `.prettierrc.json`. Avoid broad for
 | `docs/ai/topics/child-agents.md` | English | Agents | Versioned | Native profiles/policy, settlement limits, linked journals, lazy scoped Web controls and WEB-06 qualification |
 | `docs/ai/acceptance/`, `docs/ai/workflows/` | English | Agents | Versioned | Acceptance criteria and task-specific documentation workflows |
 | [`docs/audit/documentation/AUDIT-1.md`](../audit/documentation/AUDIT-1.md) | English | Agents + humans | Versioned | Historical documentation audit pinned to 2026-10-02; not a current inventory or freshness guarantee |
+| `docs/audit/architecture/AUDIT-1` | English | Agents + humans | Versioned | Application architecture/dead-code/performance/compatibility assessment pinned to `120b4d46`; legacy RPC/Web and public utility removals plus 32-MiB frame / 64-MiB aggregate RPC input policy approved; implementation/validation open; bounded Docker evidence |
 | `docs/users/{fr,en}/` | French/English | End users/operators | Versioned | User guides, operator runbooks, container guidance and language indexes |
 | `docs/contributors/{fr,en}/` | French/English | Contributors | Versioned | Parallel architecture decisions, extension, session SDK, public-contract/parity and i18n guides |
 | `docs/screenshots/` | English/French | Humans | Versioned | Playwright-derived documented product states and capture inventory |

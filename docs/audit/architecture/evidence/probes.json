@@ -1,0 +1,97 @@
+{
+  "node": "v24.15.0",
+  "coreImportMs": 366.83769700000005,
+  "startup": [
+    {
+      "wallMs": 283.174845,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 262.9234070000001,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 263.6376230000001,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 261.817364,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 255.98877300000004,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    }
+  ],
+  "metadata": {
+    "modelCount": 393,
+    "target": "anthropic/claude-sonnet-5.5",
+    "iterations": 500,
+    "freshProjectionMs": [
+      1183.1572750000003,
+      1155.0946159999999,
+      1157.779129,
+      1166.443566,
+      1156.4306079999997
+    ],
+    "requestLocalSnapshotLookupMs": [
+      0.017854000000170345,
+      0.02134299999988798,
+      0.015433999999913794,
+      0.015602999999828171,
+      0.015538999999989755
+    ]
+  },
+  "storage": [
+    {
+      "files": 10,
+      "messagesPerFile": 64,
+      "bytes": 483930,
+      "passes": [
+        {
+          "wallMs": 38.13558600000033,
+          "loadSessionCalls": 10
+        },
+        {
+          "wallMs": 30.565647999999783,
+          "loadSessionCalls": 10
+        }
+      ]
+    },
+    {
+      "files": 100,
+      "messagesPerFile": 64,
+      "bytes": 4850910,
+      "passes": [
+        {
+          "wallMs": 262.184663,
+          "loadSessionCalls": 100
+        },
+        {
+          "wallMs": 257.03305399999954,
+          "loadSessionCalls": 100
+        }
+      ]
+    }
+  ],
+  "legacy": {
+    "receivedSignal": false,
+    "requestedTools": false,
+    "eventNames": [
+      "text_delta",
+      "message_end"
+    ],
+    "responseToolCalls": 1,
+    "persistedAssistantToolCalls": 0
+  },
+  "framing": {
+    "inputBytes": 8388680,
+    "accepted": true
+  },
+  "limits": "Local synthetic observations only. Startup samples use warm OS caches. Snapshot lookup is an illustrative local alternative, not a product patch or validated cache. Storage sizes use one two-pass sequence each, not a distribution. No browser render, vendor, production or global-suite qualification."
+}

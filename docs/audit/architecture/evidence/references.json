@@ -1,0 +1,48 @@
+{
+  "scope": "Tracked code identifiers including tests/scripts; comments/strings also count. Public wildcard exports and external/dynamic consumers require separate review.",
+  "trackedCodeFiles": 1302,
+  "sourceFiles": 454,
+  "sourceDigest": "95b9c40d931559783e462ddca102da115df0201adb6a16c439fc48166c0f7862",
+  "lexicallySingleExportCandidates": [
+    {
+      "file": "packages/core/src/tools/truncation.ts",
+      "line": 157,
+      "name": "truncateToolBytes"
+    },
+    {
+      "file": "packages/core/src/utils/index.ts",
+      "line": 159,
+      "name": "fetchWithRetry"
+    },
+    {
+      "file": "packages/core/src/utils/index.ts",
+      "line": 205,
+      "name": "formatDate"
+    },
+    {
+      "file": "packages/core/src/utils/index.ts",
+      "line": 227,
+      "name": "deepClone"
+    },
+    {
+      "file": "packages/server/src/security/request-security.ts",
+      "line": 239,
+      "name": "getAuthContext"
+    },
+    {
+      "file": "packages/web/src/services/api.ts",
+      "line": 2388,
+      "name": "startSubagentRun"
+    },
+    {
+      "file": "packages/web/src/store/session-store.ts",
+      "line": 1264,
+      "name": "baseStore"
+    },
+    {
+      "file": "packages/web/src/store/session-store.ts",
+      "line": 1265,
+      "name": "providerStore"
+    }
+  ]
+}

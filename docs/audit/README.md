@@ -52,6 +52,7 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 | Audit | Scope | Status |
 |---|---|---|
 | [Documentation audit 1](./documentation/AUDIT-1.md) | Documentation structure, accuracy, screenshots, bilingual coverage and validation at the pinned 2026-10-02 state | DONE for that snapshot |
+| [Application architecture audit 1](./architecture/AUDIT-1.md) | Package/module coupling, dead-code classification, measured performance opportunities and compatibility decisions at commit `120b4d46` | IN PROGRESS — legacy RPC/Web and public utility removals plus RPC input limits approved; implementation/validation remain open |
 
 Historical results and inventories describe their pinned source/date, not the current checkout. Later documentation changes require fresh source checks. Use relative links for versioned reports; reserve plain paths for local-only evidence.
 
