@@ -1,7 +1,6 @@
 import path from 'node:path';
 import { resolveVirtualModelFallback } from '@ai-harness/core';
 import os from 'node:os';
-import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
 import {
   agentToolExposure,
@@ -16,7 +15,6 @@ import {
   loadAgentSettings,
   McpOAuthCredentialManager,
   McpSessionHost,
-  normalizeProviderUsage,
   PluginService,
   ProjectTrustManager,
   SessionManager,
@@ -33,9 +31,6 @@ import {
   selectRegisteredTools,
   isDeclaredToolExposure,
   toChatToolDefinitions,
-  type AiProvider,
-  type ChatResponse,
-  type Message,
   type ResolvedAgentSettings,
   type ThinkingLevel,
 } from '@ai-harness/core';
@@ -54,31 +49,9 @@ import { resolveStartupSession, resolveStartupSessionDirectory } from '../sessio
 import { ResourceManager } from '../resources/resource-manager.js';
 import { RpcExtensionUiBridge } from './rpc-extension-ui.js';
 import { isRpcCommandRequest, RpcController, rpcParseError } from './rpc-controller.js';
+import { readRpcFrames } from './rpc-input.js';
 
 const MAX_PENDING_RPC_REQUESTS = 256;
-
-export interface RpcRequest {
-  id?: string | number;
-  method: string;
-  params?: Record<string, unknown>;
-}
-
-export interface RpcResponse {
-  id?: string | number;
-  result?: unknown;
-  error?: { code: string; message: string };
-  event?: string;
-  data?: unknown;
-}
-
-export interface RpcContext {
-  sessionManager: SessionManager;
-  providers: Map<string, AiProvider>;
-  defaultProviderName?: string;
-  defaultThinking?: ThinkingLevel;
-  systemPrompt?: string;
-  emit(response: RpcResponse): void | Promise<void>;
-}
 
 export interface RpcStartupOptions {
   /** Explicit snapshot overrides the process environment for embedded hosts. */
@@ -117,107 +90,6 @@ export interface RpcStartupOptions {
   output?: (record: Record<string, unknown>) => void | Promise<void>;
   /** Internal process-local redactor shared with the CLI composition root. */
   credentialRedactor?: CredentialRedactor;
-}
-
-export async function handleRpcRequest(request: RpcRequest, context: RpcContext): Promise<RpcResponse> {
-  const params = request.params ?? {};
-  switch (request.method) {
-    case 'system.ping':
-      return { id: request.id, result: { ok: true } };
-    case 'session.list':
-      return { id: request.id, result: context.sessionManager.list() };
-    case 'session.create': {
-      const session = await context.sessionManager.create({ title: typeof params.title === 'string' ? params.title : undefined });
-      return { id: request.id, result: session };
-    }
-    case 'session.get': {
-      const sessionId = String(params.sessionId ?? '');
-      const session = context.sessionManager.get(sessionId) ?? await context.sessionManager.loadFromStore(sessionId);
-      if (!session) throw new Error(`Session introuvable : ${sessionId}`);
-      return { id: request.id, result: session };
-    }
-    case 'session.delete': {
-      const deletedCount = await context.sessionManager.deleteWithForks(String(params.sessionId ?? ''));
-      return { id: request.id, result: { deletedCount } };
-    }
-    case 'provider.list':
-      return { id: request.id, result: [...context.providers.keys()] };
-    case 'chat.send': {
-      const sessionId = String(params.sessionId ?? '');
-      const content = String(params.content ?? '').trim();
-      const providerName = String(params.provider ?? context.defaultProviderName ?? 'mock');
-      if (!content) throw new Error('Le contenu du message est requis.');
-      const session = context.sessionManager.get(sessionId) ?? await context.sessionManager.loadFromStore(sessionId);
-      if (!session) throw new Error(`Session introuvable : ${sessionId}`);
-      const provider = context.providers.get(providerName);
-      if (!provider) throw new Error(`Provider indisponible : ${providerName}`);
-      await context.sessionManager.addMessage(sessionId, { role: 'user', content });
-      const messages = context.sessionManager.get(sessionId)!.messages.map(message => ({ ...message })) as Message[];
-      let streamed = '';
-      let emitTail = Promise.resolve();
-      const response = await new Promise<ChatResponse>((resolve, reject) => {
-        provider.streamChat(
-          messages,
-          chunk => {
-            if (!chunk) return;
-            streamed += chunk;
-            emitTail = emitTail.then(() => context.emit({
-              event: 'text_delta', data: { requestId: request.id, sessionId, content: chunk },
-            }));
-            return emitTail;
-          },
-          result => resolve({
-            ...result,
-            content: streamed || result?.content || '',
-          }),
-          reject,
-          {
-            model: typeof params.model === 'string' ? params.model : undefined,
-            thinking: context.defaultThinking,
-            systemPrompt: context.systemPrompt,
-          },
-        ).catch(reject);
-      });
-      await emitTail;
-      if (response.content) await context.sessionManager.addMessage(sessionId, {
-        role: 'assistant',
-        content: response.content,
-        provider: providerName,
-        model: response.model ?? (typeof params.model === 'string' ? params.model : provider.getConfiguredModel()),
-        usage: normalizeProviderUsage(response.usage),
-      });
-      await context.emit({ event: 'message_end', data: { requestId: request.id, sessionId, ...response } });
-      return { id: request.id, result: response };
-    }
-    default:
-      return { id: request.id, error: { code: 'METHOD_NOT_FOUND', message: `Méthode inconnue : ${request.method}` } };
-  }
-}
-
-/** Read strict LF-framed JSONL without treating U+2028/U+2029 as delimiters. */
-async function* jsonLines(input: Readable, signalShutdown: () => boolean): AsyncGenerator<string> {
-  const decoder = new StringDecoder('utf8');
-  let buffer = '';
-  try {
-    for await (const chunk of input) {
-      buffer += typeof chunk === 'string' ? chunk : decoder.write(chunk as Buffer);
-      while (true) {
-        const newline = buffer.indexOf('\n');
-        if (newline < 0) break;
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        yield line.endsWith('\r') ? line.slice(0, -1) : line;
-      }
-    }
-  } catch (error) {
-    // Only our signal-induced stdin close is normal shutdown. Do not turn an
-    // unrelated transport failure into EOF, or admit an interrupted tail line.
-    if (!(signalShutdown() && input.destroyed && error instanceof Error
-      && 'code' in error && error.code === 'ERR_STREAM_PREMATURE_CLOSE')) throw error;
-    return;
-  }
-  buffer += decoder.end();
-  if (buffer) yield buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
 }
 
 function reportSettingsDiagnostics(
@@ -299,6 +171,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
   }
 
   let runError: unknown;
+  const pending = new Set<Promise<void>>();
   try {
     if (!!options.extensionRegistry !== !!options.extensionLoader) {
       throw new Error('Prepared RPC extensions require both registry and loader.');
@@ -412,7 +285,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
     );
     if (!options.noSession) {
       sessionManager.setStore(new JsonlSessionStore(sessionDirectory));
-      await sessionManager.loadAllSessions();
+      // Defer hydration until credential discovery; controller/session selection is later.
     }
 
     const instructions = await resolveInstructionPrompt({
@@ -485,6 +358,7 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       offline,
       providerHost.signal,
     );
+    // Keep the full locked scrub after all startup credentials have been enrolled.
     if (!options.noSession) await sessionManager.loadAllSessions();
     const providers = createConfiguredProviders(process.env, {
       credentials: providerRuntime.values,
@@ -558,14 +432,6 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
       cliToolSelectionOptions(() => extensionRegistry.getTools(), toolSelectionOptions));
     const selectedTools = selectedStaticTools.filter(tool => isDeclaredToolExposure(agentToolExposure(tool)));
 
-    const customContext: RpcContext = {
-      sessionManager,
-      providers,
-      defaultProviderName: startup.providerName,
-      defaultThinking: startupThinking,
-      systemPrompt: instructions.systemPrompt,
-      emit: response => output(response as Record<string, unknown>),
-    };
     controller = new RpcController({
       offline,
       provider: startup.provider,
@@ -715,6 +581,13 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         return;
       }
 
+      // Retired envelopes must not enter either canonical commands or UI replies,
+      // including hybrid requests carrying both type and method/params.
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        && ('method' in parsed || 'params' in parsed)) {
+        await output({ error: { code: 'INVALID_REQUEST', message: 'Legacy method/params RPC is not supported. Use type commands.' } });
+        return;
+      }
       if (extensionUi.handleResponse(parsed)) return;
 
       if (isRpcCommandRequest(parsed)) {
@@ -740,30 +613,17 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
         return;
       }
 
-      const request = parsed as Partial<RpcRequest>;
-      if (!request || typeof request !== 'object' || typeof request.method !== 'string' || !request.method) {
-        await output({ error: { code: 'INVALID_REQUEST', message: 'The type or method field is required.' } });
-        return;
-      }
-      try {
-        await output(await handleRpcRequest(request as RpcRequest, customContext) as unknown as Record<string, unknown>);
-      } catch (error) {
-        await output({
-          id: request.id,
-          error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : String(error) },
-        });
-      }
+      await output({ error: { code: 'INVALID_REQUEST', message: 'The type field is required.' } });
     };
 
-    const pending = new Set<Promise<void>>();
     let taskFailure: unknown;
-    for await (const line of jsonLines(input, () => signalClosedInput)) {
+    for await (const frame of readRpcFrames(input, () => signalClosedInput)) {
       if (taskFailure) throw taskFailure;
       while (pending.size >= MAX_PENDING_RPC_REQUESTS) {
         await Promise.race([...pending].map(task => task.catch(() => undefined)));
         if (taskFailure) throw taskFailure;
       }
-      const task = handleLine(line);
+      const task = handleLine(frame.line).finally(frame.release);
       pending.add(task);
       void task.then(
         () => pending.delete(task),
@@ -791,6 +651,8 @@ export async function runRpcMode(options: RpcStartupOptions = {}): Promise<'SIGI
   let cleanupError: unknown;
   try { extensionUi.close(); } catch (error) { cleanupError = error ?? new Error('RPC UI cleanup failed.'); }
   try { await controller?.close(); } catch (error) { cleanupError ??= error ?? new Error('RPC controller cleanup failed.'); }
+  // Fatal framing/input errors still join admitted handlers and output deliveries.
+  await Promise.allSettled([...pending]);
   try { await mcpHost?.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('MCP shutdown failed.'); }
   try { await extensionRegistry.shutdown(); } catch (error) { cleanupError ??= error ?? new Error('Extension shutdown failed.'); }
   try {

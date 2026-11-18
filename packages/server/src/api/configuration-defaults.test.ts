@@ -139,7 +139,7 @@ describe('independent new-session defaults', () => {
 
   it.each(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5',
     'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929'])(
-    'owns legacy HTTP/WebSocket numeric budgets for %s in the default workspace, never in caller selectors or maps', async model => {
+    'owns detached numeric budgets for %s in the validated workspace, never in prompt maps or opaque cache IDs', async model => {
     const globalFile = path.join(root, '.data', 'settings.json');
     const projectFile = path.join(root, '.ai-harness', 'settings.json');
     const cacheId = 'legacy-provider-cache';
@@ -160,46 +160,35 @@ describe('independent new-session defaults', () => {
       ].map(([type, data]) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data as object })}\n\n`).join(''),
       { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const chat = async (budget: number | 'off' | 'omitted' | 'refused', thinking = 'low') => {
-      for (const route of ['/api/chat', '/api/chat/stream', '/api/chat/ws']) {
-        const before = calls.length;
-        const input = { provider: 'anthropic', messages: [{ role: 'user', content: 'Trusted numeric policy' }],
-          cwd: '/caller-cannot-select', projectId: 'caller-project', sessionId: cacheId, thinkingBudgets: { low: 999999 },
-          options: { model, maxTokens: 64000, ...(budget === 'omitted' ? {} : { thinking }), sessionId: cacheId,
-            thinkingBudgets: { low: 999999, high: 999999 } } };
-        let body: string;
-        if (route === '/api/chat/ws') {
-          const socket = new WebSocket(base.replace('http:', 'ws:') + route,
-            ['aih.v1', `aih.bearer.${Buffer.from('defaults-user').toString('base64url')}`]);
-          try {
-            const received = await new Promise<{ body: string; code: number; protocol: string }>((resolve, reject) => {
-              let text = '';
-              socket.addEventListener('open', () => socket.send(JSON.stringify(input)), { once: true });
-              socket.addEventListener('message', event => { text += String(event.data); });
-              socket.addEventListener('error', () => reject(new Error('Legacy numeric WebSocket failed')), { once: true });
-              socket.addEventListener('close', event => resolve({ body: text, code: event.code, protocol: socket.protocol }), { once: true });
-            });
-            expect(received.code).toBe(1000); expect(received.protocol).toBe('aih.v1'); body = received.body;
-          } finally { socket.close(); }
-        } else {
-          const response = await request(route, 'POST', input);
-          expect(response.status).toBe(200); body = await response.text();
-        }
-        if (budget === 'refused') {
-          expect(body.match(/^event: error$/gm)).toHaveLength(1);
-          expect(body).toContain('Provider request failed.');
-          for (const forbidden of ['LEGACY_BUDGET_OK', 'event: message_end', 'Invalid Anthropic thinking allocation.']) expect(body).not.toContain(forbidden);
-          expect(calls).toHaveLength(before);
-          continue;
-        }
-        expect(body).toContain('LEGACY_BUDGET_OK');
-        expect(calls).toHaveLength(before + 1);
-        if (budget === 'omitted') {
-          expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true });
-          expect(calls.at(-1)).not.toHaveProperty('thinking');
-        } else expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true,
-          thinking: budget === 'off' ? { type: 'disabled' } : { type: 'enabled', budget_tokens: budget, display: 'summarized' } });
+    const chat = async (budget: number | 'off' | 'refused' | 'untrusted', thinking = 'low') => {
+      const before = calls.length;
+      const response = await request('/api/agent/runs', 'POST', {
+        provider: 'anthropic', model, input: 'Trusted numeric policy', cwd: root,
+        ...(thinking === 'omitted' ? {} : { thinking }), toolPreset: 'chat-only', autoCompaction: false,
+        projectId: 'caller-project', thinkingBudgets: { low: 999999 },
+        options: { sessionId: cacheId, thinkingBudgets: { low: 999999, high: 999999 } },
+      });
+      if (budget === 'untrusted') {
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({ code: 'PROJECT_TRUST_REQUIRED' });
+        expect(calls).toHaveLength(before);
+        return;
       }
+      expect(response.status).toBe(202);
+      const { run } = await response.json() as { run: { id: string; sessionId: string } };
+      const settled = await services.agentRuntime.wait(run.id);
+      const state = await request(`/api/agent/sessions/${run.sessionId}/state`).then(result => result.json());
+      if (budget === 'refused') {
+        expect(settled?.phase).toBe('failed');
+        expect(state.session.messages.some((message: { role: string; content: string }) => message.role === 'assistant' && message.content.includes('LEGACY_BUDGET_OK'))).toBe(false);
+        expect(calls).toHaveLength(before);
+        return;
+      }
+      expect(settled?.phase).toBe('completed');
+      expect(state.session.messages.at(-1)).toMatchObject({ content: 'LEGACY_BUDGET_OK', provider: 'anthropic', model });
+      expect(calls).toHaveLength(before + 1);
+      expect(calls.at(-1)).toMatchObject({ model, max_tokens: 64000, stream: true,
+        thinking: budget === 'off' ? { type: 'disabled' } : { type: 'enabled', budget_tokens: budget, display: 'summarized' } });
     };
     try {
       getProxy().setApiKey('anthropic', 'disposable-legacy-budget-key', undefined, model);
@@ -215,7 +204,7 @@ describe('independent new-session defaults', () => {
       await chat(3500, 'high');
       await chat(3500, 'xhigh');
       await chat(3500, 'max');
-      await chat('omitted');
+      await chat(3500, 'omitted'); // Canonical omission inherits the saved high level.
       await services.configurationStore.patch('project', { thinkingBudgets: { high: 999999 } }, projectId);
       await chat(62976, 'high'); // Published 64,000 ceiling retains 1,024 answer tokens.
       await services.configurationStore.patch('project', { thinkingBudgets: { high: 0 } }, projectId);
@@ -231,17 +220,17 @@ describe('independent new-session defaults', () => {
       await writeFile(projectFile, JSON.stringify({ thinkingBudgets: { low: 4000 } }));
       await chat(4000);
       await services.trustManager.refuse(root);
-      await chat(1600);
+      await chat('untrusted');
       await services.configurationStore.patch('project', { thinkingBudgets: { low: 4500 } }, projectId);
-      await chat(4500); // An administrator-owned map is not a project file.
+      await chat('untrusted'); // A scoped map never grants workspace execution trust.
       await services.configurationStore.patch('project', { thinkingBudgets: null }, projectId);
       await services.trustManager.trust(root);
       await chat(4000);
       const unavailable = vi.spyOn(services.workspaceManager, 'getDefaultCwd')
         .mockRejectedValue(new WorkspacePathError('OUTSIDE_ALLOWED_ROOTS', 'Unavailable default'));
-      try { await chat(1600); } finally { unavailable.mockRestore(); }
+      try { await chat(4000); } finally { unavailable.mockRestore(); } // Explicit validated cwd retains project policy.
       await chat('off', 'off');
-      expect(calls).toHaveLength(51);
+      expect(calls).toHaveLength(15);
     } finally {
       transport.mockRestore();
       await services.trustManager.trust(root);

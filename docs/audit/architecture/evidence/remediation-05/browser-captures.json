@@ -1,0 +1,125 @@
+{
+  "captures": [
+    {
+      "name": "before-terminal",
+      "messages": 0,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 0,
+      "commits": 35,
+      "totalInstrumentedCommitMs": 162.40000000223517,
+      "cpuSamples": 2245,
+      "sourceTimelineSha256": "8d85f2eb8b39eb46629556aa400c78edaca22f42114c56212220266d71ea1bb1",
+      "storedTimelineSha256": "bc39e4914bbbc4ff6c45a3b3836fe89fc516d7015311eb091240128732e338a7",
+      "sourceTimelineBytes": 1404950,
+      "storedTimelineBytes": 1323309,
+      "droppedUserTimingEvents": 249,
+      "privacy": "Post-capture removal of ALL blink.user_timing events; no metrics/CPU rewriting. These matched earlier captures used identical instrumentation."
+    },
+    {
+      "name": "before-320-messages",
+      "messages": 320,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 20,
+      "commits": 53,
+      "totalInstrumentedCommitMs": 781.0999999959022,
+      "cpuSamples": 1281,
+      "sourceTimelineSha256": "7e3e25204ef94f5bd8c45e90c135b203c6ec5fc90d1a1ac8d485ba017e80e9b0",
+      "storedTimelineSha256": "eb9c8f66c7f7c7297bae3a33dfa9e3bf5e50b27e677610caef146112818ddfc8",
+      "sourceTimelineBytes": 2519945,
+      "storedTimelineBytes": 2355713,
+      "droppedUserTimingEvents": 496,
+      "privacy": "Post-capture removal of ALL blink.user_timing events; no metrics/CPU rewriting. These matched earlier captures used identical instrumentation."
+    },
+    {
+      "name": "after-terminal",
+      "messages": 0,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 0,
+      "commits": 35,
+      "totalInstrumentedCommitMs": 166.59999999590218,
+      "cpuSamples": 2209,
+      "sourceTimelineSha256": "8b980ff98799d46953ce4125c4ac1a2c04cc0001244f4d6d35960e12713b61c1",
+      "storedTimelineSha256": "be3d22b17ad06eb0120d3c48e257c70f3a7565ada453fa5bbdeba90e6245c28f",
+      "sourceTimelineBytes": 1404077,
+      "storedTimelineBytes": 1321536,
+      "droppedUserTimingEvents": 250,
+      "privacy": "Post-capture removal of ALL blink.user_timing events; no metrics/CPU rewriting. These matched earlier captures used identical instrumentation."
+    },
+    {
+      "name": "after-320-messages",
+      "messages": 320,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 20,
+      "commits": 54,
+      "totalInstrumentedCommitMs": 1118.1000000014901,
+      "cpuSamples": 1292,
+      "sourceTimelineSha256": "8cdbe14de8708397f1abaa0092ca674c8c82795524da143f3d1e45b3fe1c5ca1",
+      "storedTimelineSha256": "4f76346f3063d4115ca84e49a9eddf380d6207808e78192f8c595c70ae4405af",
+      "sourceTimelineBytes": 2507002,
+      "storedTimelineBytes": 2336240,
+      "droppedUserTimingEvents": 525,
+      "privacy": "Post-capture removal of ALL blink.user_timing events; no metrics/CPU rewriting. These matched earlier captures used identical instrumentation."
+    },
+    {
+      "name": "current-private-terminal",
+      "messages": 0,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 0,
+      "commits": 25,
+      "totalInstrumentedCommitMs": 132.59999999590218,
+      "cpuSamples": 1590,
+      "sourceTimelineSha256": "b6345ea8d7401dfa8bf960b37f1b3b7ad2ddc489df558c11a253a311c1e2df8f",
+      "storedTimelineSha256": "b6345ea8d7401dfa8bf960b37f1b3b7ad2ddc489df558c11a253a311c1e2df8f",
+      "sourceTimelineBytes": 1116014,
+      "storedTimelineBytes": 1116014,
+      "droppedUserTimingEvents": 0,
+      "privacy": "Capture excludes user-timing at source; unmodified timeline/CPU."
+    },
+    {
+      "name": "current-private-320-messages",
+      "messages": 320,
+      "browser": "156.0.8078.79",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "online": true,
+      "mountedMessages": 20,
+      "commits": 53,
+      "totalInstrumentedCommitMs": 778.0000000055879,
+      "cpuSamples": 1203,
+      "sourceTimelineSha256": "f4d7dfe627732575bf2c080204ba4ad0814d8ba0c903fa0d57ceee4773a662e1",
+      "storedTimelineSha256": "f4d7dfe627732575bf2c080204ba4ad0814d8ba0c903fa0d57ceee4773a662e1",
+      "sourceTimelineBytes": 2186702,
+      "storedTimelineBytes": 2186702,
+      "droppedUserTimingEvents": 0,
+      "privacy": "Capture excludes user-timing at source; unmodified timeline/CPU."
+    }
+  ],
+  "limits": "Synthetic owning Web/Vite plus frozen emitted Server/Core. One paired observation per scenario, not latency statistics or optimization gains. Broader paired captures were privacy-projected; narrow current captures exclude user-timing entirely. Failed baseline compiler/profiler observations are retained separately, not recast as passing gates."
+}

@@ -128,7 +128,7 @@
     },
     {
       "id": "rpc-invalid-envelope",
-      "description": "returns a fixed protocol error for a request without type or method",
+      "description": "returns a fixed protocol error for a request without type",
       "criteria": ["CLI-AUT-02"],
       "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc"],
       "stdinFixture": "transcripts/rpc-invalid.input.jsonl",
@@ -139,8 +139,8 @@
       }
     },
     {
-      "id": "rpc-legacy-chat-migration",
-      "description": "accepts the deprecated method/params envelope and emits its complete streamed result",
+      "id": "rpc-legacy-chat-rejection",
+      "description": "rejects retired method/params input without chat execution",
       "criteria": ["CLI-AUT-03"],
       "args": ["--mode", "rpc", "--no-session", "--session-id", "contract-rpc"],
       "stdinFixture": "transcripts/rpc-legacy-chat.input.jsonl",

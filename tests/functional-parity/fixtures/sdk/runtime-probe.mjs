@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import * as core from '@ai-harness/core';
 import {
   AI_HARNESS_CORE_API_VERSION,
   AI_HARNESS_EXTENSION_API_VERSION,
@@ -6,6 +8,14 @@ import {
   SessionManager,
   serializeSession,
 } from '@ai-harness/core';
+
+assert.equal(AI_HARNESS_CORE_API_VERSION, 2);
+assert.equal(AI_HARNESS_EXTENSION_API_VERSION, 1);
+assert.equal(SESSION_SCHEMA_VERSION, 2);
+for (const name of ['fetchWithRetry', 'formatDate', 'deepClone']) assert.equal(Object.hasOwn(core, name), false);
+assert.equal(typeof core.generateId(), 'string');
+assert.equal(core.truncate('retained utility', 8), 'retai...');
+assert.equal(await core.withRetryIfRetryable(async () => 'retained retry'), 'retained retry');
 
 const sessions = new SessionManager();
 const session = await sessions.create({

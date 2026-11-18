@@ -17,6 +17,7 @@ function settingsSection(page: Page, heading: string) {
 
 test.describe('Settings and authentication', () => {
   test('présente les fournisseurs hydratés et le nombre de sessions', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('ai-harness-transport', 'websocket'));
     await installMockApi(page, {
       sessions: [mockSession('first-session', 'Première'), mockSession('second-session', 'Deuxième')],
       providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: true }],
@@ -32,6 +33,8 @@ test.describe('Settings and authentication', () => {
       'GPT-4o (Recommended)', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
     ]);
     await expect(settingsSection(page, 'Sessions')).toContainText('Total sessions: 2');
+    await expect(page.locator('#transport')).toHaveCount(0);
+    await expect(page.getByLabel('Select the real-time transport', { exact: true })).toHaveCount(0);
   });
 
   test('filtre le catalogue serveur, active les modèles par workspace et alimente le chat', async ({ page }) => {

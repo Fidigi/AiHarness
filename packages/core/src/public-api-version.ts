@@ -5,7 +5,7 @@
  * an intentional breaking change cannot be represented additively or through
  * a documented migration.
  */
-export const AI_HARNESS_CORE_API_VERSION = 1 as const;
+export const AI_HARNESS_CORE_API_VERSION = 2 as const;
 
 /** Major version supplied to every loaded AiHarness extension factory. */
 export const AI_HARNESS_EXTENSION_API_VERSION = 1 as const;

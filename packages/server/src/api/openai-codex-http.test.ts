@@ -6,7 +6,7 @@ import { EncryptedCredentialStore, ProviderCredentialService, type ModelCatalog,
 import { start, stop } from '../index.js';
 import { AiProxyServer } from './proxy.js';
 
-it('routes actual HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect', async () => {
+it('routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-ws-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-http-ws-master', accountId = 'fixture-codex-account', model = 'gpt-6.1-sol';
   const accessToken = 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: accountId } })).toString('base64url') + '.fixture';
@@ -42,11 +42,19 @@ it('routes actual HTTP chat through explicit Codex WebSocket and refuses traffic
       expect(init.headers).toMatchObject({ Authorization: 'Bearer ' + accessToken, 'chatgpt-account-id': accountId, 'OpenAI-Beta': 'responses_websockets=2026-02-06' });
       const socket = new Socket(); sockets.push(socket); return socket as unknown as ProviderWebSocket;
     } });
-    const chat = () => fetch(base + '/api/chat', { method: 'POST', headers, body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model, sessionId: 'http-websocket' } }) });
-    const text = await (await chat()).text(); expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+    expect((await fetch(base + '/api/workspaces/trust', { method: 'POST', headers, body: JSON.stringify({ cwd, confirm: true }) })).status).toBe(200);
+    const chat = () => fetch(base + '/api/agent/runs', { method: 'POST', headers,
+      body: JSON.stringify({ cwd, provider: 'openai-codex', model, input: 'probe', toolPreset: 'chat-only', autoCompaction: false }) });
+    const response = await chat(); expect(response.status).toBe(202);
+    const { run } = await response.json() as { run: { id: string; sessionId: string } };
+    await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(result => result.json()))
+      .toMatchObject({ phase: 'completed' }));
+    const state = await fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(result => result.json());
+    expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
     expect(sent).toHaveLength(1); expect(sent[0]).toMatchObject({ type: 'response.create', model, store: false }); expect(sockets).toHaveLength(1);
     expect((await fetch(base + '/api/provider-registry/auth/openai-codex', { method: 'DELETE', headers })).status).toBe(200);
-    const calls = vendor.mock.calls.length, denied = await (await chat()).text(); expect(denied).not.toContain('event: message_end');
+    const calls = vendor.mock.calls.length, denied = await chat();
+    expect(denied.status).toBe(500); expect(await denied.json()).toEqual({ error: 'Internal server error' });
     expect(sent).toHaveLength(1); expect(vendor).toHaveBeenCalledTimes(calls);
     await stop(); expect(sockets[0].readyState).toBe(3);
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
@@ -110,6 +118,16 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
       const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
       const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer codex-http-admin', 'content-type': 'application/json' };
       const post = (route: string, body: unknown) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
+      const chat = async () => {
+        const response = await post('/api/agent/runs', { cwd, provider: 'openai-codex', model, input: 'probe',
+          toolPreset: 'chat-only', autoCompaction: false });
+        expect(response.status).toBe(202);
+        const { run } = await response.json() as { run: { id: string; sessionId: string } };
+        await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(result => result.json()))
+          .toMatchObject({ phase: 'completed' }));
+        const state = await fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(result => result.json());
+        expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
+      };
       if (!restart) {
         const auth = await fetch(base + '/api/provider-registry/auth', { headers }).then(response => response.json());
         expect(auth).toContainEqual(expect.objectContaining({ type: 'openai-codex', method: 'oauth', configured: false }));
@@ -150,10 +168,9 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
       expect(catalog.providers.find(row => row.provider === 'openai-codex')?.models.filter(row => row.available).map(row => row.id)).toEqual([model]);
       expect((await post('/api/config', { type: 'openai-codex', apiKey: 'forbidden-key' })).status).toBe(400);
       expect((await post('/api/provider-registry/custom', { id: 'openai-codex', name: 'Forged native', dialect: 'openai', baseUrl: 'https://unrelated.example', apiKey: 'forbidden-key' })).status).toBe(400);
-      const reply = await post('/api/chat', { provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model, stream: false } });
-      expect(reply.status).toBe(200); expect(await reply.text()).toContain('ok');
+      expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
+      await chat();
       if (restart) {
-        expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
         if (generation === 1) {
           expect((await post('/api/plugins/reload', { cwd })).status).toBe(200);
         } else {
@@ -194,8 +211,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
         expect(removedCatalog.providers.find(row => row.provider === 'openai-codex')!.models).toContainEqual(expect.objectContaining({ id: model, available: false }));
         expect(calls.length).toBeGreaterThan(beforeRemote);
         const removed = await post('/api/chat', { provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } });
-        expect(removed.status).toBe(200); const removedText = await removed.text();
-        expect(removedText).toContain('event: error'); expect(removedText).not.toContain('event: message_end'); expect(removedText).not.toContain(access);
+        expect(removed.status).toBe(404); expect(await removed.json()).toEqual({ error: 'Not found' });
         const remoteRun = await post('/api/agent/runs', { sessionId, cwd, provider: 'openai-codex', model, input: 'removed by account', autoCompaction: false, maxRetries: 0 });
         expect(remoteRun.status).toBe(202); const { run: removedRun } = await remoteRun.json() as { run: { id: string } };
         await vi.waitFor(async () => expect(await fetch(base + '/api/agent/runs/' + removedRun.id, { headers }).then(response => response.json())).toMatchObject({ phase: 'failed' }));
@@ -211,7 +227,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
         const withdrawn = await fetch(base + '/api/models', { headers }).then(response => response.json()) as ModelCatalog;
         expect(withdrawn.providers.find(row => row.provider === 'openai-codex')?.models.every(row => !row.available)).toBe(true);
         const count = calls.length, denied = await post('/api/chat', { provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } });
-        const text = await denied.text(); expect(text).toContain('event: error'); expect(text).not.toContain('event: message_end'); expect(calls).toHaveLength(count);
+        expect(denied.status).toBe(404); expect(await denied.json()).toEqual({ error: 'Not found' }); expect(calls).toHaveLength(count);
         const failed = await post('/api/agent/runs', { sessionId, cwd, provider: 'openai-codex', model, input: 'withdrawn', autoCompaction: false, maxRetries: 0 });
         expect(failed.status).toBe(202); const { run: deniedRun } = await failed.json() as { run: { id: string } };
         await vi.waitFor(async () => expect(await fetch(base + '/api/agent/runs/' + deniedRun.id, { headers }).then(response => response.json())).toMatchObject({ phase: 'failed' }));
@@ -231,7 +247,7 @@ it('owns native Codex HTTP login, encrypted restart/refresh, CX private replay a
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inference-body'] as const)('retires Codex HTTP credential or inference work at held %s without undoing committed credentials', async stage => {
+it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inference-body'] as const)('retires Codex HTTP credential or detached inference work at held %s without undoing committed credentials', async stage => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-codex-http-cancel-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-codex-http-cancel-master', model = 'gpt-6.1-sol', account = 'codex-http-cancel-account', initialRefresh = 'disposable-codex-refresh-original';
   const token = (generation: number) => 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + Buffer.from('rotation-' + generation).toString('base64url');
@@ -289,18 +305,35 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inferenc
     const initialCalls = calls.length, current = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
     if (current?.credential.type !== 'oauth') throw new Error('Missing fixture credential.');
     const caller = new AbortController();
-    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers, signal,
-      body: JSON.stringify({ provider: 'openai-codex', messages: [{ role: 'user', content: 'probe' }], options: { model } }) });
+    const chat = async (signal?: AbortSignal) => {
+      const response = await fetch(base + '/api/agent/runs', { method: 'POST', headers, signal,
+        body: JSON.stringify({ cwd, provider: 'openai-codex', model, input: 'probe', toolPreset: 'chat-only', autoCompaction: false }) });
+      expect(response.status).toBe(202);
+      return (await response.json() as { run: { id: string; sessionId: string } }).run;
+    };
+    const settled = async (run: { id: string; sessionId: string }, phase: string) => {
+      await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(response => response.json()))
+        .toMatchObject({ phase }));
+      return fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(response => response.json());
+    };
+    const stopRun = async (run: { id: string; sessionId: string }) => {
+      const response = await fetch(`${base}/api/agent/runs/${run.id}/stop`, { method: 'POST', headers });
+      expect(response.status).toBe(202);
+      await settled(run, 'stopped');
+    };
+    if (stage !== 'discovery-shutdown') expect((await fetch(base + '/api/workspaces/trust', { method: 'POST', headers,
+      body: JSON.stringify({ cwd, confirm: true }) })).status).toBe(200);
     if (stage === 'inference-body') {
       const committed = await readFile(file); hold = true;
-      const response = await chat(caller.signal); expect(response.status).toBe(200);
-      const output = response.text().catch((error: unknown) => error);
-      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      const run = await chat(caller.signal);
+      await started; caller.abort();
+      expect(issuerSignal?.aborted).toBe(false);
+      await stopRun(run);
       await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true)); await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
       expect(await readFile(file)).toEqual(committed); expect(refreshes).toBe(0); expect(calls.slice(initialCalls)).toEqual([modelsUrl, responsesUrl]);
       hold = false;
-      const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
-      expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+      const resumed = await chat(), state = await settled(resumed, 'completed'), text = JSON.stringify(state);
+      expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
       expect(calls.slice(initialCalls)).toEqual([modelsUrl, responsesUrl, modelsUrl, responsesUrl]); expect(refreshes).toBe(0); expect(bodyCancelled).toHaveBeenCalledTimes(1);
       expect(await readFile(file)).toEqual(committed); expect((await stat(file)).mode & 0o777).toBe(0o600);
       for (const secret of [token(0), initialRefresh]) { expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret); }
@@ -327,13 +360,13 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inferenc
     }
     await reader.setOAuth('openai-codex', { ...current.credential, expiresAt: Date.now() - 1000 });
     const expired = await readFile(file); hold = true;
-    const response = await chat(caller.signal); expect(response.status).toBe(200);
-    const output = response.text().catch((error: unknown) => error); await started;
+    const run = await chat(caller.signal); await started;
     const boundary = await readFile(file), committed = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });
     expect(committed?.credential).toMatchObject({ type: 'oauth', accessToken: token(stage === 'token' ? 0 : 1),
       refreshToken: stage === 'token' ? initialRefresh : 'disposable-codex-refresh-1', subscription: { provider: 'openai-codex', accountId: account } });
     if (stage === 'token') expect(boundary).toEqual(expired); else expect(boundary).not.toEqual(expired);
-    caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' }); await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
+    caller.abort(); expect(issuerSignal?.aborted).toBe(false);
+    await stopRun(run); await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
     if (stage === 'catalogue-body') await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
     else {
       const late = Response.json(stage === 'token' ? { access_token: token(1), refresh_token: 'disposable-codex-refresh-1', expires_in: 3600 }
@@ -344,8 +377,8 @@ it.each(['token', 'catalogue', 'catalogue-body', 'discovery-shutdown', 'inferenc
     expect(await readFile(file)).toEqual(boundary);
     expect(calls.slice(initialCalls)).toEqual(stage === 'token' ? [tokenUrl] : [tokenUrl, modelsUrl]);
     hold = false;
-    const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
-    expect(text).toContain('event: message_end'); expect(text).toContain('"content":"ok"'); expect(text).not.toContain('event: error');
+    const resumed = await chat(), state = await settled(resumed, 'completed'), text = JSON.stringify(state);
+    expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
     expect(refreshes).toBe(stage === 'token' ? 2 : 1);
     expect(calls.slice(initialCalls)).toEqual(stage === 'token' ? [tokenUrl, tokenUrl, modelsUrl, responsesUrl] : [tokenUrl, modelsUrl, modelsUrl, responsesUrl]);
     const durable = await reader.resolve('openai-codex', { env: {}, subscriptionProvider: 'openai-codex', now: 0 });

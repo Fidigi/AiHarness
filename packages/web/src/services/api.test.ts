@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as api from './api';
 import {
   appendSessionMessage,
   autoNameSession,
@@ -11,7 +12,6 @@ import {
   forkSession,
   getAgentRun,
   getAppUpdateStatus,
-  getChatTransport,
   getEffectiveConfiguration,
   getMcpConfig,
   getModelCatalog,
@@ -29,9 +29,7 @@ import {
   mutatePlugin,
   reloadPluginResources,
   searchSessions,
-  sendChat,
   setAuthToken,
-  setChatTransport,
   setProviderApiKey,
   setPluginsEnabled,
   stopSubagentRun,
@@ -41,7 +39,7 @@ import {
   updateSubagentSettings,
   updateSubagentProfile,
   acknowledgeSubagentRun,
-  streamChat,
+  boundedSseRecords,
   uploadFiles,
 } from './api';
 import {
@@ -108,79 +106,33 @@ describe('Web API service', () => {
     });
   });
 
-  it('associates SSE event names with their data payloads', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
-      'event: message_start\ndata: {"provider":"mock"}\n\n',
-      'event: text_delta\ndata: {"content":"Bon"}\n\n',
-      'event: text_delta\ndata: {"content":"jour"}\n\n',
-      'event: message_end\ndata: {"content":"Bonjour"}\n\n',
-    ])));
-
-    const events = [];
-    for await (const event of streamChat('mock', [{ role: 'user', content: 'Salut' }])) {
-      events.push(event);
+  it('does not expose the retired stateless chat clients or transport selector', () => {
+    for (const name of ['sendChat', 'streamChat', 'setChatTransport', 'getChatTransport']) {
+      expect(Object.hasOwn(api, name)).toBe(false);
     }
-
-    expect(events.map(event => event.type)).toEqual([
-      'message_start',
-      'text_delta',
-      'text_delta',
-      'message_end',
-    ]);
-    expect(events[3].content).toBe('Bonjour');
   });
 
-  it('handles SSE records split across network chunks', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
-      'event: text_',
-      'delta\ndata: {"content":"chunk"}\n\n',
-      'event: message_end\ndata: {"content":"chunk"}\n\n',
-    ])));
-
+  it('keeps the shared bounded SSE parser, including fragmented names and final CRLF/no-LF data', async () => {
+    const response = sseResponse([
+      'event: message.', 'delta\r\ndata: {"content":"chunk"}\r\n\r\n',
+      'event: connection.ready\r\ndata: {"reset":true}',
+    ]);
     const events = [];
-    for await (const event of streamChat('mock', [])) events.push(event);
-
+    for await (const event of boundedSseRecords(response)) events.push(event);
     expect(events).toEqual([
-      { type: 'text_delta', content: 'chunk' },
-      { type: 'message_end', content: 'chunk' },
+      { event: 'message.delta', data: '{"content":"chunk"}' },
+      { event: 'connection.ready', data: '{"reset":true}' },
     ]);
   });
 
-  it('fails closed when an SSE stream ends without a terminal event', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
-      'event: text_delta\ndata: {"content":"partial"}\n\n',
-    ])));
-
-    const events = [];
-    for await (const event of streamChat('mock', [])) events.push(event);
-
-    expect(events).toEqual([
-      { type: 'text_delta', content: 'partial' },
-      { type: 'error', content: 'Provider stream ended without a terminal event.' },
-    ]);
-  });
-
-  it('parses the final SSE record even when the stream has no trailing newline', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([
-      'event: message_end\r\ndata: {"content":"Terminé"}',
-    ])));
-
-    const events = [];
-    for await (const event of streamChat('mock', [])) events.push(event);
-
-    expect(events).toEqual([{ type: 'message_end', content: 'Terminé' }]);
-  });
-
-  it('yields an error event for HTTP failures', async () => {
+  it('preserves detached SSE HTTP failures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
       JSON.stringify({ error: 'Provider unavailable' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } },
     )));
-
-    const events = [];
-    for await (const event of streamChat('openai', [])) events.push(event);
-
-    expect(events).toEqual([{ type: 'error', content: 'Provider unavailable' }]);
+    await expect((async () => {
+      for await (const _record of streamAgentEvents('session-1')) { /* Consume the owning stream. */ }
+    })()).rejects.toThrow('Provider unavailable');
   });
 
   it('propagates cancellation to a manual compaction request', async () => {
@@ -700,7 +652,6 @@ describe('Web API service', () => {
     setAuthToken(' secret-token ');
 
     const results = await Promise.all([
-      sendChat('openai', [{ role: 'user', content: 'Hello' }]),
       listSessions(),
       createSession('New'),
       getSession('session-1'),
@@ -733,7 +684,6 @@ describe('Web API service', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
 
     const results = await Promise.all([
-      sendChat('openai', []),
       listSessions(),
       createSession(),
       getSession('missing'),
@@ -819,48 +769,4 @@ describe('Web API service', () => {
     expect(JSON.parse(requests[0]!.body)).toMatchObject({ cwd: '/workspace', path: '.', collision: 'reject' });
   });
 
-  it('streams chat over WebSocket and persists the selected transport', async () => {
-    const storage = { setItem: vi.fn() };
-    vi.stubGlobal('localStorage', storage);
-    vi.stubGlobal('location', { protocol: 'https:', host: 'chat.example.test' });
-
-    let selectedProtocols: string | string[] | undefined;
-    class MockWebSocket {
-      onopen?: () => void;
-      onmessage?: (event: { data: string }) => void;
-      onerror?: () => void;
-      onclose?: () => void;
-      readonly sent: string[] = [];
-
-      constructor(readonly url: string, protocols?: string | string[]) {
-        selectedProtocols = protocols;
-        queueMicrotask(() => {
-          this.onopen?.();
-          this.onmessage?.({ data: 'event: text_delta\ndata: {"content":"Salut"}\n' });
-          this.onmessage?.({ data: 'event: message_end\ndata: {"content":"Salut"}\n' });
-          this.onclose?.();
-        });
-      }
-
-      send(payload: string): void {
-        this.sent.push(payload);
-      }
-    }
-    vi.stubGlobal('WebSocket', MockWebSocket);
-    setChatTransport('websocket');
-
-    const events = [];
-    for await (const event of streamChat('openai', [{ role: 'user', content: 'Bonjour' }])) {
-      events.push(event);
-    }
-
-    expect(getChatTransport()).toBe('websocket');
-    expect(selectedProtocols).toEqual(['aih.v1']);
-    expect(storage.setItem).toHaveBeenCalledWith('ai-harness-transport', 'websocket');
-    expect(events).toEqual([
-      { type: 'text_delta', content: 'Salut' },
-      { type: 'message_end', content: 'Salut' },
-    ]);
-    setChatTransport('sse');
-  });
 });

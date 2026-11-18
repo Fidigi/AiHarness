@@ -20,7 +20,7 @@ import { assertProviderRequestBudget, captureProviderRequestBudget, ProviderRequ
   type ProviderRequestBudget } from './provider-request-estimate.js';
 import { ProviderRequestOptionsError } from './provider-request-options.js';
 import { captureProviderCallLabels, captureProviderMessages, prepareProviderPayload } from './provider-request-payload.js';
-import { AgentAbortError } from './tool-loop.js';
+import { AgentAbortError } from './agent-errors.js';
 import { awaitAgentAdmission } from './prestart-admission.js';
 import type { SessionManager } from '../sessions/session-manager.js';
 import { resolveVirtualModelFallback, VirtualModelRoutingError, type VirtualModelReason, type VirtualModelRequest } from '../providers/virtual-models.js';

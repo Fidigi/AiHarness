@@ -1,6 +1,6 @@
 /** Optional presentation metadata. Never a configuration, descriptor or trust source. */
 export const settingsSections = [
-  'authentication', 'providers', 'provider-lifecycle', 'transport', 'model', 'defaults',
+  'authentication', 'providers', 'provider-lifecycle', 'model', 'defaults',
   'custom-models', 'skills', 'tools', 'plugins', 'subagents', 'appearance', 'shortcuts',
   'sessions', 'mcp', 'about',
 ] as const;

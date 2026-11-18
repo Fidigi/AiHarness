@@ -1,6 +1,7 @@
 import type { AiProvider } from './index.js';
-import { getPublishedModelMetadata, type PublishedThinkingLevel, type PublishedModelMetadata } from './model-metadata.js';
+import { getPublishedModelMetadata, type PublishedThinkingLevel, type PublishedModelMetadata } from './published-models.js';
 import type { ModelPricing } from '../types/index.js';
+import { readOwnedPublishedModel } from './published-model-reader.js';
 
 function data(value: unknown, key: string): unknown {
   if (!value || typeof value !== 'object') return undefined;
@@ -15,15 +16,30 @@ function positive(value: unknown): value is number { return typeof value === 'nu
 export function getProviderPublishedModels(
   provider: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>,
 ): PublishedModelMetadata[] | undefined {
+  return readPublishedModels(provider);
+}
+
+/** Internal targeted projection; undefined still means undeclared, not withdrawn. */
+export function getDeclaredProviderPublishedModel(
+  provider: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>, model: string,
+): PublishedModelMetadata[] | undefined {
+  return readPublishedModels(provider, model);
+}
+
+function readPublishedModels(
+  provider: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>, model?: string,
+): PublishedModelMetadata[] | undefined {
   let raw: unknown;
-  try { raw = provider.getPublishedModels?.(); } catch { return []; }
+  try { raw = (model === undefined ? undefined : readOwnedPublishedModel(provider, model)) ?? provider.getPublishedModels?.(); } catch { return []; }
   if (raw === undefined) return undefined;
   try { if (!Array.isArray(raw)) return []; } catch { return []; }
   const models: PublishedModelMetadata[] = [], seen = new Set<string>();
   const count = data(raw, 'length');
   if (!positive(count) && count !== 0) return [];
   for (let index = 0; index < Math.min(count as number, 500); index++) {
-    const row = data(raw, String(index)), id = data(row, 'id'), name = data(row, 'name'), capabilities = data(row, 'capabilities');
+    const row = data(raw, String(index)), id = data(row, 'id');
+    if (model !== undefined && (!text(id) || id.trim() !== model)) continue;
+    const name = data(row, 'name'), capabilities = data(row, 'capabilities');
     const reasoning = data(capabilities, 'reasoning'), imageInput = data(capabilities, 'imageInput'), toolCalls = data(capabilities, 'toolCalls');
     if (!text(id) || !text(name) || seen.has(id.trim()) || typeof reasoning !== 'boolean' || typeof imageInput !== 'boolean' || typeof toolCalls !== 'boolean') continue;
     const rawApi = data(row, 'api'), api = typeof rawApi === 'string' && /^[a-z][a-z0-9-]{0,63}$/.test(rawApi) ? rawApi : undefined;
@@ -61,6 +77,6 @@ export function getProviderPublishedModels(
 export function getProviderPublishedModel(
   provider: string, model: string, source?: Pick<AiProvider, 'getPublishedModels' | 'getModelApi'>,
 ): PublishedModelMetadata | undefined {
-  const models = source ? getProviderPublishedModels(source) : undefined;
+  const models = source ? getDeclaredProviderPublishedModel(source, model) : undefined;
   return models === undefined ? getPublishedModelMetadata(provider, model) : models.find(row => row.id === model);
 }

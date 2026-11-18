@@ -12,10 +12,8 @@ import type { ProviderType } from '@ai-harness/core';
 import type { TranslationFunction } from '../i18n/types';
 import {
   getAppUpdateStatus,
-  getChatTransport,
   logoutWeb,
   setAuthToken,
-  setChatTransport,
   setProviderApiKey,
   type AppUpdateStatus,
 } from '../services/api';
@@ -66,7 +64,6 @@ function SettingsView({ entryRelease, entryEpoch }: {
   const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
-  const [transport, updateTransport] = useState<'sse' | 'websocket'>(() => getChatTransport());
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
@@ -288,22 +285,6 @@ function SettingsView({ entryRelease, entryEpoch }: {
         onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
         onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
         onCanonicalReload={() => setProviderReload(value => value + 1)} />
-
-      <section className="settings-section" id="transport">
-        <h3>{t('settings.realtimeTransport')}</h3>
-        <select
-          value={transport}
-          aria-label={t('settings.selectTransport')}
-          onChange={event => {
-            const value = event.target.value as 'sse' | 'websocket';
-            updateTransport(value);
-            setChatTransport(value);
-          }}
-        >
-          <option value="sse">Server-Sent Events (SSE)</option>
-          <option value="websocket">WebSocket</option>
-        </select>
-      </section>
 
       {/* Model Selection and server catalogue */}
       <section className="settings-section" id="model">

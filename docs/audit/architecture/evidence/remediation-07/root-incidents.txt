@@ -1,0 +1,22 @@
+npm notice run ai-harness@0.1.0 npx
+npm notice run 'vitest' run packages/cli/src/cli/invocation.test.ts packages/cli/src/cli/package-command.test.ts packages/cli/src/cli/provider-auth-command.test.ts packages/cli/src/cli/thinking-budgets-process.test.ts -t selects, names, and continues persisted startup sessions|project non-UTF8 source|uses an encrypted Copilot login for an actual json inference turn and refuses it after logout|admits public readonly budgets and executes emitted Core outside the checkout
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/cli/invocation.test.ts (19 tests | 18 skipped) 1976ms
+   ✓ CLI invocation contract (19)
+     ✓ selects, names, and continues persisted startup sessions 1975ms
+ ✓ packages/cli/src/cli/provider-auth-command.test.ts (27 tests | 26 skipped) 2150ms
+   ✓ actual top-level provider auth CLI (24)
+     ✓ uses an encrypted Copilot login for an actual json inference turn and refuses it after logout 2149ms
+ ✓ packages/cli/src/cli/package-command.test.ts (30 tests | 29 skipped) 2025ms
+   ✓ package command arguments (30)
+     ✓ fails closed at the real CLI settings boundary: project non-UTF8 source 2023ms
+ ✓ packages/cli/src/cli/thinking-budgets-process.test.ts (11 tests | 10 skipped) 1064ms
+   ✓ emitted CLI thinking-budget composition (11)
+     ✓ admits public readonly budgets and executes emitted Core outside the checkout 1063ms
+
+ Test Files  4 passed (4)
+      Tests  4 passed | 83 skipped (87)
+   Start at  18:27:38
+   Duration  9.33s (tests 79%, transform 13%, import 7%)

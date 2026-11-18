@@ -25,6 +25,9 @@ jobs:
       - name: Run TypeScript checks (Docker)
         run: make typecheck
 
+      - name: Check architecture policy and negative controls (Docker)
+        run: make test-architecture
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest

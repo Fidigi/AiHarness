@@ -16,9 +16,11 @@ Cette politique couvre l’exécutable CLI, la sortie print, les modes d’autom
 | Mode RPC | Requêtes canoniques `{type,id}` et records corrélés de réponse/événement | Enveloppe canonique ; pas encore de version dédiée dans le flux |
 | Persistance de session | Métadonnées JSONL AiHarness et entrées liées par parent | `SESSION_SCHEMA_VERSION` (`2`) |
 | Factory d’extension | `ExtensionAPI`, enregistrements, hooks et nettoyage lifecycle | `api.version` et `AI_HARNESS_EXTENSION_API_VERSION` (`1`) |
-| Point d’entrée Core | Valeurs runtime et déclarations TypeScript exportées par `@ai-harness/core` | `AI_HARNESS_CORE_API_VERSION` (`1`) |
+| Point d’entrée Core | Valeurs runtime et déclarations TypeScript exportées par `@ai-harness/core` | `AI_HARNESS_CORE_API_VERSION` (`2`) |
 
-L’ancienne enveloppe RPC `{id,method,params}` est une entrée de migration, pas le contrat préféré. Sa fixture empêche sa suppression accidentelle avant une migration annoncée. Les nouvelles commandes n’ont pas à prendre en charge les deux formes.
+Rupture approuvée le 2026-11-17 (architecture COMP-01) : l’ancien moteur RPC `{id,method,params}` est supprimé, sans adaptateur ni nouvelle négociation dans le flux. Le contrat canonique `{type,id}` reste inchangé. Toute enveloppe contenant `method` ou `params` reçoit désormais le refus fixe non corrélé `INVALID_REQUEST` / `Legacy method/params RPC is not supported. Use type commands.`, sans exécution. Le golden historique change volontairement en refus ; des probes émis et installés vérifient séparément le framing et le cycle canoniques. Les payloads JSON sont limités à 32 Mio UTF-8 (hors LF/CR terminal), les entrées accumulées/traitements en cours à 64 Mio avec régulation de lecture ; le dépassement individuel est fatal avec `RPC_FRAME_TOO_LARGE` sans contenu, après nettoyage. Les écritures déjà admises ne sont pas annulées.
+
+**Core API 2 (2026-11-17, DEAD-03) :** `fetchWithRetry`, `formatDate` et `deepClone` sont retirés des exports runtime et déclarations, sans alias/shim. Utilisez la politique réseau existante des providers pour leurs requêtes, `Intl`/le formatage natif côté consommateur et `structuredClone` lorsque son contrat convient. Les autres utilitaires restent supportés. Les vérifications de majeure Core passent à 2 ; l’API d’extension 1, le schéma de journal 2 et les événements JSON 3 ne changent pas. Des probes installés positifs/négatifs de déclarations et runtime protègent cette rupture volontaire ; la version du package reste indépendante.
 
 ## Règles de compatibilité
 

@@ -6,9 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { EventEmitter } from 'node:events';
-import { CredentialRedactor, type AiProvider } from '@ai-harness/core';
-import { AiProxyServer, sanitizedProxyChatOptions, writeSSEStream } from './proxy';
+import type { AiProvider } from '@ai-harness/core';
+import { AiProxyServer } from './proxy';
 
 // ===================================================================
 // Test helpers
@@ -187,31 +186,6 @@ describe('AiProxyServer', () => {
     });
   });
 
-  it('redacts credentials fragmented at the final SSE response boundary', async () => {
-    const output: string[] = [];
-    const response = Object.assign(new EventEmitter(), {
-      destroyed: false,
-      writableEnded: false,
-      write: (chunk: string | Uint8Array) => {
-        output.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
-        return true;
-      },
-      end() { this.writableEnded = true; },
-    });
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode('event: error\ndata: boundary-'));
-        controller.enqueue(encoder.encode('secret\n\n'));
-        controller.close();
-      },
-    });
-
-    await writeSSEStream(stream, response as never, new CredentialRedactor(['boundary-secret']));
-
-    expect(output.join('')).toBe('event: error\ndata: [REDACTED]\n\n');
-  });
-
   it('redacts raw and encoded runtime credentials from provider SSE errors', async () => {
     const secret = 'short+runtime-secret';
     const provider = {
@@ -281,22 +255,6 @@ describe('AiProxyServer', () => {
 
     for (const variant of variants) expect(output).not.toContain(variant);
     expect(output.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(variants.length);
-  });
-
-  it('copies only bounded provider options from untrusted JSON payloads', () => {
-    const signal = { hostile: true };
-    expect(sanitizedProxyChatOptions({
-      model: ' model-1 ', temperature: 0.5, maxTokens: 128, maxRetries: 2,
-      thinking: 'high', sessionId: 'session-1', stream: true, signal, ignored: 'value',
-      tools: [{ name: 'read', description: 'Read a file', parameters: { type: 'object' } }],
-    })).toEqual({
-      model: 'model-1', temperature: 0.5, maxTokens: 128, maxRetries: 2,
-      thinking: 'high', sessionId: 'session-1', stream: true,
-      tools: [{ name: 'read', description: 'Read a file', parameters: { type: 'object' } }],
-    });
-    expect(sanitizedProxyChatOptions({ maxTokens: 0 })).toBeNull();
-    expect(sanitizedProxyChatOptions({ systemPrompt: 'x'.repeat(1024 * 1024 + 1) })).toBeNull();
-    expect(sanitizedProxyChatOptions({ tools: Array.from({ length: 1_025 }, () => ({})) })).toBeNull();
   });
 
   describe('setApiKey()', () => {

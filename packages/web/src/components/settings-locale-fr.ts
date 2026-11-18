@@ -74,8 +74,6 @@ export const settingsFrMessages: Readonly<Record<string, string>> = {
     'settings.localProviderConfigured': '✅ Provider local compatible OpenAI configuré',
     'settings.providerConfigured': '✅ {provider} configuré',
     'settings.noApiKey': '⚠️ Aucune API Key définie pour {provider}',
-    'settings.realtimeTransport': 'Transport en temps réel',
-    'settings.selectTransport': 'Sélectionner le transport en temps réel',
     'settings.modelCatalog.manage': 'Gérer le catalogue de modèles',
     'settings.modelCatalog.help': 'Choisissez les modèles publiés ou découverts proposés dans le chat pour ce workspace.',
     'settings.modelCatalog.filter': 'Filtrer les modèles ou providers',

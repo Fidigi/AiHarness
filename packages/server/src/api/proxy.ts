@@ -3,7 +3,6 @@
 // ============================================================
 
 import type { Request, Response } from 'express';
-import { sessionCopyRequest } from './session-copy-request.js';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -11,11 +10,8 @@ import {
   azureEnvironmentConfig,
   bedrockCredentialConfig,
   atomicWriteStableFile,
-  assertCompactionTranscript,
-  getSummaryModelMessages,
   readCompactionSummary,
   copyCompactionResponse,
-  copyThinkingBudgets,
   BedrockProvider,
   closeProviderNetworkDispatchers,
   createProviderNetworkScope,
@@ -66,128 +62,10 @@ export type ProxyChatOptions = ChatOptions & { stream?: boolean };
 
 const UNSAFE_OPTION_IDENTIFIER = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u;
 
-function boundedToolSchema(value: unknown): Record<string, unknown> | undefined {
-  let nodes = 0;
-  let stringBytes = 0;
-  const clone = (input: unknown, depth: number): unknown => {
-    if (++nodes > 100_000 || depth > 32) throw new Error('invalid-schema');
-    if (input === null || typeof input === 'boolean') return input;
-    if (typeof input === 'number') {
-      if (!Number.isFinite(input)) throw new Error('invalid-schema');
-      return input;
-    }
-    if (typeof input === 'string') {
-      stringBytes += Buffer.byteLength(input);
-      if (stringBytes > 4 * 1024 * 1024) throw new Error('invalid-schema');
-      return input;
-    }
-    if (!input || typeof input !== 'object') throw new Error('invalid-schema');
-    if (Array.isArray(input)) {
-      if (input.length > 10_000) throw new Error('invalid-schema');
-      return input.map((_item, index) => {
-        const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
-        if (!descriptor || !('value' in descriptor)) throw new Error('invalid-schema');
-        return clone(descriptor.value, depth + 1);
-      });
-    }
-    const names = Object.keys(input);
-    if (names.length > 10_000) throw new Error('invalid-schema');
-    const result: Record<string, unknown> = {};
-    for (const name of names) {
-      if (Buffer.byteLength(name) > 1_024 || UNSAFE_OPTION_IDENTIFIER.test(name)) throw new Error('invalid-schema');
-      const descriptor = Object.getOwnPropertyDescriptor(input, name);
-      if (!descriptor || !('value' in descriptor)) throw new Error('invalid-schema');
-      Object.defineProperty(result, name, {
-        value: clone(descriptor.value, depth + 1), enumerable: true, configurable: true, writable: true,
-      });
-    }
-    return result;
-  };
-  try {
-    const cloned = clone(value, 0);
-    return cloned && typeof cloned === 'object' && !Array.isArray(cloned)
-      ? cloned as Record<string, unknown> : undefined;
-  } catch { return undefined; }
-}
-
-/** Validate and copy untrusted JSON chat options without forwarding unknown properties. */
-export function sanitizedProxyChatOptions(value: unknown): ProxyChatOptions | undefined | null {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const source = value as Record<string, unknown>;
-  const options: ProxyChatOptions = {};
-  if (source.model !== undefined) {
-    if (typeof source.model !== 'string' || !source.model.trim() || Buffer.byteLength(source.model) > 500
-      || UNSAFE_OPTION_IDENTIFIER.test(source.model)) return null;
-    options.model = source.model.trim();
-  }
-  if (source.temperature !== undefined) {
-    if (typeof source.temperature !== 'number' || !Number.isFinite(source.temperature)
-      || source.temperature < 0 || source.temperature > 2) return null;
-    options.temperature = source.temperature;
-  }
-  if (source.maxTokens !== undefined) {
-    if (!Number.isSafeInteger(source.maxTokens) || (source.maxTokens as number) < 1
-      || (source.maxTokens as number) > 1_000_000) return null;
-    options.maxTokens = source.maxTokens as number;
-  }
-  if (source.systemPrompt !== undefined) {
-    if (typeof source.systemPrompt !== 'string' || Buffer.byteLength(source.systemPrompt) > 1024 * 1024) return null;
-    options.systemPrompt = source.systemPrompt;
-  }
-  if (source.maxRetries !== undefined) {
-    if (!Number.isSafeInteger(source.maxRetries) || (source.maxRetries as number) < 0
-      || (source.maxRetries as number) > 10) return null;
-    options.maxRetries = source.maxRetries as number;
-  }
-  if (source.thinking !== undefined) {
-    if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(source.thinking as string)) return null;
-    options.thinking = source.thinking as NonNullable<ChatOptions['thinking']>;
-  }
-  if (source.sessionId !== undefined) {
-    if (typeof source.sessionId !== 'string'
-      || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(source.sessionId)) return null;
-    options.sessionId = source.sessionId;
-  }
-  if (source.stream !== undefined) {
-    if (typeof source.stream !== 'boolean') return null;
-    options.stream = source.stream;
-  }
-  if (source.tools !== undefined) {
-    if (!Array.isArray(source.tools) || source.tools.length > 1_024) return null;
-    const tools: NonNullable<ChatOptions['tools']> = [];
-    let toolBytes = 0;
-    for (const toolValue of source.tools) {
-      if (!toolValue || typeof toolValue !== 'object' || Array.isArray(toolValue)) return null;
-      const tool = toolValue as Record<string, unknown>;
-      if (typeof tool.name !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(tool.name)
-        || typeof tool.description !== 'string' || Buffer.byteLength(tool.description) > 4_096
-        || !tool.parameters || typeof tool.parameters !== 'object' || Array.isArray(tool.parameters)) return null;
-      const parameters = boundedToolSchema(tool.parameters);
-      if (!parameters) return null;
-      let encoded: string;
-      try { encoded = JSON.stringify(parameters); }
-      catch { return null; }
-      toolBytes += Buffer.byteLength(tool.name) + Buffer.byteLength(tool.description) + Buffer.byteLength(encoded);
-      if (toolBytes > 4 * 1024 * 1024) return null;
-      tools.push({
-        name: tool.name,
-        description: tool.description,
-        parameters,
-      });
-    }
-    options.tools = tools;
-  }
-  return options;
-}
-
 const DEFAULT_TIMEOUT = 120_000; // 2 minutes default
 const MAX_SSE_TRANSPORT_CHUNK_BYTES = 16 * 1024 * 1024;
-const MAX_SSE_TRANSPORT_BYTES = 64 * 1024 * 1024;
 const MAX_PROXY_STREAM_EVENTS = 100_000;
 const MAX_FINAL_CONTENT_JSON_BYTES = MAX_SSE_TRANSPORT_CHUNK_BYTES - 8 * 1024;
-const SSE_DRAIN_TIMEOUT_MS = 30_000;
-const SSE_READ_IDLE_TIMEOUT_MS = 120_000;
 const MAX_USAGE_PROVIDERS = 512;
 const MAX_USAGE_FILE_BYTES = 1024 * 1024;
 
@@ -1152,257 +1030,16 @@ function createSSEError(message: string): ReadableStream<Uint8Array> {
   });
 }
 
-/** Pipe a Web ReadableStream to an Express response. */
-export async function writeSSEStream(
-  stream: ReadableStream<Uint8Array>,
-  res: Response,
-  redactor?: CredentialRedactor,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = redactor ? new TextDecoder('utf-8', { fatal: true }) : undefined;
-  const outputRedactor = redactor?.createStream();
-  let closed = res.destroyed;
-  let completed = false;
-  let flushed = false;
-  let transportedBytes = 0;
-  let writtenBytes = 0;
-  const closedResult = Symbol('closed');
-  let notifyClosed!: () => void;
-  const closeNotification = new Promise<typeof closedResult>(resolve => {
-    notifyClosed = () => resolve(closedResult);
-  });
-  const cancel = (): void => {
-    closed = true;
-    notifyClosed();
-    void reader.cancel('client-disconnected').catch(() => undefined);
-  };
-  res.once('close', cancel);
-  const readNext = async (): Promise<Awaited<ReturnType<typeof reader.read>> | typeof closedResult> => {
-    let timer: NodeJS.Timeout | undefined;
-    const deadline = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('Provider stream was idle for too long.')), SSE_READ_IDLE_TIMEOUT_MS);
-      timer.unref?.();
-    });
-    try { return await Promise.race([reader.read(), closeNotification, deadline]); }
-    finally { if (timer) clearTimeout(timer); }
-  };
-  const write = async (value: string | Uint8Array): Promise<void> => {
-    if (closed || res.writableEnded || res.destroyed || (typeof value === 'string' && !value)) return;
-    const bytes = typeof value === 'string' ? Buffer.byteLength(value) : value.byteLength;
-    if (bytes > MAX_SSE_TRANSPORT_CHUNK_BYTES || writtenBytes + bytes > MAX_SSE_TRANSPORT_BYTES) {
-      throw new Error('Provider stream exceeded its output limit.');
-    }
-    writtenBytes += bytes;
-    if (res.write(typeof value === 'string' ? value : Buffer.from(value))) return;
-    await new Promise<void>(resolve => {
-      const timeout = setTimeout(() => {
-        closed = true;
-        try { res.destroy(); } catch { /* The response may already be gone. */ }
-        done();
-      }, SSE_DRAIN_TIMEOUT_MS);
-      timeout.unref?.();
-      const done = (): void => {
-        clearTimeout(timeout);
-        res.off('drain', drained);
-        res.off('close', disconnected);
-        resolve();
-      };
-      const drained = (): void => done();
-      const disconnected = (): void => { closed = true; done(); };
-      res.once('drain', drained);
-      res.once('close', disconnected);
-    });
-  };
-  const flushRedactor = async (): Promise<void> => {
-    if (!decoder || !outputRedactor || flushed || closed || res.writableEnded) return;
-    flushed = true;
-    const trailing = outputRedactor.push(decoder.decode()) + outputRedactor.flush();
-    await write(trailing);
-  };
-  try {
-    while (!closed) {
-      const item = await readNext();
-      if (item === closedResult) break;
-      const { done, value } = item;
-      if (done) {
-        completed = true;
-        break;
-      }
-      if (value.byteLength > MAX_SSE_TRANSPORT_CHUNK_BYTES) {
-        throw new Error('Provider stream event exceeded its output limit.');
-      }
-      transportedBytes += value.byteLength;
-      if (transportedBytes > MAX_SSE_TRANSPORT_BYTES) {
-        throw new Error('Provider stream exceeded its output limit.');
-      }
-      if (!decoder || !outputRedactor) await write(value);
-      else await write(outputRedactor.push(decoder.decode(value, { stream: true })));
-    }
-    await flushRedactor();
-  } catch {
-    await flushRedactor().catch(() => undefined);
-    if (!closed) await write('event: error\ndata: Provider stream was invalid.\n\n');
-  } finally {
-    await flushRedactor().catch(() => undefined);
-    res.off('close', cancel);
-    if (!completed) void reader.cancel('stream-abandoned').catch(() => undefined);
-    try { reader.releaseLock(); } catch { /* Cancellation may still be settling for a hostile source. */ }
-    if (!closed && !res.writableEnded) res.end();
-  }
-}
-
 // ===================================================================
 // Express Route Handlers
 // ===================================================================
-
-function validChatRequest(provider: unknown, messages: unknown): messages is Message[] {
-  if (typeof provider !== 'string' || !/^[a-z][a-z0-9_-]{1,63}$/u.test(provider)
-    || !Array.isArray(messages) || messages.length < 1 || messages.length > 10_000) return false;
-  let bytes = 0;
-  for (const message of messages) {
-    if (!message || typeof message !== 'object' || Array.isArray(message)) return false;
-    const candidate = message as { role?: unknown; content?: unknown };
-    if (typeof candidate.role !== 'string'
-      || !['system', 'user', 'assistant', 'tool'].includes(candidate.role)
-      || typeof candidate.content !== 'string') return false;
-    const contentBytes = Buffer.byteLength(candidate.content);
-    if (contentBytes > 4 * 1024 * 1024) return false;
-    bytes += contentBytes;
-    if (bytes > 12 * 1024 * 1024) return false;
-  }
-  return true;
-}
-
-function sanitizedProxyMessages(messages: Message[], prefix: string): Message[] {
-  const timestamp = new Date();
-  return messages.map((message, index) => ({
-    id: `${prefix}-${index}`,
-    role: message.role,
-    content: message.content,
-    timestamp,
-  }));
-}
-
-/** Summary-only typed data: keep public blocks/tool traces, never grant chat/tool
- * execution authority or replay private provider fields through the legacy route. */
-function sanitizedProxySummaryMessages(messages: Message[]): Message[] {
-  assertCompactionTranscript(messages);
-  const owned = structuredClone(messages), timestamp = new Date();
-  return getSummaryModelMessages(owned.map((message, index) => ({
-    ...message, id: `compact-${index}`, timestamp,
-  })));
-}
 
 export function createProxyRoutes(
   proxy: AiProxyServer,
   options: {
     persistApiKey?: (provider: string, apiKey: string, vertexAuthMode?: 'api-key' | 'bearer') => Promise<void>;
-    /** Host-owned policy only: HTTP bodies and provider cache IDs select no scope. */
-    resolveThinkingBudgets?: () => Promise<ChatOptions['thinkingBudgets']>;
   } = {},
 ) {
-  const resolveThinkingBudgets = options.resolveThinkingBudgets;
-  /** POST /api/chat - Chat with streaming (SSE) */
-  const chatHandler = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { provider, messages, options } = (req.body ?? {}) as {
-        provider: string;
-        messages: Message[];
-        options?: ChatOptions & { stream?: boolean };
-      };
-      const safeOptions = sanitizedProxyChatOptions(options);
-
-      if (!validChatRequest(provider, messages) || (options !== undefined && safeOptions === null)) {
-        res.status(400).json({ error: 'Invalid provider, messages, or options.' });
-        return;
-      }
-
-      const ownedMessages = sanitizedProxyMessages(messages, 'http');
-      let chatOptions = safeOptions ?? undefined;
-      if (resolveThinkingBudgets) {
-        const thinkingBudgets = copyThinkingBudgets(await resolveThinkingBudgets());
-        if (thinkingBudgets !== undefined) chatOptions = { ...chatOptions, thinkingBudgets };
-      }
-      if (req.aborted || res.destroyed) return;
-
-      const result = await proxy.sendChatSSE(provider, ownedMessages, chatOptions);
-
-      if (result.error) {
-        res.status(400).json({ error: 'Provider request failed.' });
-        return;
-      }
-
-      // Set SSE headers
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.flushHeaders?.();
-
-      await writeSSEStream(result.stream, res, proxy.getCredentialRedactor());
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error(proxy.redactText(`[Proxy] Chat handler error: ${err.message}`));
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    }
-  };
-
-  /** POST /api/chat/compact - Compact conversation with LLM summary */
-  const compactHandler = async (req: Request, res: Response): Promise<void> => {
-    const lifetime = sessionCopyRequest(req, res);
-    const aborted = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!.bind(lifetime.signal);
-    const sendChat = proxy.sendChat.bind(proxy), configured = proxy.isConfigured.bind(proxy), redact = proxy.redactText.bind(proxy);
-    try {
-      if (aborted()) return;
-      const { messages, provider, options } = (req.body ?? {}) as {
-        messages: Message[];
-        provider?: string;
-        options?: ChatOptions & { instructions?: string };
-      };
-      const safeOptions = sanitizedProxyChatOptions(options);
-      const instructions = options?.instructions ?? 'Summarize this conversation concisely, preserving key information and context. Include any important decisions or conclusions.';
-
-      if (!validChatRequest(provider ?? 'openai', messages) || messages.length < 4
-        || (options !== undefined && safeOptions === null)
-        || typeof instructions !== 'string' || Buffer.byteLength(instructions) > 64 * 1024
-        || UNSAFE_OPTION_IDENTIFIER.test(instructions)) {
-        res.status(400).json({ error: 'Need between 4 and 10,000 valid messages and bounded options to compact.' });
-        return;
-      }
-
-      const proxyType = provider ?? (process.env.OPENAI_API_KEY ? 'openai' : 'anthropic');
-      if (!configured(proxyType)) {
-        res.status(400).json({ error: `Provider "${proxyType}" not configured` });
-        return;
-      }
-
-      const ownedMessages = sanitizedProxySummaryMessages(messages);
-      assertCompactionTranscript(ownedMessages);
-      let chatOptions = safeOptions ?? undefined;
-      if (resolveThinkingBudgets) {
-        const thinkingBudgets = copyThinkingBudgets(await resolveThinkingBudgets());
-        if (thinkingBudgets !== undefined) chatOptions = { ...chatOptions, thinkingBudgets };
-      }
-      if (aborted()) return;
-      const result = await sendChat(
-        proxyType,
-        ownedMessages,
-        { ...chatOptions, stream: false, systemPrompt: `You are a conversation summarizer. ${instructions}`, tools: [], maxTokens: Math.min(4096, safeOptions?.maxTokens ?? 4096), signal: lifetime.signal },
-        undefined, true,
-      );
-
-      const summary = readCompactionSummary(result);
-      if (!aborted() && !res.destroyed && !res.writableEnded) res.json({ summary });
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      console.error(redact(`[Proxy] Compact handler error: ${err.message}`));
-      if (!res.headersSent && !res.destroyed && !res.writableEnded) {
-        res.status(aborted() ? 409 : 500).json({ error: aborted() ? 'Compaction cancelled' : 'Internal server error' });
-      }
-    } finally { lifetime.dispose(); }
-  };
-
   /** GET /api/providers - List configured providers */
   const providersHandler = (_req: Request, res: Response): void => {
     res.json(proxy.getProviders());
@@ -1474,5 +1111,5 @@ export function createProxyRoutes(
     }
   };
 
-  return { chatHandler, compactHandler, providersHandler, configHandler };
+  return { providersHandler, configHandler };
 }

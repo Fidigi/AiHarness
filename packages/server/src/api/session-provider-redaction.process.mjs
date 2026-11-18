@@ -13,12 +13,16 @@ const root = await mkdtemp(path.join(os.tmpdir(), 'aih-session-provider-http-'))
 const cwd = path.join(root, 'workspace');
 const dataDir = path.join(root, 'private');
 await mkdir(cwd);
+const loadAll = SessionManager.prototype.loadAllSessions;
+let startupLoads = 0;
+SessionManager.prototype.loadAllSessions = function(...args) { startupLoads++; return loadAll.apply(this, args); };
 try {
   let services;
   const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd,
     enableMockProvider: true,
     runtimeServicesFactory: async (proxy, options) => services = await createRuntimeServices(proxy, options) });
   assert.ok(services.sessionManager instanceof SessionManager);
+  assert.equal(startupLoads, 1, 'Hydrate once after custom-provider credential enrollment, before publishing services.');
   const get = async route => {
     const response = await fetch(`http://127.0.0.1:${server.port}${route}`);
     assert.equal(response.status, 200, route);
@@ -91,6 +95,7 @@ try {
   assert.equal(await services.trustManager.isTrusted(cwd), false);
   console.log(`SESSION_PROVIDER_HTTP_OK ${kind}`);
 } finally {
+  SessionManager.prototype.loadAllSessions = loadAll;
   await stop();
   await rm(root, { recursive: true, force: true });
 }

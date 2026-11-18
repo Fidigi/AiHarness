@@ -1,0 +1,434 @@
+npm notice run ai-harness@0.1.0 test:parity
+npm notice run vitest run tests/functional-parity
+
+ RUN  v5.0.3 /app
+
+ ✓ tests/functional-parity/installed-executable.test.ts (402 tests) 797210ms
+   ✓ CLI-RUN-01 genuine locally packed installed executable (363)
+     ✓ owns native extension execution hooks outside the checkout (print) 639ms
+     ✓ owns native extension execution hooks outside the checkout (json) 636ms
+     ✓ owns native extension execution hooks outside the checkout (rpc) 632ms
+     ✓ owns native extension execution hooks outside the checkout (regular) 700ms
+     ✓ owns native extension execution hooks outside the checkout (fullscreen) 741ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/tools) 810ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/overflow) 729ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/length) 751ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/length-tools) 716ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/tools) 801ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/overflow) 754ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/length) 746ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/length-tools) 671ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/tools) 731ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/overflow) 729ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/length) 758ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/length-tools) 716ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/tools) 501ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/overflow) 434ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/length) 427ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/length-tools) 403ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/queues) 740ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/queues) 463ms
+     ✓ owns native run delivery/recovery/results outside the checkout (regular/queues) 871ms
+     ✓ owns native run delivery/recovery/results outside the checkout (fullscreen/queues) 901ms
+     ✓ invalidates strict installed typecheck caches for changed roots, declarations and options 24847ms
+     ✓ publishes native bounded recovery, nested/rich results and parallel snapshot declarations 1807ms
+     ✓ withdraws native workspace write authority through installed packages (print) 642ms
+     ✓ withdraws native workspace write authority through installed packages (json) 608ms
+     ✓ withdraws native workspace write authority through installed packages (rpc) 605ms
+     ✓ withdraws native workspace write authority through installed packages (sdk) 324ms
+     ✓ replays native context edits and private checkpoints through installed packages (print) 718ms
+     ✓ replays native context edits and private checkpoints through installed packages (json) 705ms
+     ✓ replays native context edits and private checkpoints through installed packages (rpc) 745ms
+     ✓ replays native context edits and private checkpoints through installed packages (sdk) 425ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/print) 2346ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/json) 2235ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/rpc) 8336ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/print) 2213ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/json) 2332ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/rpc) 8346ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/print) 2282ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/json) 2297ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/rpc) 8269ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/print) 2132ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/json) 2326ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/rpc) 8335ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/print) 2275ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/json) 2326ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/rpc) 8420ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/print) 2178ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/json) 2269ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/rpc) 8265ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/print) 2292ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/json) 2280ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/rpc) 8167ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/print) 2132ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/json) 2213ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/rpc) 8058ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print) 2287ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json) 2361ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc) 8297ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print) 2275ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json) 2225ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc) 8216ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print/MiniMax-M2.7-highspeed) 2236ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json/MiniMax-M2.7-highspeed) 2323ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc/MiniMax-M2.7-highspeed) 8211ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print/MiniMax-M2.7-highspeed) 2312ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json/MiniMax-M2.7-highspeed) 2152ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc/MiniMax-M2.7-highspeed) 8198ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print/MiniMax-M3) 2280ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json/MiniMax-M3) 2312ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc/MiniMax-M3) 8024ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print/MiniMax-M3) 2320ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json/MiniMax-M3) 2336ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc/MiniMax-M3) 8305ms
+     ✓ publishes owned native context-state and output-only compaction declarations 1701ms
+     ✓ uses native exact-entry row copies and declarations outside the checkout 2324ms
+     ✓ inherits only project MCP controls through installed public Core and the PATH bin 6265ms
+     ✓ reserves installed Core startup and withdraws SDK pending prompts with owned declarations 2396ms
+     ✓ pins native no-MCP denial across installed hosts without denying ordinary sources 6119ms
+     ✓ resolves CLI tool patterns and ordered adjustments through the installed PATH bin 8026ms
+     ✓ ships native editor schemas and public declarations outside the checkout 2171ms
+     ✓ publishes MOD-01 provider sources and native image worker through genuinely installed strict public contracts 8852ms
+     ✓ keeps metadata-only help/version inert and unknown option status/channels strict 855ms
+     ✓ warns about all four installed PATH-bin exports on stderr without disclosing conversation or credential values 1831ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGINT) 635ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGTERM) 588ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGINT) 586ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGTERM) 580ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGINT) 577ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGTERM) 602ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGINT/admission) 599ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGTERM/admission) 626ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGINT/admission) 601ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGTERM/admission) 600ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGINT/admission) 595ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGTERM/admission) 591ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (regular) 1871ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (fullscreen) 2008ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (print) 2340ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (json) 2412ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (rpc) 2404ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-print) 4323ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-json) 4348ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-rpc) 4223ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-print) 4320ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-json) 4232ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-rpc) 4334ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-print) 4230ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-json) 4370ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-rpc) 4280ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (regular) 1724ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (fullscreen) 1962ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (print) 3317ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (json) 2635ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (rpc) 2487ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-print) 4367ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-json) 4441ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-rpc) 4329ms
+     ✓ retains independent Codex CX continuations through the installed public Core root 321ms
+     ✓ joins an admitted append before installed TTY shutdown (regular) 642ms
+     ✓ joins an admitted append before installed TTY shutdown (fullscreen) 634ms
+     ✓ reports model output limits through the installed PATH-bin (print/partial-length) 648ms
+     ✓ reports model output limits through the installed PATH-bin (print/empty-length) 653ms
+     ✓ reports model output limits through the installed PATH-bin (print/normal) 610ms
+     ✓ reports model output limits through the installed PATH-bin (json/partial-length) 642ms
+     ✓ reports model output limits through the installed PATH-bin (json/empty-length) 650ms
+     ✓ reports model output limits through the installed PATH-bin (json/normal) 645ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/partial-length) 642ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/empty-length) 626ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/normal) 622ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/completions/invalid) 628ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/completions/valid) 696ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/responses/invalid) 653ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/responses/valid) 699ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/anthropic/invalid) 650ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/anthropic/valid) 689ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/completions/invalid) 647ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/completions/valid) 694ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/responses/invalid) 630ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/responses/valid) 627ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/anthropic/invalid) 599ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/anthropic/valid) 653ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/completions/invalid) 601ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/completions/valid) 686ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/responses/invalid) 639ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/responses/valid) 700ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/anthropic/invalid) 640ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/anthropic/valid) 667ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/completions/invalid) 376ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/completions/valid) 380ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/responses/invalid) 378ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/responses/valid) 410ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/anthropic/invalid) 380ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/anthropic/valid) 414ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/native) 661ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/combined) 613ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/split) 627ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/native) 604ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/combined) 595ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/split) 593ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/native) 600ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/combined) 633ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/split) 606ms
+     ✓ preserves MCP exposure patterns through installed public packages (command/global) 1185ms
+     ✓ preserves MCP exposure patterns through installed public packages (command/project) 1217ms
+     ✓ preserves MCP exposure patterns through installed public packages (core/global) 341ms
+     ✓ preserves MCP exposure patterns through installed public packages (core/project) 347ms
+     ✓ preserves MCP exposure patterns through installed public packages (print/global) 738ms
+     ✓ preserves MCP exposure patterns through installed public packages (print/project) 718ms
+     ✓ preserves MCP exposure patterns through installed public packages (json/global) 681ms
+     ✓ preserves MCP exposure patterns through installed public packages (json/project) 668ms
+     ✓ preserves MCP exposure patterns through installed public packages (rpc/global) 718ms
+     ✓ preserves MCP exposure patterns through installed public packages (rpc/project) 716ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/one) 348ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/two) 344ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/none) 338ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/qualified) 353ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/native) 359ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/pin) 395ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/scope) 378ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/warning) 345ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/selected-warning) 356ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/unmatched) 343ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/one) 361ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/two) 339ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/none) 329ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/qualified) 325ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/native) 332ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/pin) 327ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/scope) 327ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/warning) 330ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/selected-warning) 328ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/unmatched) 336ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/one) 352ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/two) 335ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/none) 335ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/qualified) 353ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/native) 353ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/pin) 352ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/scope) 370ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/warning) 351ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/selected-warning) 354ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/unmatched) 336ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/recover) 2679ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/exhausted) 14707ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/prefix) 672ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/queued) 14709ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/normal) 665ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/recover) 2678ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/exhausted) 14632ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/prefix) 607ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/queued) 14650ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/normal) 608ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/recover) 2656ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/exhausted) 14690ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/prefix) 663ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/queued) 14702ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/normal) 620ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/recover) 848ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/exhausted) 1900ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/prefix) 363ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/queued) 1908ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/normal) 361ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/durable-prefix) 1046ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/durable-prefix) 1044ms
+     ✓ preserves home selectors and template arguments through installed packages (print/global/allow) 814ms
+     ✓ preserves home selectors and template arguments through installed packages (print/global/refuse) 804ms
+     ✓ preserves home selectors and template arguments through installed packages (print/project/allow) 832ms
+     ✓ preserves home selectors and template arguments through installed packages (print/project/refuse) 802ms
+     ✓ preserves home selectors and template arguments through installed packages (print/explicit/allow) 828ms
+     ✓ preserves home selectors and template arguments through installed packages (print/explicit/refuse) 792ms
+     ✓ preserves home selectors and template arguments through installed packages (json/global/allow) 800ms
+     ✓ preserves home selectors and template arguments through installed packages (json/global/refuse) 789ms
+     ✓ preserves home selectors and template arguments through installed packages (json/project/allow) 770ms
+     ✓ preserves home selectors and template arguments through installed packages (json/project/refuse) 759ms
+     ✓ preserves home selectors and template arguments through installed packages (json/explicit/allow) 872ms
+     ✓ preserves home selectors and template arguments through installed packages (json/explicit/refuse) 789ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/global/allow) 796ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/global/refuse) 789ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/project/allow) 802ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/project/refuse) 756ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/explicit/allow) 801ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/explicit/refuse) 724ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (core/deadline) 455ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/freeze) 677ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/globals) 662ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/error) 674ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/schema) 656ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/options) 644ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/output) 660ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/configured) 623ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/image) 680ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/freeze) 613ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/globals) 638ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/error) 637ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/schema) 606ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/options) 565ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/output) 650ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/configured) 683ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/image) 681ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/freeze) 650ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/globals) 665ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/error) 653ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/schema) 663ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/options) 592ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/output) 668ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/configured) 677ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/image) 657ms
+     ✓ compiles and executes native CODE limits and classifier images from installed public declarations 2007ms
+     ✓ preserves public summary transcripts through installed packages (core-branch/private) 315ms
+     ✓ preserves public summary transcripts through installed packages (core-branch/ordinary) 357ms
+     ✓ preserves public summary transcripts through installed packages (sdk-auto/private) 469ms
+     ✓ preserves public summary transcripts through installed packages (sdk-auto/ordinary) 518ms
+     ✓ preserves public summary transcripts through installed packages (print-auto/private) 800ms
+     ✓ preserves public summary transcripts through installed packages (print-auto/ordinary) 793ms
+     ✓ preserves public summary transcripts through installed packages (json-auto/private) 784ms
+     ✓ preserves public summary transcripts through installed packages (json-auto/ordinary) 804ms
+     ✓ preserves public summary transcripts through installed packages (rpc-manual/private) 692ms
+     ✓ preserves public summary transcripts through installed packages (rpc-manual/ordinary) 653ms
+     ✓ preserves public summary transcripts through installed packages (rpc-auto/private) 707ms
+     ✓ preserves public summary transcripts through installed packages (rpc-auto/ordinary) 762ms
+     ✓ preserves public summary transcripts through installed packages (rpc-branch/private) 661ms
+     ✓ preserves public summary transcripts through installed packages (rpc-branch/ordinary) 665ms
+     ✓ preserves public summary transcripts through installed packages (regular/private) 743ms
+     ✓ preserves public summary transcripts through installed packages (regular/ordinary) 811ms
+     ✓ preserves public summary transcripts through installed packages (fullscreen/private) 2085ms
+     ✓ preserves public summary transcripts through installed packages (fullscreen/ordinary) 1934ms
+     ✓ publishes readonly summary-projection declarations and independent runtime ownership outside the checkout 1949ms
+     ✓ installed PATH-bin definitive credential authority (11)
+       ✓ print/literal: preserves literal bytes without displacing real credentials 1077ms
+       ✓ print/genuine: preserves literal bytes without displacing real credentials 1526ms
+       ✓ print/mixed: preserves literal bytes without displacing real credentials 1970ms
+       ✓ json/literal: preserves literal bytes without displacing real credentials 1059ms
+       ✓ json/genuine: preserves literal bytes without displacing real credentials 1427ms
+       ✓ json/mixed: preserves literal bytes without displacing real credentials 1934ms
+       ✓ rpc/key-before: preserves correlated framing and real-key masking 544ms
+       ✓ rpc/key-after: preserves correlated framing and real-key masking 515ms
+     ✓ publishes read-only snapshots and captured startup-fork options without expanding the facade 1748ms
+     ✓ preserves startup fork private state through the installed PATH-bin (rpc/file) 796ms
+     ✓ preserves startup fork private state through the installed PATH-bin (json/prefix) 803ms
+     ✓ clones the private-only current position through the installed RPC PATH-bin (memory) 344ms
+     ✓ clones the private-only current position through the installed RPC PATH-bin (durable) 394ms
+     ✓ owns installed terminal branch lifetimes and exact copies (regular-memory) 1749ms
+     ✓ owns installed terminal branch lifetimes and exact copies (regular-durable) 2039ms
+     ✓ owns installed terminal branch lifetimes and exact copies (fullscreen-memory) 3362ms
+     ✓ owns installed terminal branch lifetimes and exact copies (fullscreen-durable) 3520ms
+     ✓ publishes installed active-branch state and related-copy declarations without adding a facade method 1744ms
+     ✓ uses the actual installed PATH-bin for extension state (rpc/durable) 931ms
+     ✓ uses the actual installed PATH-bin for extension state (headless/print-memory) 673ms
+     ✓ publishes installed host-supplied compaction windows without adding a facade mutation or changing API 1 1966ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (thresholds) 722ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (eof) 533ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-rpc) 719ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-print) 703ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-json) 751ms
+     ✓ publishes strict installed optional navigation and custom-entry declarations without changing Core API 1 1703ms
+     ✓ uses installed Core and the actual PATH-bin navigation protocol (summary) 660ms
+     ✓ uses installed Core and the actual PATH-bin navigation protocol (eof) 641ms
+     ✓ publishes strict installed journal accounting and additive summary provenance declarations 1714ms
+     ✓ uses installed Core journal accounting and the actual PATH-bin RPC statistics without changing legacy framing 602ms
+     ✓ accepts installed verbose startup without changing headless print output 1047ms
+     ✓ retains explicit passive provider policies in installed declarations, Core runtime and the PATH bin 2858ms
+     ✓ separates discovery suppression from explicit loading in installed Core, SDK and PATH bin 3028ms
+     ✓ preserves scoped Markdown selectors through installed readonly declarations, runtime and PATH bin 2529ms
+     ✓ preserves literal absolute resource bases through installed legacy Core, SDK and PATH-bin reads 816ms
+     ✓ discovers themes through installed readonly Core declarations and the actual PATH bin 2859ms
+     ✓ loads, browses and freshly reloads installed PATH-bin keyboard actions with its packaged schema (regular) 2112ms
+     ✓ loads, browses and freshly reloads installed PATH-bin keyboard actions with its packaged schema (fullscreen) 2195ms
+     ✓ enforces the installed RPC input contract (boundary) 401ms
+     ✓ enforces the installed RPC input contract (held-overflow) 396ms
+     ✓ runs installed print/JSON/RPC against the reviewed protocol goldens 2219ms
+     ✓ discovers user and trusted project CJS options through the installed bin, not metadata-only help 1149ms
+     ✓ uses the installed public Core entry for fresh CJS reload, minimal SDK types and copied QuickJS assets 2330ms
+   ✓ routes selectable models and derives non-context warming notices through genuinely installed public contracts 8047ms
+   ✓ hosts and withdraws owned MCP registrations through installed declarations and actual stdio 1926ms
+   ✓ validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results, user images and signed continuation 4687ms
+   ✓ binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar, tool images and output boundaries through installed declarations and runtime 9172ms
+   ✓ dispatches original Google/Vertex schema/generation/choice/history/tool and user images and regional Bearer construction through installed declarations and runtime 3333ms
+   ✓ dispatches native Bedrock binary streams through installed public declarations and runtime 6828ms
+   ✓ dispatches Azure native v1 and explicit Responses through installed public declarations and runtime 2278ms
+   ✓ dispatches native OpenRouter images through installed declarations, output blocks and failed guest accounting 2118ms
+   ✓ dispatches native OpenAI Decisions through installed declarations, images and failed guest accounting 2101ms
+   ✓ dispatches native OpenRouter C through installed declarations, reasoning, tools and virtual classification 8541ms
+   ✓ dispatches native OpenRouter A through installed declarations, adaptive effort and virtual classification 2639ms
+   ✓ dispatches mixed OpenRouter A/C/I/T through one installed SDK without overlapping cache or authentication 8850ms
+   ✓ dispatches native OpenRouter classifiers through installed declarations, native answers and guest accounting 2103ms
+   ✓ dispatches overlapping OpenAI R/D through one installed SDK with operation-owned prices 2086ms
+   ✓ dispatches mixed Cloudflare C/S through one installed SDK without changing native classifier accounting 2532ms
+   ✓ dispatches native Cloudflare C through installed public declarations, reasoning and virtual classification 2482ms
+   ✓ dispatches native Cloudflare classifiers through installed public declarations, envelopes and guest bridge 2050ms
+   ✓ dispatches native TypeSafe classifiers through installed public declarations, runtime and guest bridge 1942ms
+   ✓ dispatches native Groq through installed public declarations and captured C policies 2223ms
+   ✓ dispatches native Z.ai through installed public declarations and captured C policies 2224ms
+   ✓ dispatches native Moonshot through installed public declarations and captured C policies 2056ms
+   ✓ dispatches native OpenCode Go through installed declarations and owned A/C/R policies 2547ms
+   ✓ dispatches native Kimi Coding through installed declarations and owned A policies 2123ms
+   ✓ dispatches native Xiaomi through installed declarations and owned C policies 2199ms
+   ✓ dispatches native Hugging Face through installed declarations and owned C policies 3476ms
+   ✓ dispatches mixed native Fireworks through installed declarations and owned A/C policies 2436ms
+   ✓ dispatches native Together through installed public declarations and physical C policies 2474ms
+   ✓ dispatches native Baseten through installed public declarations and physical C policies 2583ms
+   ✓ dispatches native Meta through installed public declarations and captured R policies 2128ms
+   ✓ dispatches native xAI through installed public declarations and captured R policies 2177ms
+   ✓ dispatches native MiniMax through installed public declarations and captured A policies 2153ms
+   ✓ dispatches native Nvidia through installed public declarations and captured C policies 2606ms
+   ✓ dispatches native DeepSeek through installed public declarations and captured C policies 2022ms
+   ✓ dispatches native Ant Ling through installed public declarations and captured C policies 2157ms
+   ✓ dispatches native Cerebras through installed public declarations and captured C policies 2113ms
+   ✓ dispatches native Mistral through installed public declarations and runtime 3819ms
+   ✓ dispatches native OpenCode Zen through installed A/G/C/R/T declarations and owned accounting 3451ms
+   ✓ dispatches native MiniMax CN through installed public declarations and captured A policies 2122ms
+   ✓ dispatches native Moonshot CN through installed public declarations and captured C policies 2017ms
+ ✓ tests/functional-parity/provider-coverage.test.mjs (3 tests) 9424ms
+   ✓ native typed catalogue coverage (3)
+     ✓ maps every typed identity to real native declarations and independent passive host projections 9412ms
+ ✓ tests/functional-parity/functional-parity.test.ts (27 tests) 11156ms
+   ✓ cli-version (1)
+     ✓ locks the metadata-only executable version response 686ms
+   ✓ cli-invalid-option (1)
+     ✓ rejects an unknown startup option without contaminating stdout 466ms
+   ✓ cli-invalid-tui-mode (1)
+     ✓ rejects an unsupported terminal mode before runtime startup 448ms
+   ✓ cli-print-input (1)
+     ✓ combines piped, file, and option-terminated input while keeping print stdout final-text-only 762ms
+   ✓ cli-persisted-session (1)
+     ✓ creates a named exact-ID session through the executable contract 833ms
+   ✓ cli-package-help (1)
+     ✓ keeps top-level package administration discoverable before agent startup 454ms
+   ✓ json-lifecycle-purity (1)
+     ✓ emits a versioned JSON lifecycle and redirects extension stdout noise to stderr 766ms
+   ✓ json-missing-prompt (1)
+     ✓ fails a one-shot JSON invocation with no prompt and preserves empty stdout 484ms
+   ✓ rpc-state-purity (1)
+     ✓ returns a canonical correlated state response while redirecting extension noise 485ms
+   ✓ rpc-invalid-startup-file (1)
+     ✓ rejects RPC startup files before extensions, file reads, or session admission 451ms
+   ✓ rpc-invalid-envelope (1)
+     ✓ returns a fixed protocol error for a request without type 443ms
+   ✓ rpc-legacy-chat-rejection (1)
+     ✓ rejects retired method/params input without chat execution 442ms
+   ✓ rpc-bash (1)
+     ✓ streams and completes a trusted bounded shell command over RPC 485ms
+   ✓ rpc-session-stats (1)
+     ✓ projects deterministic empty-session statistics through the public RPC command 444ms
+   ✓ rpc-command-catalogue (1)
+     ✓ discovers extension commands through an AiHarness-owned command catalogue 480ms
+   ✓ rpc-extension-command (1)
+     ✓ loads and invokes a versioned native extension command without starting an agent turn 492ms
+   ✓ rpc-extension-ui (1)
+     ✓ round-trips a correlated declarative extension confirmation over RPC 481ms
+   ✓ rpc-invalid-extension (1)
+     ✓ reports an invalid extension on stderr and keeps the RPC channel usable 494ms
+   ✓ sdk-specialized-models (1)
+     ✓ executes typed classifier/image bridges and credential/kind negatives through the public Core entry 341ms
+   ✓ sdk-types-positive (1)
+     ✓ compiles a consumer against the supported Core and extension declarations 581ms
+   ✓ sdk-types-negative (1)
+     ✓ rejects an undeclared compatibility alias at the public package boundary 346ms
+ ✓ tests/functional-parity/installed-process.test.ts (5 tests) 76ms
+
+ Test Files  4 passed (4)
+      Tests  437 passed (437)
+   Start at  12:13:15
+   Duration  820.70s (tests 100%)

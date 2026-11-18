@@ -43,9 +43,9 @@
 | `api/skill-routes.ts` | catalogue/invocation des skills et registre installable global/projet |
 | `api/push-routes.ts` | clé publique VAPID, état, inscription et désinscription Web Push |
 | `api/subagent-routes.ts` | réglages/profils globaux ou projet et cycle de vie des agents enfants |
-| `api/proxy.ts` | providers, credentials, métriques tarifées et anciens endpoints de chat compatibles |
+| `api/proxy.ts` | providers, credentials, métriques tarifées et routes courantes providers/configuration |
 
-Les anciens endpoints `/api/chat*` restent disponibles pour compatibilité, mais le Web courant démarre un run via `/api/agent/runs`.
+**Rupture (2026-11-17, COMP-02) :** les anciens `POST /api/chat`, `/api/chat/stream`, `/api/chat/compact` et WebSocket entrant `/api/chat/ws` sont retirés sans adaptateur. Une requête authentifiée reçoit le HTTP404 fixe `{error:"Not found"}`, sans upgrade WebSocket ni appel provider. Les contrôles d’authentification/Origin restent actifs. Utilisez `/api/agent/runs` et les états/événements/compactions de session ; un run admis reste détaché de la déconnexion HTTP. Le sélecteur de transport Web est supprimé et sa préférence enregistrée ignorée. Les WebSockets sortants Core des providers et les migrations de journaux/réglages sont inchangés.
 
 ## Flux agent détaché
 

@@ -1,0 +1,74 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/github-copilot-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] Request failed.
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/github-copilot-http.test.ts (8 tests) 19115ms
+   ✓ logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal 6742ms
+   ✓ retires held HTTP credential or detached inference work on logout without a late encrypted publication 1953ms
+   ✓ retires held HTTP credential or detached inference work on shutdown without a late encrypted publication 1285ms
+   ✓ retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication 4288ms
+   ✓ retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication 1314ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication 1302ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication 1272ms
+   ✓ retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication 957ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  13:43:08
+   Duration  21.01s (tests 91%, transform 7%, import 2%)

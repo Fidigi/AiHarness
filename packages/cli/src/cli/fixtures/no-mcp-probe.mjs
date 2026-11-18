@@ -8,7 +8,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
 
-assert.equal(AI_HARNESS_CORE_API_VERSION, 1);
+assert.equal(AI_HARNESS_CORE_API_VERSION, 2);
 const mode=process.argv[2],scenario=process.argv[3]??'suppressed';
 assert(['print','json','rpc','regular','fullscreen'].includes(mode));
 assert(['suppressed','control','patterns','modifiers'].includes(scenario));

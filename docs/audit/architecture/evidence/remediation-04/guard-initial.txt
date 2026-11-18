@@ -1,0 +1,37 @@
+✔ public SDK and declared dynamic entries are not unused-export evidence (143.346525ms)
+✔ rejects reverse Core dependencies even for type imports (59.19218ms)
+✔ Web allows only type imports or the reviewed browser-safe Core subpath (102.503417ms)
+✔ rejects a new value cycle but not a type-only cycle; exceptions pin deferred identity (94.864365ms)
+✔ rejects an unconsumed internal value export and stale exclusions (45.932673ms)
+✖ namespace and deferred computed consumers conservatively retain exported values (42.061279ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 5
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 678.747534
+
+✖ failing tests:
+
+test at scripts/check-architecture.test.mjs:80:1
+✖ namespace and deferred computed consumers conservatively retain exported values (42.061279ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + [
+  +   'Unused internal export: packages/core/src/public.ts:publicSdk'
+  + ]
+  - []
+
+      at TestContext.<anonymous> (file:///app/scripts/check-architecture.test.mjs:87:10)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Unused internal export: packages/core/src/public.ts:publicSdk' ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

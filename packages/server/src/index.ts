@@ -19,7 +19,6 @@ import {
   CredentialRedactor,
   EncryptedCredentialStore,
   isValidSessionId,
-  loadAgentSettings,
   McpOAuthCredentialManager,
   McpOAuthFlowService,
   ProviderCredentialService,
@@ -28,17 +27,14 @@ import {
   serializeSession,
   serializeSessionForExport,
   SessionBranchCancelledError,
-  WorkspacePathError,
 } from '@ai-harness/core';
-import type { AgentSettings, ChatOptions, Session, SessionManager } from '@ai-harness/core';
-import { closeServerWebSockets, handleWebSocketUpgrade } from './api/websocket.js';
+import type { AgentSettings, Session, SessionManager } from '@ai-harness/core';
 import { createAgentRouter, userBlocks } from './api/agent-routes.js';
 import { sessionCopyRequest } from './api/session-copy-request.js';
 import { createWorkspaceRouter } from './api/workspace-routes.js';
 import type { WorkspaceFileManagerOptions } from './api/workspace-file-manager.js';
 import { createFileRouter } from './api/file-routes.js';
 import { createConfigurationRouter } from './api/config-routes.js';
-import { resolveEffectiveConfiguration } from './config/effective-configuration.js';
 import { createMcpRouter } from './api/mcp-routes.js';
 import { createModelRouter } from './api/model-routes.js';
 import { createPluginRouter } from './api/plugin-routes.js';
@@ -137,8 +133,6 @@ interface CredentialRuntime {
 let activeCredentialRuntime: CredentialRuntime | undefined;
 let activeProviderOAuth: ProviderOAuthService | undefined;
 let applicationGeneration = 0;
-let applicationExclusiveHost = false;
-let applicationThinkingBudgets: (() => Promise<ChatOptions['thinkingBudgets']>) | undefined;
 const sharedSessions = new Map<string, { sessionId: string; expiresAt: number }>();
 
 async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | undefined> {
@@ -438,7 +432,6 @@ export function createApp(config?: ServerConfig): express.Application {
     throw new Error(`Web bundle introuvable : ${webIndexFile}. Exécutez npm run build.`);
   }
   const generation = ++applicationGeneration;
-  closeServerWebSockets();
   const replacedServices = activeServices;
   const replacedProxy = proxyServer;
   const replacedCredentials = activeCredentialRuntime;
@@ -462,7 +455,6 @@ export function createApp(config?: ServerConfig): express.Application {
   if (config?.proxy && config.proxy === replacedProxy) void applicationProxy.rotateNetworkScope();
   proxyServer = applicationProxy;
   if (config?.proxy) applicationProxy.setCredentialRedactor(redactor);
-  applicationExclusiveHost = exclusiveHost;
   const runtimeConfig = { ...(config ?? {}), dataDir, providerRenameExclusiveHost: exclusiveHost };
   const servicesPromise = (config?.runtimeServicesFactory ?? createRuntimeServices)(applicationProxy, runtimeConfig).then(services => {
     // Activate only this fully wired restricted host generation, never a stale
@@ -537,25 +529,7 @@ export function createApp(config?: ServerConfig): express.Application {
   app.use('/api', credentialRedactionMiddleware(redactor));
 
   // Routes
-  const resolveThinkingBudgets = async (): Promise<ChatOptions['thinkingBudgets']> => {
-    const services = await servicesPromise;
-    await services.configurationStore.load();
-    let cwd: string | undefined;
-    try { cwd = await services.workspaceManager.getDefaultCwd(); }
-    catch (error) { if (!(error instanceof WorkspacePathError)) throw error; }
-    // An unavailable default grants no project scope, and never selects another root.
-    const projectId = cwd ? (await services.workspaceManager.describe(cwd, false)).id : undefined;
-    const settings = await loadAgentSettings({
-      cwd: cwd ?? dataDir, agentDir: services.agentSettings.agentDir, agentDirTrusted: true,
-      projectTrusted: cwd !== undefined && await services.trustManager.isTrusted(cwd),
-    });
-    if (generation !== applicationGeneration) throw new Error('Application runtime is no longer active.');
-    return resolveEffectiveConfiguration(services, { projectId }).values.thinkingBudgets
-      ?? settings.settings.thinkingBudgets;
-  };
-  applicationThinkingBudgets = resolveThinkingBudgets;
   const routes = createProxyRoutes(applicationProxy, {
-    resolveThinkingBudgets,
     persistApiKey: async (provider, apiKey, vertexAuthMode) => {
       const credentials = credentialRuntime.service;
       if (!(credentials as (ProviderCredentialService & { hasPersistentStore?: () => boolean }) | undefined)
@@ -642,10 +616,11 @@ export function createApp(config?: ServerConfig): express.Application {
   });
 
   app.use('/api', originMiddleware(), authenticationMiddleware(), rateLimit(), jsonBody);
+  // Retired stateless chat has no adapter, provider initialization or upgrade path.
+  app.use('/api/chat', (_request, response) => { response.status(404).json({ error: 'Not found' }); });
   if (exclusiveHost) app.use('/api', (request, response, next) => {
     // Express routes/mounts are case-insensitive by default.
     const route = request.path.toLowerCase();
-    const legacy = route === '/chat' || route.startsWith('/chat/');
     const unsupportedMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && ['/models', '/tools', '/terminals', '/files', '/plugins', '/skills', '/workspaces', '/mcp', '/agent/commands', '/config']
         .some(prefix => route === prefix || route.startsWith(`${prefix}/`));
@@ -654,7 +629,7 @@ export function createApp(config?: ServerConfig): express.Application {
     const unsafeRead = ['/files', '/workspaces'].some(prefix => route === prefix || route.startsWith(`${prefix}/`));
     const unsupportedCommand = !['GET', 'HEAD', 'OPTIONS'].includes(request.method)
       && /^\/agent\/sessions\/[^/]+\/commands(?:\/|$)/.test(route);
-    if (legacy || unsupportedMutation || unsafeRead || unsupportedCommand) {
+    if (unsupportedMutation || unsafeRead || unsupportedCommand) {
       response.status(409).json({ error: 'This operation is unavailable in exclusive provider-administration mode.', code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' });
       return;
     }
@@ -683,14 +658,6 @@ export function createApp(config?: ServerConfig): express.Application {
       next(error);
     }
   });
-
-  // Chat routes (streaming and non-streaming)
-  app.post('/api/chat', routes.chatHandler);
-  
-  /** Backward-compatible alias for the same bounded SSE chat handler. */
-  app.post('/api/chat/stream', routes.chatHandler);
-
-  app.post('/api/chat/compact', routes.compactHandler);
 
   // Detached agent, workspace and scoped non-secret configuration routes.
   app.use('/api/agent', requireCapability('chat'), createAgentRouter(servicesPromise));
@@ -1638,8 +1605,6 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
   const initializingServices = activeServices;
   const startingApp = appInstance;
   const startingGeneration = applicationGeneration;
-  const exclusiveHost = applicationExclusiveHost;
-  const resolveThinkingBudgets = applicationThinkingBudgets;
   if (!initializingServices || !startingApp) throw new Error('Runtime initialization is unavailable.');
   // start() publishes a usable composition, not merely a bound socket.
   await initializingServices;
@@ -1653,21 +1618,7 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
     }
     const server = createServer(startingApp);
     const serverGeneration = startingGeneration;
-    const serverProxy = getProxy();
     httpServer = server;
-    server.on('upgrade', (request, socket, head) => {
-      if (serverGeneration !== applicationGeneration) {
-        socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-      if (exclusiveHost) {
-        socket.write('HTTP/1.1 409 Conflict\r\nConnection: close\r\n\r\n');
-        socket.end(() => socket.destroy());
-        return;
-      }
-      handleWebSocketUpgrade(request, socket, serverProxy, head, resolveThinkingBudgets);
-    });
     server.listen(port, host, () => {
       if (serverGeneration !== applicationGeneration || startingApp !== appInstance) {
         if (httpServer === server) httpServer = null;
@@ -1686,8 +1637,6 @@ export async function start(config?: ServerConfig): Promise<{ port: number; host
 export async function stop(): Promise<void> {
   applicationGeneration++;
   appInstance = null;
-  applicationThinkingBudgets = undefined;
-  closeServerWebSockets();
   activeProviderOAuth?.close();
   activeProviderOAuth = undefined;
   const services = activeServices;

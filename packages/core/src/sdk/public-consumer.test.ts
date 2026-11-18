@@ -48,7 +48,7 @@ import {
   type AgentAuthDescriptor, type AgentModel, type AgentResourceLoader,
   type AgentEvent, type AgentPromptOptions, ExtensionRegistry, type AgentRunTrigger,
 } from '@ai-harness/core';
-const version: 1 = AI_HARNESS_CORE_API_VERSION;
+const version: 2 = AI_HARNESS_CORE_API_VERSION;
 declare const provider: AiProvider;
 const binding: AgentProvider = { kind: 'instance', name: 'custom', provider };
 const config: AgentProviderConfig = { type: 'openai', apiKey: 'disposable', httpIdleTimeoutMs: 100, transport: 'sse' };
@@ -179,7 +179,7 @@ import {
   AI_HARNESS_CORE_API_VERSION, createAgentSession, createAgentResourceLoader,
   AiProvider, JsonlSessionStore, deserializeSession, ExtensionRegistry,
 } from '@ai-harness/core';
-assert.equal(AI_HARNESS_CORE_API_VERSION, 1);
+assert.equal(AI_HARNESS_CORE_API_VERSION, 2);
 assert.ok(import.meta.resolve('@ai-harness/core').startsWith(new URL('./node_modules/@ai-harness/core/', import.meta.url).href));
 class Mock extends AiProvider {
   validateConfig() { return true; }

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { OpenRouterProvider } from '../index.js';
+import { OpenRouterProvider, getProviderPublishedModel, getSupportedThinkingLevels } from '../index.js';
 const c = 'openai/gpt-4o', a = 'anthropic/claude-haiku-4.5', base = 'https://synthetic-router.test/regional', key = 'synthetic-user-model-key';
 afterEach(() => vi.restoreAllMocks());
 it('filters only native chat and uses personalized context/output/pricing tiers on actual C wire and usage', async () => {
@@ -10,6 +10,9 @@ it('filters only native chat and uses personalized context/output/pricing tiers 
     expect(String(url)).toBe(base + '/v1/chat/completions'); const body = JSON.parse(String(init?.body)); expect(body.max_completion_tokens).toBe(20000); expect(body.max_tokens).toBeUndefined(); return Response.json({ choices: [{ message: { role: 'assistant', content: 'personalized' }, finish_reason: 'stop' }], usage: { prompt_tokens: 101, completion_tokens: 2 } });
   });
   expect(await provider.refreshUserModels()).toEqual([c]); expect(await provider.getAvailableModels()).toEqual([c]); expect(provider.getPublishedModels()).toMatchObject([{ id: c, contextWindow: 262144, maxOutputTokens: 32768, pricing: { inputPerMillion: 3, outputPerMillion: 15 } }]); expect(provider.getSpecializedModels().filter(model => !model.virtual)).toEqual(native);
+  expect(getProviderPublishedModel('router-user', c, provider)).toMatchObject({ contextWindow: 262144, maxOutputTokens: 32768, pricing: { inputPerMillion: 3 } });
+  expect(getProviderPublishedModel('router-user', a, provider)).toBeUndefined();
+  expect(getSupportedThinkingLevels('router-user', a, undefined, provider)).toEqual(['off']);
   expect(await provider.chat([{ id: 'u', role: 'user', content: 'probe', timestamp: new Date(0) }], { model: c, maxTokens: 20000 })).toMatchObject({ content: 'personalized', usage: { totalTokens: 103, costUsd: 0.000666 } });
   await expect(provider.chat([], { model: a })).rejects.toThrow(); await expect(provider.chat([], { model: c, maxTokens: 32769 })).rejects.toThrow(); expect(fetcher).toHaveBeenCalledTimes(2);
 });
@@ -62,8 +65,17 @@ it('does not let a cancelled overlapping refresh revoke an independent refresh o
   releaseA(Response.json({ data: [{ id: c }] })); expect(await pendingA).toEqual([c]); releaseB(new Response(new ReadableStream({ cancel() { cancelled++; } }))); await vi.waitFor(() => expect(cancelled).toBe(1)); expect(await provider.getAvailableModels()).toEqual([c]);
   let releaseOld!: (response: Response) => void; const old = new Promise<Response>(resolve => { releaseOld = resolve; }); vi.mocked(fetch).mockReturnValueOnce(old).mockResolvedValueOnce(Response.json({ data: [{ id: a }] }));
   const stale = provider.refreshUserModels().catch(error => error); await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3)); expect(await provider.refreshUserModels()).toEqual([a]); releaseOld(Response.json({ data: [{ id: c }] })); expect(await stale).toBeInstanceOf(Error); expect(await provider.getAvailableModels()).toEqual([a]);
+  expect(getProviderPublishedModel('router-concurrent', a, provider)?.id).toBe(a);
+  expect(getProviderPublishedModel('router-concurrent', c, provider)).toBeUndefined();
 });
 it('does not apply another key/header scope and refuses stale discovery publication after I/O', async () => {
   const headers = { 'x-tenant': 'synthetic-first' }, provider = new OpenRouterProvider({ type: 'router-scope', apiKey: key, baseUrl: base, customHeaders: headers }); let release!: (value: Response) => void;
-  const held = new Promise<Response>(resolve => { release = resolve; }); vi.spyOn(globalThis, 'fetch').mockReturnValue(held); const pending = provider.refreshUserModels().catch(error => error); headers['x-tenant'] = 'synthetic-other'; release(Response.json({ data: [{ id: c }] })); expect(await pending).toBeInstanceOf(Error);
+  const held = new Promise<Response>(resolve => { release = resolve; });
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ data: [{ id: c }] })).mockReturnValue(held);
+  await provider.refreshUserModels(); expect(getProviderPublishedModel('router-scope', c, provider)?.id).toBe(c);
+  const pending = provider.refreshUserModels().catch(error => error); headers['x-tenant'] = 'synthetic-other';
+  expect(getProviderPublishedModel('router-scope', c, provider)).toBeUndefined();
+  expect(getSupportedThinkingLevels('router-scope', c, undefined, provider)).toEqual(['off']);
+  release(Response.json({ data: [{ id: c }] })); expect(await pending).toBeInstanceOf(Error);
+  expect(getProviderPublishedModel('router-scope', c, provider)).toBeUndefined();
 });

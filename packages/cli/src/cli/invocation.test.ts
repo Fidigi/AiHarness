@@ -835,7 +835,7 @@ describe('CLI invocation contract', () => {
       '{"id":1,"method":"system.ping"}\n',
     );
     expect(result.code).toBe(0);
-    expect(result.stdout).toBe('{"id":1,"result":{"ok":true}}\n');
+    expect(result.stdout).toBe('{"error":{"code":"INVALID_REQUEST","message":"Legacy method/params RPC is not supported. Use type commands."}}\n');
     expect(result.stderr).toContain('rpc extension stdout noise');
 
     const invalidProvider = await invoke([

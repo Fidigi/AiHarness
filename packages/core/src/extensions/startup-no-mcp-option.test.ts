@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { AI_HARNESS_CORE_API_VERSION, ExtensionRegistry, selectRegisteredTools } from '../index.js';
 
 it('reserves the native MCP suppression flag without reinterpreting exact public tool authority', async () => {
-  expect(AI_HARNESS_CORE_API_VERSION).toBe(1);
+  expect(AI_HARNESS_CORE_API_VERSION).toBe(2);
   const registry = new ExtensionRegistry();
   try {
     await expect(registry.load('attempt', api => {

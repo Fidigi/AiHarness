@@ -1,0 +1,49 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/proxy-compaction-generation.test.ts packages/server/src/api/summary-public-http.test.ts packages/server/src/api/http-compaction-lifecycle.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/http-compaction-lifecycle.test.ts > real HTTP compaction, exclusive=false
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/http-compaction-lifecycle.test.ts > real HTTP compaction, exclusive=true
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/http-compaction-lifecycle.test.ts (24 tests) 1303ms
+ ✓ packages/server/src/api/proxy-compaction-generation.test.ts (11 tests) 15ms
+stdout | packages/server/src/api/summary-public-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ❯ packages/server/src/api/summary-public-http.test.ts (2 tests | 1 failed) 318ms
+   ✓ the owning manual agent summary preserves public tool traces and rich text, never private replay 91ms
+   × retains the canonical two-million-byte ceiling before stripping oversized private metadata 123ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/server/src/api/summary-public-http.test.ts > retains the canonical two-million-byte ceiling before stripping oversized private metadata
+AssertionError: expected 200 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 200
+
+ ❯ packages/server/src/api/summary-public-http.test.ts:55:27
+     53|   const chat = vi.spyOn(MockProvider.prototype, 'chat');
+     54|   const response = await compact(messages);
+     55|   expect(response.status).toBe(500); expect(await response.json()).toE…
+       |                           ^
+     56| });
+     57|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 36 passed (37)
+   Start at  13:34:03
+   Duration  4.42s (tests 39%, transform 33%, import 28%)

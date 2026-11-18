@@ -61,3 +61,6 @@ CHANGELOG.md
 # Scripts internes exclus, sauf le lanceur TypeScript utilisé par les workspaces.
 scripts/*
 !scripts/run-typescript.mjs
+!scripts/check-architecture.mjs
+!scripts/check-architecture.test.mjs
+!scripts/architecture-policy.json

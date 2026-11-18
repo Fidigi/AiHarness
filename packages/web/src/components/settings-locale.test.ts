@@ -9,7 +9,11 @@ import { settingsLocaleBoundaryMessage } from './settings-locale-boundary-messag
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const entryLines = (text: string) => text.match(/^ {4}'[^']+': .*\n/gm) ?? [];
-// Explicit post-inventory addition; every historical literal remains unchanged.
+// Explicit COMP-02 removals; preserve the historical inventory and every retained literal.
+const retiredTransportKeys = new Set(['settings.realtimeTransport', 'settings.selectTransport']);
+const retainedMoved = inventory.moved.filter(entry => !retiredTransportKeys.has(entry.key));
+
+// Explicit post-inventory addition.
 const mcpExposureHelp = {
   en: "    'settings.mcp.exposureHelp': 'Missing exposure defaults to direct. Code mode is script-only; deferred tools need tool_search before a later model turn; hidden tools are not model-callable. All modes retain allowlists, exclusions and read-only checks. Overrides match original remote names: exact first, then the first matching * pattern.',\n",
   fr: "    'settings.mcp.exposureHelp': 'Sans exposition définie, les outils sont directs. Le mode Code est réservé aux scripts ; les outils différés nécessitent tool_search avant un tour ultérieur du modèle ; les outils cachés ne sont pas appelables par le modèle. Les listes autorisées, exclusions et contrôles de lecture seule restent prioritaires. Les surcharges visent les noms distants : nom exact, puis premier motif * correspondant.',\n",
@@ -37,14 +41,17 @@ const vertexCredentials = {
 describe('Settings locale allocation', () => {
   it('relocates all projected inventoried EN/FR literals byte-for-byte and changes no retained key/value', () => {
     expect(inventory.moved).toHaveLength(228);
+    expect(retainedMoved).toHaveLength(226);
     for (const locale of ['en', 'fr'] as const) {
       const eager = entryLines(source(`../i18n/messages/${locale}.ts`));
       const lazy = entryLines(source(`./settings-locale-${locale}.ts`));
       const withVertexCredentials = (line: string) => line.startsWith("    'settings.apiKeyForProvider':")
         ? [line, ...vertexCredentials[locale]] : [line];
-      const moved = inventory.moved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
+      const retired = inventory.moved.filter(entry => retiredTransportKeys.has(entry.key))
+        .map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']);
+      const moved = retainedMoved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
       expect(lazy).toEqual(moved);
-      const projected = inventory.original[locale].lines.flatMap(line =>
+      const projected = inventory.original[locale].lines.filter(line => !retired.includes(line)).flatMap(line =>
         line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]).flatMap(withVertexCredentials);
       expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
       expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
@@ -53,7 +60,7 @@ describe('Settings locale allocation', () => {
 
   it('moves only direct Settings-tree consumers, not shared/dynamic/dirty/default keys', () => {
     const allowed = new Set(['SettingsView.tsx', 'EcosystemSettings.tsx', 'McpSettings.tsx', 'McpImportPreview.tsx', 'PluginSettings.tsx']);
-    for (const entry of inventory.moved) {
+    for (const entry of retainedMoved) {
       expect(inventory.dirty).not.toContain(entry.key);
       expect(entry.key.startsWith('settings.defaults.')).toBe(false);
       expect(inventory.dynamic.some(dynamic => entry.key.startsWith(dynamic.prefix))).toBe(false);
@@ -82,7 +89,7 @@ describe('Settings locale allocation', () => {
     if (previous !== undefined) french[key] = previous;
     registerFeatureLocaleMessages({ fr: settingsFrMessages });
     expect(translateMessage('fr', key, messages)).toBe(settingsFrMessages[key]);
-    for (const entry of inventory.moved) {
+    for (const entry of retainedMoved) {
       const placeholders = (value: string) => [...value.matchAll(/\{([\w.-]+)\}/g)].map(match => match[1]).sort();
       expect(placeholders(settingsFrMessages[entry.key]!)).toEqual(placeholders(settingsEnMessages[entry.key]!));
     }

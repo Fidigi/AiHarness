@@ -287,6 +287,16 @@ beforeAll(async () => {
 afterAll(async () => { if (artifactRoot) await rm(artifactRoot, { recursive: true, force: true }); });
 
 describe('CLI-RUN-01 genuine locally packed installed executable', () => {
+  it('enforces the Core API 2 utility removal in installed declarations and runtime', async () => {
+    await cp(path.join(fixtureRoot, 'sdk', 'types-positive.ts'), path.join(consumer, 'core-v2-public.ts'));
+    await succeed(process.execPath, [compiler, '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext',
+      '--moduleResolution', 'NodeNext', '--types', 'node', 'core-v2-public.ts'], consumer, environment);
+    await cp(path.join(fixtureRoot, 'sdk', 'runtime-probe.mjs'), path.join(consumer, 'core-v2-runtime.mjs'));
+    const result = await succeed(process.execPath, ['core-v2-runtime.mjs'], consumer, environment);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout).versions).toEqual({ core: 2, extension: 1, factory: 1, session: 2 });
+  });
+
   it.each(['print', 'json', 'rpc', 'regular', 'fullscreen'])('owns native extension execution hooks outside the checkout (%s)', async mode => {
     const probe = `extension-execution-${mode}.mjs`;
     await cp(path.join(checkout, 'packages/cli/src/cli/fixtures/extension-execution-probe.mjs'), path.join(consumer, probe));
@@ -427,7 +437,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const manager = new SessionManager(), store = new JsonlSessionStore('/disposable');
       const result: Promise<Session | null> = manager.cloneSessionAtEntry('source', 'displayed-entry', undefined,
         { sourceStore: store, expectedCwd: '/workspace', signal: new AbortController().signal });
-      const api: 1 = AI_HARNESS_CORE_API_VERSION; void result; void api;
+      const api: 2 = AI_HARNESS_CORE_API_VERSION; void result; void api;
       // @ts-expect-error HTTP bodies cannot grant arbitrary source-store/path authority
       manager.cloneSessionAtEntry('source', 'entry', undefined, { sourceStore: { path: '/private' } });
       // @ts-expect-error captured source scope is a string comparison, not a numeric destination selector
@@ -455,7 +465,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     }
     await writeFile(path.join(consumer, 'inheritance-public.ts'), `
       import { AI_HARNESS_CORE_API_VERSION, inspectMcpConfig } from '@ai-harness/core';
-      const major: 1 = AI_HARNESS_CORE_API_VERSION; void major;
+      const major: 2 = AI_HARNESS_CORE_API_VERSION; void major;
       async function proof(options: Parameters<typeof inspectMcpConfig>[0]) {
         const inventory = await inspectMcpConfig(options);
         const inherited: true | undefined = inventory.servers[0]?.inheritsGlobal; void inherited;
@@ -484,7 +494,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     await writeFile(path.join(consumer, 'prestart-public.ts'), `
       import { AI_HARNESS_CORE_API_VERSION, type StartAgentRunRequest, type BeforeAgentData,
         type AgentPromptOptions, type CreateAgentSessionOptions } from '@ai-harness/core';
-      const major: 1 = AI_HARNESS_CORE_API_VERSION; void major;
+      const major: 2 = AI_HARNESS_CORE_API_VERSION; void major;
       const signal = new AbortController().signal;
       const request: StartAgentRunRequest = { sessionId:'native',cwd:'.',provider:'mock',input:'native',signal }; void request;
       const hook: BeforeAgentData = { sessionId:'native',provider:'mock',input:'native',signal }; void hook.signal?.aborted;
@@ -542,7 +552,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const global: Record<string, unknown> = getAgentSettingsEditorSchema();
       const project: Record<string, unknown> = getAgentSettingsEditorSchema(scope);
       const model: Record<string, unknown> = getCustomModelEditorSchema();
-      const version: 1 = AI_HARNESS_CORE_API_VERSION; void global; void project; void model; void version;
+      const version: 2 = AI_HARNESS_CORE_API_VERSION; void global; void project; void model; void version;
       // @ts-expect-error session files are not an agent-settings file scope
       getAgentSettingsEditorSchema('session');
       // @ts-expect-error metadata schema projection does not admit provider configuration or credentials
@@ -915,7 +925,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const snapshot: Promise<SessionStoreSnapshot | null> = store.getSessionSnapshot('source');
       const options: SessionForkOptions = { sourceStore: store, id: 'destination', cwd: '/new', workspaceId: undefined };
       const fork: Promise<Session | null> = manager.forkSession('source', undefined, 'Title', options);
-      const api: 1 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION;
+      const api: 2 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION;
       void snapshot; void fork; void api; void schema;
       // @ts-expect-error explicit identities remain primitive strings
       manager.forkSession('source', undefined, undefined, { id: 1 });
@@ -969,7 +979,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       declare const context: ExtensionRuntimeContext;
       const extensionEntries: Promise<SessionEntry[]> = context.sessionManager.getActiveBranchEntries(context.currentSessionId ?? '');
       void entries; void extensionEntries;
-      const api: 1 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION; void api; void schema;
+      const api: 2 = AI_HARNESS_CORE_API_VERSION; const schema: 2 = SESSION_SCHEMA_VERSION; void api; void schema;
       const options: SessionBranchOptions = { signal: new AbortController().signal };
       const before: SessionBranchHook = (event: Readonly<SessionBranchEvent>) => { const id: string = event.sourceSessionId; void id; return false; };
       manager.onBeforeBranch(before);
@@ -1024,7 +1034,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const window: number | undefined = resolveAgentCompactionContextWindow('openai', 'gpt-4o');
       manager.setCompactionContextWindow(window); manager.setCompactionContextWindow(undefined);
       const current: number | undefined = manager.getCompactionContextWindow(); void current;
-      const version: 1 = AI_HARNESS_CORE_API_VERSION; void version;
+      const version: 2 = AI_HARNESS_CORE_API_VERSION; void version;
       // @ts-expect-error token windows are numeric, not strings
       manager.setCompactionContextWindow('128000');
       // @ts-expect-error model identities are strings, not coercible objects
@@ -1070,7 +1080,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     ]);
   });
 
-  it('publishes strict installed optional navigation and custom-entry declarations without changing Core API 1', async () => {
+  it('publishes strict installed optional navigation and custom-entry declarations under Core API 2', async () => {
     await writeFile(path.join(consumer, 'session-navigation-public.ts'), `
       import { SessionManager, createProviderBranchSummarizer, AI_HARNESS_CORE_API_VERSION,
         type BranchNavigationOptions, type BranchNavigationResult, type BranchSummaryOutput,
@@ -1086,7 +1096,7 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
       const result: Promise<BranchNavigationResult> = manager.navigateTree('session', 'entry', options); void result;
       const state: Promise<CustomSessionEntry | null> = manager.appendCustomEntry('session', 'state', { value: 1 }); void state;
       const message: Promise<CustomMessageEntry | null> = manager.appendCustomMessage('session', 'notice', 'text', { display: false }); void message;
-      const version: 1 = AI_HARNESS_CORE_API_VERSION; void version; void createProviderBranchSummarizer;
+      const version: 2 = AI_HARNESS_CORE_API_VERSION; void version; void createProviderBranchSummarizer;
       // @ts-expect-error generation authority is a boolean, never a truthy string
       const bad: BranchNavigationOptions = { summarize: 'yes' }; void bad;
       // @ts-expect-error usage is numeric when present
@@ -1498,9 +1508,20 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     }
   }, 30_000);
 
-  it('runs installed print/JSON/RPC against the unchanged reviewed protocol goldens', async () => {
+  it.each(['boundary', 'held-overflow'])('enforces the installed RPC input contract (%s)', async scenario => {
+    const worker = path.join(consumer, `rpc-input-${scenario}.mjs`);
+    await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'rpc-input-probe.mjs'), worker);
+    const result = await run(process.execPath, [worker, scenario], consumer, {
+      ...environment, AIH_RPC_CLI: await realpath(path.join(consumer, 'node_modules', '.bin', 'ai-harness')),
+    });
+    expect(result.code, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout).toBe(`RPC_INPUT_OK ${scenario}\n`);
+  });
+
+  it('runs installed print/JSON/RPC against the reviewed protocol goldens', async () => {
     const manifest = await loadManifest();
-    for (const id of ['cli-version', 'cli-print-input', 'json-lifecycle-purity', 'rpc-state-purity', 'rpc-legacy-chat-migration', 'rpc-invalid-startup-file']) {
+    for (const id of ['cli-version', 'cli-print-input', 'json-lifecycle-purity', 'rpc-state-purity', 'rpc-legacy-chat-rejection', 'rpc-invalid-startup-file']) {
       const scenario = manifest.processScenarios.find(item => item.id === id)!;
       const fixtures = path.join(consumer, 'fixtures');
       await cp(fixtureRoot, fixtures, { recursive: true });
@@ -3832,7 +3853,7 @@ it('dispatches native Groq through installed public declarations and captured C 
     const dialect: ProviderDialect = 'groq'; void dialect;
     const profile: GroqProfile = GROQ_MODELS[0];
     const provider: AiProvider = new GroqProvider({ type: 'operator-groq', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested price tables are immutable
@@ -3911,7 +3932,7 @@ it('dispatches native Z.ai through installed public declarations and captured C 
     const dialect: ProviderDialect = 'zai'; void dialect;
     const profile: ZaiProfile = ZAI_MODELS[0];
     const provider: AiProvider = new ZaiProvider({ type: 'operator-zai', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested declared price tables are immutable
@@ -3991,7 +4012,7 @@ it('dispatches native Moonshot through installed public declarations and capture
     const dialect: ProviderDialect = 'moonshot'; void dialect;
     const profile: MoonshotProfile = MOONSHOT_MODELS[0];
     const provider: AiProvider = new MoonshotProvider({ type: 'operator-moonshot', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested declared price tables are immutable
@@ -4573,7 +4594,7 @@ it('dispatches native Meta through installed public declarations and captured R 
     import { MetaProvider, META_MODELS, type MetaProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
     const profile: MetaProfile = META_MODELS[0];
     const provider: AiProvider = new MetaProvider({ type: 'operator-meta', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error physical profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error base prices are immutable
@@ -4703,7 +4724,7 @@ it('dispatches native xAI through installed public declarations and captured R p
     import { XaiProvider, XAI_MODELS, type XaiProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
     const profile: XaiProfile = XAI_MODELS[0];
     const provider: AiProvider = new XaiProvider({ type: 'operator-xai', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error physical profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error base prices are immutable
@@ -4838,7 +4859,7 @@ it('dispatches native MiniMax through installed public declarations and captured
     import { MiniMaxProvider, MINIMAX_MODELS, type MiniMaxProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
     const profile: MiniMaxProfile = MINIMAX_MODELS[0];
     const provider: AiProvider = new MiniMaxProvider({ type: 'operator-minimax', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested prices are immutable
@@ -4926,7 +4947,7 @@ it('dispatches native Nvidia through installed public declarations and captured 
     const dialect: ProviderDialect = 'nvidia'; void dialect;
     const profile: NvidiaProfile = NVIDIA_MODELS[0];
     const provider: AiProvider = new NvidiaProvider({ type: 'operator-nvidia', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested declared price tables are immutable
@@ -5006,7 +5027,7 @@ it('dispatches native DeepSeek through installed public declarations and capture
     const dialect: ProviderDialect = 'deepseek'; void dialect;
     const profile: DeepSeekProfile = DEEPSEEK_MODELS[0];
     const provider: AiProvider = new DeepSeekProvider({ type: 'operator-deepseek', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested price tables are immutable
@@ -5080,7 +5101,7 @@ it('dispatches native Ant Ling through installed public declarations and capture
     import { AntLingProvider, ANT_LING_MODELS, type AntLingProfile, type AiProvider, type ProviderDialect, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
     const profile: AntLingProfile = ANT_LING_MODELS[2];
     const provider: AiProvider = new AntLingProvider({ type: 'operator-ant-ling', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     const dialect: ProviderDialect = 'ant-ling';
     // @ts-expect-error custom-host dialects do not admit undeclared compatibility aliases
     const unknownDialect: ProviderDialect = 'ant-ling-compat'; void unknownDialect;
@@ -5168,7 +5189,7 @@ it('dispatches native Cerebras through installed public declarations and capture
     const nativeType: ProviderType = ProviderType.CEREBRAS; void builtin; void nativeType;
     const profile: CerebrasProfile = CEREBRAS_MODELS[0];
     const provider: AiProvider = new CerebrasProvider({ type: 'operator-cerebras', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION;
     // @ts-expect-error reviewed profiles are immutable
     profile.contextWindow = 1;
     // @ts-expect-error nested price tables are immutable
@@ -5371,7 +5392,7 @@ it('dispatches native OpenCode Zen through installed A/G/C/R/T declarations and 
     const profile: OpenCodeProfile = OPENCODE_MODELS[0]; const priced: NonNullable<OpenCodeProfile['pricing']> = profile.pricing!;
     const provider = new OpenCodeProvider({ type: 'operator', apiKey: 'disposable' }); const api: 'anthropic-messages' | 'google-generative-ai' | 'openai-completions' | 'openai-responses' = profile.api;
     const native: Promise<NativeClassifierResult> = provider.classifyNativeQuestions({ model: 'jev-1.13', state: {}, questions: { level: { type: 'score', instructions: 'Level', criteria: ['Low', 'High'] } } });
-    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void native; const version: 1 = AI_HARNESS_CORE_API_VERSION; void version;
+    provider.setConfiguredModel(profile.id); void provider.getPublishedModels(); void api; void native; const version: 2 = AI_HARNESS_CORE_API_VERSION; void version;
     // @ts-expect-error physical limits are readonly
     profile.maxOutputTokens = 1;
     // @ts-expect-error native maps are readonly
@@ -5502,7 +5523,7 @@ it('dispatches native MiniMax CN through installed public declarations and captu
     import { MiniMaxCnProvider, MINIMAX_CN_MODELS, type MiniMaxProfile, type AiProvider, AI_HARNESS_CORE_API_VERSION } from '@ai-harness/core';
     const profile: MiniMaxProfile = MINIMAX_CN_MODELS[0];
     const provider: AiProvider = new MiniMaxCnProvider({ type: 'operator-cn', apiKey: 'disposable' });
-    const version: 1 = AI_HARNESS_CORE_API_VERSION; void version; void provider;
+    const version: 2 = AI_HARNESS_CORE_API_VERSION; void version; void provider;
     // @ts-expect-error pinned declarations are readonly
     profile.contextWindow = 1;
     // @ts-expect-error prices are readonly
@@ -5585,7 +5606,7 @@ it('dispatches native Moonshot CN through installed public declarations and capt
       else res.end(JSON.stringify({model:'remote-alias',choices:[{message:{content:answer,reasoning_content:'Thought'},finish_reason:'stop'}],usage}));
     });await new Promise(r=>server.listen(0,'127.0.0.1',r));
     try {
-      assert.equal(AI_HARNESS_CORE_API_VERSION,1);assert.equal(MOONSHOT_CN_MODELS,MOONSHOT_MODELS);assert.equal(MOONSHOT_CN_MODELS.length,4);
+      assert.equal(AI_HARNESS_CORE_API_VERSION,2);assert.equal(MOONSHOT_CN_MODELS,MOONSHOT_MODELS);assert.equal(MOONSHOT_CN_MODELS.length,4);
       assert.equal(Object.isFrozen(MOONSHOT_CN_MODELS),true);assert.equal(MOONSHOT_CN_MODELS.every(p=>Object.isFrozen(p)&&Object.isFrozen(p.pricing)&&Object.isFrozen(p.declaredInputLimits.images.resize)),true);assert.equal(ProviderFactory.has('moonshotai-cn'),false);
       const provider=new MoonshotCnProvider({type:'google',apiKey:key,baseUrl:'http://127.0.0.1:'+server.address().port+'/owned%2Fcn/v1'});
       assert.equal(provider.canDiscoverModels(),false);assert.deepEqual(await provider.getAvailableModels(),MOONSHOT_CN_MODELS.map(p=>p.id));assert.equal(getProviderPublishedModel('google','gemini-2.5-pro',provider),undefined);

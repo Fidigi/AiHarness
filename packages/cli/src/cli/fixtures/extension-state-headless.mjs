@@ -17,7 +17,7 @@ class FixtureProvider extends MockProvider {
   calls=0;
   async streamChat(messages,onChunk,onComplete,onError,options){
     try{
-      assert.ok(!options?.signal?.aborted);assert.equal(AI_HARNESS_CORE_API_VERSION,1);
+      assert.ok(!options?.signal?.aborted);assert.equal(AI_HARNESS_CORE_API_VERSION,2);
       const body=JSON.stringify(messages);assert.ok(!body.includes('HEADLESS_PRIVATE_STATE'));
       const step=this.calls++;
       await record({kind:'provider',step,literal:messages.filter(message=>message.role==='user').at(-1)?.content});

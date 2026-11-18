@@ -21,14 +21,6 @@ function linesOf(content: string): string[] {
   return lines;
 }
 
-function utf8Prefix(value: string, maxBytes: number): string {
-  const bytes = Buffer.from(value, 'utf8');
-  if (bytes.length <= maxBytes) return value;
-  let end = maxBytes;
-  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
-  return bytes.subarray(0, end).toString('utf8');
-}
-
 function utf8Suffix(value: string, maxBytes: number): string {
   const bytes = Buffer.from(value, 'utf8');
   if (bytes.length <= maxBytes) return value;
@@ -152,10 +144,6 @@ export function truncateToolLine(
 ): { content: string; truncated: boolean } {
   if (line.length <= maxLength) return { content: line, truncated: false };
   return { content: `${line.slice(0, maxLength)}… [truncated]`, truncated: true };
-}
-
-export function truncateToolBytes(value: string, maxBytes: number): string {
-  return utf8Prefix(value, maxBytes);
 }
 
 export function formatToolBytes(bytes: number): string {

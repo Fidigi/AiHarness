@@ -14,6 +14,7 @@ import { ProviderContextOverflowError } from '../providers/context-overflow.js';
 import { ProviderRequestContextError } from './provider-request-estimate.js';
 import { prepareMessageImages } from '../media/message-images.js';
 import { awaitAgentAdmission } from './prestart-admission.js';
+import { AgentAbortError } from './agent-errors.js';
 import { ownToolResult } from './tool-result.js';
 import { nestedToolScope } from './nested-tools.js';
 import { copyAgentRunTrigger, copyExtensionResult, type AgentRunTrigger, type ExtensionCustomTrigger } from '../extensions/execution-hooks.js';
@@ -114,13 +115,7 @@ function assistantBlocks(response: ChatResponse): MessageContentBlock[] {
   return blocks;
 }
 
-/** Stable error used by the CLI and detached Web runtime. */
-export class AgentAbortError extends Error {
-  constructor() {
-    super("Exécution de l'agent interrompue.");
-    this.name = 'AbortError';
-  }
-}
+export { AgentAbortError } from './agent-errors.js';
 
 /**
  * Run model turns until a final assistant response is produced. Tool calls and

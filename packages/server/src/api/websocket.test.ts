@@ -1,352 +1,60 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CredentialRedactor, type ChatOptions } from '@ai-harness/core';
-import type { IncomingMessage } from 'node:http';
-import { Duplex } from 'node:stream';
-import {
-  closeServerWebSockets,
-  decodeWebSocketFrame,
-  encodeWebSocketFrame,
-  handleWebSocketUpgrade,
-} from './websocket';
-import { createWebSession } from '../security/request-security';
+import { connect } from 'node:net';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it, vi } from 'vitest';
+import { start, stop } from '../index.js';
+import { AiProxyServer } from './proxy.js';
 
-function maskedFrame(payload: string | Uint8Array, opcode = 0x1, final = true, reserved = false): Buffer {
-  const content = Buffer.from(payload);
-  const mask = Buffer.from([1, 2, 3, 4]);
-  const first = (final ? 0x80 : 0) | (reserved ? 0x40 : 0) | opcode;
-  const header = content.length < 126
-    ? Buffer.from([first, 0x80 | content.length])
-    : Buffer.from([first, 0x80 | 126, content.length >> 8, content.length & 0xff]);
-  const masked = Buffer.from(content.map((byte, index) => byte ^ mask[index % 4]));
-  return Buffer.concat([header, mask, masked]);
-}
+let root: string | undefined;
+afterEach(async () => {
+  await stop();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  if (root) await rm(root, { recursive: true, force: true });
+});
 
-function upgradeHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    host: 'localhost',
-    connection: 'Upgrade',
-    upgrade: 'websocket',
-    'sec-websocket-version': '13',
-    'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
-    ...extra,
-  };
-}
+it('rejects retired HTTP and WebSocket chat without dispatch, retaining authentication and Origin checks', async () => {
+  root = await mkdtemp(path.join(os.tmpdir(), 'aih-retired-chat-'));
+  vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'synthetic-user');
+  vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'synthetic-admin');
+  const proxy = new AiProxyServer({ enableMockProvider: true });
+  const chat = vi.spyOn(proxy, 'sendChat');
+  const stream = vi.spyOn(proxy, 'sendChatSSE');
+  const server = await start({ port: 0, host: '127.0.0.1', dataDir: path.join(root, 'data'),
+    allowedRoots: [root], defaultCwd: root, proxy });
+  const base = `http://127.0.0.1:${server.port}`;
+  for (const route of ['/api/chat', '/api/chat/stream', '/api/chat/compact']) {
+    const body = JSON.stringify({ provider: 'mock', messages: [{ role: 'user', content: 'must-not-run' }] });
+    const rejected = await fetch(base + route, { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer synthetic-user' }, body });
+    expect(rejected.status).toBe(404);
+    expect(await rejected.json()).toEqual({ error: 'Not found' });
+    expect((await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })).status).toBe(401);
+  }
+  expect((await fetch(base + '/api/chat', { method: 'POST', headers: {
+    Authorization: 'Bearer synthetic-admin', Origin: 'https://foreign.invalid',
+  } })).status).toBe(403);
 
-function captureSocket(): { socket: Duplex; output: string[]; chunks: Buffer[] } {
-  const output: string[] = [];
-  const chunks: Buffer[] = [];
-  const socket = new Duplex({
-    read() {},
-    write(chunk, _encoding, callback) {
-      const bytes = Buffer.from(chunk);
-      chunks.push(bytes);
-      output.push(bytes.toString());
-      callback();
-    },
+  const upgrade = (authorization: boolean) => new Promise<string>((resolve, reject) => {
+    const socket = connect(server.port, '127.0.0.1');
+    let response = '';
+    socket.on('connect', () => socket.write('GET /api/chat/ws HTTP/1.1\r\nHost: localhost\r\n'
+      + 'Connection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\n'
+      + 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
+      + 'Sec-WebSocket-Protocol: aih.v1, aih.bearer.private-marker\r\n'
+      + (authorization ? 'Authorization: Bearer synthetic-user\r\n' : '') + '\r\n'));
+    socket.on('data', chunk => {
+      response += chunk.toString();
+      if (response.includes('\r\n\r\n')) { socket.destroy(); resolve(response); }
+    });
+    socket.on('end', () => resolve(response));
+    socket.on('error', reject);
   });
-  return { socket, output, chunks };
-}
-
-describe('transport WebSocket', () => {
-  afterEach(() => {
-    closeServerWebSockets();
-    vi.unstubAllEnvs();
-  });
-
-  it('encode les frames serveur RFC 6455', () => {
-    const decoded = decodeWebSocketFrame(encodeWebSocketFrame('bonjour'));
-    expect(decoded).toMatchObject({ payload: 'bonjour', opcode: 1 });
-  });
-
-  it('décode les frames clientes masquées et fragmentées au niveau TCP', () => {
-    const frame = maskedFrame(JSON.stringify({ provider: 'mock', messages: [] }));
-    expect(decodeWebSocketFrame(frame.subarray(0, 3))).toBeNull();
-    expect(decodeWebSocketFrame(frame)?.payload).toContain('"provider":"mock"');
-  });
-
-  it('gère les payloads étendus', () => {
-    const payload = 'x'.repeat(70_000);
-    expect(decodeWebSocketFrame(encodeWebSocketFrame(payload))?.payload).toBe(payload);
-  });
-
-  it('rejette les frames non masquées, réservées, fragmentées, non canoniques et UTF-8 invalides', async () => {
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders(),
-    } as IncomingMessage;
-    const mask = Buffer.from([1, 2, 3, 4]);
-    const nonCanonicalPayload = Buffer.from([0x78 ^ mask[0]]);
-    const nonCanonical = Buffer.concat([Buffer.from([0x81, 0xfe, 0, 1]), mask, nonCanonicalPayload]);
-    const cases = [
-      encodeWebSocketFrame('{"provider":"mock"}'),
-      maskedFrame('{}', 0x1, true, true),
-      maskedFrame('{}', 0x1, false),
-      nonCanonical,
-      maskedFrame(Buffer.from([0xc3]), 0x1),
-      maskedFrame(Buffer.from([0x00]), 0x8),
-    ];
-
-    for (const frame of cases) {
-      const { socket, chunks } = captureSocket();
-      handleWebSocketUpgrade(request, socket, {} as never);
-      socket.push(frame);
-      await vi.waitFor(() => expect(chunks.length).toBeGreaterThan(1));
-      const closed = decodeWebSocketFrame(chunks.at(-1)!);
-      expect(closed?.opcode).toBe(0x8);
-      expect(closed?.payloadBytes.readUInt16BE(0)).toBe(1_002);
-      socket.destroy();
-    }
-  });
-
-  it('répond aux pings binaires et accepte une fermeture RFC 6455 valide', async () => {
-    const { socket, chunks } = captureSocket();
-    const request = {
-      method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders(),
-    } as IncomingMessage;
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    socket.push(maskedFrame(Buffer.from([0xff, 0x00]), 0x9));
-    await vi.waitFor(() => expect(chunks.length).toBeGreaterThan(1));
-    const pong = decodeWebSocketFrame(chunks.at(-1)!);
-    expect(pong).toMatchObject({ opcode: 0xa, payloadBytes: Buffer.from([0xff, 0x00]) });
-
-    const closePayload = Buffer.alloc(2);
-    closePayload.writeUInt16BE(1_000);
-    socket.push(maskedFrame(closePayload, 0x8));
-    await vi.waitFor(() => expect(decodeWebSocketFrame(chunks.at(-1)!)?.opcode).toBe(0x8));
-    expect(decodeWebSocketFrame(chunks.at(-1)!)?.payloadBytes.readUInt16BE(0)).toBe(1_000);
-    socket.destroy();
-  });
-
-  it('consomme les octets déjà lus avec la requête upgrade', async () => {
-    const { socket } = captureSocket();
-    const sendChatSSE = vi.fn(async () => ({
-      stream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
-    }));
-    const proxy = { getCredentialRedactor: () => new CredentialRedactor(), sendChatSSE };
-    const request = {
-      method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders(),
-    } as IncomingMessage;
-    const firstFrame = maskedFrame(JSON.stringify({
-      provider: 'mock', messages: [{ role: 'user', content: 'from-head' }],
-    }));
-
-    handleWebSocketUpgrade(request, socket, proxy as never, firstFrame);
-
-    await vi.waitFor(() => expect(sendChatSSE).toHaveBeenCalledTimes(1));
-    expect(sendChatSSE.mock.calls[0]?.[1]).toEqual([
-      expect.objectContaining({ role: 'user', content: 'from-head', id: 'websocket-0' }),
-    ]);
-    socket.destroy();
-  });
-
-  it.each(['dispatch', 'disconnect'] as const)('owns asynchronous host reasoning policy before WebSocket %s', async action => {
-    const { socket } = captureSocket(), hostBudgets = { low: 3000 };
-    let resolve!: (value: typeof hostBudgets) => void;
-    const pending = new Promise<typeof hostBudgets>(done => { resolve = done; });
-    const resolveThinkingBudgets = vi.fn(() => pending);
-    const sendChatSSE = vi.fn(async (_provider: string, _messages: unknown[], _options: ChatOptions) => ({
-      stream: new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }),
-    }));
-    const proxy = { getCredentialRedactor: () => new CredentialRedactor(), sendChatSSE };
-    const request = { method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders() } as IncomingMessage;
-    const input = maskedFrame(JSON.stringify({ provider: 'mock', messages: [{ role: 'user', content: 'owned before policy' }],
-      cwd: '/untrusted', projectId: 'untrusted', thinkingBudgets: { low: 999999 },
-      options: { thinking: 'low', thinkingBudgets: { low: 999999 } } }));
-    handleWebSocketUpgrade(request, socket, proxy as never, input, resolveThinkingBudgets);
-    expect(resolveThinkingBudgets.mock.calls).toEqual([[]]); expect(sendChatSSE).not.toHaveBeenCalled();
-    if (action === 'disconnect') {
-      const closed = new Promise<void>(done => socket.once('close', done)); socket.destroy(); await closed;
-    }
-    resolve(hostBudgets);
-    await new Promise<void>(done => setImmediate(done));
-    if (action === 'disconnect') expect(sendChatSSE).not.toHaveBeenCalled();
-    else {
-      expect(sendChatSSE).toHaveBeenCalledTimes(1);
-      expect(sendChatSSE.mock.calls[0]?.[1]).toEqual([expect.objectContaining({ role: 'user', content: 'owned before policy' })]);
-      const options = sendChatSSE.mock.calls[0]![2];
-      expect(options).toMatchObject({ thinking: 'low', thinkingBudgets: { low: 3000 } });
-      expect(options.thinkingBudgets).not.toBe(hostBudgets);
-      hostBudgets.low = 4000; expect(options.thinkingBudgets).toEqual({ low: 3000 });
-      socket.destroy();
-    }
-  });
-
-  it('borne le nombre de connexions upgradées actives', () => {
-    const sockets: Duplex[] = [];
-    const request = {
-      method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders(),
-    } as IncomingMessage;
-    for (let index = 0; index < 256; index++) {
-      const target = captureSocket();
-      sockets.push(target.socket);
-      handleWebSocketUpgrade(request, target.socket, {} as never);
-      expect(target.output.join('')).toContain('101 Switching Protocols');
-    }
-    const refused = captureSocket();
-    handleWebSocketUpgrade(request, refused.socket, {} as never);
-    expect(refused.output.join('')).toContain('503 Service Unavailable');
-    for (const socket of sockets) socket.destroy();
-  });
-
-  it('protège aussi les upgrades quand seul le jeton administrateur est configuré', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', '');
-    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-secret');
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders(),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('401 Unauthorized');
-    expect(socket.destroyed).toBe(true);
-  });
-
-  it('authentifie le sous-protocole sans le réfléchir dans le handshake', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
-    const encoded = Buffer.from('user-secret').toString('base64url');
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders({ 'sec-websocket-protocol': `aih.bearer.${encoded}` }),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('101 Switching Protocols');
-    expect(output.join('')).not.toContain(encoded);
-    expect(output.join('')).not.toContain('Sec-WebSocket-Protocol');
-    socket.destroy();
-  });
-
-  it('sélectionne uniquement le protocole applicatif sûr pour les clients navigateur', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
-    const encoded = Buffer.from('user-secret').toString('base64url');
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders({
-        'sec-websocket-protocol': `aih.v1, aih.bearer.${encoded}`,
-      }),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('101 Switching Protocols');
-    expect(output.join('')).toContain('Sec-WebSocket-Protocol: aih.v1');
-    expect(output.join('')).not.toContain(encoded);
-    socket.destroy();
-  });
-
-  it('accepte le cookie opaque de la session Web', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
-    const session = createWebSession('user-secret')!;
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders({ cookie: `aih_session=${session.token}` }),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('101 Switching Protocols');
-    socket.destroy();
-  });
-
-  it('annule la requête provider lorsque le client ferme la socket', async () => {
-    const { socket } = captureSocket();
-    const cancelled = vi.fn();
-    let requestSignal: AbortSignal | undefined;
-    const proxy = {
-      getCredentialRedactor: () => new CredentialRedactor(),
-      sendChatSSE: vi.fn(async (_provider: string, _messages: unknown[], options: { signal?: AbortSignal }) => {
-        requestSignal = options.signal;
-        return { stream: new ReadableStream<Uint8Array>({ cancel: cancelled }) };
-      }),
-    };
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders(),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, proxy as never);
-    socket.push(maskedFrame(JSON.stringify({
-      provider: 'mock',
-      messages: [{ role: 'user', content: 'hello' }],
-    })));
-    await vi.waitFor(() => expect(requestSignal).toBeDefined());
-    socket.destroy();
-
-    await vi.waitFor(() => expect(requestSignal?.aborted).toBe(true));
-    await vi.waitFor(() => expect(cancelled).toHaveBeenCalled());
-  });
-
-  it('ferme les sockets upgradées et annule leur provider lors de l’arrêt du runtime', async () => {
-    const { socket } = captureSocket();
-    const cancelled = vi.fn();
-    let requestSignal: AbortSignal | undefined;
-    const proxy = {
-      getCredentialRedactor: () => new CredentialRedactor(),
-      sendChatSSE: vi.fn(async (_provider: string, _messages: unknown[], options: { signal?: AbortSignal }) => {
-        requestSignal = options.signal;
-        return { stream: new ReadableStream<Uint8Array>({ cancel: cancelled }) };
-      }),
-    };
-    const request = {
-      method: 'GET', url: '/api/chat/ws', headers: upgradeHeaders(),
-    } as IncomingMessage;
-    handleWebSocketUpgrade(request, socket, proxy as never);
-    socket.push(maskedFrame(JSON.stringify({
-      provider: 'mock', messages: [{ role: 'user', content: 'shutdown' }],
-    })));
-    await vi.waitFor(() => expect(requestSignal).toBeDefined());
-
-    closeServerWebSockets();
-
-    expect(socket.destroyed).toBe(true);
-    await vi.waitFor(() => expect(requestSignal?.aborted).toBe(true));
-    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledTimes(1));
-    expect(() => closeServerWebSockets()).not.toThrow();
-  });
-
-  it('accepte le jeton administrateur dans le sous-protocole non réfléchi', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
-    vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'admin-secret');
-    const encoded = Buffer.from('admin-secret').toString('base64url');
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws',
-      headers: upgradeHeaders({ 'sec-websocket-protocol': `aih.bearer.${encoded}` }),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('101 Switching Protocols');
-    expect(output.join('')).not.toContain(encoded);
-    socket.destroy();
-  });
-
-  it('refuse les anciens jetons placés dans la chaîne de requête', () => {
-    vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'user-secret');
-    const { socket, output } = captureSocket();
-    const request = {
-      method: 'GET',
-      url: '/api/chat/ws?token=user-secret',
-      headers: upgradeHeaders(),
-    } as IncomingMessage;
-
-    handleWebSocketUpgrade(request, socket, {} as never);
-
-    expect(output.join('')).toContain('401 Unauthorized');
-    expect(socket.destroyed).toBe(true);
-  });
+  expect(await upgrade(true)).toMatch(/^HTTP\/1\.1 404 /);
+  const unauthorized = await upgrade(false);
+  expect(unauthorized).toMatch(/^HTTP\/1\.1 401 /);
+  expect(unauthorized).not.toContain('private-marker');
+  expect(chat).not.toHaveBeenCalled();
+  expect(stream).not.toHaveBeenCalled();
 });

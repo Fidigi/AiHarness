@@ -1,0 +1,11 @@
+# Diagnostic only: no application source, no replacement for production qualification.
+FROM node:26.13.1-bookworm-slim
+RUN npm install --global npm@12.1.0 && apt-get update && apt-get install -y --no-install-recommends g++ make python3 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package.json package-lock.json .npmrc ./
+COPY packages/core/package.json packages/core/
+COPY packages/cli/package.json packages/cli/
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN npm ci --omit=dev --ignore-scripts
+WORKDIR /app/node_modules/node-pty

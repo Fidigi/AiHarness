@@ -1,0 +1,11 @@
+npm notice run ai-harness@0.1.0 typecheck
+npm notice run npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present && npm run typecheck:parity
+npm notice run @ai-harness/core@0.1.0 build
+npm notice run node ../../scripts/run-typescript.mjs
+npm notice run @ai-harness/cli@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run @ai-harness/core@0.1.0 typecheck
+npm notice run @ai-harness/server@0.1.0 typecheck
+npm notice run @ai-harness/web@0.1.0 typecheck
+npm notice run ai-harness@0.1.0 typecheck:parity
+npm notice run node scripts/run-typescript.mjs --noEmit -p tests/functional-parity/tsconfig.json

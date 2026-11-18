@@ -1260,6 +1260,3 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('pagehide', flushSessionViewCache);
 }
-
-export const baseStore = useSessionStore;
-export const providerStore = useSessionStore;

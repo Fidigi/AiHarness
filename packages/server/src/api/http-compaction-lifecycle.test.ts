@@ -171,11 +171,10 @@ for (const exclusive of [false, true]) describe(`real HTTP compaction, exclusive
     const after = await f.manager.getRawEntries(f.id); for (const entry of before) expect(after.find(next => next.id === entry.id)).toEqual(entry);
   });
 
-  it('preserves exclusive legacy compact refusal without inventing reference-owner admission', async () => {
+  it('rejects retired compact in every host mode without inventing reference-owner admission', async () => {
     const chat = vi.spyOn(MockProvider.prototype, 'chat');
     const response = await fetch(`${h.base}/api/chat/compact`, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ provider: 'mock', messages: Array.from({ length: 4 }, (_, index) => ({ role: index % 2 ? 'assistant' : 'user', content: `message-${index}` })) }) });
-    if (exclusive) { expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' }); expect(chat).not.toHaveBeenCalled(); }
-    else expect(response.status).toBe(200);
+    expect(response.status).toBe(404); expect(await response.json()).toEqual({ error: 'Not found' }); expect(chat).not.toHaveBeenCalled();
   });
 });

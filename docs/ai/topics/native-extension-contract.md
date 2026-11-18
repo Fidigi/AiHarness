@@ -4,7 +4,7 @@
 
 ## Overview
 
-AiHarness is an independent product: Core API 1, extension API 1 and journal schema 2 are separate contracts. Import only the public `@ai-harness/core` root. JavaScript/TypeScript support does not imply foreign extension, SDK, RPC, file or renderer compatibility. Import native objects through the public root only.
+AiHarness is an independent product: Core API 2, extension API 1 and journal schema 2 are separate contracts. Import only the public `@ai-harness/core` root. JavaScript/TypeScript support does not imply foreign extension, SDK, RPC, file or renderer compatibility. Import native objects through the public root only.
 
 ## Main Entry Points
 

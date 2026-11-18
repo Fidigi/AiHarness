@@ -8,6 +8,7 @@ import type { Message, MessageContentBlock, ProviderConfig, ToolCall, TokenUsage
 import { ProviderType } from '../types/index.js';
 import { calculateModelCost, calculatePublishedModelCost, clampPublishedThinkingLevel, getPublishedModelMetadata, getPublishedModels, getSupportedThinkingLevels, type PublishedModelMetadata } from './model-metadata.js';
 import { getProviderPublishedModel } from './provider-model-metadata.js';
+import { registerPublishedModelReader } from './published-model-reader.js';
 import { resolveProviderDiscoveryEndpoint } from './provider-endpoints.js';
 import { azureDeployments, normalizeAzureResponsesBaseUrl, usesAzureResponses } from './azure-config.js';
 import { azureCompletionReasoning, azureCompletionStreamValidator, azureProfileApi, azureProfileUsage, azurePublishedProfiles, prepareAzureCompletion, prepareAzureResponses, validateAzureCompletion } from './azure-profiles.js';
@@ -6882,7 +6883,12 @@ export class OpenRouterProvider extends AiProvider {
     const model = config.model ?? 'openai/gpt-4o';
     openRouterConversationApi(model);
     super({ ...config, model, baseUrl: openRouterApiBase(config.baseUrl ?? 'https://openrouter.ai/api/v1') }); this.explicitModel = config.model !== undefined;
-    if (new.target === OpenRouterProvider) { nativeOpenRouterReplay.add(this); nativeOpenRouterCompletions.add(this); }
+    if (new.target === OpenRouterProvider) {
+      nativeOpenRouterReplay.add(this); nativeOpenRouterCompletions.add(this);
+      if (OPENROUTER_COMPLETION_MODELS.length + OPENROUTER_MESSAGE_MODELS.length <= 500) {
+        registerPublishedModelReader(this, nativeOpenRouterPublishedModels, id => this.#publishedModels(id));
+      }
+    }
   }
   private userCatalogueContext() {
     const headers = new Headers(configuredHeaders(this.config)); headers.set('authorization', `Bearer ${String(this.config.apiKey)}`); headers.set('accept', 'application/json'); headers.delete('content-type');
@@ -6917,9 +6923,11 @@ export class OpenRouterProvider extends AiProvider {
     if (!current || configured && current.has(configured)) return configured;
     return this.explicitModel ? undefined : this.getPublishedModels()[0]?.id;
   }
-  override getPublishedModels(): readonly PublishedModelMetadata[] {
+  override getPublishedModels(): readonly PublishedModelMetadata[] { return this.#publishedModels(); }
+  #publishedModels(model?: string): readonly PublishedModelMetadata[] {
     const current = this.currentUserModels();
-    return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS].filter(profile => !current || current.has(profile.id)).map(profile => {
+    return [...OPENROUTER_COMPLETION_MODELS, ...OPENROUTER_MESSAGE_MODELS]
+      .filter(profile => (model === undefined || profile.id === model) && (!current || current.has(profile.id))).map(profile => {
       const personal = current?.get(profile.id), pricing = personal?.prices ? personal.prices.known ? personal.prices.rates : undefined : profile.pricing;
       return { id: profile.id, api: profile.api, name: profile.name,
         ...(profile.thinkingLevelMap === undefined ? {} : { thinkingLevelMap: profile.thinkingLevelMap === null ? null : { ...profile.thinkingLevelMap } }),
@@ -6994,6 +7002,9 @@ export class OpenRouterProvider extends AiProvider {
     return new OpenRouterImagesProvider({ ...this.config, model: request.model }).generateImages(request, options);
   }
 }
+
+// Capture the actual module-owned implementation, not a later patched prototype.
+const nativeOpenRouterPublishedModels = OpenRouterProvider.prototype.getPublishedModels;
 
 function aiGatewayHeaders(config: ProviderConfig, gateway: AiGatewayId, profile: AiGatewayProfile, options?: ChatOptions): Record<string, string> {
   const headers = new Headers(configuredHeaders(config));

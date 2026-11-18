@@ -1,4 +1,4 @@
-/** High-level AiHarness SDK, additive to Core API major 1. */
+/** High-level AiHarness SDK, additive to Core API major 2. */
 export { createAgentSession } from './agent-session.js';
 export { createAgentResourceLoader } from './resource-loader.js';
 export type {

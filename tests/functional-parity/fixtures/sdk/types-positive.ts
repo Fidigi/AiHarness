@@ -6,6 +6,9 @@ import {
   SpecializedModels,
   MockProvider,
   serializeSessionForExport,
+  generateId,
+  withRetryIfRetryable,
+  truncate,
   type MessageContentBlock,
   type ChatResponse,
   type ClassificationRequest,
@@ -16,7 +19,17 @@ import {
   type Session,
 } from '@ai-harness/core';
 
-const coreVersion: 1 = AI_HARNESS_CORE_API_VERSION;
+// @ts-expect-error Core API 2 deliberately removes this public utility.
+import { fetchWithRetry } from '@ai-harness/core';
+// @ts-expect-error Core API 2 deliberately removes this public utility.
+import { formatDate } from '@ai-harness/core';
+// @ts-expect-error Core API 2 deliberately removes this public utility.
+import { deepClone } from '@ai-harness/core';
+void [fetchWithRetry, formatDate, deepClone];
+const id: string = generateId();
+const retried: Promise<string> = withRetryIfRetryable(async () => truncate(id, 8));
+void retried;
+const coreVersion: 2 = AI_HARNESS_CORE_API_VERSION;
 const extensionVersion: 1 = AI_HARNESS_EXTENSION_API_VERSION;
 const manager = new SessionManager();
 const context: ExtensionRuntimeContext = {

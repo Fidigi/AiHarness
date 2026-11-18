@@ -1,58 +1,30 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { ExtensionRegistry, MockProvider, SessionManager, type ExtensionAPI } from '@ai-harness/core';
+import { ExtensionRegistry, type ExtensionAPI } from '@ai-harness/core';
 import { ExtensionLoader } from '../extensions/extension-loader.js';
-import { handleRpcRequest, runRpcMode, type RpcContext } from './rpc-server';
-
-async function context(): Promise<RpcContext> {
-  const sessionManager = new SessionManager();
-  return {
-    sessionManager,
-    providers: new Map([['mock', new MockProvider({ type: 'mock' as any }, ['Réponse RPC'])]]),
-    emit: vi.fn(),
-  };
-}
+import { runRpcMode } from './rpc-server';
 
 describe('RPC server', () => {
-  it('creates, lists, gets, and deletes sessions', async () => {
-    const ctx = await context();
-    const created = await handleRpcRequest({ id: 1, method: 'session.create', params: { title: 'RPC' } }, ctx);
-    const sessionId = (created.result as { id: string }).id;
-
-    expect((await handleRpcRequest({ id: 2, method: 'session.list' }, ctx)).result).toHaveLength(1);
-    expect((await handleRpcRequest({ id: 3, method: 'session.get', params: { sessionId } }, ctx)).result).toMatchObject({ title: 'RPC' });
-    expect((await handleRpcRequest({ id: 4, method: 'session.delete', params: { sessionId } }, ctx)).result).toEqual({ deletedCount: 1 });
-  });
-
-  it('streams chat events and persists both messages', async () => {
-    const ctx = await context();
-    const created = await ctx.sessionManager.create({ title: 'Chat' });
-
-    const response = await handleRpcRequest({
-      id: 'chat-1',
-      method: 'chat.send',
-      params: { sessionId: created.id, provider: 'mock', content: 'Bonjour' },
-    }, ctx);
-
-    expect(response.result).toMatchObject({ content: 'Réponse RPC' });
-    expect(ctx.sessionManager.get(created.id)?.messages.map(message => message.role)).toEqual(['user', 'assistant']);
-    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({ event: 'text_delta' }));
-    expect(ctx.emit).toHaveBeenCalledWith(expect.objectContaining({ event: 'message_end' }));
-  });
-
-  it('uses the startup provider when a chat request omits one', async () => {
-    const ctx = await context();
-    ctx.providers = new Map([['preferred', new MockProvider({ type: 'mock' as any }, ['Startup provider'])]]);
-    ctx.defaultProviderName = 'preferred';
-    const session = await ctx.sessionManager.create({ title: 'Default provider' });
-
-    const response = await handleRpcRequest({
-      id: 'default-provider',
-      method: 'chat.send',
-      params: { sessionId: session.id, content: 'Bonjour' },
-    }, ctx);
-
-    expect(response.result).toMatchObject({ content: 'Startup provider' });
+  it('rejects retired and hybrid envelopes without dispatch, then accepts canonical reads', async () => {
+    const records: Record<string, unknown>[] = [];
+    const retired = [
+      { id: 1, method: 'session.create', params: { title: 'must-not-create' } },
+      { id: 'private-id', method: 'chat.send', params: { content: 'private-content' } },
+      { type: 'prompt', method: 'chat.send', message: 'must-not-run' },
+      { type: 'new_session', params: {} },
+    ];
+    await runRpcMode({
+      noSession: true, offline: true, noExtensions: true,
+      input: Readable.from([...retired.map(value => JSON.stringify(value) + '\n'),
+        '{"type":"get_messages","id":"messages"}\n']),
+      output: record => { records.push(record); },
+    });
+    expect(records.slice(0, 4)).toEqual(retired.map(() => ({
+      error: { code: 'INVALID_REQUEST', message: 'Legacy method/params RPC is not supported. Use type commands.' },
+    })));
+    expect(records.slice(4)).toEqual([{
+      type: 'response', command: 'get_messages', id: 'messages', success: true, data: { messages: [] },
+    }]);
   });
 
   it('serializes custom protocol sinks under backpressure', async () => {
@@ -131,7 +103,7 @@ describe('RPC server', () => {
       extensionRegistry: registry,
       extensionLoader: loader,
       ...(ending === 'startup-failure' ? { provider: 'missing', model: 'missing-model' } : {}),
-      input: Readable.from(['{"id":"prepared","method":"system.ping"}\n']),
+      input: Readable.from(['{"id":"prepared","type":"get_state"}\n']),
       output: async record => {
         if (ending === 'output-failure') throw new Error('closed prepared sink');
         records.push(record);
@@ -139,7 +111,7 @@ describe('RPC server', () => {
     });
     if (ending === 'eof') {
       await running;
-      expect(records).toEqual([{ id: 'prepared', result: { ok: true } }]);
+      expect(records).toEqual([expect.objectContaining({ id: 'prepared', command: 'get_state', success: true })]);
     } else {
       await expect(running).rejects.toThrow(ending === 'startup-failure' ? 'Provider unavailable' : 'closed prepared sink');
     }
@@ -152,11 +124,4 @@ describe('RPC server', () => {
     expect(registry.list()).toEqual([]);
   });
 
-  it('returns a structured error for unknown methods', async () => {
-    const ctx = await context();
-    await expect(handleRpcRequest({ id: 9, method: 'unknown' }, ctx)).resolves.toEqual({
-      id: 9,
-      error: { code: 'METHOD_NOT_FOUND', message: 'Méthode inconnue : unknown' },
-    });
-  });
 });

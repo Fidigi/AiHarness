@@ -1,0 +1,71 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/providers/model-metadata.test.ts -t revalidates replacement
+
+ RUN  v5.0.3 /app
+
+ ❯ packages/core/src/providers/model-metadata.test.ts (11 tests | 1 failed | 10 skipped) 6ms
+   ❯ shared model metadata (11)
+     ↓ projects one original-owner row, not a full catalogue, without borrowing the optimization for derived owners
+     × revalidates replacement, withdrawal and API binding rather than caching a native-owner snapshot 6ms
+     ↓ keeps mutable adapter arrays fresh across calls and awaits, including duplicate and withdrawn rows
+     ↓ uses the actual native effort map across operator and conflicting aliases
+     ↓ preserves undeclared legacy and virtual authority, but cannot borrow through empty or failing declarations
+     ↓ copies only bounded own thinking-map data without invoking map or row accessors
+     ↓ returns non-secret capability, limit, and pricing metadata as defensive copies
+     ↓ lists provider metadata and infers conservative capabilities for discovered models
+     ↓ applies explicit thinking maps and upward-then-downward clamping
+     ↓ publishes the pinned forty-model Mistral projection with owned exact effort/media/price fields
+     ↓ prices normalized cache-aware usage only for published models
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/core/src/providers/model-metadata.test.ts > shared model metadata > revalidates replacement, withdrawal and API binding rather than caching a native-owner snapshot
+AssertionError: expected { …(8) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "api": "anthropic-messages",
+  "capabilities": {
+    "imageInput": true,
+    "reasoning": true,
+    "toolCalls": true,
+  },
+  "contextWindow": 1000000,
+  "id": "anthropic/claude-sonnet-4.6",
+  "maxOutputTokens": 128000,
+  "name": "Anthropic: Claude Sonnet 4.6",
+  "pricing": {
+    "cacheReadPerMillion": 0.3,
+    "cacheWritePerMillion": 3.75,
+    "inputPerMillion": 3,
+    "outputPerMillion": 15,
+  },
+  "thinkingLevelMap": {
+    "high": "high",
+    "low": "low",
+    "max": "max",
+    "medium": "medium",
+    "minimal": null,
+    "off": "none",
+    "xhigh": null,
+  },
+}
+
+ ❯ packages/core/src/providers/model-metadata.test.ts:60:64
+     58|     }));
+     59|     expect(changed.getPublishedModels()).toEqual([]);
+     60|     expect(getProviderPublishedModel('operator', id, changed)).toBeUnd…
+       |                                                                ^
+     61|     expect(getSupportedThinkingLevels('operator', id, undefined, chang…
+     62|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  16:26:57
+   Duration  900ms (transform 81%, import 18%, tests 1%)

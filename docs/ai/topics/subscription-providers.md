@@ -8,6 +8,8 @@ GitHub Copilot has a bounded native subscription implementation, distinct from A
 
 [IMPORTANT] Server OAuth now has a native Copilot device-login path as well as existing-credential composition. Web Settings has separate emitted-Server/static-Web EN/FR fixture journeys; interactive CLI now has a separate explicit issuer path and bounded terminal fixtures; full profile/account acceptance remains incomplete. Do not infer live account acceptance from service/HTTP/browser fixtures.
 
+**2026-11-17, architecture COMP-02:** legacy `/api/chat*` and inbound chat WebSocket endpoints are retired. Historical legacy-route receipts below describe their frozen sources, not current availability. Current owning Copilot/Codex HTTP fixtures use detached runs; after acknowledgement a completed-request abort does not cancel inference, while explicit run Stop still retires held refresh/catalogue/body work and preserves committed credentials. The explicit outbound Codex provider-WebSocket control remains separate from the removed inbound transport. See [the architecture remediation journal](../../audit/architecture/AUDIT-1.md); this fixture migration changes no provider/account permission or full-profile qualification.
+
 ## Automated Test Policy
 
 The user owns real-account verification manually, outside the automated suite. Copilot/Codex tests must use synthetic accounts/credentials, disposable stores and mocked or verified loopback transports. Do not add a real-account opt-in flag, accept user tokens/personal credential stores in fixtures, or provide a switch that bypasses simulated account flows to contact live subscription services. This also applies to separately qualified installed/production probes. Subscription browser files named `*-live.spec.ts` exercise a real **local Server/browser**, not real vendor accounts.
@@ -106,7 +108,7 @@ The request-budget correction records five old-product REDs and current both-fac
 
 ### Server composition
 
-Startup prepares a canonical subscription resolver and checks runtime lifetime before proxy publication. Tokens never pass through `setApiKey`. Copilot is reserved against custom-provider namespace replacement. The catalogue rechecks local account discovery rather than retaining stale availability after failure. Legacy `/api/chat` reports late failure as an SSE error after HTTP 200, without a successful `message_end`.
+Startup prepares a canonical subscription resolver and checks runtime lifetime before proxy publication. Tokens never pass through `setApiKey`. Copilot is reserved against custom-provider namespace replacement. The catalogue rechecks local account discovery rather than retaining stale availability after failure. Before COMP-02 retirement, legacy `/api/chat` reported late failure as an SSE error after HTTP 200, without a successful `message_end`; that route is no longer available.
 
 `POST /api/provider-registry/auth/github-copilot/oauth` fixes the issuer to the native public client, independently of generic `AI_HARNESS_OAUTH_GITHUB_COPILOT_*` settings. It is a reserved subscription endpoint, not arbitrary-label issuer inference. The optional enterprise domain remains explicit server configuration. Encrypted storage is required before contacting GitHub. The service reserves a one-shot publication before the device request; starting a replacement login cancels the previous pending start/flow. Request disconnect before device metadata is returned withdraws that start. Once returned, the bounded flow is detached and uses the existing administrator-only poll/cancel routes.
 

@@ -497,7 +497,7 @@ async function main(): Promise<void> {
   sessionManager.setCompactionSettings(resolveAgentCompactionSettings(settingsResolution.settings));
   if (!cliArguments.noSession) {
     sessionManager.setStore(store);
-    await sessionManager.loadAllSessions();
+    // No session consumer runs before credential discovery; hydrate/scrub below.
   }
 
   const workspaceDescriptor = await workspaceManager.describe(
@@ -1007,7 +1007,7 @@ async function main(): Promise<void> {
     await cleanupEarlyExit();
     return;
   }
-  // Credentials loaded from the encrypted store may only become known here; scrub legacy rows now.
+  // First hydration waits for encrypted credentials; keep the full locked legacy scrub.
   if (!cliArguments.noSession) await sessionManager.loadAllSessions();
   const configuredProviders: Map<string, AiProvider> = createConfiguredProviders(process.env, {
     credentials: providerRuntime.values,

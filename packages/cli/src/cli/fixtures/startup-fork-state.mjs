@@ -3,13 +3,35 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline';
+import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
 const [mode,selector]=process.argv.slice(2);
 assert.ok(['print','json','rpc'].includes(mode));assert.ok(['id','prefix','file'].includes(selector));
 const root=await mkdtemp(path.join(os.tmpdir(),'startup-fork-native-'));
 console.log(JSON.stringify({root,mode,selector,node:process.versions.node}));
 const cwd=path.join(root,'work'),agent=path.join(root,'agent'),sessions=path.join(root,'sessions'),destination=path.join(root,'destination'),trace=path.join(root,'trace.jsonl'),entry=path.join(agent,'state.mjs');
 await mkdir(cwd);await mkdir(agent);await writeFile(path.join(agent,'settings.json'),JSON.stringify({quietStartup:true}));
+const master = 'synthetic-startup-hydration-master-at-least-32-bytes';
+const secret = 'synthetic-startup-stored-credential: +/字';
+const variants = [secret, Buffer.from(secret).toString('base64'), encodeURIComponent(secret)];
+const credentials = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(agent, 'credentials.enc'), master) });
+await credentials.setApiKey('openai', secret);
+await mkdir(sessions);
+for (const id of ['unselected-history-a', 'unselected-history-b']) {
+  const now = 1700000000000;
+  const rows = [{ id: `meta-${id}`, type: 'metadata', version: 2, schemaVersion: 2, timestamp: now,
+    createdAt: now, updatedAt: now, cwd, title: 'Unselected history' },
+    { id: `${id}-message`, type: 'message', version: 2, timestamp: now, role: 'user', content: variants.join(' | ') }];
+  await writeFile(path.join(sessions, `${id}.jsonl`), rows.map(row => JSON.stringify(row)).join('\n')+'\n', { mode: 0o600 });
+}
+const preload = path.join(agent, 'startup-loads.mjs');
+await writeFile(preload, `import {SessionManager} from ${JSON.stringify(import.meta.resolve('@ai-harness/core'))};
+import {appendFileSync} from 'node:fs';
+const load = SessionManager.prototype.loadAllSessions; let calls = 0;
+SessionManager.prototype.loadAllSessions = function(...args) { calls++; return load.apply(this, args); };
+process.once('exit', () => appendFileSync(${JSON.stringify(trace)}, JSON.stringify({kind:'startup-loads',calls})+'\\n'));
+`);
 await writeFile(entry,`import assert from 'node:assert/strict';import {appendFile} from 'node:fs/promises';
 import {MockProvider,SessionManager,AI_HARNESS_CORE_API_VERSION} from '@ai-harness/core';
 const record=async value=>appendFile(${JSON.stringify(trace)},JSON.stringify(value)+'\\n');
@@ -17,7 +39,7 @@ class FixtureProvider extends MockProvider {
   calls=0;
   async streamChat(messages,onChunk,onComplete,onError,options){
     try{
-      assert.ok(!options?.signal?.aborted);assert.equal(AI_HARNESS_CORE_API_VERSION,1);
+      assert.ok(!options?.signal?.aborted);assert.equal(AI_HARNESS_CORE_API_VERSION,2);
       assert.ok(!JSON.stringify(messages).includes('STARTUP_FORK_PRIVATE'));
       const step=this.calls++;
       await record({kind:'provider',step,literal:messages.filter(message=>message.role==='user').at(-1)?.content});
@@ -61,7 +83,7 @@ async function invoke(round){
     '--offline','--approve','--no-context-files','--no-extensions','-e',entry,'--no-builtin-tools','--model','statefixture/fixture-model',
     '--session-dir',round&&selector==='file'?destination:sessions,'--session-id',round?'startup-native-fork':'startup-native-source',
     ...(round?['--fork',selected]:[]),...(mode==='print'?['--print',prompt]:['--mode',mode,...(mode==='json'?[prompt]:[])])],
-    {cwd,env:{PATH:process.env.PATH,HOME:path.join(root,'home'),AI_HARNESS_AGENT_DIR:agent,NO_COLOR:'1'},stdio:['pipe','pipe','pipe']});
+    {cwd,env:{PATH:process.env.PATH,HOME:path.join(root,'home'),AI_HARNESS_AGENT_DIR:agent,AI_HARNESS_MASTER_KEY:master,NO_COLOR:'1',NODE_OPTIONS:`--import=${pathToFileURL(preload).href}`},stdio:['pipe','pipe','pipe']});
   active=child;let stdout='',stderr='';
   child.stdout.on('data',value=>{stdout+=value;});child.stderr.on('data',value=>{stderr+=value;});
   const lines=mode==='rpc'?createInterface({input:child.stdout}):undefined;
@@ -73,12 +95,18 @@ async function invoke(round){
   if(mode==='print')assert.equal(stdout.trim(),'STARTUP_FORK_FINISH');
   else{assert.ok(stdout.endsWith('\n'));for(const line of stdout.trim().split('\n'))assert.equal(typeof JSON.parse(line).type,'string');assert.ok(stdout.includes('STARTUP_FORK_FINISH'));}
   assert.ok(!stdout.includes('STARTUP_FORK_PRIVATE'));assert.ok(!stderr.includes('STARTUP_FORK_PRIVATE'));
+  for (const id of ['unselected-history-a', 'unselected-history-b']) {
+    const history = await readFile(path.join(sessions, `${id}.jsonl`), 'utf8');
+    for (const value of variants) assert.ok(!history.includes(value) && !(stdout + stderr).includes(value));
+    assert.ok(history.includes('[REDACTED]'));
+  }
 }
 try{
   await invoke(0);
   const sourceFile=path.join(sessions,'startup-native-source.jsonl'),sourceBytes=await readFile(sourceFile),sourceInfo=await stat(sourceFile,{bigint:true});
   await invoke(1);
   const records=(await readFile(trace,'utf8')).split('\n').filter(Boolean).map(line=>JSON.parse(line));
+  assert.deepEqual(records.filter(value=>value.kind==='startup-loads').map(value=>value.calls),[1,1]);
   assert.deepEqual(records.filter(value=>value.kind==='provider').map(value=>value.step),[0,1,0,1]);
   assert.ok(records.filter(value=>value.kind==='provider').every(value=>value.literal===(mode==='rpc'?'state-probe literal':'/state-probe literal')));
   assert.deepEqual(records.filter(value=>value.kind==='tool').map(value=>({id:value.id,prior:value.prior})),[{id:'startup-native-source',prior:[]},{id:'startup-native-fork',prior:[1]}]);

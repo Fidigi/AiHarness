@@ -1,11 +1,16 @@
 import { getEventListeners } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { awaitAgentAdmission } from './prestart-admission.js';
+import { AgentAbortError } from '../index.js';
+import { AgentAbortError as LoopAbortError } from './tool-loop.js';
 
 describe('unpublished agent admission awaits', () => {
   it('never invokes work for an already aborted lifetime', async () => {
     const controller = new AbortController(); controller.abort(); let calls = 0;
-    await expect(awaitAgentAdmission(() => { calls++; return 'late'; }, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    const result = awaitAgentAdmission(() => { calls++; return 'late'; }, controller.signal);
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(result).rejects.toBeInstanceOf(AgentAbortError);
+    expect(AgentAbortError).toBe(LoopAbortError);
     expect(calls).toBe(0); expect(getEventListeners(controller.signal, 'abort')).toEqual([]);
   });
   it('retains native synchronous and asynchronous results and removes listeners', async () => {

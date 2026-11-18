@@ -1,0 +1,39 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/providers/model-metadata.test.ts packages/core/src/providers/openrouter-user-models.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/core/src/providers/openrouter-user-models.test.ts (11 tests) 98ms
+ ❯ packages/core/src/providers/model-metadata.test.ts (11 tests | 1 failed) 113ms
+   ❯ shared model metadata (11)
+     × projects one original-owner row, not a full catalogue, without borrowing the optimization for derived owners 37ms
+     ✓ revalidates replacement, withdrawal and API binding rather than caching a native-owner snapshot 12ms
+     ✓ keeps mutable adapter arrays fresh across calls and awaits, including duplicate and withdrawn rows 0ms
+     ✓ uses the actual native effort map across operator and conflicting aliases 60ms
+     ✓ preserves undeclared legacy and virtual authority, but cannot borrow through empty or failing declarations 0ms
+     ✓ copies only bounded own thinking-map data without invoking map or row accessors 1ms
+     ✓ returns non-secret capability, limit, and pricing metadata as defensive copies 1ms
+     ✓ lists provider metadata and infers conservative capabilities for discovered models 0ms
+     ✓ applies explicit thinking maps and upward-then-downward clamping 0ms
+     ✓ publishes the pinned forty-model Mistral projection with owned exact effort/media/price fields 1ms
+     ✓ prices normalized cache-aware usage only for published models 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/core/src/providers/model-metadata.test.ts > shared model metadata > projects one original-owner row, not a full catalogue, without borrowing the optimization for derived owners
+AssertionError: expected 8510 to be less than 100
+ ❯ packages/core/src/providers/model-metadata.test.ts:30:23
+     28|       expect(getProviderPublishedModel('operator', row!.id, source)?.c…
+     29|     }
+     30|     expect(counts[0]).toBeLessThan(100);
+       |                       ^
+     31|     expect(counts[1]).toBeGreaterThan(500);
+     32|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 21 passed (22)
+   Start at  14:25:45
+   Duration  1.94s (transform 63%, import 25%, tests 12%)

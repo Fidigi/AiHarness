@@ -1,4 +1,4 @@
-import { AgentAbortError } from './tool-loop.js';
+import { AgentAbortError } from './agent-errors.js';
 
 /** Withdraw unpublished startup work without claiming to terminate privileged callbacks. */
 export function awaitAgentAdmission<T>(work: () => T | PromiseLike<T>, signal: AbortSignal): Promise<T> {

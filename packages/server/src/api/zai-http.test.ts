@@ -5,7 +5,7 @@ import path from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { start, stop } from '../index.js';
 
-it('reloads encrypted explicit Z.ai hosts and preserves native C policy across legacy chat, agent and virtual guests', async () => {
+it('reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-za-http-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'private');
   const chats = ['glm-4.7', 'glm-5.3-flash'], keys = ['disposable-za-http-one', 'disposable-za-http-two'];
   const headerSecret = 'disposable-za-http-header';
@@ -25,11 +25,10 @@ it('reloads encrypted explicit Z.ai hosts and preserves native C policy across l
         response.end(JSON.stringify({ model: body.model, choices: [{ message: { role: 'assistant', content: JSON.stringify({ label: 'safe', confidence: 0.8, probabilities: { safe: 0.8, review: 0.2 } }) }, finish_reason: 'stop' }], usage })); return;
       }
       const finished = body.messages.some((message: Record<string, unknown>) => message.role === 'tool');
-      const legacy = body.messages.some((message: Record<string, unknown>) => message.content === 'Legacy probe');
       response.setHeader('content-type', 'text/event-stream');
-      response.end([{ model: body.model, choices: [{ index: 0, delta: finished || legacy ? { content: 'native-za-http-ok' }
+      response.end([{ model: body.model, choices: [{ index: 0, delta: finished ? { content: 'native-za-http-ok' }
         : { tool_calls: [{ index: 0, id: 'script-1', type: 'function', function: { name: 'codemode', arguments: JSON.stringify({ code }) } }] } }] },
-        { choices: [{ index: 0, delta: {}, finish_reason: finished || legacy ? 'stop' : 'tool_calls' }], usage },
+        { choices: [{ index: 0, delta: {}, finish_reason: finished ? 'stop' : 'tool_calls' }], usage },
       ].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n');
     } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid Z.ai HTTP fixture'); }
   });
@@ -68,7 +67,8 @@ it('reloads encrypted explicit Z.ai hosts and preserves native C policy across l
       expect(calls).toHaveLength(before); expect(JSON.stringify(fresh)).not.toContain(key); expect(JSON.stringify(fresh)).not.toContain(headerSecret);
       const model = chats[index]!;
       const legacy = await post('/api/chat', { provider: 'za-native', messages: [{ role: 'user', content: 'Legacy probe' }], options: { model, thinking: 'off', maxTokens: 64 } });
-      expect(legacy.status).toBe(200); expect(await legacy.text()).toContain('native-za-http-ok');
+      expect(legacy.status).toBe(404); expect(await legacy.json()).toEqual({ error: 'Not found' });
+      expect(calls).toHaveLength(before);
       expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
       expect((await fetch(`${base}/api/tools`, { method: 'PATCH', headers, body: JSON.stringify({ enabledTools: ['codemode'], toolPreset: 'default',
         powershellEnabled: false, codemodeEnabled: true, codemodeMode: 'only' }) })).status).toBe(200);
@@ -88,8 +88,8 @@ it('reloads encrypted explicit Z.ai hosts and preserves native C policy across l
       for (const secret of [...keys, headerSecret]) { expect(JSON.stringify(state)).not.toContain(secret); expect(journal).not.toContain(secret); }
       await stop();
     }
-    expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(8);
-    for (const [index, key] of keys.entries()) for (const call of calls.slice(index * 4, (index + 1) * 4)) {
+    expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(6);
+    for (const [index, key] of keys.entries()) for (const call of calls.slice(index * 3, (index + 1) * 3)) {
       expect(call.headers.authorization).toBe(`Bearer ${key}`); expect(call.headers['x-operator-fixture']).toBe(headerSecret);
       const enabled = call.body.model === chats[1];
       expect(call.body.thinking).toEqual(enabled ? { type: 'enabled', clear_thinking: false } : { type: 'disabled' }); expect(call.body.reasoning_effort).toBe(enabled ? 'low' : undefined);

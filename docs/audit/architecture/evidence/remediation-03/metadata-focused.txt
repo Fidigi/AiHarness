@@ -1,0 +1,17 @@
+npm notice run @ai-harness/core@0.1.0 build
+npm notice run node ../../scripts/run-typescript.mjs
+npm notice run @ai-harness/core@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/providers/model-metadata.test.ts packages/core/src/providers/openrouter-user-models.test.ts packages/core/src/providers/openrouter.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/core/src/providers/openrouter-user-models.test.ts (11 tests) 99ms
+ ✓ packages/core/src/providers/model-metadata.test.ts (11 tests) 18ms
+ ✓ packages/core/src/providers/openrouter.test.ts (3 tests) 54ms
+
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+   Start at  14:28:34
+   Duration  2.20s (transform 56%, import 35%, tests 9%, worker 1%)

@@ -1,0 +1,1049 @@
+[TEST] Build de l'image + exécution des tests...
+docker build -f .docker/Dockerfile.test \
+	--target test-runner \
+	-t ai-harness:test-latest-run-1794931887209118001 \
+	.
+#1 [internal] load build definition from Dockerfile.test
+#1 sha256:d3b265808394ce6c518a9149d091ad7439e181680a9f89718487d9332a2da8c5
+#1 transferring dockerfile: 2.41kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24.15.0-bookworm-slim
+#2 sha256:474e51bc321101a059fc1d1d1b7416f0256fa6ceaf2fc5ea158c8d4309f5ab95
+#2 DONE 0.6s
+
+#3 [internal] load .dockerignore
+#3 sha256:5e7dbdbb1a8a922843fe77bba7362613c0ab0aa62338ca94bdb03d182766435f
+#3 transferring context: 1.27kB done
+#3 DONE 0.0s
+
+#18 [base  1/15] FROM docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d
+#18 sha256:d7dc2c1a700a6b001b77996e757322ee31ca4909e052bc2c66d1d0f71b81bed4
+#18 resolve docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d 0.0s done
+#18 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:59d4be745ad76bf00876e7bac94337b0e9ce6e636650a06400ef4b7e19257617
+#12 transferring context: 189.40kB 0.1s done
+#12 DONE 0.1s
+
+#17 [base  5/15] WORKDIR /app
+#17 sha256:fb9496eaf220c70729f86fcff53b2da9623942ca88a1621d9b6d76360ef23413
+#17 CACHED
+
+#15 [base 12/15] COPY . .
+#15 sha256:fc450cf0ab6a21dfd88c06d6de6554b6e424bbebe8cd3ac212f36056aa6e3694
+#15 CACHED
+
+#19 [base  8/15] COPY packages/cli/package.json packages/cli/
+#19 sha256:80de0f10458f88addace690ca30646acabf827b54b4412cdceb2fa5137ecb155
+#19 CACHED
+
+#11 [base  4/15] COPY .docker/test-fonts.conf /etc/fonts/local.conf
+#11 sha256:32914168280e27ac969e8e2e8924a2d56ca0965b6b8c68fdec15b64f69d38873
+#11 CACHED
+
+#13 [base  3/15] RUN apt-get update && apt-get install -y --no-install-recommends     chromium     fonts-liberation     fonts-noto-cjk     fonts-noto-color-emoji     libasound2     libatk-bridge2.0-0     libatk1.0-0     libc6     libcairo2     libcups2     libdbus-1-3     libexpat1     libfontconfig1     libgbm1     libgcc1     libglib2.0-0     libgtk-3-0     libnspr4     libnss3     libpango-1.0-0     libpangocairo-1.0-0     libstdc++6     libx11-xcb1     libxcb1     libxcomposite1     libxdamage1     libxfixes3     libxi6     libxrandr2     libxrender1     libxss1     libxtst6     ca-certificates     g++     git     make     python3     wget     && rm -rf /var/lib/apt/lists/*
+#13 sha256:fc1b37b5a4174fa175030838671168c707b11c8981c0d5e342a64d6cf412fed5
+#13 CACHED
+
+#9 [base 13/15] RUN npm run build --workspace @ai-harness/core     && npm run build --workspace @ai-harness/cli     && npm run build --workspace @ai-harness/server     && npm run build --workspace @ai-harness/web
+#9 sha256:82a694b5550413bf419a0a4ff795af327417c7db8c711312f9c25fa4003756e0
+#9 CACHED
+
+#4 [base 11/15] RUN npm ci
+#4 sha256:77a5624a7a2e0c66b6b718cf8f24638f841706123c318aad3198bc02378508c4
+#4 CACHED
+
+#16 [base 14/15] RUN node --test .docker/test-build.test.mjs
+#16 sha256:e3e1553b0384a861ed3f4fb37119fc15156fd00bf34bedbb8adefb9ef0fe72e1
+#16 CACHED
+
+#5 [base 10/15] COPY packages/server/package.json packages/server/
+#5 sha256:c97a38bd7c3e5c7d4b5429ece51abd9611083506e47d9e871c25e31b96f1d135
+#5 CACHED
+
+#7 [base  6/15] COPY package.json package-lock.json .npmrc ./
+#7 sha256:aba718248baabb1d8e08606f167b6c94bc4dcf7ccec46bcc1e5f6024522559ea
+#7 CACHED
+
+#8 [base  7/15] COPY packages/core/package.json packages/core/
+#8 sha256:3d00cc45ff75add835782c0ac4d7bdc0d507a190b0a3bf77e4e9b4ece9766670
+#8 CACHED
+
+#14 [base  2/15] RUN npm install --global npm@12.1.0
+#14 sha256:a072c845a7e874e563d9d994d8a539c30590639196a9e0791aec2dc885476c22
+#14 CACHED
+
+#6 [base  9/15] COPY packages/web/package.json packages/web/
+#6 sha256:bdfe62c8aa9c598781a4cca5929c4867b31a8f06f9cd9ab83c17cd0cfd802684
+#6 CACHED
+
+#10 [base 15/15] RUN node --test .docker/e2e-suites.test.mjs
+#10 sha256:0c714275e667531452fd8248d227f4187631b4501f64af55da6097344d7040dc
+#10 CACHED
+
+#20 exporting to image
+#20 sha256:31aa1821abb2e00cda364eb1f16e99b8905b9c8a6e64801a2205554e35d4d041
+#20 exporting layers done
+#20 exporting manifest sha256:b4d579d9c00736b675d4590277e3177b915dbe5c7bc8ee2baecac64f072e6519 done
+#20 exporting config sha256:d6b9b48969bb0345b54791568f64440bfd4621d7371550b203c8463b78b2a6b1 done
+#20 naming to docker.io/library/ai-harness:test-latest-run-1794931887209118001 done
+#20 unpacking to docker.io/library/ai-harness:test-latest-run-1794931887209118001 done
+#20 DONE 0.0s
+docker run --rm \
+	--name aiharness-test-unit-1794931887209118001 \
+	-e CI=true \
+	ai-harness:test-latest-run-1794931887209118001 \
+	npm test
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run
+
+ RUN  v5.0.3 /app
+
+ ✓ tests/functional-parity/installed-executable.test.ts (403 tests) 790298ms
+   ✓ CLI-RUN-01 genuine locally packed installed executable (364)
+     ✓ enforces the Core API 2 utility removal in installed declarations and runtime 2017ms
+     ✓ owns native extension execution hooks outside the checkout (print) 620ms
+     ✓ owns native extension execution hooks outside the checkout (json) 657ms
+     ✓ owns native extension execution hooks outside the checkout (rpc) 681ms
+     ✓ owns native extension execution hooks outside the checkout (regular) 728ms
+     ✓ owns native extension execution hooks outside the checkout (fullscreen) 720ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/tools) 755ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/overflow) 698ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/length) 753ms
+     ✓ owns native run delivery/recovery/results outside the checkout (print/length-tools) 692ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/tools) 781ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/overflow) 716ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/length) 741ms
+     ✓ owns native run delivery/recovery/results outside the checkout (json/length-tools) 691ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/tools) 752ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/overflow) 715ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/length) 742ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/length-tools) 689ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/tools) 485ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/overflow) 419ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/length) 435ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/length-tools) 407ms
+     ✓ owns native run delivery/recovery/results outside the checkout (rpc/queues) 712ms
+     ✓ owns native run delivery/recovery/results outside the checkout (sdk/queues) 447ms
+     ✓ owns native run delivery/recovery/results outside the checkout (regular/queues) 843ms
+     ✓ owns native run delivery/recovery/results outside the checkout (fullscreen/queues) 888ms
+     ✓ invalidates strict installed typecheck caches for changed roots, declarations and options 24056ms
+     ✓ publishes native bounded recovery, nested/rich results and parallel snapshot declarations 1718ms
+     ✓ withdraws native workspace write authority through installed packages (print) 643ms
+     ✓ withdraws native workspace write authority through installed packages (json) 642ms
+     ✓ withdraws native workspace write authority through installed packages (rpc) 639ms
+     ✓ withdraws native workspace write authority through installed packages (sdk) 317ms
+     ✓ replays native context edits and private checkpoints through installed packages (print) 667ms
+     ✓ replays native context edits and private checkpoints through installed packages (json) 682ms
+     ✓ replays native context edits and private checkpoints through installed packages (rpc) 709ms
+     ✓ replays native context edits and private checkpoints through installed packages (sdk) 412ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/print) 2203ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/json) 2231ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (native-r/rpc) 7945ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/print) 2195ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/json) 2202ms
+     ✓ retains original Responses encrypted continuation through the installed PATH-bin (azure/rpc) 7935ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/print) 2188ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/json) 2188ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (anthropic/rpc) 7782ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/print) 2139ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/json) 2116ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (google/rpc) 7610ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/print) 2105ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/json) 2135ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (vertex/rpc) 7847ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/print) 2207ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/json) 2264ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (bedrock/rpc) 8638ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/print) 2296ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/json) 2160ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax/rpc) 7680ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/print) 2132ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/json) 2136ms
+     ✓ retains original Anthropic/Google/Vertex/Bedrock/MiniMax signed continuation through the installed PATH-bin (minimax-cn/rpc) 8135ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print) 2199ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json) 2189ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc) 7875ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print) 2188ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json) 2188ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc) 7957ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print/MiniMax-M2.7-highspeed) 2250ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json/MiniMax-M2.7-highspeed) 2230ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc/MiniMax-M2.7-highspeed) 7992ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print/MiniMax-M2.7-highspeed) 2161ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json/MiniMax-M2.7-highspeed) 2191ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc/MiniMax-M2.7-highspeed) 7827ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/print/MiniMax-M3) 2174ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/json/MiniMax-M3) 2195ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax/rpc/MiniMax-M3) 7991ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/print/MiniMax-M3) 2243ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/json/MiniMax-M3) 2223ms
+     ✓ retains private continuation with an extension-default-only key through the installed PATH-bin (minimax-cn/rpc/MiniMax-M3) 8009ms
+     ✓ publishes owned native context-state and output-only compaction declarations 1738ms
+     ✓ uses native exact-entry row copies and declarations outside the checkout 2235ms
+     ✓ inherits only project MCP controls through installed public Core and the PATH bin 6199ms
+     ✓ reserves installed Core startup and withdraws SDK pending prompts with owned declarations 2259ms
+     ✓ pins native no-MCP denial across installed hosts without denying ordinary sources 6079ms
+     ✓ resolves CLI tool patterns and ordered adjustments through the installed PATH bin 7995ms
+     ✓ ships native editor schemas and public declarations outside the checkout 2152ms
+     ✓ publishes MOD-01 provider sources and native image worker through genuinely installed strict public contracts 8584ms
+     ✓ keeps metadata-only help/version inert and unknown option status/channels strict 815ms
+     ✓ warns about all four installed PATH-bin exports on stderr without disclosing conversation or credential values 1733ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGINT) 592ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGTERM) 610ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGINT) 605ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGTERM) 600ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGINT) 607ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGTERM) 619ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGINT/admission) 567ms
+     ✓ settles and cleans up an interrupted installed headless invocation (print/SIGTERM/admission) 573ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGINT/admission) 571ms
+     ✓ settles and cleans up an interrupted installed headless invocation (json/SIGTERM/admission) 583ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGINT/admission) 569ms
+     ✓ settles and cleans up an interrupted installed headless invocation (rpc/SIGTERM/admission) 570ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (regular) 1847ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (fullscreen) 2078ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (print) 2344ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (json) 2463ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (rpc) 2284ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-print) 4233ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-json) 4293ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-a-rpc) 4175ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-print) 4228ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-json) 4397ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-c-rpc) 4226ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-print) 4205ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-json) 4392ms
+     ✓ owns native Copilot login and withdrawal through the installed executable (private-r-rpc) 4338ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (regular) 1664ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (fullscreen) 1931ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (print) 3367ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (json) 2487ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (rpc) 2534ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-print) 4403ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-json) 4362ms
+     ✓ owns independent Codex login and withdrawal through the installed executable (private-rpc) 4442ms
+     ✓ joins an admitted append before installed TTY shutdown (regular) 601ms
+     ✓ joins an admitted append before installed TTY shutdown (fullscreen) 619ms
+     ✓ reports model output limits through the installed PATH-bin (print/partial-length) 603ms
+     ✓ reports model output limits through the installed PATH-bin (print/empty-length) 613ms
+     ✓ reports model output limits through the installed PATH-bin (print/normal) 597ms
+     ✓ reports model output limits through the installed PATH-bin (json/partial-length) 616ms
+     ✓ reports model output limits through the installed PATH-bin (json/empty-length) 619ms
+     ✓ reports model output limits through the installed PATH-bin (json/normal) 596ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/partial-length) 624ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/empty-length) 646ms
+     ✓ reports model output limits through the installed PATH-bin (rpc/normal) 649ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/completions/invalid) 624ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/completions/valid) 666ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/responses/invalid) 612ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/responses/valid) 668ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/anthropic/invalid) 620ms
+     ✓ rejects malformed final tool JSON in the installed consumer (print/anthropic/valid) 666ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/completions/invalid) 625ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/completions/valid) 663ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/responses/invalid) 625ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/responses/valid) 669ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/anthropic/invalid) 619ms
+     ✓ rejects malformed final tool JSON in the installed consumer (json/anthropic/valid) 665ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/completions/invalid) 602ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/completions/valid) 667ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/responses/invalid) 613ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/responses/valid) 670ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/anthropic/invalid) 610ms
+     ✓ rejects malformed final tool JSON in the installed consumer (rpc/anthropic/valid) 658ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/completions/invalid) 373ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/completions/valid) 396ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/responses/invalid) 369ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/responses/valid) 399ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/anthropic/invalid) 368ms
+     ✓ rejects malformed final tool JSON in the installed consumer (sdk/anthropic/valid) 403ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/native) 617ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/combined) 623ms
+     ✓ preserves mixed-delta ordering through installed public packages (print/split) 618ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/native) 621ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/combined) 628ms
+     ✓ preserves mixed-delta ordering through installed public packages (json/split) 629ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/native) 631ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/combined) 625ms
+     ✓ preserves mixed-delta ordering through installed public packages (rpc/split) 619ms
+     ✓ preserves MCP exposure patterns through installed public packages (command/global) 1140ms
+     ✓ preserves MCP exposure patterns through installed public packages (command/project) 1169ms
+     ✓ preserves MCP exposure patterns through installed public packages (core/global) 329ms
+     ✓ preserves MCP exposure patterns through installed public packages (core/project) 324ms
+     ✓ preserves MCP exposure patterns through installed public packages (print/global) 728ms
+     ✓ preserves MCP exposure patterns through installed public packages (print/project) 704ms
+     ✓ preserves MCP exposure patterns through installed public packages (json/global) 715ms
+     ✓ preserves MCP exposure patterns through installed public packages (json/project) 717ms
+     ✓ preserves MCP exposure patterns through installed public packages (rpc/global) 691ms
+     ✓ preserves MCP exposure patterns through installed public packages (rpc/project) 701ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/one) 347ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/two) 327ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/none) 330ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/qualified) 347ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/native) 342ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/pin) 335ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/scope) 341ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/warning) 343ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/selected-warning) 340ms
+     ✓ resolves models and plural scopes through the installed PATH bin (print/unmatched) 327ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/one) 344ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/two) 330ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/none) 333ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/qualified) 342ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/native) 341ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/pin) 342ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/scope) 346ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/warning) 341ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/selected-warning) 341ms
+     ✓ resolves models and plural scopes through the installed PATH bin (json/unmatched) 330ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/one) 336ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/two) 322ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/none) 317ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/qualified) 331ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/native) 340ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/pin) 348ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/scope) 341ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/warning) 336ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/selected-warning) 337ms
+     ✓ resolves models and plural scopes through the installed PATH bin (rpc/unmatched) 318ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/recover) 2676ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/exhausted) 14659ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/prefix) 625ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/queued) 14736ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/normal) 627ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/recover) 2699ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/exhausted) 14668ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/prefix) 636ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/queued) 14719ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/normal) 625ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/recover) 2680ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/exhausted) 14676ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/prefix) 644ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/queued) 14675ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (rpc/normal) 662ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/recover) 895ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/exhausted) 1885ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/prefix) 374ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/queued) 1915ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (sdk/normal) 366ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (print/durable-prefix) 1008ms
+     ✓ preserves explicit SSE error/retry boundaries through installed public packages (json/durable-prefix) 1022ms
+     ✓ preserves home selectors and template arguments through installed packages (print/global/allow) 781ms
+     ✓ preserves home selectors and template arguments through installed packages (print/global/refuse) 804ms
+     ✓ preserves home selectors and template arguments through installed packages (print/project/allow) 792ms
+     ✓ preserves home selectors and template arguments through installed packages (print/project/refuse) 760ms
+     ✓ preserves home selectors and template arguments through installed packages (print/explicit/allow) 812ms
+     ✓ preserves home selectors and template arguments through installed packages (print/explicit/refuse) 785ms
+     ✓ preserves home selectors and template arguments through installed packages (json/global/allow) 788ms
+     ✓ preserves home selectors and template arguments through installed packages (json/global/refuse) 738ms
+     ✓ preserves home selectors and template arguments through installed packages (json/project/allow) 801ms
+     ✓ preserves home selectors and template arguments through installed packages (json/project/refuse) 772ms
+     ✓ preserves home selectors and template arguments through installed packages (json/explicit/allow) 778ms
+     ✓ preserves home selectors and template arguments through installed packages (json/explicit/refuse) 769ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/global/allow) 817ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/global/refuse) 799ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/project/allow) 810ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/project/refuse) 770ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/explicit/allow) 800ms
+     ✓ preserves home selectors and template arguments through installed packages (rpc/explicit/refuse) 795ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (core/deadline) 441ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/freeze) 655ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/globals) 663ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/error) 656ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/schema) 640ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/options) 596ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/output) 665ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/configured) 673ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (print/image) 735ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/freeze) 670ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/globals) 685ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/error) 686ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/schema) 649ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/options) 633ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/output) 675ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/configured) 674ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (json/image) 714ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/freeze) 668ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/globals) 679ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/error) 667ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/schema) 649ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/options) 604ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/output) 671ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/configured) 677ms
+     ✓ retains bounded QuickJS intrinsics through installed public packages (rpc/image) 717ms
+     ✓ compiles and executes native CODE limits and classifier images from installed public declarations 2051ms
+     ✓ preserves public summary transcripts through installed packages (core-branch/private) 346ms
+     ✓ preserves public summary transcripts through installed packages (core-branch/ordinary) 349ms
+     ✓ preserves public summary transcripts through installed packages (sdk-auto/private) 478ms
+     ✓ preserves public summary transcripts through installed packages (sdk-auto/ordinary) 499ms
+     ✓ preserves public summary transcripts through installed packages (print-auto/private) 761ms
+     ✓ preserves public summary transcripts through installed packages (print-auto/ordinary) 769ms
+     ✓ preserves public summary transcripts through installed packages (json-auto/private) 760ms
+     ✓ preserves public summary transcripts through installed packages (json-auto/ordinary) 787ms
+     ✓ preserves public summary transcripts through installed packages (rpc-manual/private) 669ms
+     ✓ preserves public summary transcripts through installed packages (rpc-manual/ordinary) 676ms
+     ✓ preserves public summary transcripts through installed packages (rpc-auto/private) 740ms
+     ✓ preserves public summary transcripts through installed packages (rpc-auto/ordinary) 743ms
+     ✓ preserves public summary transcripts through installed packages (rpc-branch/private) 602ms
+     ✓ preserves public summary transcripts through installed packages (rpc-branch/ordinary) 639ms
+     ✓ preserves public summary transcripts through installed packages (regular/private) 728ms
+     ✓ preserves public summary transcripts through installed packages (regular/ordinary) 743ms
+     ✓ preserves public summary transcripts through installed packages (fullscreen/private) 2053ms
+     ✓ preserves public summary transcripts through installed packages (fullscreen/ordinary) 2020ms
+     ✓ publishes readonly summary-projection declarations and independent runtime ownership outside the checkout 1906ms
+     ✓ installed PATH-bin definitive credential authority (11)
+       ✓ print/literal: preserves literal bytes without displacing real credentials 996ms
+       ✓ print/genuine: preserves literal bytes without displacing real credentials 1417ms
+       ✓ print/mixed: preserves literal bytes without displacing real credentials 1846ms
+       ✓ json/literal: preserves literal bytes without displacing real credentials 1029ms
+       ✓ json/genuine: preserves literal bytes without displacing real credentials 1434ms
+       ✓ json/mixed: preserves literal bytes without displacing real credentials 1948ms
+       ✓ rpc/key-before: preserves correlated framing and real-key masking 523ms
+       ✓ rpc/key-after: preserves correlated framing and real-key masking 537ms
+     ✓ publishes read-only snapshots and captured startup-fork options without expanding the facade 1695ms
+     ✓ preserves startup fork private state through the installed PATH-bin (rpc/file) 1510ms
+     ✓ preserves startup fork private state through the installed PATH-bin (json/prefix) 1520ms
+     ✓ clones the private-only current position through the installed RPC PATH-bin (memory) 323ms
+     ✓ clones the private-only current position through the installed RPC PATH-bin (durable) 386ms
+     ✓ owns installed terminal branch lifetimes and exact copies (regular-memory) 1798ms
+     ✓ owns installed terminal branch lifetimes and exact copies (regular-durable) 2011ms
+     ✓ owns installed terminal branch lifetimes and exact copies (fullscreen-memory) 3280ms
+     ✓ owns installed terminal branch lifetimes and exact copies (fullscreen-durable) 3558ms
+     ✓ publishes installed active-branch state and related-copy declarations without adding a facade method 1726ms
+     ✓ uses the actual installed PATH-bin for extension state (rpc/durable) 904ms
+     ✓ uses the actual installed PATH-bin for extension state (headless/print-memory) 656ms
+     ✓ publishes installed host-supplied compaction windows without adding a facade mutation or changing API 1 1942ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (thresholds) 800ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (eof) 571ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-rpc) 769ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-print) 722ms
+     ✓ uses installed Core and the actual PATH-bin context-settings protocol (native-json) 728ms
+     ✓ publishes strict installed optional navigation and custom-entry declarations under Core API 2 1696ms
+     ✓ uses installed Core and the actual PATH-bin navigation protocol (summary) 649ms
+     ✓ uses installed Core and the actual PATH-bin navigation protocol (eof) 630ms
+     ✓ publishes strict installed journal accounting and additive summary provenance declarations 1682ms
+     ✓ uses installed Core journal accounting and the actual PATH-bin RPC statistics without changing legacy framing 599ms
+     ✓ accepts installed verbose startup without changing headless print output 1053ms
+     ✓ retains explicit passive provider policies in installed declarations, Core runtime and the PATH bin 2974ms
+     ✓ separates discovery suppression from explicit loading in installed Core, SDK and PATH bin 3068ms
+     ✓ preserves scoped Markdown selectors through installed readonly declarations, runtime and PATH bin 2510ms
+     ✓ preserves literal absolute resource bases through installed legacy Core, SDK and PATH-bin reads 757ms
+     ✓ discovers themes through installed readonly Core declarations and the actual PATH bin 2880ms
+     ✓ loads, browses and freshly reloads installed PATH-bin keyboard actions with its packaged schema (regular) 2050ms
+     ✓ loads, browses and freshly reloads installed PATH-bin keyboard actions with its packaged schema (fullscreen) 2048ms
+     ✓ enforces the installed RPC input contract (boundary) 414ms
+     ✓ enforces the installed RPC input contract (held-overflow) 411ms
+     ✓ runs installed print/JSON/RPC against the reviewed protocol goldens 2336ms
+     ✓ discovers user and trusted project CJS options through the installed bin, not metadata-only help 1166ms
+     ✓ uses the installed public Core entry for fresh CJS reload, minimal SDK types and copied QuickJS assets 2281ms
+   ✓ routes selectable models and derives non-context warming notices through genuinely installed public contracts 8209ms
+   ✓ hosts and withdraws owned MCP registrations through installed declarations and actual stdio 1999ms
+   ✓ validates installed public provider discovery declarations and keyless based-path runtime with original Anthropic caller tools, scoped strict policy, unsigned results, user images and signed continuation 4841ms
+   ✓ binds original OpenAI/Azure unsigned response IDs, paired tools, schema/choice, scalar generation, grammar, tool images and output boundaries through installed declarations and runtime 9479ms
+   ✓ dispatches original Google/Vertex schema/generation/choice/history/tool and user images and regional Bearer construction through installed declarations and runtime 3481ms
+   ✓ dispatches native Bedrock binary streams through installed public declarations and runtime 6779ms
+   ✓ dispatches Azure native v1 and explicit Responses through installed public declarations and runtime 2228ms
+   ✓ dispatches native OpenRouter images through installed declarations, output blocks and failed guest accounting 2039ms
+   ✓ dispatches native OpenAI Decisions through installed declarations, images and failed guest accounting 2018ms
+   ✓ dispatches native OpenRouter C through installed declarations, reasoning, tools and virtual classification 8270ms
+   ✓ dispatches native OpenRouter A through installed declarations, adaptive effort and virtual classification 2533ms
+   ✓ dispatches mixed OpenRouter A/C/I/T through one installed SDK without overlapping cache or authentication 8808ms
+   ✓ dispatches native OpenRouter classifiers through installed declarations, native answers and guest accounting 2069ms
+   ✓ dispatches overlapping OpenAI R/D through one installed SDK with operation-owned prices 2058ms
+   ✓ dispatches mixed Cloudflare C/S through one installed SDK without changing native classifier accounting 2537ms
+   ✓ dispatches native Cloudflare C through installed public declarations, reasoning and virtual classification 2432ms
+   ✓ dispatches native Cloudflare classifiers through installed public declarations, envelopes and guest bridge 1994ms
+   ✓ dispatches native TypeSafe classifiers through installed public declarations, runtime and guest bridge 2059ms
+   ✓ dispatches native Groq through installed public declarations and captured C policies 2206ms
+   ✓ dispatches native Z.ai through installed public declarations and captured C policies 2204ms
+   ✓ dispatches native Moonshot through installed public declarations and captured C policies 2102ms
+   ✓ dispatches native OpenCode Go through installed declarations and owned A/C/R policies 2650ms
+   ✓ dispatches native Kimi Coding through installed declarations and owned A policies 2110ms
+   ✓ dispatches native Xiaomi through installed declarations and owned C policies 2152ms
+   ✓ dispatches native Hugging Face through installed declarations and owned C policies 3530ms
+   ✓ dispatches mixed native Fireworks through installed declarations and owned A/C policies 2480ms
+   ✓ dispatches native Together through installed public declarations and physical C policies 2433ms
+   ✓ dispatches native Baseten through installed public declarations and physical C policies 2485ms
+   ✓ dispatches native Meta through installed public declarations and captured R policies 2078ms
+   ✓ dispatches native xAI through installed public declarations and captured R policies 2122ms
+   ✓ dispatches native MiniMax through installed public declarations and captured A policies 2082ms
+   ✓ dispatches native Nvidia through installed public declarations and captured C policies 2533ms
+   ✓ dispatches native DeepSeek through installed public declarations and captured C policies 2059ms
+   ✓ dispatches native Ant Ling through installed public declarations and captured C policies 2061ms
+   ✓ dispatches native Cerebras through installed public declarations and captured C policies 2028ms
+   ✓ dispatches native Mistral through installed public declarations and runtime 3898ms
+   ✓ dispatches native OpenCode Zen through installed A/G/C/R/T declarations and owned accounting 3364ms
+   ✓ dispatches native MiniMax CN through installed public declarations and captured A policies 2060ms
+   ✓ dispatches native Moonshot CN through installed public declarations and captured C policies 2124ms
+stdout | packages/server/src/web-server.test.ts > combined Web server
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/web-server.test.ts (43 tests) 5716ms
+   ✓ combined Web server (43)
+     ✓ manages custom providers/models, tool settings, and Web Push subscriptions without exposing secrets 436ms
+     ✓ manages sub-agent profiles and executes linked background children 360ms
+     ✓ runs a trusted detached mock agent, replays events, and persists its result 352ms
+     ✓ applies shared Core queue modes to detached Web runs 599ms
+     ✓ delivers shared instructions, keeps effective settings ephemeral, and supports explicit session overrides 1406ms
+ ✓ packages/core/src/providers/opencode.test.ts (116 tests) 11068ms
+ ✓ packages/core/src/providers/bedrock-converse-stream.test.ts (647 tests) 23879ms
+   ✓ native Bedrock ConverseStream (400)
+     ✓ enforces aggregate payload, tool-input and event-count limits while accepting large coalesced reads 366ms
+ ✓ packages/core/src/providers/anthropic-profiles.test.ts (254 tests) 1052ms
+ ✓ packages/core/src/providers/google-profiles.test.ts (251 tests) 1276ms
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > create() > serializes cross-manager creation of the same durable ID
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > addMessage() > keeps memory unchanged when message persistence fails
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > delete() > keeps in-memory state when an unsafe durable target prevents update or deletion
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > delete() > keeps in-memory state when an unsafe durable target prevents update or deletion
+[SessionManager] Failed to delete session.
+
+ ✓ packages/core/src/sessions/session-manager.test.ts (95 tests) 3253ms
+   ✓ JsonlSessionStore (29)
+     ✓ appendMessage() (7)
+       ✓ serializes concurrent appends from independent store instances 1018ms
+       ✓ does not lose appends racing with atomic session rewrites 453ms
+ ✓ packages/core/src/providers/opencode-go.test.ts (59 tests) 4625ms
+ ✓ packages/core/src/providers/index.test.ts (89 tests) 2139ms
+   ✓ MockProvider (11)
+     ✓ chat() (4)
+       ✓ should return custom responses in order 324ms
+ ✓ packages/server/src/runtime/provider-registry.test.ts (42 tests) 23681ms
+   ✓ ProviderRegistryService (42)
+     ✓ ignores retired gateway records on reload without losing other providers or rewriting files 431ms
+     ✓ composes ant-ling through encrypted native registry lifecycle without discovery or borrowed model admission 356ms
+     ✓ composes baseten through encrypted native registry lifecycle without discovery or borrowed model admission 447ms
+     ✓ composes fireworks through encrypted native registry lifecycle without discovery or borrowed model admission 450ms
+     ✓ composes huggingface through encrypted native registry lifecycle without discovery or borrowed model admission 723ms
+     ✓ composes kimi-coding through encrypted native registry lifecycle without discovery or borrowed model admission 459ms
+     ✓ composes meta through encrypted native registry lifecycle without discovery or borrowed model admission 469ms
+     ✓ composes minimax through encrypted native registry lifecycle without discovery or borrowed model admission 346ms
+     ✓ composes minimax-cn through encrypted native registry lifecycle without discovery or borrowed model admission 342ms
+     ✓ composes opencode-go through encrypted native registry lifecycle without discovery or borrowed model admission 480ms
+     ✓ composes opencode through encrypted native registry lifecycle without discovery or borrowed model admission 734ms
+     ✓ composes together through encrypted native registry lifecycle without discovery or borrowed model admission 410ms
+     ✓ composes xai through encrypted native registry lifecycle without discovery or borrowed model admission 449ms
+     ✓ composes xiaomi through encrypted native registry lifecycle without discovery or borrowed model admission 359ms
+     ✓ composes moonshot-cn through encrypted native registry lifecycle without discovery or borrowed model admission 346ms
+     ✓ composes qwen-token-plan through encrypted native registry lifecycle without discovery or borrowed model admission 429ms
+     ✓ composes qwen-token-plan-cn through encrypted native registry lifecycle without discovery or borrowed model admission 428ms
+     ✓ composes qwen-token-plan-individual through encrypted native registry lifecycle without discovery or borrowed model admission 372ms
+     ✓ composes xiaomi-token-plan-ams through encrypted native registry lifecycle without discovery or borrowed model admission 350ms
+     ✓ composes xiaomi-token-plan-cn through encrypted native registry lifecycle without discovery or borrowed model admission 349ms
+     ✓ composes xiaomi-token-plan-sgp through encrypted native registry lifecycle without discovery or borrowed model admission 348ms
+     ✓ composes zai-coding-cn through encrypted native registry lifecycle without discovery or borrowed model admission 351ms
+     ✓ composes cloudflare-ai-gateway through encrypted native registry lifecycle without discovery or borrowed model admission 651ms
+     ✓ composes vercel-ai-gateway through encrypted native registry lifecycle without discovery or borrowed model admission 1673ms
+     ✓ imports native R profile fields without confusing D context or replacing explicit operator metadata 540ms
+     ✓ restores explicit native NVIDIA hosts with21-profile admission and unknown prices before mutation 621ms
+     ✓ restores explicit native Moonshot hosts with four-profile admission before mutation 539ms
+     ✓ keeps an explicit CN Moonshot endpoint through key replacement and encrypted reload 393ms
+     ✓ restores explicit native Z.ai hosts with seven-profile admission and unknown highspeed prices before mutation 538ms
+     ✓ restores explicit native Groq hosts with seven-profile admission before secret or metadata replacement 558ms
+     ✓ restores explicit native DeepSeek hosts with two-profile admission before secret or metadata replacement 532ms
+     ✓ restores explicit native Cerebras hosts with two-profile admission and no discovery certificate 1200ms
+     ✓ restores explicit native OpenAI R/D hosts without conflating the shared model ID or replacing legacy Responses 1406ms
+     ✓ restores explicit Cloudflare C/S hosts, bounded chat admission and encrypted lifecycle without discovery claims 1166ms
+     ✓ restores explicit OpenRouter composition and refuses unsupported model mutations or static connection certificates 3428ms
+     ✓ migrates the legacy combined secret payload to the shared credential namespace 383ms
+ ✓ packages/core/src/providers/fireworks.test.ts (35 tests) 3170ms
+ ✓ packages/core/src/providers/minimax.test.ts (50 tests) 6055ms
+   ✓ native MiniMax context allocation (7)
+     ✓ minimax/MiniMax-M3 preserves raw context allocation and complete request projection on both facades 1726ms
+     ✓ minimax-cn/MiniMax-M3 preserves raw context allocation and complete request projection on both facades 1740ms
+ ✓ packages/core/src/providers/openai-responses.test.ts (376 tests) 4556ms
+Created: c416f320-cdaa-46a8-968d-3a8d042d37b1 - Conversation 2
+
+Created: efcf9675-68ee-417d-8c04-29d569983330 - My Custom Chat
+
+Created: 80cd7a59-2059-4fde-9596-b98f87abd8ce - Test Session
+
+Usage: /switch <id>
+
+Session not found: nonexistent-id-12345. Use /list to see available sessions.
+
+Session not found: 999. Use /list to see available sessions.
+
+Switched to session: e4e612fa-3199-4094-82e0-a1f993d2102b - Session Two (0 msgs)
+
+Saved virtual router unavailable; resuming its last physical model.
+Switched to session: f3b0cb86-dd5b-4a45-ab6f-0336b3599d62 - Untitled (1 msgs)
+
+Switched to session: 514cef0f-c632-4c29-b6c7-70992ccc6726 - Default Session (0 msgs)
+
+Switched to session: 4cb9ddae-caba-41a2-8993-c1a9604513dd - JSONL Session (1 msgs)
+
+Deleted session 4df0a072-45e4-4549-bb1f-877d93d8f2b7
+
+Session not found: nonexistent-id
+
+Usage: /delete <id>
+
+Cleared Default Session — conversation is now empty.
+
+No active session to clear.
+
+Cleared Default Session — conversation is now empty.
+
+No active session to compact.
+
+Not enough messages to compact (0/3 minimum).
+
+✅ Compacted Default Session
+   Summary: [Mock AI Response]
+
+✅ Compacted Default Session
+   Summary: [Mock AI Response]
+
+✅ Compacted Default Session
+   Summary: [Mock AI Response]
+
+
+🌳 Session Tree
+────────────────────────────────────────────────────────────
+● Default Session
+
+
+✅ Forked session cd2b0e00-756d-48a0-8525-584d5cf77db6
+   Title: Default Session (fork)
+   Messages: 0 (from message index 0)
+
+Session not found: non-existent-id. Use /list to see available sessions.
+
+✅ Cloned session 6e405703-c520-4953-a68d-59fa12633bf7
+   Title: Default Session (clone)
+   Messages: 0
+
+Session not found: non-existent-id. Use /list to see available sessions.
+
+Privacy warning: exported conversations and tool output may contain private data or unrecognized secrets. Review the file before sharing; registered-credential redaction is not complete sanitization.
+✅ Exported session "Default Session" as json (206 chars)
+   → Default Session-2026-11-17T16-25-10.json
+
+Privacy warning: exported conversations and tool output may contain private data or unrecognized secrets. Review the file before sharing; registered-credential redaction is not complete sanitization.
+✅ Exported session "Default Session" as markdown (19 chars)
+   → Default Session-2026-11-17T16-25-10.md
+
+Privacy warning: exported conversations and tool output may contain private data or unrecognized secrets. Review the file before sharing; registered-credential redaction is not complete sanitization.
+✅ Exported session "Default Session" as jsonl (116 chars)
+   → Default Session-2026-11-17T16-25-10.jsonl
+
+Unsupported format: xml. Use json, markdown, jsonl, or html.
+
+Privacy warning: exported conversations and tool output may contain private data or unrecognized secrets. Review the file before sharing; registered-credential redaction is not complete sanitization.
+✅ Exported session "Default Session" as json (206 chars)
+   → Default Session-2026-11-17T16-25-10.json
+
+Available AI Providers:
+
+  ✓ mock
+  ✓ local
+
+Switched to provider: local
+
+Switched to provider: mock
+
+Unknown provider: nonexistent. Available: mock, local
+
+✅ Set model to mock/mock-model-v1 (Mock model v1)
+
+Model "missing/model" not found. Available:
+  mock/mock-model - Mock model
+  mock/mock-model-v1 - Mock model v1
+  local/local-model - Local server model
+
+✅ Switched to mock/mock-model (Mock model)
+   Cycle: [mock/mock-model-v1 → mock/mock-model]
+
+Switched to provider: other
+
+✅ Set model to native-r/gpt-6-luna (GPT-6 Luna)
+
+Niveau de raisonnement défini sur max.
+
+✅ Switched to native-r/o3-mini (published)
+   Cycle: [native-r/gpt-6-luna → native-r/o3-mini]
+
+Model "not-reviewed/invalid" not found. Available:
+  mock/mock-model - Mock model
+  mock/mock-model-v1 - Mock model v1
+  local/local-model - Local server model
+  other/mock-model-v1 - configured
+  native-r/gpt-4 - GPT-4
+  native-r/gpt-4-turbo - GPT-4 Turbo
+  native-r/gpt-4.1 - GPT-4.1
+  native-r/gpt-4.1-mini - GPT-4.1 mini
+  native-r/gpt-4.1-nano - GPT-4.1 nano
+  native-r/gpt-4o - GPT-4o
+  native-r/gpt-4o-2024-05-13 - GPT-4o (2024-05-13)
+  native-r/gpt-4o-2024-08-06 - GPT-4o (2024-08-06)
+  native-r/gpt-4o-2024-11-20 - GPT-4o (2024-11-20)
+  native-r/gpt-4o-mini - GPT-4o mini
+  native-r/gpt-5 - GPT-5
+  native-r/gpt-5-chat-latest - GPT-5 Chat Latest
+  native-r/gpt-5-mini - GPT-5 Mini
+  native-r/gpt-5-nano - GPT-5 Nano
+  native-r/gpt-5-pro - GPT-5 Pro
+  native-r/gpt-5.1 - GPT-5.1
+  native-r/gpt-5.2 - GPT-5.2
+  native-r/gpt-5.2-chat-latest - GPT-5.2 Chat
+  native-r/gpt-5.2-pro - GPT-5.2 Pro
+  native-r/gpt-5.3-chat-latest - GPT-5.3 Chat (latest)
+  native-r/gpt-5.3-codex - GPT-5.3 Codex
+  native-r/gpt-5.3-codex-spark - GPT-5.3 Codex Spark
+  native-r/gpt-5.4 - GPT-5.4
+  native-r/gpt-5.4-mini - GPT-5.4 mini
+  native-r/gpt-5.4-nano - GPT-5.4 nano
+  native-r/gpt-5.4-pro - GPT-5.4 Pro
+  native-r/gpt-5.5 - GPT-5.5
+  native-r/gpt-5.5-pro - GPT-5.5 Pro
+  native-r/gpt-5.6-luna - GPT-5.6 Luna
+  native-r/gpt-5.6-sol - GPT-5.6 Sol
+  native-r/gpt-5.6-terra - GPT-5.6 Terra
+  native-r/gpt-6-astra - GPT-6 Astra
+  native-r/gpt-6-luna - GPT-6 Luna
+  native-r/gpt-6-sol - GPT-6 Sol
+  native-r/gpt-6.1-sol - GPT-6.1 Sol
+  native-r/gpt-daybreak-blue-latest - Daybreak Blue
+  native-r/gpt-daybreak-red-latest - Daybreak Red
+  native-r/gpt-realtime-2.1 - GPT-Realtime-2.1
+  native-r/o1 - published
+  native-r/o1-pro - published
+  native-r/o3 - published
+  native-r/o3-mini - published
+  native-r/o3-pro - published
+  native-r/o4-mini - published
+
+✅ Set model to mock/mock-model-v1 (Mock model v1)
+
+Agent settings are not configured for this runtime.
+
+Agent settings are not configured for this runtime.
+
+✅ Set model to mock/mock-model-v1 (Mock model v1)
+
+Current Model: mock-model
+
+MOCK Models:
+  ● mock-model - Mock model
+  ○ mock-model-v1 - Mock model v1
+
+Commands:
+  /model <name>      Set a fuzzy or provider-qualified model
+  /model cycle       Cycle through the active --models scope
+
+Switched to provider: mock
+
+Switched to provider: mock
+
+Current Model: mock-model-v1
+
+MOCK Models:
+  ○ mock-model - Mock model
+  ● mock-model-v1 - Mock model v1
+
+Commands:
+  /model <name>      Set a fuzzy or provider-qualified model
+  /model cycle       Cycle through the active --models scope
+
+✅ Switched to mock/mock-model (Mock model)
+   Cycle: [mock/mock-model → mock/mock-model-v1]
+
+✅ Set model to mock/mock-model-v1 (Mock model v1)
+
+Model "nonexistent-model" not found. Available:
+  mock/mock-model - Mock model
+  mock/mock-model-v1 - Mock model v1
+  local/local-model - Local server model
+
+✅ Switched to mock/mock-model (Mock model)
+   Cycle: [mock/mock-model → mock/mock-model-v1]
+
+Configuration:
+  Sessions directory: ~/.ai-harness/sessions/
+  Persistence: JSONL format
+  Auto-save: Enabled
+
+Configuration:
+  Sessions directory: ~/.ai-harness/sessions/
+  Persistence: JSONL format
+  Auto-save: Enabled
+
+Reloaded 0 extension(s).
+
+Created: a0a78456-a8fa-476f-88f3-86a168674b39 - Conversation 2
+
+Created: decd4ad9-d388-442f-9a5c-d29b8d57a716 - Title With Extra Args Here
+
+Created: f645b1b0-5908-4a03-bd19-d8c0724ccec6 - Persisted Session
+
+Created: b01e3134-dd6c-40ac-929d-9a16f507d26d - Export Test Session
+
+Created: 133411ca-06ff-4c91-926a-eb056d10e95c - Markdown Export
+
+Created: f452530c-6079-4c79-bca9-9f716941d547 - HTML Export
+
+Created: e9312c81-2991-4d16-b743-041e4d37f1eb - JSONL Export
+
+Created: 26fb82b8-605f-4837-b8d6-df8579f0606f - Quoted Export
+
+Created: 560f8970-5cd0-45f4-ae20-b8c1c4e6f8f4 - Filter Test A
+
+Created: 68c437a9-0498-4e2c-9621-7d2e84a2cdf7 - Filter Test B
+
+Thème actif : ocean.
+
+Created: e60dcab5-5e52-4f3c-b270-a86701db2365 - Original Name
+
+ ✓ packages/cli/src/commands/handler.test.ts (94 tests) 1796ms
+ ✓ packages/cli/src/rpc/rpc-controller.test.ts (36 tests) 1319ms
+ ✓ packages/cli/src/cli/anthropic-thinking-process.test.ts (118 tests) 117385ms
+   ✓ emitted built-in Anthropic reasoning selection (106)
+     ✓ print: claude-sonnet-4-6/minimal reaches the actual built-in payload 324ms
+     ✓ print: claude-sonnet-4-6/max reaches the actual built-in payload 315ms
+     ✓ print: claude-sonnet-4-6/xhigh reaches the actual built-in payload 304ms
+     ✓ print: claude-sonnet-4-6/off reaches the actual built-in payload 307ms
+     ✓ print: claude-fable-5/xhigh reaches the actual built-in payload 317ms
+     ✓ print: claude-opus-4-6/xhigh reaches the actual built-in payload 307ms
+     ✓ print: claude-opus-4-7/xhigh reaches the actual built-in payload 302ms
+     ✓ print: claude-opus-4-8/xhigh reaches the actual built-in payload 311ms
+     ✓ print: claude-sonnet-4-6/high reaches the actual built-in payload 307ms
+     ✓ print: claude-sonnet-5/xhigh reaches the actual built-in payload 307ms
+     ✓ print: claude-fable-5/off reaches the actual built-in payload 317ms
+     ✓ print: claude-fable-5-1/off reaches the actual built-in payload 312ms
+     ✓ print: claude-haiku-5-5/off reaches the actual built-in payload 306ms
+     ✓ print: claude-opus-5/xhigh reaches the actual built-in payload 311ms
+     ✓ print: claude-opus-5-5/max reaches the actual built-in payload 313ms
+     ✓ print: claude-sonnet-5-5/low reaches the actual built-in payload 311ms
+     ✓ print: claude-haiku-4-5/high reaches the actual built-in payload 317ms
+     ✓ print: claude-haiku-4-5-20251001/high reaches the actual built-in payload 307ms
+     ✓ print: claude-opus-4-5/high reaches the actual built-in payload 303ms
+     ✓ print: claude-opus-4-5-20251101/high reaches the actual built-in payload 303ms
+     ✓ print: claude-sonnet-4-5/high reaches the actual built-in payload 306ms
+     ✓ print: claude-sonnet-4-5-20250929/high reaches the actual built-in payload 309ms
+     ✓ json: claude-sonnet-4-6/minimal reaches the actual built-in payload 309ms
+     ✓ json: claude-sonnet-4-6/max reaches the actual built-in payload 315ms
+     ✓ json: claude-sonnet-4-6/xhigh reaches the actual built-in payload 312ms
+     ✓ json: claude-sonnet-4-6/off reaches the actual built-in payload 313ms
+     ✓ json: claude-fable-5/xhigh reaches the actual built-in payload 313ms
+     ✓ json: claude-opus-4-6/xhigh reaches the actual built-in payload 309ms
+     ✓ json: claude-opus-4-7/xhigh reaches the actual built-in payload 313ms
+     ✓ json: claude-opus-4-8/xhigh reaches the actual built-in payload 310ms
+     ✓ json: claude-sonnet-4-6/high reaches the actual built-in payload 315ms
+     ✓ json: claude-sonnet-5/xhigh reaches the actual built-in payload 314ms
+     ✓ json: claude-fable-5/off reaches the actual built-in payload 315ms
+     ✓ json: claude-fable-5-1/off reaches the actual built-in payload 313ms
+     ✓ json: claude-haiku-5-5/off reaches the actual built-in payload 307ms
+     ✓ json: claude-opus-5/xhigh reaches the actual built-in payload 311ms
+     ✓ json: claude-opus-5-5/max reaches the actual built-in payload 320ms
+     ✓ json: claude-sonnet-5-5/low reaches the actual built-in payload 326ms
+     ✓ json: claude-haiku-4-5/high reaches the actual built-in payload 315ms
+     ✓ json: claude-haiku-4-5-20251001/high reaches the actual built-in payload 315ms
+     ✓ json: claude-opus-4-5/high reaches the actual built-in payload 317ms
+     ✓ json: claude-opus-4-5-20251101/high reaches the actual built-in payload 316ms
+     ✓ json: claude-sonnet-4-5/high reaches the actual built-in payload 310ms
+     ✓ json: claude-sonnet-4-5-20250929/high reaches the actual built-in payload 319ms
+     ✓ rpc: claude-sonnet-4-6/minimal reaches the actual built-in payload 311ms
+     ✓ rpc: claude-sonnet-4-6/max reaches the actual built-in payload 313ms
+     ✓ rpc: claude-sonnet-4-6/xhigh reaches the actual built-in payload 317ms
+     ✓ rpc: claude-sonnet-4-6/off reaches the actual built-in payload 318ms
+     ✓ rpc: claude-fable-5/xhigh reaches the actual built-in payload 317ms
+     ✓ rpc: claude-opus-4-6/xhigh reaches the actual built-in payload 313ms
+     ✓ rpc: claude-opus-4-7/xhigh reaches the actual built-in payload 321ms
+     ✓ rpc: claude-opus-4-8/xhigh reaches the actual built-in payload 312ms
+     ✓ rpc: claude-sonnet-4-6/high reaches the actual built-in payload 318ms
+     ✓ rpc: claude-sonnet-5/xhigh reaches the actual built-in payload 311ms
+     ✓ rpc: claude-fable-5/off reaches the actual built-in payload 318ms
+     ✓ rpc: claude-fable-5-1/off reaches the actual built-in payload 316ms
+     ✓ rpc: claude-haiku-5-5/off reaches the actual built-in payload 310ms
+     ✓ rpc: claude-opus-5/xhigh reaches the actual built-in payload 316ms
+     ✓ rpc: claude-opus-5-5/max reaches the actual built-in payload 317ms
+     ✓ rpc: claude-sonnet-5-5/low reaches the actual built-in payload 310ms
+     ✓ rpc: claude-haiku-4-5/high reaches the actual built-in payload 311ms
+     ✓ rpc: claude-haiku-4-5-20251001/high reaches the actual built-in payload 310ms
+     ✓ rpc: claude-opus-4-5/high reaches the actual built-in payload 314ms
+     ✓ rpc: claude-opus-4-5-20251101/high reaches the actual built-in payload 320ms
+     ✓ rpc: claude-sonnet-4-5/high reaches the actual built-in payload 313ms
+     ✓ rpc: claude-sonnet-4-5-20250929/high reaches the actual built-in payload 310ms
+     ✓ minimax/MiniMax-M2.7/print: emitted default-key-only full native lifecycle 2104ms
+     ✓ minimax/MiniMax-M2.7/json: emitted default-key-only full native lifecycle 2096ms
+     ✓ minimax/MiniMax-M2.7/rpc: emitted default-key-only full native lifecycle 7524ms
+     ✓ minimax/MiniMax-M2.7-highspeed/print: emitted default-key-only full native lifecycle 2094ms
+     ✓ minimax/MiniMax-M2.7-highspeed/json: emitted default-key-only full native lifecycle 2067ms
+     ✓ minimax/MiniMax-M2.7-highspeed/rpc: emitted default-key-only full native lifecycle 7609ms
+     ✓ minimax/MiniMax-M3/print: emitted default-key-only full native lifecycle 2133ms
+     ✓ minimax/MiniMax-M3/json: emitted default-key-only full native lifecycle 2113ms
+     ✓ minimax/MiniMax-M3/rpc: emitted default-key-only full native lifecycle 7592ms
+     ✓ minimax-cn/MiniMax-M2.7/print: emitted default-key-only full native lifecycle 2105ms
+     ✓ minimax-cn/MiniMax-M2.7/json: emitted default-key-only full native lifecycle 2067ms
+     ✓ minimax-cn/MiniMax-M2.7/rpc: emitted default-key-only full native lifecycle 7456ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/print: emitted default-key-only full native lifecycle 2079ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/json: emitted default-key-only full native lifecycle 2091ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/rpc: emitted default-key-only full native lifecycle 7764ms
+     ✓ minimax-cn/MiniMax-M3/print: emitted default-key-only full native lifecycle 2096ms
+     ✓ minimax-cn/MiniMax-M3/json: emitted default-key-only full native lifecycle 2121ms
+     ✓ minimax-cn/MiniMax-M3/rpc: emitted default-key-only full native lifecycle 7585ms
+     ✓ print: retains native signed tool/final blocks across process restart 751ms
+     ✓ json: retains native signed tool/final blocks across process restart 754ms
+     ✓ RPC projects signed continuation by physical model and edits only the selected entry 739ms
+     ✓ minimax/print: retains native signed tool/final blocks across process restart 754ms
+     ✓ minimax/json: retains native signed tool/final blocks across process restart 751ms
+     ✓ minimax/RPC projects signed continuation by physical model and edits only the selected entry 745ms
+     ✓ minimax/MiniMax-M2.7-highspeed/print: retains native signed tool/final blocks across process restart 736ms
+     ✓ minimax/MiniMax-M2.7-highspeed/json: retains native signed tool/final blocks across process restart 739ms
+     ✓ minimax/MiniMax-M2.7-highspeed/RPC projects signed continuation by physical model and edits only the selected entry 741ms
+     ✓ minimax/MiniMax-M3/print: retains native signed tool/final blocks across process restart 748ms
+     ✓ minimax/MiniMax-M3/json: retains native signed tool/final blocks across process restart 754ms
+     ✓ minimax/MiniMax-M3/RPC projects signed continuation by physical model and edits only the selected entry 746ms
+     ✓ minimax-cn/print: retains native signed tool/final blocks across process restart 760ms
+     ✓ minimax-cn/json: retains native signed tool/final blocks across process restart 759ms
+     ✓ minimax-cn/RPC projects signed continuation by physical model and edits only the selected entry 740ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/print: retains native signed tool/final blocks across process restart 783ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/json: retains native signed tool/final blocks across process restart 758ms
+     ✓ minimax-cn/MiniMax-M2.7-highspeed/RPC projects signed continuation by physical model and edits only the selected entry 743ms
+     ✓ minimax-cn/MiniMax-M3/print: retains native signed tool/final blocks across process restart 753ms
+     ✓ minimax-cn/MiniMax-M3/json: retains native signed tool/final blocks across process restart 762ms
+     ✓ minimax-cn/MiniMax-M3/RPC projects signed continuation by physical model and edits only the selected entry 735ms
+     ✓ RPC changes native effort and switches numeric/adaptive dialects between prompts 802ms
+   ✓ emitted built-in Google/Vertex signed continuation (6)
+     ✓ google/print: retains signed tool/final history across explicit same-model restart 754ms
+     ✓ google/json: retains signed tool/final history across explicit same-model restart 773ms
+     ✓ google/RPC: projects physical model/API/provider switches and edits only the selected entry 853ms
+     ✓ vertex/print: retains signed tool/final history across explicit same-model restart 774ms
+     ✓ vertex/json: retains signed tool/final history across explicit same-model restart 762ms
+     ✓ vertex/RPC: projects physical model/API/provider switches and edits only the selected entry 827ms
+   ✓ emitted original Responses encrypted continuation (6)
+     ✓ native-r/print: retains encrypted tool/final history across explicit same-model restart 769ms
+     ✓ native-r/json: retains encrypted tool/final history across explicit same-model restart 763ms
+     ✓ native-r/RPC: projects physical model/API/provider switches and edits only the selected entry 849ms
+     ✓ azure/print: retains encrypted tool/final history across explicit same-model restart 758ms
+     ✓ azure/json: retains encrypted tool/final history across explicit same-model restart 764ms
+     ✓ azure/RPC: projects physical model/API/provider switches and edits only the selected entry 841ms
+ ✓ packages/cli/src/cli/invocation.test.ts (19 tests) 37091ms
+   ✓ CLI invocation contract (19)
+     ✓ wires saved model compaction overrides through sequential real RPC commands 317ms
+     ✓ prints help/version and rejects unknown options before startup 2024ms
+     ✓ registers owned startup options once, exposes values and trust-gates generated help/completion 7892ms
+     ✓ reuses owned contributed values in real RPC processes with pure framing and consistent shutdown 5327ms
+     ✓ administers shared packages without starting the agent and loads enabled package resources 2639ms
+     ✓ keeps print stdout pure for positional, piped, and @file input 1427ms
+     ✓ applies shared system and context prompts in print, JSON, and RPC modes 2257ms
+     ✓ applies agent settings to model scope, thinking, queues, tools, and session storage 1688ms
+     ✓ applies one-process trust overrides and the global headless trust policy without persisting overrides 2932ms
+     ✓ does not let an untrusted workspace masquerade as the global agent directory 1455ms
+     ✓ prompts for protected resources in an interactive terminal and saves the selected decision 564ms
+     ✓ selects, names, and continues persisted startup sessions 1562ms
+     ✓ queues interactive steering/follow-ups and restores pending input on Escape 2978ms
+     ✓ keeps RPC stdout protocol-pure and accepts in-memory startup 946ms
+     ✓ accepts RPC command envelopes, strict LF framing, and startup session selectors 490ms
+     ✓ executes model/nested QuickJS bridges in json outside the installation with authenticated accounting 624ms
+     ✓ executes model/nested QuickJS bridges in print outside the installation with authenticated accounting 627ms
+     ✓ executes model/nested QuickJS bridges in rpc outside the installation with authenticated accounting 628ms
+     ✓ emits a strict JSONL lifecycle with a session header and no plain-text stdout 713ms
+ ✓ packages/core/src/providers/moonshot.test.ts (27 tests) 1389ms
+ ✓ packages/core/src/plugins/plugin-service.test.ts (17 tests) 1315ms
+ ✓ packages/core/src/providers/huggingface.test.ts (92 tests) 10712ms
+ ✓ packages/core/src/providers/openrouter-messages.test.ts (22 tests) 4276ms
+   ✓ native OpenRouter Anthropic Messages (22)
+     ✓ compares independent whole private A arrays through both owning SDKs for anthropic/claude-fable-5 379ms
+ ✓ packages/core/src/providers/baseten.test.ts (36 tests) 3315ms
+ ✓ packages/core/src/providers/together.test.ts (31 tests) 2588ms
+ ✓ packages/core/src/providers/zai.test.ts (18 tests) 1251ms
+ ✓ packages/core/src/providers/nvidia.test.ts (36 tests) 3166ms
+ ✓ packages/core/src/providers/deepseek.test.ts (13 tests) 479ms
+ ✓ packages/core/src/providers/cerebras.test.ts (14 tests) 480ms
+ ✓ packages/core/src/providers/groq.test.ts (18 tests) 1230ms
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] Request failed.
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/github-copilot-http.test.ts (8 tests) 19221ms
+   ✓ logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal 6745ms
+   ✓ retires held HTTP credential or detached inference work on logout without a late encrypted publication 1945ms
+   ✓ retires held HTTP credential or detached inference work on shutdown without a late encrypted publication 1305ms
+   ✓ retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication 4275ms
+   ✓ retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication 1352ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication 1339ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication 1282ms
+   ✓ retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication 977ms
+ ✓ packages/core/src/agent/runtime.test.ts (18 tests) 963ms
+   ✓ AgentRuntime (18)
+     ✓ retries only failures that happen before a delta and does not duplicate assistant messages 513ms
+ ✓ packages/core/src/providers/kimi-coding.test.ts (19 tests) 735ms
+stdout | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] Request failed.
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+npm error path /app
+npm error command failed
+npm error signal SIGTERM
+npm error command sh -c vitest run
+npm error A complete log of this run can be found in: /root/.npm/_logs/2026-11-17T16_11_28_174Z-debug-0.log
+make: *** [Makefile:141: test] Error 1

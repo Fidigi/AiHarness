@@ -1,0 +1,48 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-input.test.ts
+
+ RUN  v5.0.3 /app
+
+ ❯ packages/cli/src/rpc/rpc-input.test.ts (12 tests | 1 failed) 506ms
+   ❯ RPC byte-framed input (12)
+     ✓ preserves fragmented UTF-8, LF/CRLF, empty lines, Unicode separators and final EOF 3ms
+     × preserves supplementary Unicode from object string streams 4ms
+     ✓ preserves supplementary Unicode from decoded string streams 0ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "" 85ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\n" 68ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\r\n" 64ms
+     ✓ rejects one extra byte before dispatch, with delimiter "" 22ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\n" 13ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\r\n" 14ms
+     ✓ counts UTF-8 bytes rather than characters and rejects a nonterminal extra CR 29ms
+     ✓ stops pulling at 64 MiB until release (partial frame bytes: 0) 115ms
+     ✓ stops pulling at 64 MiB until release (partial frame bytes: 1) 86ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/cli/src/rpc/rpc-input.test.ts > RPC byte-framed input > preserves supplementary Unicode from object string streams
+AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+-   "{\"id\":\"é😀\\u2028\",\"type\":\"get_state\"}",
++   "{\"id\":\"é��\\u2028\",\"type\":\"get_state\"}",
+  ]
+
+ ❯ packages/cli/src/rpc/rpc-input.test.ts:28:34
+     26|     const input = mode === 'object' ? Readable.from((line + '\n').spli…
+     27|       : Readable.from([Buffer.from(line + '\n')], { objectMode: false …
+     28|     expect(await collect(input)).toEqual([line]);
+       |                                  ^
+     29|   });
+     30|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 passed (12)
+   Start at  13:55:18
+   Duration  612ms (tests 93%, transform 4%, import 2%, worker 1%)

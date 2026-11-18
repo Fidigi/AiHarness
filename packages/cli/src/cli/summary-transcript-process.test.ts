@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 const fixture=fileURLToPath(new URL('./fixtures/summary-transcript-probe.mjs',import.meta.url));
-const modes=['core-branch','sdk-auto','print-auto','json-auto','rpc-manual','rpc-auto','rpc-branch','regular','fullscreen','server-agent','server-proxy','server-auto'];
+const modes=['core-branch','sdk-auto','print-auto','json-auto','rpc-manual','rpc-auto','rpc-branch','regular','fullscreen','server-agent','server-auto'];
 function run(mode:string,kind:string){
   return new Promise<{code:number|null;signal:NodeJS.Signals|null;stdout:string;stderr:string}>((resolve,reject)=>{
     const child=spawn(process.execPath,[fixture,mode,kind],{stdio:['ignore','pipe','pipe']});let stdout='',stderr='';

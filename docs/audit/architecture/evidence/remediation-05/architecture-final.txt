@@ -1,0 +1,210 @@
+docker build -f .docker/Dockerfile.test \
+	--target test-runner \
+	-t ai-harness:test-latest-run-1794937514719657543 \
+	.
+#1 [internal] load build definition from Dockerfile.test
+#1 sha256:1ea7b96ac157091f56cea31169bc3994473b721a8c771d8fbd2bcc94ad8d4b10
+#1 transferring dockerfile: 2.41kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24.15.0-bookworm-slim
+#2 sha256:474e51bc321101a059fc1d1d1b7416f0256fa6ceaf2fc5ea158c8d4309f5ab95
+#2 DONE 0.6s
+
+#3 [internal] load .dockerignore
+#3 sha256:b45822c7419c4d2c705c2db4038d11a6736568a8af0660e22916da5e321efabc
+#3 transferring context: 1.27kB done
+#3 DONE 0.0s
+
+#7 [base  1/15] FROM docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d
+#7 sha256:d7dc2c1a700a6b001b77996e757322ee31ca4909e052bc2c66d1d0f71b81bed4
+#7 resolve docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d 0.0s done
+#7 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:6bfd5f2889888389aed9caa2b576444210323489dabb10f3700ba696313ed283
+#12 transferring context: 173.68MB 0.4s done
+#12 DONE 0.4s
+
+#11 [base  4/15] COPY .docker/test-fonts.conf /etc/fonts/local.conf
+#11 sha256:5c11c5b6e32f3c3eeea64819aa121379bf5e002620c18f8668fb54587482f84d
+#11 CACHED
+
+#13 [base  3/15] RUN apt-get update && apt-get install -y --no-install-recommends     chromium     fonts-liberation     fonts-noto-cjk     fonts-noto-color-emoji     libasound2     libatk-bridge2.0-0     libatk1.0-0     libc6     libcairo2     libcups2     libdbus-1-3     libexpat1     libfontconfig1     libgbm1     libgcc1     libglib2.0-0     libgtk-3-0     libnspr4     libnss3     libpango-1.0-0     libpangocairo-1.0-0     libstdc++6     libx11-xcb1     libxcb1     libxcomposite1     libxdamage1     libxfixes3     libxi6     libxrandr2     libxrender1     libxss1     libxtst6     ca-certificates     g++     git     make     python3     wget     && rm -rf /var/lib/apt/lists/*
+#13 sha256:fc1b37b5a4174fa175030838671168c707b11c8981c0d5e342a64d6cf412fed5
+#13 CACHED
+
+#10 [base  5/15] WORKDIR /app
+#10 sha256:48db8d4ba0683a29763a3d8da70e6e3b5eaa920748b03ee2ec7f1488c081c90c
+#10 CACHED
+
+#8 [base  7/15] COPY packages/core/package.json packages/core/
+#8 sha256:fa700a34ac0449ffb030d62ffe8c0f050ac59d4b4f4ec75d3f4558429022e876
+#8 CACHED
+
+#6 [base  9/15] COPY packages/web/package.json packages/web/
+#6 sha256:d8155b68535383d9b7b2255423dd1f9c88443932b11a1db6660df00dc1929217
+#6 CACHED
+
+#16 [base 14/15] RUN node --test .docker/test-build.test.mjs
+#16 sha256:d7d94740b012d25486ffb087d9afc852b804ff2d80db13ee9df40662bbfe559a
+#16 CACHED
+
+#5 [base 10/15] COPY packages/server/package.json packages/server/
+#5 sha256:633d81496bf3e4e647d2c460939a5ac66291fd6dd98e7056cf67460bb832566a
+#5 CACHED
+
+#18 [base  6/15] COPY package.json package-lock.json .npmrc ./
+#18 sha256:5d38b5d3fcc3a9ae46710675a40433b15fe43a95fa6571da9ba6d6d8a81006d4
+#18 CACHED
+
+#14 [base  2/15] RUN npm install --global npm@12.1.0
+#14 sha256:a072c845a7e874e563d9d994d8a539c30590639196a9e0791aec2dc885476c22
+#14 CACHED
+
+#15 [base 12/15] COPY . .
+#15 sha256:46d24dbbfd54e4d60af2dfe9ee343a999c4db21eb27872229dba95b9fe8b7eeb
+#15 CACHED
+
+#4 [base 11/15] RUN npm ci
+#4 sha256:9503b48da93bdb81ca32ccf81d9297a31a3f318b574bf1088f422a16e47b686b
+#4 CACHED
+
+#19 [base  8/15] COPY packages/cli/package.json packages/cli/
+#19 sha256:b8239e5baa82e5196532e93ab64b74858d2c50adf6e6eb5232ad097277ddb5c7
+#19 CACHED
+
+#9 [base 13/15] RUN npm run build --workspace @ai-harness/core     && npm run build --workspace @ai-harness/cli     && npm run build --workspace @ai-harness/server     && npm run build --workspace @ai-harness/web
+#9 sha256:32eba2b4faf74e9090a94f7678ba8a600bb4aabe80f22e4c37e49e1f1e4178e7
+#9 CACHED
+
+#17 [base 15/15] RUN node --test .docker/e2e-suites.test.mjs
+#17 sha256:d7ffa4403514115b9fefa579feac2a32e7ea4a33433568011fabb8e32b3d0570
+#17 CACHED
+
+#20 exporting to image
+#20 sha256:77115bc2f51ba89519f98d06f8883580caeabcb88e288335c9ec3c5a11b30ae0
+#20 exporting layers done
+#20 exporting manifest sha256:e8fc137c0f3ed488e853b348e599bf6e960b349f28511223ec028d1cff2478ec done
+#20 exporting config sha256:fff3e21b566260a98ab0725efbe31039ba184f30a09bef447bc534e214887f16 done
+#20 naming to docker.io/library/ai-harness:test-latest-run-1794937514719657543 done
+#20 unpacking to docker.io/library/ai-harness:test-latest-run-1794937514719657543 done
+#20 DONE 0.0s
+docker run --rm --network none \
+	--name aiharness-test-architecture-1794937514719657543 \
+	-e CI=true \
+	ai-harness:test-latest-run-1794937514719657543 \
+	npm run test:architecture
+npm notice run ai-harness@0.1.0 test:architecture
+npm notice run node --test scripts/check-architecture.test.mjs && node scripts/check-architecture.mjs
+✔ public SDK and declared dynamic entries are not unused-export evidence (123.397302ms)
+✔ rejects reverse Core dependencies even for type imports (52.643418ms)
+✔ Web allows only type imports or the reviewed browser-safe Core subpath (94.225211ms)
+✔ rejects Core UI, browser Node and unsafe subpath dependencies (150.813282ms)
+✔ rejects a new value cycle but not a type-only cycle; exceptions pin deferred identity (92.529338ms)
+✔ rejects an unconsumed internal value export and stale exclusions (35.016081ms)
+✔ namespace and deferred computed consumers conservatively retain exported values (45.826907ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 769.106217
+{
+  "modules": 458,
+  "edges": 1783,
+  "forbidden": [],
+  "cycles": [
+    [
+      "packages/core/src/providers/classification-questions.ts -> packages/core/src/providers/specialized-models.ts (eager)",
+      "packages/core/src/providers/specialized-models.ts -> packages/core/src/providers/classification-questions.ts (eager)"
+    ],
+    [
+      "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/anthropic-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/xai-oauth.ts (eager)",
+      "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+      "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+      "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)"
+    ],
+    [
+      "packages/core/src/tools/codemode.ts -> packages/core/src/tools/tool-search.ts (eager)",
+      "packages/core/src/tools/tool-search.ts -> packages/core/src/tools/codemode.ts (eager)"
+    ],
+    [
+      "packages/core/src/extensions/index.ts -> packages/core/src/extensions/module-loader.ts (eager)",
+      "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/native-module-alias.ts (eager)",
+      "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/typescript-module.ts (eager)",
+      "packages/core/src/extensions/native-module-alias.ts -> packages/core/src/index.ts (deferred)",
+      "packages/core/src/extensions/typescript-module.ts -> packages/core/src/index.ts (deferred)",
+      "packages/core/src/index.ts -> packages/core/src/extensions/index.ts (eager)"
+    ],
+    [
+      "packages/web/src/store/session-store.ts -> packages/web/src/store/workspace-refresh.ts (deferred)",
+      "packages/web/src/store/workspace-refresh.ts -> packages/web/src/store/session-store.ts (eager)"
+    ]
+  ],
+  "unused": [
+    "packages/cli/src/providers/provider-runtime.ts:oauthRefreshConfigFromEnv",
+    "packages/cli/src/tui/terminal-escape.ts:TERMINAL_ESCAPE_GRACE_MS",
+    "packages/cli/src/tui/terminal-settings.ts:UNSUPPORTED_CLI_SETTINGS",
+    "packages/core/src/agent/interaction-handle.ts:MAX_INTERACTION_BYTES",
+    "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTIONS",
+    "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTION_BYTES",
+    "packages/core/src/extensions/execution-hooks.ts:EXECUTION_HOOK_NAMES",
+    "packages/core/src/extensions/startup-options.ts:RESERVED_STARTUP_OPTIONS",
+    "packages/core/src/providers/ai-gateways.ts:gatewayOutput",
+    "packages/core/src/providers/anthropic-response.ts:anthropicResponseToolInput",
+    "packages/core/src/providers/azure-config.ts:azureIdentifier",
+    "packages/core/src/providers/fireworks.ts:fireworksThinking",
+    "packages/core/src/providers/kimi-coding.ts:kimiCodingThinking",
+    "packages/core/src/providers/meta-oauth.ts:META_OAUTH_CLIENT_ID",
+    "packages/core/src/providers/opencode-go.ts:opencodeGoThinking",
+    "packages/core/src/providers/opencode.ts:opencodeThinking",
+    "packages/server/src/api/session-pagination.ts:DEFAULT_MESSAGE_PAGE_SIZE",
+    "packages/server/src/api/session-pagination.ts:boundedMessageLimit",
+    "packages/server/src/config/effective-configuration.ts:DEFAULT_SCOPED_CONFIGURATION",
+    "packages/server/src/runtime/app-update.ts:installedVersions",
+    "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_MAX_RECORDS",
+    "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_TTL_MS",
+    "packages/web/src/components/ExtensionInteractionBoundary.tsx:interactionLoadingMessages",
+    "packages/web/src/components/markdown-semantics.ts:remarkCjkAutolinks",
+    "packages/web/src/components/markdown-semantics.ts:remarkCurrencyMath",
+    "packages/web/src/components/settings-navigation.ts:settingsPositionTarget",
+    "packages/web/src/hooks/useI18n.tsx:LOCALE_STORAGE_KEY",
+    "packages/web/src/services/mcp-api.ts:MCP_ACTION_TIMEOUT_MS",
+    "packages/web/src/services/mcp-api.ts:MCP_OAUTH_CLIENT_TIMEOUT_MS",
+    "packages/web/src/services/mcp-api.ts:MCP_TEST_CLIENT_TIMEOUT_MS",
+    "packages/web/src/store/terminal-theme.ts:TERMINAL_THEME_KEY",
+    "packages/web/src/store/terminal-theme.ts:parseTerminalTheme"
+  ],
+  "exclusions": {
+    "publicEntries": [
+      "packages/core/src/index.ts",
+      "packages/core/src/tools/shell-input.ts",
+      "packages/cli/src/index.ts",
+      "packages/server/src/index.ts",
+      "packages/server/src/web-cli.ts"
+    ],
+    "dynamicEntries": [
+      "packages/core/src/media/image-worker.ts",
+      "packages/web/src/components/provider-settings.fixture.tsx",
+      "packages/web/src/test-support/native-frontend-relay.ts"
+    ],
+    "browserNodeHostEntries": [
+      "packages/web/src/test-support/native-frontend-relay.ts"
+    ]
+  },
+  "scope": "Literal src TS/TSX dependencies; types excluded from SCCs. Named value exports only; public entry points, reviewed dynamic entries and namespace/computed consumers excluded. Tests/E2E/fixtures are consumers, not layer/cycle subjects. No claim about arbitrary computed imports, external SDK consumers or class members.",
+  "errors": []
+}

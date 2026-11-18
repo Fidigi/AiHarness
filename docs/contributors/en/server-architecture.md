@@ -43,9 +43,9 @@
 | api/skill-routes.ts | Skill catalog/invocation and globally/project-installable registry |
 | api/push-routes.ts | VAPID public key, state, subscribe and unsubscribe Web Push |
 | api/subagent-routes.ts | Global/project settings/profiles and child agent lifecycle |
-| api/proxy.ts | Providers, credentials, priced metrics and legacy compatible chat endpoints |
+| api/proxy.ts | Providers, credentials, priced metrics and current provider/configuration routes |
 
-Legacy `/api/chat*` endpoints remain available for compatibility, but the current Web application starts a run through `/api/agent/runs`.
+**Breaking transition (2026-11-17, COMP-02):** legacy `POST /api/chat`, `/api/chat/stream`, `/api/chat/compact` and inbound WebSocket `/api/chat/ws` are retired without an adapter. Authenticated requests receive fixed HTTP404 `{error:"Not found"}`; no WebSocket upgrade or provider dispatch occurs. Normal authentication/Origin checks remain. Use detached `/api/agent/runs` and session state/events/compaction; accepted runs remain detached from HTTP disconnect. The old Web transport selector is removed and its stored preference ignored. Outbound Core provider WebSockets and retained journal/settings migrations are unchanged.
 
 ## Detached Agent Flow
 

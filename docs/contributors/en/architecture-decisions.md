@@ -8,7 +8,7 @@ Read the [architecture overview](./architecture-overview.md), [server architectu
 
 **Context.** CLI, JSONL RPC and detached Web agents must not independently reinterpret trust, tool execution or session history. A browser must not load privileged Node implementation.
 
-**Decision.** Core owns shared contracts, providers, the tool loop, session projection/persistence, workspace trust, MCP and sandbox bridges. CLI owns terminal/protocol orchestration; Server owns HTTP authorization, detached host services and transport; Web owns state reconciliation and presentation and imports Core types only. Core API1 and JSONL schema2 remain separate versioned compatibility surfaces; additive implementation helpers are not mandatory extension/store methods.
+**Decision.** Core owns shared contracts, providers, the tool loop, session projection/persistence, workspace trust, MCP and sandbox bridges. CLI owns terminal/protocol orchestration; Server owns HTTP authorization, detached host services and transport; Web owns state reconciliation and presentation and imports Core types only. Core API2 and JSONL schema2 remain separate versioned compatibility surfaces; additive implementation helpers are not mandatory extension/store methods.
 
 **Consequences.** Reuse shared operations rather than copy policy into routes/components. Preserve structural-store and borrowed-resource lifetimes. A capability advertised by one host is not automatically available on another; static names do not grant runtime authority.
 

@@ -7,7 +7,7 @@ import { start, stop } from '../index.js';
 import type { AiProxyServer } from './proxy.js';
 import { createRuntimeServices, type RuntimeServices } from '../runtime/services.js';
 
-it('routes legacy JSON/SSE/summary and isolated children, then resumes an unloaded router with physical accounting', async () => {
+it('rejects retired routes, retains direct embedding/isolated children and resumes an unloaded router with physical accounting', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-router-http-'));
   vi.stubEnv('AI_HARNESS_AUTH_TOKEN', 'router-admin');
   vi.stubEnv('AI_HARNESS_ADMIN_TOKEN', 'router-admin');
@@ -36,19 +36,17 @@ it('routes legacy JSON/SSE/summary and isolated children, then resumes an unload
     const input = { provider: 'router', messages: [{ role: 'user', content: 'direct question' }], options: { model: 'auto', stream: false } };
     expect((await post('/api/chat', input, 'wrong')).status).toBe(401);
     const json = await post('/api/chat', input);
-    expect(json.status).toBe(200);
-    const jsonEvents = await json.text();
-    expect(jsonEvents).toContain('"provider":"physical"');
+    expect(json.status).toBe(404);
+    expect(await json.json()).toEqual({ error: 'Not found' });
     expect(await hostProxy.sendChat('router', [{ id: 'direct', timestamp: new Date(), role: 'user', content: 'question' }], input.options))
       .toMatchObject({ content: 'physical reply', provider: 'physical', model: 'native' });
     const stream = await post('/api/chat/stream', input);
-    expect(stream.status).toBe(200);
-    const events = await stream.text();
-    expect(events).toContain('physical reply'); expect(events).toContain('"provider":"physical"'); expect(events).toContain('"model":"native"');
-    expect(events).not.toContain('event: error');
+    expect(stream.status).toBe(404);
+    expect(await stream.json()).toEqual({ error: 'Not found' });
     const summary = await post('/api/chat/compact', { ...input, messages: Array(4).fill(input.messages[0]) });
-    expect(summary.status).toBe(200);
-    expect(requests.map(request => request.reason)).toEqual(['direct', 'direct', 'direct', 'direct']);
+    expect(summary.status).toBe(404);
+    expect(await summary.json()).toEqual({ error: 'Not found' });
+    expect(requests.map(request => request.reason)).toEqual(['direct']);
     expect(requests.every(request => request.state === undefined)).toBe(true);
 
     await services.trustManager.trust(root);
@@ -71,12 +69,12 @@ it('routes legacy JSON/SSE/summary and isolated children, then resumes an unload
     const { run: receipt } = await resumed.json();
     await services.agentRuntime.wait(receipt.id);
     expect(services.agentRuntime.getRun(receipt.id)?.phase).toBe('completed');
-    expect(requests).toHaveLength(6); expect(calls).toEqual(Array(7).fill('native'));
+    expect(requests).toHaveLength(3); expect(calls).toEqual(Array(4).fill('native'));
     expect((await services.sessionManager.getActiveBranchEntries(parent.id)).filter(entry => entry.type === 'custom')).toEqual(parentStates);
     const wire = await fetch(`${base}/api/sessions/${parent.id}`, { headers: { Authorization: 'Bearer router-admin' } }).then(response => response.json());
     expect(wire.messages.at(-1)).toMatchObject({ provider: 'physical', model: 'native', metadata: { selection: { provider: 'router', id: 'auto' } } });
     expect(JSON.stringify(wire)).not.toContain('PRIVATE_ROUTER_STATE');
     expect(hostProxy.getUsage('router')).toBeUndefined();
-    expect(hostProxy.getUsage('physical')).toMatchObject({ requests: 7 });
+    expect(hostProxy.getUsage('physical')).toMatchObject({ requests: 4 });
   } finally { await stop(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30_000);

@@ -8,7 +8,7 @@ Lire ensemble la [vue d’ensemble](./architecture-overview.md), l’[architectu
 
 **Contexte.** CLI, RPC JSONL et agents Web détachés ne doivent pas réinterpréter séparément confiance, exécution des outils ou historique. Le navigateur ne doit pas charger du Node privilégié.
 
-**Décision.** Core possède contrats, fournisseurs, boucle d’outils, projection/persistance des sessions, confiance, MCP et ponts sandbox. CLI possède terminal/protocole ; Server possède autorisation HTTP, services détachés et transports ; Web possède réconciliation et présentation, et n’importe que les types Core. API Core1 et schéma JSONL2 sont des surfaces versionnées distinctes ; un helper interne additif n’est pas une nouvelle méthode obligatoire d’extension/store.
+**Décision.** Core possède contrats, fournisseurs, boucle d’outils, projection/persistance des sessions, confiance, MCP et ponts sandbox. CLI possède terminal/protocole ; Server possède autorisation HTTP, services détachés et transports ; Web possède réconciliation et présentation, et n’importe que les types Core. API Core2 et schéma JSONL2 sont des surfaces versionnées distinctes ; un helper interne additif n’est pas une nouvelle méthode obligatoire d’extension/store.
 
 **Conséquences.** Réutiliser les opérations partagées plutôt que copier les politiques dans routes/composants. Préserver stores structurels et durées de vie des ressources empruntées. Une capacité d’un hôte n’est pas automatiquement disponible sur un autre ; un nom ne donne pas d’autorité d’exécution.
 

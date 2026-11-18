@@ -4,7 +4,7 @@
 
 ## Overview
 
-This map owns native trust/resource precedence, credential lifecycle and browser/proxy admission. It supplements [security implementation details](./security.md), without promising foreign file, authentication or execution compatibility. Core API major 1 and native JSONL v2 remain unchanged; foreign plaintext authentication files and project-selected secret stores are not consumed.
+This map owns native trust/resource precedence, credential lifecycle and browser/proxy admission. It supplements [security implementation details](./security.md), without promising foreign file, authentication or execution compatibility. Core API major 2 and native JSONL v2 are independent; foreign plaintext authentication files and project-selected secret stores are not consumed.
 
 ## Main Entry Points
 

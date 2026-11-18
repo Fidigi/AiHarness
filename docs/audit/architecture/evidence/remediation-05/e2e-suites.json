@@ -1,0 +1,59 @@
+{
+  "status": 1,
+  "results": [
+    {
+      "name": "standard",
+      "status": 1,
+      "code": 1,
+      "signal": null
+    },
+    {
+      "name": "interactions",
+      "status": 1,
+      "code": 1,
+      "signal": null
+    },
+    {
+      "name": "locale",
+      "status": 0,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "workspace",
+      "status": 0,
+      "code": 0,
+      "signal": null
+    },
+    {
+      "name": "pane",
+      "status": 1,
+      "code": null,
+      "signal": "SIGTRAP"
+    },
+    {
+      "name": "linked",
+      "status": 1,
+      "code": 1,
+      "signal": null
+    },
+    {
+      "name": "title",
+      "status": 1,
+      "code": 1,
+      "signal": null
+    },
+    {
+      "name": "progress",
+      "status": 1,
+      "code": 1,
+      "signal": null
+    },
+    {
+      "name": "demo",
+      "status": 1,
+      "code": null,
+      "signal": "SIGSEGV"
+    }
+  ]
+}

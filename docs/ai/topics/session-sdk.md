@@ -4,7 +4,7 @@
 
 ## Scope and ownership
 
-The Core API-major-1 root entry exports `createAgentSession`, `createAgentResourceLoader`, session/provider/auth/model types, structural `SessionStore`, and existing Date/wire conversions. The complete bilingual API and lifecycle reference is [Core SDK README](../../../packages/core/src/sdk/README.md); contributor guides are [EN](../../contributors/en/session-sdk.md) and [FR](../../contributors/fr/session-sdk.md).
+The Core API-major-2 root entry exports `createAgentSession`, `createAgentResourceLoader`, session/provider/auth/model types, structural `SessionStore`, and existing Date/wire conversions. The complete bilingual API and lifecycle reference is [Core SDK README](../../../packages/core/src/sdk/README.md); contributor guides are [EN](../../contributors/en/session-sdk.md) and [FR](../../contributors/fr/session-sdk.md).
 
 | Source | Responsibility |
 |---|---|

@@ -16,9 +16,11 @@ This policy covers the executable CLI, print output, JSON and RPC automation, th
 | RPC mode | Canonical `{type,id}` requests and correlated response/event records | Canonical envelope; no separate in-band version yet |
 | Session persistence | AiHarness JSONL metadata and parent-linked entries | `SESSION_SCHEMA_VERSION` (`2`) |
 | Extension factories | `ExtensionAPI`, registrations, hooks and lifecycle cleanup | `api.version` and `AI_HARNESS_EXTENSION_API_VERSION` (`1`) |
-| Core entry point | Runtime values and TypeScript declarations exported by `@ai-harness/core` | `AI_HARNESS_CORE_API_VERSION` (`1`) |
+| Core entry point | Runtime values and TypeScript declarations exported by `@ai-harness/core` | `AI_HARNESS_CORE_API_VERSION` (`2`) |
 
-The old RPC `{id,method,params}` envelope is migration input, not the preferred contract. Its fixture prevents accidental removal before an announced migration. It does not require new commands to support both shapes.
+Breaking transition approved on 2026-11-17 (architecture COMP-01): the old RPC `{id,method,params}` engine is removed, without an adapter or new in-band negotiation. Canonical `{type,id}` remains unchanged. Envelopes containing `method` or `params` now receive fixed uncorrelated `INVALID_REQUEST` / `Legacy method/params RPC is not supported. Use type commands.` without dispatch. The retired-input golden intentionally changes to rejection; emitted and installed probes separately preserve canonical framing and lifecycle. RPC also limits JSON payloads to 32 MiB UTF-8 (excluding LF/terminal CR) and accumulated/pending handler input to 64 MiB with read backpressure; individual overflow is fatal with body-free `RPC_FRAME_TOO_LARGE` after owned cleanup. This does not cancel writes already admitted.
+
+**Core API 2 (2026-11-17, DEAD-03):** `fetchWithRetry`, `formatDate` and `deepClone` are removed from runtime exports and declarations, without aliases/shims. Use the existing provider network policy for provider requests, native `Intl`/date formatting at the consumer, and `structuredClone` when suitable. Other utilities remain supported. Update Core-major checks to 2; extension major 1, journal schema 2 and JSON event version 3 do not change. Installed positive/negative declaration and runtime probes guard this deliberate break; package release metadata is independent.
 
 ## Compatibility Rules
 

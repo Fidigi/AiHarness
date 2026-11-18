@@ -104,6 +104,16 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
       if (generation === 2) expect(exchanges).toBe(1); // Credential initialization belongs to authorized HTTP admission.
       const base = `http://127.0.0.1:${server.port}`, headers = { 'content-type': 'application/json', authorization: 'Bearer copilot-admin' };
       const post = (route: string, body: unknown) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
+      const chat = async (model: string) => {
+        const response = await post('/api/agent/runs', { cwd, provider: 'github-copilot', model, input: 'probe',
+          toolPreset: 'chat-only', autoCompaction: false });
+        expect(response.status).toBe(202);
+        const { run } = await response.json() as { run: { id: string; sessionId: string } };
+        await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(result => result.json()))
+          .toMatchObject({ phase: 'completed' }));
+        const state = await fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(result => result.json());
+        return state.session.messages.at(-1)?.content;
+      };
       if (generation === 0) {
         const authBefore = await fetch(base + '/api/provider-registry/auth', { headers }).then(response => response.json());
         expect(authBefore).toContainEqual(expect.objectContaining({ type: 'github-copilot', method: 'oauth', configured: false }));
@@ -142,14 +152,13 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
       expect((await post('/api/provider-registry/custom', { id: 'github-copilot', name: 'Forged subscription', dialect: 'openai',
         baseUrl: 'https://unrelated.example', apiKey: 'disposable-forbidden-api-key' })).status).toBe(400);
       expect((await fetch(base + '/api/provider-registry/auth/github-copilot', { method: 'DELETE', headers: { ...headers, authorization: 'Bearer copilot-user' } })).status).toBe(403);
+      expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
       if (generation < 2) for (const model of models) {
-        const response = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model, maxTokens: 64, stream: false } });
-        expect(response.status).toBe(200); expect(await response.text()).toContain('ok');
+        expect(await chat(model)).toContain('ok');
         expect(calls.at(-1)).toMatchObject({ url: 'https://api.individual.githubcopilot.com' + fixture.rows.find(row => row.model === model)!.expectedPath,
           authorization: `Bearer ${token}`, apiKey: null, body: { model, stream: true } });
       }
       if (generation === 1) {
-        expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
         const response = await post('/api/agent/runs', { cwd, provider: 'github-copilot', model: 'gpt-5-mini', input: 'probe', autoCompaction: false, thinking: 'off' });
         expect(response.status).toBe(202);
         const { run } = await response.json() as { run: { id: string; sessionId: string } };
@@ -159,7 +168,6 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
         expect(journal).not.toContain(token);
       }
       if (generation > 0) {
-        expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
         if (generation === 1) expect((await post('/api/plugins/reload', { cwd })).status).toBe(200);
         privateActive = true;
         for (const row of rows) {
@@ -223,15 +231,14 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
           subscription: { provider: 'github-copilot', availableModelIds: models.slice(0, 2) } });
         const beforeRemote = calls.length;
         const removed = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini', stream: false } });
-        expect(removed.status).toBe(200); const removedEvents = await removed.text();
-        expect(removedEvents).toContain('event: error'); expect(removedEvents).not.toContain('event: message_end'); expect(calls).toHaveLength(beforeRemote);
+        expect(removed.status).toBe(404); expect(await removed.json()).toEqual({ error: 'Not found' });
+        expect(calls).toHaveLength(beforeRemote);
         const removedRun = await post('/api/agent/runs', { cwd, sessionId: sessions.get('gpt-5-mini'), provider: 'github-copilot', model: 'gpt-5-mini',
           input: 'removed by account', autoCompaction: false, maxRetries: 0 });
         expect(removedRun.status).toBe(202); const { run } = await removedRun.json() as { run: { id: string } };
         await vi.waitFor(async () => expect(await fetch(base + '/api/agent/runs/' + run.id, { headers }).then(response => response.json())).toMatchObject({ phase: 'failed' }));
         expect(calls).toHaveLength(beforeRemote);
-        const allowed = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gemini-3.5-flash', stream: false } });
-        expect(allowed.status).toBe(200); expect(await allowed.text()).toContain('ok'); expect(calls).toHaveLength(beforeRemote + 1);
+        expect(await chat('gemini-3.5-flash')).toContain('ok'); expect(calls).toHaveLength(beforeRemote + 1);
         expect(calls.at(-1)).toMatchObject({ url: endpoint + '/chat/completions', authorization: `Bearer ${token}` });
         expect(await readFile(marker, 'utf8')).toBe('effect\neffect\neffect\n');
         // A different store writer withdraws access; a cached successful catalogue is not authority.
@@ -240,12 +247,8 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
         expect(withdrawn.providers.find(row => row.provider === 'github-copilot')!.models.every(row => !row.available)).toBe(true);
         const before = calls.length;
         const denied = await post('/api/chat', { provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini', stream: false } });
-        // This legacy route always uses SSE: failure is terminal error, not an HTTP status after headers.
-        expect(denied.status).toBe(200);
-        const deniedEvents = await denied.text();
-        expect(deniedEvents).toContain('event: error');
-        expect(deniedEvents).not.toContain('event: message_end');
-        expect(deniedEvents).not.toContain(token);
+        expect(denied.status).toBe(404);
+        expect(await denied.json()).toEqual({ error: 'Not found' });
         expect(calls).toHaveLength(before);
         for (const row of rows) {
           const response = await post('/api/agent/runs', { cwd, sessionId: sessions.get(row.model), provider: 'github-copilot', model: row.model,
@@ -272,7 +275,7 @@ it('logs in through HTTP, refreshes private A/C/R across tiers and observes remo
   } finally { await stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }); }
 }, 30000);
 
-it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel', 'refresh-catalogue-body-cancel', 'inference-body-cancel'] as const)('retires held HTTP credential or inference work on %s without a late encrypted publication', async mutation => {
+it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'refresh-catalogue-cancel', 'refresh-catalogue-body-cancel', 'inference-body-cancel'] as const)('retires held HTTP credential or detached inference work on %s without a late encrypted publication', async mutation => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-copilot-http-retire-'));
   const cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
   const master = 'disposable-copilot-retirement-master';
@@ -352,19 +355,36 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
     const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
     const base = `http://127.0.0.1:${server.port}`, headers = { authorization: 'Bearer copilot-admin' };
     const caller = new AbortController();
-    const chat = (signal?: AbortSignal) => fetch(base + '/api/chat', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, signal,
-      body: JSON.stringify({ provider: 'github-copilot', messages: [{ role: 'user', content: 'probe' }], options: { model: 'gpt-5-mini' } }) });
+    const chat = async (signal?: AbortSignal) => {
+      const response = await fetch(base + '/api/agent/runs', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, signal,
+        body: JSON.stringify({ cwd, provider: 'github-copilot', model: 'gpt-5-mini', input: 'probe', toolPreset: 'chat-only', autoCompaction: false }) });
+      expect(response.status).toBe(202);
+      return (await response.json() as { run: { id: string; sessionId: string } }).run;
+    };
+    const settled = async (run: { id: string; sessionId: string }, phase: string) => {
+      await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(response => response.json()))
+        .toMatchObject({ phase }));
+      return fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(response => response.json());
+    };
+    const stopRun = async (run: { id: string; sessionId: string }) => {
+      const response = await fetch(`${base}/api/agent/runs/${run.id}/stop`, { method: 'POST', headers });
+      expect(response.status).toBe(202);
+      await settled(run, 'stopped');
+    };
+    if (refreshStage || inferenceBody) expect((await fetch(base + '/api/workspaces/trust', { method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ cwd, confirm: true }) })).status).toBe(200);
     if (inferenceBody) {
       expect((await fetch(base + '/api/models', { headers })).status).toBe(200); expect(inferenceCalls).toEqual([]);
       const file = path.join(dataDir, 'credentials.enc'), committed = await readFile(file); holdRefresh = true;
-      const response = await chat(caller.signal); expect(response.status).toBe(200);
-      const output = response.text().catch((error: unknown) => error);
-      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      const run = await chat(caller.signal);
+      await started; caller.abort();
+      expect(issuerSignal?.aborted).toBe(false); // An acknowledged run is detached from the completed HTTP request.
+      await stopRun(run);
       await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true)); await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
       expect(await readFile(file)).toEqual(committed); expect(inferenceCalls).toEqual(['https://api.individual.githubcopilot.com/responses']);
       holdRefresh = false;
-      const resumed = await chat(); expect(resumed.status).toBe(200); const text = await resumed.text();
-      expect(text).toContain('event: message_end'); expect(text).toContain('ok'); expect(text).not.toContain('event: error');
+      const resumed = await chat(), state = await settled(resumed, 'completed'), text = JSON.stringify(state);
+      expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
       expect(inferenceCalls).toEqual(Array(2).fill('https://api.individual.githubcopilot.com/responses')); expect(bodyCancelled).toHaveBeenCalledTimes(1);
       expect(await readFile(file)).toEqual(committed); expect((await stat(file)).mode & 0o777).toBe(0o600);
       for (const secret of [originalToken, 'disposable-held-grant']) { expect(text).not.toContain(secret); expect(await readFile(file, 'utf8')).not.toContain(secret); }
@@ -377,9 +397,10 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
       await credentials.setOAuth('github-copilot', { ...current.credential, expiresAt: 1 });
       const file = path.join(dataDir, 'credentials.enc'), expired = await readFile(file);
       holdRefresh = true;
-      const response = await chat(caller.signal); expect(response.status).toBe(200);
-      const output = response.text().catch((error: unknown) => error);
-      await started; caller.abort(); expect(await output).toMatchObject({ name: 'AbortError' });
+      const run = await chat(caller.signal);
+      await started; caller.abort();
+      expect(issuerSignal?.aborted).toBe(false);
+      await stopRun(run);
       await vi.waitFor(() => expect(issuerSignal?.aborted).toBe(true));
       if (refreshStage === 'catalogue-body') await vi.waitFor(() => expect(bodyCancelled).toHaveBeenCalledTimes(1));
       else {
@@ -391,8 +412,8 @@ it.each(['logout', 'shutdown', 'request-cancel', 'refresh-exchange-cancel', 'ref
       expect(await readFile(file)).toEqual(expired);
       expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage !== 'exchange' ? ['https://api.business.githubcopilot.com/models'] : [])]);
       holdRefresh = false;
-      const resumed = await chat();
-      expect(resumed.status).toBe(200); const text = await resumed.text(); expect(text).toContain('event: message_end'); expect(text).toContain('ok'); expect(text).not.toContain('event: error');
+      const resumed = await chat(), state = await settled(resumed, 'completed'), text = JSON.stringify(state);
+      expect(state.session.messages.at(-1)).toMatchObject({ role: 'assistant', content: 'ok' });
       expect(refreshCalls).toEqual(['https://api.github.com/copilot_internal/v2/token', ...(refreshStage !== 'exchange' ? ['https://api.business.githubcopilot.com/models'] : []),
         'https://api.github.com/copilot_internal/v2/token', 'https://api.business.githubcopilot.com/models', 'https://api.business.githubcopilot.com/responses']);
       const durable = await credentials.resolve('github-copilot', { env: {}, subscriptionProvider: 'github-copilot', now: 0 });

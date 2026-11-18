@@ -1,0 +1,37 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/tools/workspace-tools.test.ts packages/core/src/sdk/agent-session.test.ts packages/core/src/sdk/public-consumer.test.ts packages/core/src/extensions/startup-no-mcp-option.test.ts packages/server/src/security/request-security.test.ts packages/web/src/services/api.test.ts packages/web/src/store/session-store.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/web/src/services/api.test.ts (29 tests) 48ms
+stderr | packages/core/src/sdk/agent-session.test.ts > high-level Core session SDK > reports persistence failures, keeps failed writes out of memory, and isolates custom store references
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sdk/agent-session.test.ts > high-level Core session SDK > reports persistence failures, keeps failed writes out of memory, and isolates custom store references
+[SessionManager] Failed to save session.
+
+ ✓ packages/core/src/sdk/agent-session.test.ts (16 tests) 1181ms
+   ✓ high-level Core session SDK (16)
+     ✓ isolates the owned provider network scope and closes only after the last copied handle 434ms
+stdout | packages/core/src/sdk/public-consumer.test.ts > SDK emitted public package contract > runs a genuine built-Core consumer outside the installation
+SDK public consumer: memory, custom store, resume, events, redaction, usage, fork/clone, resources, typed triggers and continuation hooks OK
+
+stdout | packages/core/src/sdk/public-consumer.test.ts > SDK emitted public package contract > runs boundary regressions and nested progress/stop through the genuine public built entry
+SDK public review: fresh persisted canonical trust, queued options, accounting copies, policy copies, store boundary/init error redaction, ownership, nested progress copies and durable stop OK
+
+ ✓ packages/core/src/sdk/public-consumer.test.ts (3 tests) 2174ms
+   ✓ SDK emitted public package contract (3)
+     ✓ runs a genuine built-Core consumer outside the installation 582ms
+     ✓ runs boundary regressions and nested progress/stop through the genuine public built entry 680ms
+     ✓ checks positive and rejected public declaration calls using real package exports 912ms
+ ✓ packages/web/src/store/session-store.test.ts (17 tests) 6ms
+ ✓ packages/core/src/tools/workspace-tools.test.ts (14 tests) 5437ms
+   ✓ shared workspace tools (14)
+     ✓ terminates catastrophic regular expressions at the shared grep deadline 5003ms
+ ✓ packages/server/src/security/request-security.test.ts (8 tests) 9ms
+ ✓ packages/core/src/extensions/startup-no-mcp-option.test.ts (1 test) 3ms
+
+ Test Files  7 passed (7)
+      Tests  88 passed (88)
+   Start at  12:51:46
+   Duration  11.66s (tests 79%, transform 12%, import 9%)

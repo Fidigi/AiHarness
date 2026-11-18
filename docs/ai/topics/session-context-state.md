@@ -57,7 +57,7 @@ Original summary-call usage stays attributed even when text is replaced. CLI man
 
 ## Format and Migration
 
-The format stays native JSONL v2, Core/extension API major 1. Old unversioned/v2 histories remain readable without fabricated loadouts/checkpoints; new fields/entry variants are additive. Do not downgrade a journal containing these entries to an older reader that skips unknown parent nodes. JSON/HTML conversation exports remain display projections, not backups of the private journal. No foreign journal import/converter/writer is introduced.
+The format stays native JSONL v2, independently of Core API major 2 and extension API major 1. Old unversioned/v2 histories remain readable without fabricated loadouts/checkpoints; new fields/entry variants are additive. Do not downgrade a journal containing these entries to an older reader that skips unknown parent nodes. JSON/HTML conversation exports remain display projections, not backups of the private journal. No foreign journal import/converter/writer is introduced.
 
 ## SES Scenario Map
 

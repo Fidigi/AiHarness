@@ -1,0 +1,9 @@
+[WebServer] npm notice run @ai-harness/core@0.1.0 build
+[WebServer] npm notice run node ../../scripts/run-typescript.mjs
+[WebServer] npm notice run @ai-harness/server@0.1.0 start
+[WebServer] npm notice run tsx src/index.ts --port 3099
+[WebServer] npm notice run @ai-harness/web@0.1.0 preview
+[WebServer] npm notice run vite preview --port 3080 --host 0.0.0.0
+
+Running 34 tests using 1 worker
+····················

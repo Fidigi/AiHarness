@@ -1,0 +1,16 @@
+npm notice run @ai-harness/web@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/web/src/services/api.test.ts packages/web/src/services/terminal-replay.test.ts packages/web/src/store/settings-navigation.test.ts packages/web/src/components/settings-navigation.test.ts packages/web/src/store/preferences.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/web/src/services/api.test.ts (26 tests) 40ms
+ ✓ packages/web/src/store/settings-navigation.test.ts (31 tests) 14ms
+ ✓ packages/web/src/store/preferences.test.ts (4 tests) 5ms
+ ✓ packages/web/src/services/terminal-replay.test.ts (15 tests) 5ms
+
+ Test Files  4 passed (4)
+      Tests  76 passed (76)
+   Start at  12:58:09
+   Duration  444ms (transform 45%, tests 31%, import 17%, worker 8%)

@@ -2,7 +2,7 @@
   "code": 0,
   "stdout": {
     "versions": {
-      "core": 1,
+      "core": 2,
       "extension": 1,
       "factory": 1,
       "session": 2

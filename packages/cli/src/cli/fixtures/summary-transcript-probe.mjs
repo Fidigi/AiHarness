@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { stripVTControlCharacters } from 'node:util';
 import * as Core from '@ai-harness/core';
 const [mode,kind]=process.argv.slice(2);
-const modes=['core-branch','sdk-auto','print-auto','json-auto','rpc-manual','rpc-auto','rpc-branch','regular','fullscreen','server-agent','server-proxy','server-auto'];
+const modes=['core-branch','sdk-auto','print-auto','json-auto','rpc-manual','rpc-auto','rpc-branch','regular','fullscreen','server-agent','server-auto'];
 assert.ok(modes.includes(mode));assert.ok(['private','ordinary'].includes(kind));
 const root=await mkdtemp(path.join(os.tmpdir(),'aih-summary-wire-')),cwd=path.join(root,'work'),agent=path.join(root,'agent'),sessions=path.join(agent,'sessions');
 await mkdir(cwd);await mkdir(agent);
@@ -64,10 +64,7 @@ try{
     await request('/api/sessions');
     await request('/api/config',{type:'local',baseUrl,model:'fixture-model'});
     if(mode==='server-agent')await request(`/api/agent/sessions/${session.id}/compact`,{provider:'local',model:'fixture-model'});
-    else if(mode==='server-proxy'){
-      const messages=Core.compactionMessagesFromEntries(manager.getEffectiveContext(session.id)).slice(0,4);
-      assert.equal((await request('/api/chat/compact',{provider:'local',messages})).summary,'PUBLIC_SUMMARY');
-    }else{
+    else{
       await request('/api/workspaces/trust',{cwd,confirm:true});
       const {run}=await request('/api/agent/runs',{sessionId:session.id,cwd,provider:'local',model:'fixture-model',input:'Next',toolPreset:'chat-only',autoCompaction:true});
       const settled=await wait(async()=>{const value=await request(`/api/agent/runs/${run.id}`);return ['completed','failed','stopped'].includes(value.phase)&&value;});
@@ -117,7 +114,6 @@ try{
   const restored=new Core.SessionManager({store:new Core.JsonlSessionStore(sessions)});await restored.loadFromStore(session.id);const after=await restored.getRawEntries(session.id);
   assert.ok(before.every(entry=>after.some(value=>value.id===entry.id&&JSON.stringify(value)===JSON.stringify(entry))));
   if(branch)assert.ok(after.some(entry=>entry.type==='branch_summary'&&entry.summary==='PUBLIC_SUMMARY'));
-  else if(mode==='server-proxy')assert.deepEqual(after,before);
   else assert.equal(after.filter(entry=>entry.type==='compaction').length,1);
   console.log('summary transcript OK');
 }finally{

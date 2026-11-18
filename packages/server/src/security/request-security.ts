@@ -236,10 +236,6 @@ export function requireCapability(capability: ApiCapability): RequestHandler {
   };
 }
 
-export function getAuthContext(request: Request): AuthContext {
-  return contexts.get(request) ?? { role: 'anonymous', capabilities: new Set() };
-}
-
 interface RateBucket {
   resetAt: number;
   count: number;
@@ -284,43 +280,6 @@ export function rateLimit(options: { windowMs?: number; max?: number } = {}): Re
     }
     next();
   };
-}
-
-function decodeProtocolToken(header: string | string[] | undefined): string | undefined {
-  const source = Array.isArray(header) ? header.join(',') : header ?? '';
-  if (source.length > 16 * 1024) return undefined;
-  const protocols = source.split(',').map(value => value.trim());
-  const encoded = protocols.find(value => value.startsWith('aih.bearer.'))?.slice('aih.bearer.'.length);
-  if (!encoded || encoded.length > 14_000 || !/^[A-Za-z0-9_-]+$/u.test(encoded)) return undefined;
-  try {
-    const bytes = Buffer.from(encoded, 'base64url');
-    if (bytes.length > 10_000 || bytes.toString('base64url') !== encoded) return undefined;
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    return undefined;
-  }
-}
-
-export function authenticateUpgrade(request: IncomingMessage): AuthContext | undefined {
-  if (!isAllowedOrigin(request)) return undefined;
-  let requestUrl: URL;
-  try { requestUrl = new URL(request.url || '/', 'http://localhost'); }
-  catch { return undefined; }
-  // The WebSocket endpoint has no query contract; rejecting all query parameters keeps
-  // bearer values out of access logs even when another credential would authenticate.
-  if (requestUrl.search) return undefined;
-  const userToken = process.env.AI_HARNESS_AUTH_TOKEN || undefined;
-  const adminToken = process.env.AI_HARNESS_ADMIN_TOKEN || userToken;
-  if (!userToken && !adminToken) return { role: 'admin', capabilities: ADMIN_CAPABILITIES };
-  const browserSession = webSession(request.headers.cookie);
-  // Credentials are accepted only in non-reflected headers/cookies; URL query strings
-  // are routinely retained by access logs and must never carry a bearer token.
-  const token = bearer(request.headers.authorization)
-    ?? decodeProtocolToken(request.headers['sec-websocket-protocol'])
-    ?? undefined;
-  if (browserSession?.role === 'admin' || equalsSecret(token, adminToken)) return { role: 'admin', capabilities: ADMIN_CAPABILITIES };
-  if (browserSession?.role === 'user' || equalsSecret(token, userToken)) return { role: 'user', capabilities: USER_CAPABILITIES };
-  return undefined;
 }
 
 /** Redact every JSON response before Express serializes it for HTTP/browser consumers. */

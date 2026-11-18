@@ -5,7 +5,7 @@ import path from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { start, stop } from '../index.js';
 
-it('reloads encrypted explicit Moonshot hosts and preserves native C policy across legacy chat, agent and virtual guests', async () => {
+it('reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-ms-http-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'private');
   const chats = ['kimi-k2.6', 'kimi-k3'], keys = ['disposable-ms-http-one', 'disposable-ms-http-two'];
   const headerSecret = 'disposable-ms-http-header';
@@ -25,11 +25,10 @@ it('reloads encrypted explicit Moonshot hosts and preserves native C policy acro
         response.end(JSON.stringify({ model: body.model, choices: [{ message: { role: 'assistant', content: JSON.stringify({ label: 'safe', confidence: 0.8, probabilities: { safe: 0.8, review: 0.2 } }) }, finish_reason: 'stop' }], usage })); return;
       }
       const finished = body.messages.some((message: Record<string, unknown>) => message.role === 'tool');
-      const legacy = body.messages.some((message: Record<string, unknown>) => message.content === 'Legacy probe');
       response.setHeader('content-type', 'text/event-stream');
-      response.end([{ model: body.model, choices: [{ index: 0, delta: finished || legacy ? { content: 'native-ms-http-ok' }
+      response.end([{ model: body.model, choices: [{ index: 0, delta: finished ? { content: 'native-ms-http-ok' }
         : { tool_calls: [{ index: 0, id: 'script-1', type: 'function', function: { name: 'codemode', arguments: JSON.stringify({ code }) } }] } }] },
-        { choices: [{ index: 0, delta: {}, finish_reason: finished || legacy ? 'stop' : 'tool_calls' }], usage },
+        { choices: [{ index: 0, delta: {}, finish_reason: finished ? 'stop' : 'tool_calls' }], usage },
       ].map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n');
     } catch (error) { fixtureError = error; response.statusCode = 500; response.end('Invalid Moonshot HTTP fixture'); }
   });
@@ -67,7 +66,8 @@ it('reloads encrypted explicit Moonshot hosts and preserves native C policy acro
       expect(calls).toHaveLength(before); expect(JSON.stringify(fresh)).not.toContain(key); expect(JSON.stringify(fresh)).not.toContain(headerSecret);
       const model = chats[index]!;
       const legacy = await post('/api/chat', { provider: 'ms-native', messages: [{ role: 'user', content: 'Legacy probe' }], options: { model, thinking: 'off', maxTokens: 64 } });
-      expect(legacy.status).toBe(200); expect(await legacy.text()).toContain('native-ms-http-ok');
+      expect(legacy.status).toBe(404); expect(await legacy.json()).toEqual({ error: 'Not found' });
+      expect(calls).toHaveLength(before);
       expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
       expect((await fetch(`${base}/api/tools`, { method: 'PATCH', headers, body: JSON.stringify({ enabledTools: ['codemode'], toolPreset: 'default',
         powershellEnabled: false, codemodeEnabled: true, codemodeMode: 'only' }) })).status).toBe(200);
@@ -87,8 +87,8 @@ it('reloads encrypted explicit Moonshot hosts and preserves native C policy acro
       for (const secret of [...keys, headerSecret]) { expect(JSON.stringify(state)).not.toContain(secret); expect(journal).not.toContain(secret); }
       await stop();
     }
-    expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(8);
-    for (const [index, key] of keys.entries()) for (const call of calls.slice(index * 4, (index + 1) * 4)) {
+    expect(fixtureError).toBeUndefined(); expect(calls).toHaveLength(6);
+    for (const [index, key] of keys.entries()) for (const call of calls.slice(index * 3, (index + 1) * 3)) {
       expect(call.headers.authorization).toBe(`Bearer ${key}`); expect(call.headers['x-operator-fixture']).toBe(headerSecret);
       const k3 = call.body.model === chats[1];
       expect(call.body.thinking).toEqual(k3 ? undefined : { type: 'disabled' }); expect(call.body.reasoning_effort).toBe(k3 ? 'low' : undefined);
@@ -142,6 +142,7 @@ it('keeps the explicit CN endpoint across authenticated HTTP key rotation and se
       .toEqual(['kimi-k2.6', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k3']);
     expect((await request(`/api/provider-registry/custom/${id}/test`, 'POST', {})).status).toBe(409);
     expect(calls).toHaveLength(0);
+    expect((await request('/api/workspaces/trust', 'POST', { cwd, confirm: true })).status).toBe(200);
     for (let phase = 0; phase < 3; phase++) {
       if (phase === 1) {
         const rotated = await request(`/api/provider-registry/custom/${id}`, 'PUT', { apiKey: keys[1] });
@@ -156,8 +157,14 @@ it('keeps the explicit CN endpoint across authenticated HTTP key rotation and se
       expect(listed).toContainEqual(expect.objectContaining({ id, baseUrl, dialect: 'moonshot', configured: true, modelCount: 4 }));
       for (const key of keys) expect(JSON.stringify(listed)).not.toContain(key);
       expect(calls).toHaveLength(phase);
-      const chat = await request('/api/chat', 'POST', { provider: id, messages: [{ role: 'user', content: 'CN HTTP control' }], options: { model, thinking: 'off', maxTokens: 64 } });
-      expect(chat.status).toBe(200); expect(await chat.text()).toContain('cn-http-fixture');
+      const chat = await request('/api/agent/runs', 'POST', { cwd, provider: id, model,
+        input: 'CN HTTP control', thinking: 'off', toolPreset: 'chat-only', autoCompaction: false });
+      expect(chat.status).toBe(202);
+      const { run } = await chat.json() as { run: { id: string; sessionId: string } };
+      await vi.waitFor(async () => expect(await request(`/api/agent/runs/${run.id}`, 'GET').then(response => response.json()))
+        .toMatchObject({ phase: 'completed' }));
+      const state = await request(`/api/agent/sessions/${run.sessionId}/state`, 'GET').then(response => response.json());
+      expect(state.session.messages.at(-1)).toMatchObject({ content: 'cn-http-fixture', provider: id, model });
     }
     expect(calls).toEqual([keys[0], keys[1], keys[1]].map(key => ({ url: `${baseUrl}/chat/completions`, authorization: `Bearer ${key}`, model })));
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const key of keys)

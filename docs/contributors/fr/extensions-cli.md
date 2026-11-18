@@ -213,7 +213,7 @@ api.registerCommand('remember', {
 });
 ```
 
-Attendez la fin des écritures avant d’annoncer leur succès. Les lectures se sérialisent avec les mutations du manager et refusent un remplacement de store/feuille pendant l’attente ; elles ne constituent ni une transaction CAS interprocessus, ni une opération lecture-modification-écriture atomique. Le schéma reste JSONL v2, les API Core/extension restent en version majeure1. La façade haut niveau n’ajoute aucune mutation personnalisée ni méthode de chemin actif ; voir le [SDK de session](./session-sdk.md).
+Attendez la fin des écritures avant d’annoncer leur succès. Les lectures se sérialisent avec les mutations du manager et refusent un remplacement de store/feuille pendant l’attente ; elles ne constituent ni une transaction CAS interprocessus, ni une opération lecture-modification-écriture atomique. Le schéma reste JSONL v2, indépendamment de Core API majeure2 et de l’API d’extension majeure1. La façade haut niveau n’ajoute aucune mutation personnalisée ni méthode de chemin actif ; voir le [SDK de session](./session-sdk.md).
 
 L’état durable survit aux redémarrages et générations exécutables ; celui de `--no-session` non. `/reload` remplace les factories interactives et leurs variables locales, pas le journal : relisez le chemin sélectionné plutôt que de confondre fermeture et persistance. Un candidat invalide dans le même workspace conserve/restaure la factory précédente, pas les effets Node arbitraires. Les générations exécutables RPC restent celles du démarrage : une édition disque ou `reload_context_settings` ne les recharge pas ; redémarrez explicitement. Hooks de cycle de vie, disposers complets, renderers personnalisés et sandbox restent des contrats distincts.
 

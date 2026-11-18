@@ -4,7 +4,7 @@
 
 ## Overview
 
-Native contract version 1 describes AiHarness command syntax, options, channels and cancellation. JSON event header v3, RPC envelopes, Core/extension API 1 and JSONL session v2 are separate versioned contracts. Native goldens are authoritative; executable probes do not import a reference implementation. Linux Docker evidence does not certify other operating systems or physical terminals.
+Native contract version 1 describes AiHarness command syntax, options, channels and cancellation. JSON event header v3, RPC envelopes, Core API 2 / extension API 1 and JSONL session v2 are separate versioned contracts. Native goldens are authoritative; executable probes do not import a reference implementation. Linux Docker evidence does not certify other operating systems or physical terminals.
 
 ## Main Entry Points
 
@@ -95,11 +95,12 @@ Standalone auth accepts separate/equal login-only `--issuer` forms and rejects d
 |---|---|
 | Print stdout | Last final assistant text + LF on success; no protocol/logs/startup chrome or final success text after active interruption |
 | JSON stdout | LF JSON objects, header v3 and lifecycle; `message_end` is authoritative, `agent_settled` ends the owned run |
-| RPC stdout | Correlated `{type:"response",command,success,data-or-error}` plus interleaved lifecycle; legacy `method/params` remains migration input |
+| RPC stdout | Correlated `{type:"response",command,success,data-or-error}` plus interleaved lifecycle; retired `method/params` input receives fixed `INVALID_REQUEST` without dispatch |
 | Stderr | Diagnostics, fixed warnings and redirected extension noise; registered credentials stay redacted across channels and journals |
 | Conversation exits | 0 success; 2 invalid argv/missing prompt/selection; 1 execution/input/output-limit failure; one failed RPC request need not terminate the process |
 | Active print/JSON/RPC signals | First SIGINT/SIGTERM pins 130/143, aborts active work, prevents later initial prompts and emits `Error: Request interrupted.` + LF on stderr; join cleanup/JSON flush without forced exit across admitted writes |
 | JSON interruption | Aborted assistant/end/settled records remain JSONL; partial text is not successful final output or fabricated usage |
+| RPC input budget | 32 MiB UTF-8 JSON payload excluding LF/terminal CR; 64 MiB accumulated/pending handler input with pull backpressure; individual overflow emits body-free `RPC_FRAME_TOO_LARGE`, closes input and exits 1 after owned cleanup, without rolling back admitted writes |
 | RPC signal / EOF | Signal shutdown cancels and joins work, suppressing only its intentional premature stdin close; clean EOF drains accepted work and normally exits 0 |
 
 Written output cannot be retracted. Signal ownership begins after startup admission, before header/prompts, and lasts through cleanup. [Run lifetimes](./run-lifecycle.md) distinguish earlier native OS termination, logical callback retirement, admitted writes and physical containment. A cancelled provider turn retains the admitted user message without inventing a successful assistant entry. An `abort` acknowledgement is not a durable-settlement barrier.

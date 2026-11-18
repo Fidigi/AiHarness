@@ -146,7 +146,7 @@ export async function createRuntimeServices(
     path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@ai-harness/core'))), '..'),
     path.resolve(path.dirname(fileURLToPath(import.meta.resolve('express'))), '..'),
   ]);
-  await sessionManager.loadAllSessions();
+  // No session consumers are published until credential discovery and hydration below.
   const codemodeSelfTest = await (codemodeSelfTestPromise ??= testCodemodeSandbox());
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
@@ -196,7 +196,7 @@ export async function createRuntimeServices(
     path.join(dataDir, 'provider-secrets.enc'),
   );
   await providerRegistry.load();
-  // Provider secrets discovered from encrypted storage now participate in legacy-session scrubbing.
+  // Hydrate once, after encrypted provider secrets join the full locked legacy scrub.
   await sessionManager.loadAllSessions();
   const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels(), undefined, () => extensionRegistry.virtualModels);
   await proxy.initializeUsage(

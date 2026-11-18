@@ -155,61 +155,9 @@ export async function withRetryIfRetryable<T>(
   throw lastError;
 }
 
-/** Wrap a fetch call with retry logic */
-export async function fetchWithRetry(
-  url: string,
-  init?: RequestInit & {
-    retryOptions?: RetryOptions;
-  },
-  extraOptions?: { retryOptions?: RetryOptions },
-): Promise<Response> {
-  // Merge retry options from both possible sources (init.retryOptions or extraOptions)
-  const retryOptions = init?.retryOptions ?? extraOptions?.retryOptions;
-  const fetchOptions: RequestInit = {};
-
-  if (init) {
-    for (const key in init) {
-      if (key !== 'retryOptions') {
-        (fetchOptions as Record<string, unknown>)[key] = (init as Record<string, unknown>)[key];
-      }
-    }
-  }
-
-  return withRetryIfRetryable(async () => {
-    let response: Response;
-    try {
-      response = await fetch(url, fetchOptions);
-    } catch (error) {
-      // Network errors are always retryable
-      throw new Error(`Network error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    
-    if (!response.ok && retryOptions?.retryableStatuses) {
-      const shouldRetry = retryOptions.retryableStatuses.includes(response.status);
-      if (shouldRetry) {
-        void response.body?.cancel().catch(() => undefined);
-        throw new Error(`HTTP ${response.status}`);
-      }
-    }
-    
-    return response;
-  }, retryOptions);
-}
-
 /** Generate a unique ID */
 export function generateId(): string {
   return crypto.randomUUID();
-}
-
-/** Format a date to readable string */
-export function formatDate(date: Date): string {
-  return date.toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 /** Truncate text to max length */
@@ -221,11 +169,6 @@ export function truncate(text: string, maxLength: number): string {
 /** Sleep for a given duration */
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Deep clone an object */
-export function deepClone<T>(obj: T): T {
-  return structuredClone(obj);
 }
 
 // Re-export event emitter for lifecycle hooks and extensions

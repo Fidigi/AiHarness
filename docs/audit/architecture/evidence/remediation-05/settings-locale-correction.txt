@@ -1,0 +1,17 @@
+npm notice run ai-harness@0.1.0 npx
+npm notice run 'vitest' run packages/web/src/components/settings-locale.test.ts
+
+ RUN  v5.0.3 /app
+
+stderr | packages/web/src/components/settings-locale.test.ts > Settings locale allocation > keeps bilingual placeholders complete and existing package references/overrides live
+[i18n] Missing fr translation: settings.providerLifecycle
+
+ ✓ packages/web/src/components/settings-locale.test.ts (7 tests) 42ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  18:06:19
+   Duration  235ms (transform 58%, tests 25%, import 16%, worker 2%)
+
+npm notice run @ai-harness/web@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit

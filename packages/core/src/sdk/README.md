@@ -2,7 +2,7 @@
 
 ## English — user guide
 
-The supported import is the root-built `@ai-harness/core` public entry. This is Core API major **1**, not upstream SDK compatibility.
+The supported import is the root-built `@ai-harness/core` public entry. This is Core API major **2**, not upstream SDK compatibility. Major 2 removes `fetchWithRetry`, `formatDate` and `deepClone` without shims; use provider-owned network policy, native date formatting and `structuredClone` as appropriate. Extension API 1 and journal v2 are unchanged.
 Package release, Core major and JSONL schema (v2) are separate versions.
 
 ```ts
@@ -282,7 +282,7 @@ are not inserted into the destination manager; copies are written only through
 its persistence store, not by persisting a fork through a distinct source store. CLI startup ID/prefix/file forks use this engine, preserving private,
 custom, summary and compaction ancestry rather than copying projected messages
 alone. Existing no-session startup precedence remains. These additive lower-level
-APIs do not expand the SDK facade, API major1, schema2, retained-file bounds or the
+APIs do not expand the SDK facade, Core API major2, schema2, retained-file bounds or the
 1,024-extra-entry copy limit; cross-process CAS is not provided.
 
 `await session.editContext({targetEntryId, replacement?})` is an idle-only,
@@ -395,9 +395,7 @@ copies, store redaction, borrowed ownership, nested progress and durable stop.
 
 ## Français — guide utilisateur
 
-L'import public est l'entrée racine compilée de `@ai-harness/core`. Le contrat est **Core API 1**, indépendant de la version du paquet
-et du journal JSONL v2 ; aucune compatibilité directe avec le SDK amont n'est
-promise. L'exemple anglais ci-dessus utilise le fournisseur mock, sans réseau.
+L'import public est l'entrée racine compilée de `@ai-harness/core`. Le contrat est **Core API 2**, indépendant de la version du paquet. La majeure 2 retire `fetchWithRetry`, `formatDate` et `deepClone` sans shim ; utilisez la politique réseau des providers, le formatage natif des dates et `structuredClone` selon le besoin. L’API d’extension 1 et le journal v2 restent inchangés ; aucune compatibilité directe avec le SDK amont n'est promise. L'exemple anglais ci-dessus utilise le fournisseur mock, sans réseau.
 
 `createAgentSession` exige `cwd` et un fournisseur : configuration Core intégrée
 créée paresseusement au premier prompt, ou instance `AiProvider` prêtée par

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   calculatePublishedModelCost,
   clampPublishedThinkingLevel,
@@ -12,6 +12,68 @@ import { CerebrasProvider, MistralProvider, OpenAiMixedProvider, OpenRouterProvi
 import { getProviderPublishedModel } from './provider-model-metadata.js';
 
 describe('shared model metadata', () => {
+  it('projects one original-owner row, not a full catalogue, without borrowing the optimization for derived owners', () => {
+    class Derived extends OpenRouterProvider {}
+    const counts: number[] = [];
+    for (const Provider of [OpenRouterProvider, Derived]) {
+      const source = new Provider({ type: 'operator', apiKey: 'synthetic-metadata' });
+      const descriptor = vi.spyOn(Object, 'getOwnPropertyDescriptor');
+      let row: ReturnType<typeof getProviderPublishedModel>;
+      try {
+        row = getProviderPublishedModel('operator', 'anthropic/claude-sonnet-4.6', source);
+        counts.push(descriptor.mock.calls.length);
+      } finally { descriptor.mockRestore(); }
+      expect(row?.id).toBe('anthropic/claude-sonnet-4.6');
+      row!.capabilities.reasoning = false;
+      expect(getProviderPublishedModel('operator', row!.id, source)?.capabilities.reasoning).toBe(true);
+    }
+    expect(counts[0]).toBeLessThan(100);
+    expect(counts[1]).toBeGreaterThan(500);
+  });
+
+  it('revalidates replacement, withdrawal and API binding rather than caching a native-owner snapshot', async () => {
+    const source = new OpenRouterProvider({ type: 'operator', apiKey: 'synthetic-metadata' });
+    const id = 'anthropic/claude-sonnet-4.6', original = source.getPublishedModels;
+    const row = getProviderPublishedModel('operator', id, source)!;
+    source.getPublishedModels = () => [row];
+    row.contextWindow = 1234;
+    expect(getProviderPublishedModel('operator', id, source)?.contextWindow).toBe(1234);
+    await Promise.resolve();
+    source.getPublishedModels = () => [];
+    expect(getProviderPublishedModel('openai', id, source)).toBeUndefined();
+    expect(getSupportedThinkingLevels('openai', id, undefined, source)).toEqual(['off']);
+    let getters = 0;
+    Object.defineProperty(source, 'getPublishedModels', { configurable: true, get() { getters++; return () => []; } });
+    expect(getProviderPublishedModel('operator', id, source)).toBeUndefined();
+    expect(getters).toBe(1);
+    Object.defineProperty(source, 'getPublishedModels', { configurable: true, writable: true, value: original });
+    expect(getProviderPublishedModel('operator', id, source)?.contextWindow).not.toBe(1234);
+    source.getModelApi = () => 'openai-completions';
+    expect(getProviderPublishedModel('operator', id, source)).toBeUndefined();
+    const changed = new OpenRouterProvider({ type: 'operator', apiKey: 'synthetic-metadata' });
+    Object.setPrototypeOf(changed, new Proxy(Object.getPrototypeOf(changed), {
+      get(target, key, receiver) {
+        return key === 'getPublishedModels' ? () => [] : Reflect.get(target, key, receiver);
+      },
+    }));
+    expect(changed.getPublishedModels()).toEqual([]);
+    expect(getProviderPublishedModel('operator', id, changed)).toBeUndefined();
+    expect(getSupportedThinkingLevels('operator', id, undefined, changed)).toEqual(['off']);
+  });
+
+  it('keeps mutable adapter arrays fresh across calls and awaits, including duplicate and withdrawn rows', async () => {
+    const row = { id: 'owned', name: 'Owned', capabilities: { reasoning: true, imageInput: false, toolCalls: true } };
+    const rows = [row], source = { getPublishedModels: () => rows };
+    expect(getProviderPublishedModel('openai', 'owned', source)?.capabilities.reasoning).toBe(true);
+    row.capabilities.reasoning = false;
+    expect(getSupportedThinkingLevels('openai', 'owned', undefined, source)).toEqual(['off']);
+    await Promise.resolve(); rows.length = 0;
+    expect(getProviderPublishedModel('openai', 'o3', source)).toBeUndefined();
+    expect(getSupportedThinkingLevels('openai', 'o3', undefined, source)).toEqual(['off']);
+    rows.push({ ...row, name: '' }, row);
+    expect(getProviderPublishedModel('openai', 'owned', source)?.name).toBe('Owned');
+  });
+
   it('uses the actual native effort map across operator and conflicting aliases', () => {
     for (const alias of ['operator-window', 'mistral', 'anthropic', 'openai']) {
       const scenarios = [

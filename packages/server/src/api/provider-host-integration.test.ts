@@ -65,7 +65,7 @@ describe('real restricted provider host composition', () => {
 
   it('defaults OFF and only enables the strict environment value 1', async () => {
     const { config, services, rename, port } = await fixture(false);
-    expect(await upgrade(port)).toContain('101 Switching Protocols');
+    expect(await upgrade(port)).toContain('404 Not Found');
     expect(await (await rename()).json()).toMatchObject({ code: 'PROVIDER_ADMISSION_UNAVAILABLE' });
     await stop();
     for (const value of ['true', '01', ' 1']) {
@@ -87,7 +87,7 @@ describe('real restricted provider host composition', () => {
   it('never activates restricted mode over a still-owned previous generation with bounded asynchronous cleanup', async () => {
     const { config, port, rename } = await fixture(false);
     expect(() => createApp({ ...config, providerRenameExclusiveHost: true })).toThrow('Stop the previous host');
-    expect(await upgrade(port)).toContain('101 Switching Protocols');
+    expect(await upgrade(port)).toContain('404 Not Found');
     expect(await (await rename()).json()).toMatchObject({ code: 'PROVIDER_ADMISSION_UNAVAILABLE' });
   });
 
@@ -104,11 +104,16 @@ describe('real restricted provider host composition', () => {
 
   it('permanently refuses unleased legacy, PTY, model and resource/file mutations and upgrades', async () => {
     const { mutate, port } = await fixture();
-    for (const [url, method] of [['/api/chat', 'POST'], ['/API/CHAT', 'POST'], ['/api/CHAT/STREAM/', 'POST'], ['/api/config', 'POST'], ['/api/chat/stream', 'POST'], ['/api/chat/compact', 'POST'], ['/api/models/enabled', 'PATCH'], ['/API/MODELS/ENABLED', 'PATCH'], ['/api/models/enabled/batch', 'PATCH'], ['/api/terminals', 'POST'], ['/api/files/content', 'PUT'], ['/api/plugins/reload', 'POST'], ['/api/skills/enabled', 'PATCH'], ['/api/tools/enabled', 'PATCH'], ['/api/workspaces/trust', 'POST'], ['/api/agent/commands', 'POST'], ['/api/agent/sessions/s/commands/package', 'POST'], ['/api/mcp/test', 'POST']]) {
+    for (const [url, method] of [['/api/config', 'POST'], ['/api/models/enabled', 'PATCH'], ['/API/MODELS/ENABLED', 'PATCH'], ['/api/models/enabled/batch', 'PATCH'], ['/api/terminals', 'POST'], ['/api/files/content', 'PUT'], ['/api/plugins/reload', 'POST'], ['/api/skills/enabled', 'PATCH'], ['/api/tools/enabled', 'PATCH'], ['/api/workspaces/trust', 'POST'], ['/api/agent/commands', 'POST'], ['/api/agent/sessions/s/commands/package', 'POST'], ['/api/mcp/test', 'POST']]) {
       const response = await mutate(url!, method); expect(response.status, url).toBe(409);
       expect(await response.json()).toMatchObject({ code: 'PROVIDER_REFERENCE_OWNER_UNAVAILABLE' });
     }
-    expect(await upgrade(port)).toContain('409 Conflict');
+    for (const url of ['/api/chat', '/API/CHAT', '/api/CHAT/STREAM/', '/api/chat/stream', '/api/chat/compact']) {
+      const response = await mutate(url);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'Not found' });
+    }
+    expect(await upgrade(port)).toContain('404 Not Found');
     for (const url of ['/api/files', '/api/files/git/status', '/api/workspaces/default']) {
       expect((await fetch(`http://127.0.0.1:${port}${url}`, { headers: { Authorization: 'Bearer host-admin' } })).status).toBe(409);
     }

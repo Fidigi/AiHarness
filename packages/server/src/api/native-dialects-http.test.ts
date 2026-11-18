@@ -28,9 +28,9 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       const body = JSON.parse(text), google = request.url?.includes(':streamGenerateContent');
       const model = google ? decodeURIComponent(request.url!.split('/models/')[1]!.split(':streamGenerateContent')[0]!) : body.model;
       const profile = profiles.find(row => row.model === model)!; expect(profile).toBeDefined();
-      if (profile.dialect === 'qwen-token-plan') expect(body).toMatchObject({ enable_thinking: true, reasoning_effort: 'low', max_completion_tokens: 64 });
-      if (profile.dialect === 'xiaomi-token-plan-cn') expect(body).toMatchObject({ thinking: { type: 'disabled' }, store: false, max_completion_tokens: 64 });
-      if (profile.dialect === 'zai-coding-cn') expect(body).toMatchObject({ thinking: { type: 'enabled', clear_thinking: false }, reasoning_effort: 'low', tool_stream: true, max_tokens: 64 });
+      if (profile.dialect === 'qwen-token-plan') expect(body).toMatchObject({ enable_thinking: true, reasoning_effort: 'low' });
+      if (profile.dialect === 'xiaomi-token-plan-cn') expect(body).toMatchObject({ thinking: { type: 'disabled' }, store: false });
+      if (profile.dialect === 'zai-coding-cn') expect(body).toMatchObject({ thinking: { type: 'enabled', clear_thinking: false }, reasoning_effort: 'low', tool_stream: true });
       const header = profile.dialect === 'cloudflare-ai-gateway' ? request.headers['cf-aig-authorization'] : profile.api === 'a' ? request.headers['x-api-key'] : profile.api === 'g' ? request.headers['x-goog-api-key'] : request.headers.authorization;
       expect(typeof header).toBe('string');
       if (profile.dialect === 'cloudflare-ai-gateway') { expect(request.headers.authorization).toBeUndefined(); expect(request.headers['x-api-key']).toBeUndefined(); }
@@ -55,6 +55,7 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
       const server = await start({ port: 0, host: '127.0.0.1', dataDir, allowedRoots: [cwd], defaultCwd: cwd });
       const base = `http://127.0.0.1:${server.port}`, headers = { 'content-type': 'application/json', authorization: 'Bearer native-admin' };
       const post = (route: string, body: unknown) => fetch(base + route, { method: 'POST', headers, body: JSON.stringify(body) });
+      expect((await post('/api/workspaces/trust', { cwd, confirm: true })).status).toBe(200);
       for (const profile of profiles) {
         const id = `native-${profile.dialect}`, definition = { id, name: id, dialect: profile.dialect,
           apiKey: `synthetic-${profile.dialect}-first`, baseUrl: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned` };
@@ -69,8 +70,15 @@ it('uses newly composed A/G/C/R dialects through authenticated HTTP, rotation an
         expect((await post('/api/provider-registry/models', { provider: id, id: 'future/private' })).status).toBe(400);
         expect(calls).toHaveLength(before);
         const chat = async () => {
-          const result = await post('/api/chat', { provider: id, messages: [{ role: 'user', content: 'Native probe' }], options: { model: profile.model, maxTokens: 64, thinking: 'off' } });
-          expect(result.status).toBe(200); expect(await result.text()).toContain('native-http-ok');
+          // The retired raw maxTokens option is not an agent HTTP capability.
+          const result = await post('/api/agent/runs', { cwd, provider: id, model: profile.model,
+            input: 'Native probe', thinking: 'off', toolPreset: 'chat-only', autoCompaction: false });
+          expect(result.status).toBe(202);
+          const { run } = await result.json() as { run: { id: string; sessionId: string } };
+          await vi.waitFor(async () => expect(await fetch(`${base}/api/agent/runs/${run.id}`, { headers }).then(response => response.json()))
+            .toMatchObject({ phase: 'completed' }));
+          const state = await fetch(`${base}/api/agent/sessions/${run.sessionId}/state`, { headers }).then(response => response.json());
+          expect(state.session.messages.at(-1)).toMatchObject({ content: 'native-http-ok', provider: id, model: profile.model });
         };
         await chat();
         expect(calls.at(-1)).toMatchObject({ model: profile.model, key: `synthetic-${profile.dialect}-${restart ? 'rotated' : 'first'}` });

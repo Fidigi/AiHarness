@@ -1,0 +1,2 @@
+Checked 107 Markdown files and 1493 local links (predictive mode).
+Documentation links and versioning boundaries are valid.

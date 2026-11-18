@@ -1,4 +1,5 @@
-import { apiFetch, boundedSseRecords, type TerminalSnapshot, type TerminalStreamRecord } from './api';
+import { apiFetch, boundedSseRecords } from './api-transport';
+import type { TerminalSnapshot, TerminalStreamRecord } from './api';
 
 export class TerminalStreamError extends Error {
   constructor(readonly status?: number) { super('Terminal stream unavailable'); }

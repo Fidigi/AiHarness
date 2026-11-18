@@ -59,5 +59,5 @@ try {
   const malformed = { ...inputs.theme, export: { unknown: '#abc' } }; assert.equal(validators.theme(malformed), false);
   await writeFile(target, JSON.stringify(malformed)); await assert.rejects(core.ThemeManager.load(target, [], {}, { cwd, projectTrusted: false }), /Unknown theme export token/);
 } finally { await rm(root, { recursive: true, force: true }); }
-assert.equal(core.AI_HARNESS_CORE_API_VERSION, 1);
+assert.equal(core.AI_HARNESS_CORE_API_VERSION, 2);
 process.stdout.write('native editor schemas OK\n');

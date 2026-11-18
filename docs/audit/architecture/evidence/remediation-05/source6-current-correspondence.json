@@ -1,0 +1,12 @@
+{
+  "image": "sha256:e8fc137c0f3ed488e853b348e599bf6e960b349f28511223ec028d1cff2478ec",
+  "scope": "Image-relative regular code/config/JSON/CSS/HTML/shell/Markdown files under packages/scripts/tests/e2e/.docker/.github/demo plus .dockerignore, package/lock/tsconfig/Vitest/Playwright root files. Excludes node_modules/dist/coverage/generated reports/.git; not a complete binary/Docker-context identity claim. Initial scanner incorrectly assumed Makefile was copied and failed ENOENT before comparison; corrected to actual image inputs.",
+  "files": 1460,
+  "differences": [
+    {
+      "file": "packages/web/src/components/settings-locale.test.ts",
+      "imageSha256": "c3d6883baf02b5d25842634144d68dc0f63594499f6606bfa6b39e9ae08d5d88",
+      "currentSha256": "a816c7e284a75364af65a5831ba28ab8d10669c6892cb26bc6a3b72c36b6df31"
+    }
+  ]
+}

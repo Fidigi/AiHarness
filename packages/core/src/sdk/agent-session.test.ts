@@ -90,7 +90,7 @@ describe('high-level Core session SDK', () => {
         type: 'cerebras', apiKey: key, baseUrl: `http://127.0.0.1:${(wire.address() as { port: number }).port}/owned-sdk-cerebras/v1`,
       } } });
       expect(construct).not.toHaveBeenCalled(); expect(calls).toEqual([]);
-      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 1, modelDiscovery: false, oauthLogin: false });
+      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 2, modelDiscovery: false, oauthLogin: false });
       expect((await sdk.promptAndWait('First owned turn')).phase).toBe('completed');
       await sdk.setModel('qwen-3.8-27b'); await sdk.setThinking('high');
       expect((await sdk.promptAndWait('Second owned turn')).phase).toBe('completed');
@@ -145,7 +145,7 @@ describe('high-level Core session SDK', () => {
         type: 'mistral-conversations', apiKey: key, baseUrl: `http://127.0.0.1:${(wire.address() as { port: number }).port}`,
       } } });
       expect(construct).not.toHaveBeenCalled(); expect(calls).toEqual([]);
-      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 1, modelDiscovery: false, oauthLogin: false });
+      expect(sdk.capabilities).toMatchObject({ coreApiVersion: 2, modelDiscovery: false, oauthLogin: false });
       expect((await sdk.promptAndWait('First owned turn')).phase).toBe('completed');
       await sdk.setModel('magistral-medium-latest'); await sdk.setThinking('high');
       expect((await sdk.promptAndWait('Second owned turn')).phase).toBe('completed');

@@ -602,11 +602,11 @@ Les requêtes canoniques utilisent `type` et un `id` chaîne facultatif :
 
 Les réponses utilisent `type: "response"`, répètent la commande et l’ID, puis contiennent `success` avec `data` ou `error`. Un prompt diffuse les mêmes événements agent/tour/message/outil que le mode JSON, sans en-tête de session. RPC prend aussi en charge les images et l’expansion des prompts/skills découverts ; les commandes d’extension immédiates ; le steering avant le prochain tour modèle, les follow-ups ultérieurs et l’arrêt ; la liste et le changement bornés/mis en cache des modèles configurés ainsi que le cycle ordonné des références exactes/floues/globs `--models`, avec niveau par entrée borné par ses capacités ; la création, le changement, le fork dans le journal courant, le clone et les projections imbriquées de l’historique brut ; l’usage cache-aware des messages/compactions sans prix inventé pour un modèle inconnu ; les événements de retry provider/résumé ; le bash de confiance avec sortie incrémentale corrélée et `fullOutputPath` privé en cas de troncature ; l’export HTML ; et les dialogues d’extension. Lisez stdout en continu et séparez uniquement sur LF ; les écritures du protocole et les chunks des providers intégrés sont attendus, tandis qu’une extension non coopérative est bornée.
 
-Les sélecteurs de démarrage usuels (`--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, `--no-session`) s’appliquent, de même que les réglages agent de modèles, raisonnement, outils, ressources, files, retries et compaction. `--resume` est réservé au terminal interactif : utilisez `--session` en RPC. Les anciennes requêtes `{id,method,params}` restent acceptées pour migration. Les diagnostics utilisent toujours stderr, les processus shell de confiance n’héritent pas des variables d’environnement dont le nom ressemble à un credential, et les sorties complètes conservées sont privées et expirent par défaut après 24 heures.
+Les sélecteurs de démarrage usuels (`--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, `--no-session`) s’appliquent, de même que les réglages agent de modèles, raisonnement, outils, ressources, files, retries et compaction. `--resume` est réservé au terminal interactif : utilisez `--session` en RPC. **Rupture :** l’ancien moteur `{id,method,params}` est supprimé ; toute requête contenant `method` ou `params` reçoit le refus fixe `INVALID_REQUEST` / `Legacy method/params RPC is not supported. Use type commands.`, sans exécution. Utilisez les commandes canoniques `type`. Les payloads JSON sont limités à 32 Mio UTF-8 (hors LF/CR terminal) ; les entrées accumulées et traitements en cours sont bornés à 64 Mio avec régulation de lecture. Le dépassement individuel ferme l’entrée, émet `RPC_FRAME_TOO_LARGE` sans contenu sur stderr et termine avec un code non nul après nettoyage ; les écritures déjà admises ne sont pas annulées. Les diagnostics utilisent toujours stderr, les processus shell de confiance n’héritent pas des variables d’environnement dont le nom ressemble à un credential, et les sorties complètes conservées sont privées et expirent par défaut après 24 heures.
 
 ### SDK TypeScript de session
 
-`@ai-harness/core` exporte `createAgentSession` (Core API 1) pour une configuration intégrée explicite ou une instance de fournisseur prêtée. La confiance est refusée par défaut et vérifiée fraîchement dans les limites canoniques autorisées. Sans `store`, le fonctionnement reste réellement en mémoire ; `JsonlSessionStore`/un `SessionStore` structurel permet persistance et reprise. Fabrique/lectures ne découvrent ni ressources/modèles, ne chargent aucun exécutable/MCP et ne lancent aucune commande de credentials.
+`@ai-harness/core` exporte `createAgentSession` (Core API 2 ; `fetchWithRetry`, `formatDate` et `deepClone` retirés sans shim) pour une configuration intégrée explicite ou une instance de fournisseur prêtée. La confiance est refusée par défaut et vérifiée fraîchement dans les limites canoniques autorisées. Sans `store`, le fonctionnement reste réellement en mémoire ; `JsonlSessionStore`/un `SessionStore` structurel permet persistance et reprise. Fabrique/lectures ne découvrent ni ressources/modèles, ne chargent aucun exécutable/MCP et ne lancent aucune commande de credentials.
 
 `prompt` démarre le travail détaché ; `promptAndWait` l’attend. Stop accuse réception : attendez `wait()` pour les résultats/usages interrompus durables. Les mutations d’historique/settings sont refusées pendant un run. Lectures/événements retournent des copies expurgées ; forks/clones partagent les ressources possédées, donc disposez chaque handle. L’expansion explicite retourne du texte ; une compaction exige un résumé/callback fourni. OAuth/découverte/chargement/shell/changement de fournisseur ne sont pas implicites. Les callbacks/stockages hôte sont des intégrations de confiance, pas sandboxées.
 
@@ -614,7 +614,9 @@ Consultez la [référence SDK bilingue complète et son exemple mock](../../../p
 
 ## Utiliser l’interface Web
 
-En utilisation normale, `ai-harness-web` sert l’interface React, l’API, le streaming SSE et les WebSockets depuis un seul processus et un seul port.
+En utilisation normale, `ai-harness-web` sert l’interface React, l’API et le streaming SSE depuis un seul processus et un seul port. Les providers peuvent indépendamment utiliser les WebSockets sortants Core.
+
+**Rupture (2026-11-17) :** les anciens `/api/chat`, `/api/chat/stream`, `/api/chat/compact` et `/api/chat/ws` entrant sont retirés sans adaptateur. Une requête authentifiée reçoit HTTP404 `{error:"Not found"}`, sans upgrade ni appel provider. Utilisez `/api/agent/runs` et les états/événements/compactions de session. Les conversations admises restent détachées d’une déconnexion HTTP. L’ancien sélecteur de transport est supprimé et sa préférence enregistrée ignorée. Les migrations de journaux/réglages et les WebSockets sortants des providers sont conservés.
 
 ### Démarrage
 
@@ -688,7 +690,6 @@ La page **Settings** permet de :
 - inspecter et modifier une configuration MCP expurgée, tester explicitement un serveur stdio/HTTP configuré, ou prévisualiser puis importer/remplacer une entrée collée vérifiée ;
 - installer et administrer explicitement les packages/plugins globaux ou projet, leurs versions et leurs ressources ;
 - configurer les profils de sous-agent et leur portée globale/projet, puis suivre les agents enfants ;
-- conserver le transport historique SSE/WebSocket pour les anciens endpoints de chat ;
 - choisir les thèmes System, Light, Dark, Mist, Rose ou Pine ;
 - régler largeur du contenu, taille de police et ouverture du raisonnement ;
 - activer séparément son, notifications navigateur, Web Push et actions sur la sélection ;
@@ -891,7 +892,7 @@ Pendant un run agent, le modèle peut appeler l’outil `spawn_subagent` avec un
 
 Le bouton **Child agents** dans l’en-tête de conversation affiche le nombre de runs, leur tâche, état, phase et progression. Un badge signale un run terminé, en échec ou arrêté qui demande de l’attention. Ouvrir le panneau acquitte le badge ; **Open details** ouvre la session enfant, **Back to parent agent** revient au parent et **Stop child agent** annule un run actif. Une notification interne reste visible dans le centre de statuts à la fin. Les sessions enfants survivent à un redémarrage, mais la liste de progression des runs déjà terminés est conservée uniquement pendant le processus serveur courant.
 
-Le bouton **Apply** conserve un Bearer token de compatibilité dans `sessionStorage`, isolé par onglet. Lorsque le serveur exige une authentification, la page de connexion échange plutôt ce token contre un cookie de session opaque `HttpOnly` : le secret n’est alors pas lisible par JavaScript. Les préférences versionnées et le choix du transport historique sont conservés dans `localStorage`, jamais les credentials provider.
+Le bouton **Apply** conserve un Bearer token de compatibilité dans `sessionStorage`, isolé par onglet. Lorsque le serveur exige une authentification, la page de connexion échange plutôt ce token contre un cookie de session opaque `HttpOnly` : le secret n’est alors pas lisible par JavaScript. Les préférences versionnées sont conservées dans `localStorage`, jamais les credentials provider. La préférence de transport retirée n’est plus lue ni écrite.
 
 ### Installation PWA et mode hors ligne
 
@@ -1151,7 +1152,7 @@ Le serveur refuse désormais une adresse non-loopback sans `AI_HARNESS_AUTH_TOKE
 export AI_HARNESS_ALLOWED_ORIGINS='https://ai.example.com,https://admin.example.com'
 ```
 
-Les mutations HTTP et les upgrades WebSocket refusent les origines non autorisées. La durée de session Web peut être ajustée entre cinq minutes et sept jours avec `AI_HARNESS_WEB_SESSION_TTL_MS`.
+Les requêtes HTTP, y compris les tentatives sur les chemins de chat/upgrade retirés, refusent les origines non autorisées. La durée de session Web peut être ajustée entre cinq minutes et sept jours avec `AI_HARNESS_WEB_SESSION_TTL_MS`.
 
 ## Dépannage
 

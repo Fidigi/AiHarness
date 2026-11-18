@@ -213,7 +213,7 @@ api.registerCommand('remember', {
 });
 ```
 
-Writes must settle before success. Reads serialize with manager mutations and refuse a host store/leaf replacement while awaiting; they are not a cross-process CAS transaction or an atomic read-modify-write helper. Schema remains JSONL v2 and Core/extension API major1. The high-level session facade adds no custom mutation or active-path method; see the [session SDK](./session-sdk.md).
+Writes must settle before success. Reads serialize with manager mutations and refuse a host store/leaf replacement while awaiting; they are not a cross-process CAS transaction or an atomic read-modify-write helper. Schema remains JSONL v2, independently of Core API major2 and extension API major1. The high-level session facade adds no custom mutation or active-path method; see the [session SDK](./session-sdk.md).
 
 Durable state survives process restart and executable generations; `--no-session` state does not. `/reload` replaces interactive factories and their module-local variables, not the session journal; read the selected path again rather than treating closure state as persistence. Failed same-workspace candidates retain/restore the preceding factory, not arbitrary Node side effects. RPC executable generations remain startup-scoped: disk edits and `reload_context_settings` do not reload them; restart explicitly. Lifecycle hooks, disposer completeness, custom renderers and sandboxing are separate contracts.
 

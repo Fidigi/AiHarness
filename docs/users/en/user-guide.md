@@ -602,11 +602,11 @@ Canonical requests use `type` and an optional string `id`:
 
 Responses use `type: "response"`, repeat the command and ID, and contain `success` plus either `data` or `error`. Prompting streams the same agent/turn/message/tool events as JSON mode but without a session header. RPC also supports prompt images and discovered prompt/skill expansion; immediate extension commands; next-turn steering, later follow-ups and abort; bounded cached configured-provider model listing/switching and ordered exact/fuzzy/glob `--models` cycling with per-entry capability-clamped thinking; session creation, switching, in-place forks, clones and nested raw-history projections; cache-aware message/compaction usage without invented unknown-model prices; provider/summarization retry events; trusted bash with incremental correlated output and a private `fullOutputPath` when truncated; HTML export; and extension dialog request/response records. Read stdout continuously and split only on LF; protocol writes and built-in provider chunks are awaited, and non-cooperative extension streams are bounded.
 
-Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do agent settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. The former `{id,method,params}` requests remain accepted for migration. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
+Normal startup selectors such as `--continue`, `--session`, `--session-id`, `--fork`, `--session-dir`, `--name`, and `--no-session` apply, as do agent settings for models, thinking, tools, resources, queues, retry and compaction. `--resume` is interactive-only, so use `--session` in RPC. **Breaking change:** the former `{id,method,params}` engine has been removed; requests containing `method` or `params` receive fixed `INVALID_REQUEST` / `Legacy method/params RPC is not supported. Use type commands.` without execution. Send canonical `type` commands instead. JSON payloads are limited to 32 MiB UTF-8 (excluding LF/terminal CR); accumulated and pending handler input is bounded at 64 MiB with read backpressure. Individual overflow closes input, emits body-free `RPC_FRAME_TOO_LARGE` on stderr and exits nonzero after cleanup; already-admitted writes are not rolled back. Diagnostics always use stderr, trusted shell children do not inherit credential-like environment variables, and retained full-output files are private and expire after 24 hours by default.
 
 ### TypeScript Session SDK
 
-`@ai-harness/core` exports `createAgentSession` (Core API 1) for an explicit built-in provider config or borrowed provider instance. Trust defaults to denial and is checked freshly within canonical allowed roots. Omit `store` for true memory, or supply `JsonlSessionStore`/a structural `SessionStore` for persistence and resume. Factory/read operations do not discover resources/models, load executable extensions/MCP or run credential commands.
+`@ai-harness/core` exports `createAgentSession` (Core API 2; `fetchWithRetry`, `formatDate` and `deepClone` removed without shims) for an explicit built-in provider config or borrowed provider instance. Trust defaults to denial and is checked freshly within canonical allowed roots. Omit `store` for true memory, or supply `JsonlSessionStore`/a structural `SessionStore` for persistence and resume. Factory/read operations do not discover resources/models, load executable extensions/MCP or run credential commands.
 
 `prompt` starts detached work; `promptAndWait` awaits it. Stop acknowledges cancellation: await `wait()` for durable interrupted results/usage. History/settings mutations are refused while busy. Reads/events return detached redacted snapshots; forks/clones share owned runtime resources, so dispose every handle. Explicit resource expansion returns text, and compaction requires a supplied summary/callback. Unsupported OAuth/discovery/loading/shell/provider-switching capabilities are not implied. Host callbacks/stores are trusted integrations, not sandboxed.
 
@@ -614,7 +614,9 @@ See the [complete bilingual SDK reference and mock example](../../../packages/co
 
 ## Using the Web Interface
 
-In normal use, `ai-harness-web` serves the React interface, API, SSE streaming and WebSockets from a single process and port.
+In normal use, `ai-harness-web` serves the React interface, API and SSE streaming from a single process and port. Providers can independently use outbound Core WebSockets.
+
+**Breaking change (2026-11-17):** legacy `/api/chat`, `/api/chat/stream`, `/api/chat/compact` and inbound `/api/chat/ws` are retired without an adapter. Authenticated requests receive HTTP404 `{error:"Not found"}`, without an upgrade or provider dispatch. Use detached `/api/agent/runs` and session state/events/compaction. Accepted conversations remain detached from HTTP disconnect. The old transport selector is removed; its saved preference is ignored. Journal/settings migrations and outbound provider WebSockets remain supported.
 
 ### Starting Up
 
@@ -688,7 +690,6 @@ The **Settings** page allows:
 - inspecting and editing redacted MCP configuration, explicitly testing one configured stdio/HTTP server, or previewing and importing/replacing reviewed pasted entries;
 - explicitly installing and administering global or project packages/plugins, their versions and resources;
 - configuring subagent profiles and their global/project scope, then monitoring child agents;
-- keeping SSE/WebSocket history transport for legacy chat endpoints;
 - choosing System, Light, Dark, Mist, Rose or Pine themes;
 - adjusting content width, font size and thinking expansion;
 - enabling sound, browser notifications, Web Push and selection actions separately;
@@ -891,7 +892,7 @@ During an agent run, the model can call `spawn_subagent` with a profile ID, boun
 
 The **Child agents** button in the conversation header shows run count, task, state, phase and progress. A badge marks a completed, failed or stopped run that needs attention. Opening the panel acknowledges the badge; **Open details** opens the child session, **Back to parent agent** returns to the parent, and **Stop child agent** cancels an active run. An internal notification remains in the status center when a run finishes. Child sessions survive a restart, but progress records for completed runs are retained only for the lifetime of the current server process.
 
-The **Apply** button keeps a compatibility Bearer token in per-tab `sessionStorage`. When authentication is required, the login page instead exchanges that token for an opaque `HttpOnly` session cookie, so JavaScript cannot read the secret. Versioned preferences and the legacy transport choice are stored in `localStorage`, never provider credentials.
+The **Apply** button keeps a compatibility Bearer token in per-tab `sessionStorage`. When authentication is required, the login page instead exchanges that token for an opaque `HttpOnly` session cookie, so JavaScript cannot read the secret. Versioned preferences are stored in `localStorage`, never provider credentials. The retired transport preference is no longer read or written.
 
 ### PWA Installation and Offline Mode
 
@@ -1146,7 +1147,7 @@ Server now refuses non-loopback address without `AI_HARNESS_AUTH_TOKEN` or `AI_H
 export AI_HARNESS_ALLOWED_ORIGINS='https://ai.example.com,https://admin.example.com'
 ```
 
-HTTP mutations and WebSocket upgrades refuse unauthorized origins. Web session duration adjustable between five minutes and seven days with `AI_HARNESS_WEB_SESSION_TTL_MS`.
+HTTP requests, including attempts to access retired chat/upgrade paths, refuse unauthorized origins. Web session duration adjustable between five minutes and seven days with `AI_HARNESS_WEB_SESSION_TTL_MS`.
 
 ## Troubleshooting
 

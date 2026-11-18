@@ -1,0 +1,31 @@
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+
+
+[WebServer] npm notice run vite
+
+Running 2 tests using 1 worker
+
+[1/2] [chromium] › e2e/performance.spec.ts:89:3 › Budgets et longues conversations › virtualise une conversation longue et restaure sa vue bornée avant le réseau
+  1) [chromium] › e2e/performance.spec.ts:89:3 › Budgets et longues conversations › virtualise une conversation longue et restaure sa vue bornée avant le réseau
+
+    Test timeout of 30000ms exceeded.
+
+    Error: cdpSession.send: Target page, context or browser has been closed
+
+      47 |   finally {
+      48 |     try {
+    > 49 |       const { profile } = await client.send('Profiler.stop');
+         |                                        ^
+      50 |       const { metrics } = await client.send('Performance.getMetrics');
+      51 |       const completed = new Promise<{ stream?: string }>(resolve => client.once('Tracing.tracingComplete', resolve));
+      52 |       await client.send('Tracing.end');
+        at profileBrowser (/app/e2e/performance.spec.ts:49:40)
+        at /app/e2e/performance.spec.ts:90:5
+
+    Error Context: test-results/profile-comparison/performance-Budgets-et-lon-983b6--vue-bornée-avant-le-réseau-chromium/error-context.md
+
+
+[2/2] [chromium] › e2e/performance.spec.ts:121:3 › Budgets et longues conversations › ne charge le lourd client terminal qu’à sa première ouverture
+  1 failed
+    [chromium] › e2e/performance.spec.ts:89:3 › Budgets et longues conversations › virtualise une conversation longue et restaure sa vue bornée avant le réseau
+  1 passed (34.0s)

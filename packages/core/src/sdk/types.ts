@@ -65,7 +65,7 @@ export type AgentCompactionTarget = ReturnType<SessionManager['requestCompaction
 export type AgentCompactionDetails = Parameters<SessionManager['applyCompaction']>[3];
 
 export interface AgentSessionCapabilities {
-  coreApiVersion: 1;
+  coreApiVersion: 2;
   persistence: 'memory' | 'caller-store';
   conversation: true;
   eventProtocolVersion: 1;

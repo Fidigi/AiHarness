@@ -1,0 +1,13 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run tests/functional-parity/installed-executable.test.ts -t Core API 2 utility removal
+
+ RUN  v5.0.3 /app
+
+ ✓ tests/functional-parity/installed-executable.test.ts (403 tests | 402 skipped) 51542ms
+   ✓ CLI-RUN-01 genuine locally packed installed executable (364)
+     ✓ enforces the Core API 2 utility removal in installed declarations and runtime 2037ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 402 skipped (403)
+   Start at  12:54:13
+   Duration  53.33s (tests 97%, transform 2%, import 1%)

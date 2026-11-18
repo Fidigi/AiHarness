@@ -1,0 +1,20 @@
+{
+  "criteria": 16,
+  "counts": {
+    "DONE": 16
+  },
+  "closurePercent": 100,
+  "criteriaEvidence": "README.md#completion-audit",
+  "acceptance": "User explicitly directs verified non-reproduced bugs are OK/non-blocking without a fix. Historical raw full-suite failures retained; not relabeled PASS.",
+  "surfaceTotals": [
+    16,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    16
+  ],
+  "remainingCriteria": 0
+}

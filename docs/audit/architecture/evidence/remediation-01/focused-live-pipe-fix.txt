@@ -1,0 +1,13 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-server.test.ts packages/cli/src/rpc/rpc-input.test.ts packages/cli/src/rpc/session-branch-ui.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/session-branch-ui.test.ts (7 tests) 454ms
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 150ms
+ ✓ packages/cli/src/rpc/rpc-input.test.ts (10 tests) 501ms
+
+ Test Files  3 passed (3)
+      Tests  24 passed (24)
+   Start at  12:09:32
+   Duration  3.18s (transform 41%, tests 37%, import 21%)

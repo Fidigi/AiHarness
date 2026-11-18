@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {SessionManager,JsonlSessionStore,SessionBranchCancelledError,AI_HARNESS_CORE_API_VERSION} from '@ai-harness/core';
 const scenario=process.argv[2]??'all';
-assert.equal(AI_HARNESS_CORE_API_VERSION,1);
+assert.equal(AI_HARNESS_CORE_API_VERSION,2);
 assert.ok(['all','memory','durable','external','policy','group','title'].includes(scenario));
 const root=await mkdtemp(path.join(os.tmpdir(),'aih-public-row-copy-'));
 try {
