@@ -8,6 +8,7 @@ import { serializeSessionForExport } from '../sessions/serialization.js';
 import { getCompactionModelMessages } from '../sessions/compaction-model-messages.js';
 import { getSummaryModelMessages } from '../sessions/summary-model-messages.js';
 import { CredentialRedactor } from './credentials.js';
+import { closeProviderNetworkDispatchers } from './provider-network.js';
 import { ExtensionRegistry } from '../extensions/extension-registry.js';
 import { runToolLoop } from '../agent/tool-loop.js';
 import { streamProviderTurn } from '../agent/provider-turn.js';
@@ -24,6 +25,8 @@ const servers: Server[] = [];
 const roots: string[] = [];
 afterEach(async () => {
   vi.unstubAllGlobals();
+  // Bound AbortSignal.any dependants to one case instead of the entire catalogue run.
+  await closeProviderNetworkDispatchers();
   for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
   // Filesystem teardown must not consume the request/persistence assertion deadline.
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
