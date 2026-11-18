@@ -1,4 +1,5 @@
-import { expect, test, type Locator } from './fixtures/test-budget';
+import { expect, test } from './fixtures/test-budget';
+import { expectContrast as expectReaderContrast } from './fixtures/contrast';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 test.describe('Explorer, Git et viewer', () => {
@@ -135,26 +136,6 @@ test.describe('touch file controls', () => {
     });
   }
 });
-
-// Contrast must be measured on the rendered reader, not just palette constants.
-async function expectReaderContrast(elements: Locator, property: 'color' | 'borderTopColor' | 'outlineColor' = 'color', minimum = 4.5): Promise<void> {
-  const results = await elements.evaluateAll((nodes, property) => nodes.map(node => {
-    const rgb = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
-    const luminance = (values: number[]) => values.map(v => v / 255)
-      .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
-      .reduce((sum, v, index) => sum + v * [.2126, .7152, .0722][index]!, 0);
-    let ancestor: Element | null = node;
-    let background = 'rgba(0, 0, 0, 0)';
-    while (ancestor && background === 'rgba(0, 0, 0, 0)') {
-      background = getComputedStyle(ancestor).backgroundColor;
-      ancestor = ancestor.parentElement;
-    }
-    const [low, high] = [luminance(rgb(getComputedStyle(node)[property])), luminance(rgb(background))].sort((a, b) => a - b);
-    return { selector: node.className, ratio: (high! + .05) / (low! + .05) };
-  }), property);
-  expect(results.length).toBeGreaterThan(0);
-  for (const result of results) expect(result.ratio, result.selector).toBeGreaterThanOrEqual(minimum);
-}
 
 for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 'system-dark']) {
   test(`reader semantic colors and text contrast: ${theme}`, async ({ page }) => {

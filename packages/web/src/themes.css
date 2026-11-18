@@ -20,12 +20,39 @@
   --status-warning: #f2cb83;
   --status-danger: #ffabb5;
   --surface-success: #183729;
+  --surface-warning: #3a2e19;
   --surface-danger: #48252d;
   --syntax-comment: var(--text-secondary);
   --syntax-string: var(--status-success);
   --syntax-number: var(--status-warning);
   --syntax-keyword: var(--text-link);
+  /* Existing command-output colors need readable Light counterparts too. */
+  --ansi-black: #a0aaba;
+  --ansi-red: #ff7b86;
+  --ansi-green: #78d69d;
+  --ansi-yellow: #f5d477;
+  --ansi-blue: #83adff;
+  --ansi-magenta: #d89cff;
+  --ansi-cyan: #73d6e8;
+  --ansi-white: #e8edf8;
+  --ansi-bright-black: #929db5;
+  --ansi-bright-red: #ff9aa3;
+  --ansi-bright-green: #9ae8b7;
+  --ansi-bright-yellow: #ffe69a;
+  --ansi-bright-blue: #a8c5ff;
+  --ansi-bright-magenta: #e8b9ff;
+  --ansi-bright-cyan: #9ce7f2;
+  --ansi-bright-white: #ffffff;
 }
+
+a { color: var(--text-link); }
+input, select, textarea, progress { accent-color: var(--text-link); }
+input::placeholder, textarea::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.syntax-comment { color: var(--syntax-comment); font-style: italic; }
+.syntax-string { color: var(--syntax-string); }
+.syntax-number { color: var(--syntax-number); }
+.syntax-keyword { color: var(--syntax-keyword); font-weight: 600; }
 
 html[data-theme="light"] {
   color-scheme: light;
@@ -46,7 +73,24 @@ html[data-theme="light"] {
   --status-warning: #805400;
   --status-danger: #a2263d;
   --surface-success: #e9f5ed;
+  --surface-warning: #fff4dc;
   --surface-danger: #fff0f2;
+  --ansi-black: #3c4552;
+  --ansi-red: #a41e31;
+  --ansi-green: #16613b;
+  --ansi-yellow: #785300;
+  --ansi-blue: #2458ca;
+  --ansi-magenta: #76318b;
+  --ansi-cyan: #006575;
+  --ansi-white: #526071;
+  --ansi-bright-black: #526071;
+  --ansi-bright-red: #84273a;
+  --ansi-bright-green: #185d45;
+  --ansi-bright-yellow: #704900;
+  --ansi-bright-blue: #1946a0;
+  --ansi-bright-magenta: #613c82;
+  --ansi-bright-cyan: #00616d;
+  --ansi-bright-white: #202630;
 }
 
 html[data-theme="mist"] {

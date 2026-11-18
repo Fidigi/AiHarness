@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/test-budget';
+import { expectContrast } from './fixtures/contrast';
 
 // Relative conversation ages must not move every day in visual baselines.
 // Freeze Date only: browser timers, animations and network ordering stay real.
@@ -18,6 +19,75 @@ const scenarios = [
 ] as const;
 
 const mcpScenarios = scenarios.filter(scenario => scenario.name.startsWith('desktop') || scenario.name.startsWith('mobile'));
+
+for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 'system-dark']) {
+  test(`shared semantic surfaces: ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: theme.endsWith('dark') ? 'dark' : 'light' });
+    await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+      version: 4, theme: theme.startsWith('system-') ? 'system' : theme, filesOpen: false,
+    })), theme);
+    const session = mockSession('theme-shell', 'Theme shell', [
+      { role: 'user', content: 'Inspect the workspace.' },
+      { role: 'assistant', content: 'Readable content\n\n```ts\nconst label = "hello"; // readable comment\nconst count = 42;\n```' },
+    ]);
+    session.messages[1]!.blocks = [
+      { type: 'text', text: session.messages[1]!.content },
+      { type: 'tool_call', id: 'theme-output', name: 'bash', input: { command: 'printf synthetic-output' } },
+      { type: 'tool_result', toolCallId: 'theme-output', name: 'bash', isError: false,
+        content: [...Array.from({ length: 8 }, (_, index) => 30 + index), ...Array.from({ length: 8 }, (_, index) => 90 + index)]
+          .map(code => `\u001b[${code}mColor ${code}\u001b[0m`).join(' ') },
+    ];
+    await installMockApi(page, { sessions: [session], workspaceFiles: [{ path: 'README.md', content: '# Workspace', language: 'markdown' }] });
+    const expectRoles = async (selector: string, surface: string | null, text = '--text-primary') => {
+      const elements = page.locator(selector);
+      expect(await elements.count()).toBeGreaterThan(0);
+      const values = await elements.evaluateAll((nodes, { surface, text }) => nodes.map(element => {
+        const style = getComputedStyle(element);
+        const probe = document.createElement('span'); document.body.append(probe);
+        probe.style.color = surface ? style.getPropertyValue(surface) : 'transparent'; const background = getComputedStyle(probe).color;
+        probe.style.color = style.getPropertyValue(text); const foreground = getComputedStyle(probe).color;
+        probe.remove();
+        return { selector: element.className || element.tagName, background: style.backgroundColor === background, foreground: style.color === foreground };
+      }), { surface, text });
+      for (const value of values) expect(value, selector).toMatchObject({ background: true, foreground: true });
+    };
+    await page.goto('/chat/theme-shell');
+    await expect(page.locator('.message.assistant')).toContainText('Readable content');
+    // Chat syntax must be themed before the lazy explorer has ever opened.
+    await expect(page.locator('.workspace-panel')).toHaveCount(0);
+    await expectRoles('body, .main-content', '--surface-canvas');
+    await expectRoles('.sidebar, .chat-toolbar, .input-container', '--surface-panel');
+    await expectRoles('.input-container textarea, .composer-controls select', '--surface-input');
+    await expectRoles('.message.assistant .message-content', '--surface-panel');
+    await expectRoles('.code-container', '--surface-input');
+    const output = page.locator('.tool-block').last();
+    if (await output.getAttribute('open') === null) await output.locator('summary').click();
+    await expect(output.locator('[class^="ansi-"]')).toHaveCount(16);
+    await expectContrast(output.locator('[class^="ansi-"]'));
+    await expectContrast(page.locator('.message-role, .message-meta, .chat-toolbar small, .composer-setting-scopes'));
+    await expectContrast(page.locator('.code-container .syntax-string, .code-container .syntax-comment, .code-container .syntax-number, .code-container .syntax-keyword'));
+    for (const token of ['string', 'comment', 'number', 'keyword']) {
+      await expectRoles(`.code-container .syntax-${token}`, null, `--syntax-${token}`);
+    }
+    await expect(page).toHaveScreenshot(`theme-shell-${theme}.png`, { maxDiffPixelRatio: 0.02 });
+    await page.keyboard.press('Control+k');
+    const activeCommand = page.locator('.global-command-palette-results button.active');
+    await expect(activeCommand).toHaveCSS('box-shadow', /inset/);
+    await expectContrast(activeCommand);
+    await expectContrast(activeCommand, 'boxShadow', 3);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.global-command-palette')).toHaveCount(0);
+    await page.goto('/settings#appearance');
+    await expect(page.locator('#appearance')).toBeVisible();
+    await expectRoles('#appearance', '--surface-panel');
+    await expectRoles('#appearance select', '--surface-input');
+    await expectContrast(page.locator('#appearance label, #appearance legend, #appearance .settings-help'));
+    await expectContrast(page.locator('#appearance select'), 'borderTopColor', 3);
+    await expectContrast(page.locator('#appearance input[type=range]'), 'accentColor', 3);
+    await expect(page).toHaveScreenshot(`theme-settings-${theme}.png`, { maxDiffPixelRatio: 0.02 });
+  });
+}
 
 test.describe('Régression visuelle confiance et PWA', () => {
   for (const scenario of scenarios) {
@@ -320,6 +390,14 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       await page.addStyleTag({ content: '.settings-section:not(#provider-lifecycle):not(#custom-models) { display: none !important; }' });
       await page.getByText('Create or edit a compatible provider').click();
       await expect(page.getByText('Acme Gateway')).toBeVisible();
+      const fields = page.locator('#provider-lifecycle .custom-resource-editor input, #provider-lifecycle .custom-resource-editor textarea');
+      expect(await fields.count()).toBeGreaterThan(0);
+      for (const field of await fields.all()) {
+        await expect(field).toHaveCSS('border-top-style', 'solid');
+        await expect(field).toHaveCSS('border-top-width', '1px');
+      }
+      await expectContrast(fields);
+      await expectContrast(fields, 'borderTopColor', 3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);

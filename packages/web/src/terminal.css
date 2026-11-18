@@ -5,10 +5,10 @@
   bottom: max(1rem, env(safe-area-inset-bottom));
   width: 44px;
   height: 44px;
-  border: 1px solid #52668f;
+  border: 1px solid var(--border-control);
   border-radius: 50%;
-  color: #eef2fa;
-  background: #16213e;
+  color: var(--text-primary);
+  background: var(--surface-panel);
   box-shadow: 0 8px 24px #0008;
   cursor: pointer;
 }
@@ -25,9 +25,9 @@
   min-height: 220px;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid #52668f;
-  color: #e5e7eb;
-  background: #111827;
+  border-top: 1px solid var(--border-control);
+  color: var(--text-primary);
+  background: var(--surface-panel);
   box-shadow: 0 -10px 32px #0008;
 }
 
@@ -37,8 +37,8 @@
   align-items: center;
   justify-content: space-between;
   gap: .75rem;
-  border-bottom: 1px solid #334155;
-  background: #172033;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
 }
 
 .terminal-panel > header nav {
@@ -53,38 +53,38 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  border-right: 1px solid #334155;
+  border-right: 1px solid var(--border-subtle);
 }
 
-.terminal-panel > header nav > div.active { background: #24324d; box-shadow: inset 0 -2px #e94560; }
-.terminal-panel > header button { min-height: 38px; padding: .35rem .55rem; border: 0; color: #cbd5e1; background: transparent; cursor: pointer; }
+.terminal-panel > header nav > div.active { background: var(--surface-selected); box-shadow: inset 0 -2px var(--text-link); }
+.terminal-panel > header button { min-height: 38px; padding: .35rem .55rem; border: 0; color: var(--text-primary); background: transparent; cursor: pointer; }
 .terminal-panel > header nav > div > button:first-child { display: flex; align-items: center; gap: .45rem; }
-.terminal-panel > header nav > div > button:last-child { padding-inline: .35rem; color: #8492aa; }
+.terminal-panel > header nav > div > button:last-child { padding-inline: .35rem; color: var(--text-secondary); }
 .terminal-panel > header .terminal-add { min-width: 40px; font-size: 1.1rem; }
 .terminal-panel > header > div { display: flex; flex: 0 0 auto; align-items: center; padding-right: .25rem; }
-.terminal-panel > header small { max-width: 250px; overflow: hidden; color: #8492aa; text-overflow: ellipsis; white-space: nowrap; }
-.terminal-status { width: 7px; height: 7px; border-radius: 50%; background: #64748b; }
-.terminal-status.running { background: #4ade80; box-shadow: 0 0 0 2px #4ade8033; }
-.terminal-status.failed { background: #fb7185; }
-.terminal-status.exited, .terminal-status.killed { background: #94a3b8; }
+.terminal-panel > header small { max-width: 250px; overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.terminal-status { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
+.terminal-status.running { background: var(--status-success); box-shadow: 0 0 0 2px var(--surface-success); }
+.terminal-status.failed { background: var(--status-danger); }
+.terminal-status.exited, .terminal-status.killed { background: var(--text-secondary); }
 .terminal-surface { min-height: 0; flex: 1; padding: .35rem .45rem; overflow: hidden; background: #111827; }
 .terminal-surface[data-terminal-theme="light"] { background: #f8fafc; }
 .terminal-surface[data-terminal-theme="light"] .xterm-viewport { scrollbar-color: #64748b #f8fafc; }
 .terminal-surface .xterm { height: 100%; }
 .terminal-surface[data-terminal-theme] .xterm,
 .terminal-surface[data-terminal-theme] .xterm-viewport { background-color: inherit; }
-.terminal-theme { max-width: 6rem; min-height: 38px; padding: .25rem; border: 1px solid #52668f; border-radius: 4px; color: #e5e7eb; background: #172033; }
-.terminal-extra-keys { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); flex: 0 0 auto; gap: 2px; padding: 3px; background: #172033; touch-action: manipulation; }
-.terminal-extra-keys button { min-width: 0; min-height: 40px; padding: .25rem 0; border: 1px solid #52668f; border-radius: 4px; color: #e5e7eb; background: #24324d; font-size: .7rem; }
-.terminal-extra-keys button[aria-pressed="true"] { color: #111827; background: #a4c2f4; }
-.terminal-extra-keys button:focus-visible, .terminal-theme:focus-visible { outline: 2px solid #a4c2f4; outline-offset: -2px; }
+.terminal-theme { max-width: 6rem; min-height: 38px; padding: .25rem; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); }
+.terminal-extra-keys { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); flex: 0 0 auto; gap: 2px; padding: 3px; background: var(--surface-panel); touch-action: manipulation; }
+.terminal-extra-keys button { min-width: 0; min-height: 40px; padding: .25rem 0; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-raised); font-size: .7rem; }
+.terminal-extra-keys button[aria-pressed="true"] { color: var(--text-primary); background: var(--surface-selected); box-shadow: inset 0 -2px var(--text-link); }
+.terminal-extra-keys button:focus-visible, .terminal-theme:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 .terminal-extra-keys button:disabled { opacity: .45; }
 .terminal-surface .xterm-viewport { scrollbar-color: #475569 #111827; }
-.terminal-error { margin: 0; padding: .4rem .7rem; color: #fecdd3; background: #7f1d1d; font-size: .78rem; }
-.terminal-empty { flex: 1; display: grid; place-content: center; gap: .7rem; color: #94a3b8; text-align: center; }
-.terminal-empty button { min-height: 40px; padding: .45rem .7rem; border: 1px solid #52668f; border-radius: 5px; color: #eef2fa; background: #223154; cursor: pointer; }
+.terminal-error { margin: 0; padding: .4rem .7rem; color: var(--status-danger); background: var(--surface-danger); font-size: .78rem; }
+.terminal-empty { flex: 1; display: grid; place-content: center; gap: .7rem; color: var(--text-secondary); text-align: center; }
+.terminal-empty button { min-height: 40px; padding: .45rem .7rem; border: 1px solid var(--border-control); border-radius: 5px; color: var(--text-primary); background: var(--surface-raised); cursor: pointer; }
 .panel-header-actions { display: flex; align-items: center; }
-.panel-header-actions button { min-width: 32px; min-height: 32px; border: 0; color: #aab6cd; background: transparent; cursor: pointer; }
+.panel-header-actions button { min-width: 32px; min-height: 32px; border: 0; color: var(--text-secondary); background: transparent; cursor: pointer; }
 
 @media (max-width: 850px) {
   .terminal-panel { left: 0; height: min(48dvh, 440px); padding-bottom: env(safe-area-inset-bottom); }

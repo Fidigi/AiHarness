@@ -14,9 +14,9 @@
   width: 100%;
   min-width: 0;
   padding: .5rem;
-  color: inherit;
-  background: transparent;
-  border: 1px solid #7c8ca8;
+  color: var(--text-primary);
+  background: var(--surface-input);
+  border: 1px solid var(--border-control);
   border-radius: 4px;
 }
 .provider-lifecycle-actions {

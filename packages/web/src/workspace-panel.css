@@ -29,7 +29,7 @@
 .upload-options { display: flex; align-items: center; gap: .5rem; padding: 0 .45rem .35rem; color: var(--text-secondary); font-size: .68rem; }
 .upload-options label { display: flex; min-width: 0; align-items: center; gap: .35rem; }
 .upload-options select { min-width: 0; padding: .2rem; border: 1px solid var(--border-control); border-radius: 3px; color: var(--text-primary); background: var(--surface-input); }
-.upload-options progress { min-width: 0; flex: 1; accent-color: var(--accent); }
+.upload-options progress { min-width: 0; flex: 1; accent-color: var(--text-link); }
 .upload-progress { display: grid; min-width: 0; flex: 1; grid-template-columns: minmax(3rem, 1fr) minmax(7rem, auto) auto; align-items: center; gap: .35rem; }
 .upload-progress span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upload-progress button { padding: .15rem .35rem; border: 1px solid var(--border-control); border-radius: 3px; color: inherit; background: transparent; cursor: pointer; }
@@ -92,10 +92,6 @@
 .source-view i { display: inline-block; width: 3.5rem; padding-right: .8rem; color: var(--text-secondary); text-align: right; user-select: none; }
 .source-view code { white-space: pre; }
 .source-view .target-line { background: var(--surface-selected); box-shadow: inset 3px 0 var(--text-link); }
-.syntax-comment { color: var(--syntax-comment); font-style: italic; }
-.syntax-string { color: var(--syntax-string); }
-.syntax-number { color: var(--syntax-number); }
-.syntax-keyword { color: var(--syntax-keyword); font-weight: 600; }
 .diff-view { min-width: max-content; padding: .5rem; font-size: .76rem; }
 .diff-view span { display: block; white-space: pre; }
 .diff-view .added { color: var(--status-success); background: var(--surface-success); }
