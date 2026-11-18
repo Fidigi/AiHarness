@@ -17,9 +17,13 @@ describe('actual CLI automatic compaction generation', () => {
     expect(result.status, diagnostic).toBe(0);
     expect(result.signal, diagnostic).toBeNull();
     const records = result.stdout.trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(records.filter(value => Object.hasOwn(value, 'phase')).map(value => value.phase)).toEqual([
+      'setup', 'seed-history', 'prepare-context', 'cli', 'verify-history', 'cleanup',
+    ]);
     const row = records.find(value => Object.hasOwn(value, 'ok'));
     expect(row).toMatchObject({ node: process.versions.node, mode: scenario.split('/')[0],
-      kind: scenario.split('/')[1], ordinaryCalls: 1, rawConserved: true, exit: 0, ok: true });
+      kind: scenario.split('/')[1], sourceMessages: scenario.endsWith('/over-input-bound') ? 50 : 4,
+      ordinaryCalls: 1, rawConserved: true, exit: 0, ok: true });
     const valid = ['valid', 'exact-output-bound'].includes(scenario.split('/')[1]);
     expect(row?.published).toBe(valid ? 1 : 0);
     if (scenario.endsWith('/over-input-bound')) {

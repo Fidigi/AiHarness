@@ -70,7 +70,13 @@ it('uses advisory stale tokens only outside the mandatory window, retries foregr
 it('isolates configs and caller cancellation without an older completion overwriting a newer successful token', async () => {
   const f = await fixture(), controller = new AbortController(); const held: Array<(response: Response) => void> = [];
   const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => { if (String(url).endsWith('/oauth/token')) return new Promise<Response>(resolve => held.push(resolve)); expect(new Headers(init?.headers).get('authorization')).toBe('Bearer valid-other-caller'); return reply(); });
-  const first = f.provider.chat(messages, { signal: controller.signal, thinking: 'off' }); const firstResult = expect(first).rejects.toThrow('workload authentication'); const second = f.provider.chat(messages, { thinking: 'off' }); await vi.waitFor(() => expect(held).toHaveLength(2)); controller.abort(); await firstResult; held[1](minted('valid-other-caller')); await second; held[0](minted('late-canceled')); await f.provider.chat(messages, { thinking: 'off' }); expect(held).toHaveLength(2);
+  const first = f.provider.chat(messages, { signal: controller.signal, thinking: 'off' }); const firstResult = expect(first).rejects.toThrow('workload authentication');
+  // File reads may finish out of order. Bind held[0] to the older caller before
+  // starting the newer one; both exchanges still overlap when cancellation occurs.
+  await vi.waitFor(() => expect(held, 'older caller reached token exchange').toHaveLength(1));
+  const second = f.provider.chat(messages, { thinking: 'off' });
+  await vi.waitFor(() => expect(held, 'both caller exchanges are pending').toHaveLength(2));
+  controller.abort(); await firstResult; held[1](minted('valid-other-caller')); await second; held[0](minted('late-canceled')); await f.provider.chat(messages, { thinking: 'off' }); expect(held).toHaveLength(2);
   const other = new AnthropicProvider({ ...f.config, anthropicFederation: { ...f.config.anthropicFederation!, workspaceId: 'other-workspace' } }); const pending = other.chat(messages, { thinking: 'off' }); await vi.waitFor(() => expect(held).toHaveLength(3)); held[2](minted('valid-other-caller')); await pending; expect(fetcher).toHaveBeenCalledTimes(6);
 });
 
