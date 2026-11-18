@@ -1,5 +1,8 @@
 # .dockerignore - Fichiers exclus du contexte de build Docker
 
+# Métadonnées Git : exclure le dépôt et les pointeurs de worktree.
+.git
+
 # Dépendances (sont réinstallées dans le conteneur)
 node_modules/
 **/node_modules/
@@ -33,7 +36,18 @@ playwright-report/
 test-results/
 
 # Fichiers de configuration Docker (non nécessaires dans le contexte)
-.docker/
+.docker/*
+# Required by the test image's E2E entry point and build-time packaging controls.
+!.docker/Dockerfile.test
+!.docker/e2e-suites.mjs
+!.docker/e2e-suites.d.mts
+!.docker/e2e-suites.test.mjs
+!.docker/test-build.test.mjs
+!.docker/baseline-artifacts.mjs
+!.docker/baseline-artifacts.test.mjs
+!.docker/run-e2e.mjs
+!.docker/test-fonts.conf
+!.docker/test-fonts.test.mjs
 Dockerfile*
 docker-compose*
 Makefile
@@ -44,5 +58,9 @@ docs/
 LICENSE
 CHANGELOG.md
 
-# Scripts internes non nécessaires au build
-scripts/
+# Scripts internes exclus, sauf le lanceur TypeScript utilisé par les workspaces.
+scripts/*
+!scripts/run-typescript.mjs
+!scripts/check-architecture.mjs
+!scripts/check-architecture.test.mjs
+!scripts/architecture-policy.json

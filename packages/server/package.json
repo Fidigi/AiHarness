@@ -9,10 +9,10 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc && node scripts/copy-assets.mjs",
+    "build": "node ../../scripts/run-typescript.mjs && node scripts/copy-assets.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node ../../scripts/run-typescript.mjs --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -20,13 +20,16 @@
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "node-pty": "^1.1.0",
-    "web-push": "^3.6.7"
+    "saxes": "^6.0.0",
+    "web-push": "^3.6.7",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^26.0.0",
     "@types/web-push": "^3.6.4",
+    "@types/yauzl": "^3.0.0",
     "supertest": "^7.3.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

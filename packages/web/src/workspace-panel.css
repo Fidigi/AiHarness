@@ -1,6 +1,16 @@
+.panel-linked-directories { margin: .45rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; color: #d9e3f4; background: #223154; text-align: left; cursor: pointer; }
+.file-node > .file-link-reason { padding-left: .6rem; color: #ffd478; font-size: .72rem; white-space: normal; }
+html[data-theme="light"] .panel-linked-directories { color: #26344e; background: #f8f9fc; border-color: #9eabc1; }
+html[data-theme="light"] .file-node > .file-link-reason { color: #744d00; }
 .workspace-panel { position: relative; flex: 0 0 320px; min-width: 230px; max-width: min(1200px, 65vw); display: flex; flex-direction: column; border-left: 1px solid #0f3460; background: #131d37; }
 .workspace-panel.viewer-open { min-width: 360px; }
 .workspace-panel.viewer-expanded { position: fixed; z-index: 45; inset: 0; width: 100vw !important; max-width: none; }
+.workspace-panel.viewer-open.viewer-expanded > header,
+.workspace-panel.viewer-open.viewer-expanded > .panel-linked-directories,
+.workspace-panel.viewer-open.viewer-expanded > .file-toolbar,
+.workspace-panel.viewer-open.viewer-expanded > .upload-options,
+.workspace-panel.viewer-open.viewer-expanded > .hidden-toggle,
+.workspace-panel.viewer-open.viewer-expanded > .file-tree { display: none; }
 .panel-resizer { position: absolute; z-index: 12; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 .panel-resizer::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; content: ''; background: #30466e; }
 .workspace-panel.collapsed { flex-basis: 34px; min-width: 34px; }
@@ -48,7 +58,28 @@
 .change-row small { display: flex; gap: .25rem; font-size: .65rem; }
 .change-row small i { color: #62d998; font-style: normal; }
 .change-row small em { color: #ff768d; font-style: normal; }
-.file-viewer { position: absolute; z-index: 10; inset: 0; display: flex; flex-direction: column; background: #111a31; }
+.file-viewer { position: relative; z-index: 10; display: flex; flex: 1 1 0; min-height: 0; flex-direction: column; background: #111a31; }
+.workspace-panel.viewer-open .file-tree { flex: 0 1 140px; min-height: 60px; }
+.open-file-tabs { display: flex; flex: 0 0 auto; overflow-x: auto; border-block: 1px solid #52668f; }
+.open-file-tabs [role="tablist"] { display: flex; flex: 1; min-width: 0; overflow-x: auto; }
+.open-file-tabs button { min-height: 36px; border: 0; color: #d9e3f4; background: transparent; cursor: pointer; }
+.open-file-tabs [role="tab"] { flex: 0 0 auto; max-width: min(320px, 80vw); overflow: hidden; padding: .4rem .55rem; text-overflow: ellipsis; white-space: nowrap; }
+.open-file-tabs [aria-selected="true"] { color: #fff; background: #2a3a60; box-shadow: inset 0 -3px #e94560; }
+.open-file-tabs > button { flex: 0 0 36px; }
+.open-file-tabs button:focus-visible { outline: 2px solid #8eb7ff; outline-offset: -2px; }
+.docx-preview, .pdf-preview, .delimited-preview { padding: .7rem; }
+.docx-preview pre, .pdf-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.docx-preview > p { margin-bottom: .7rem; font-size: .8rem; }
+.pdf-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .7rem; }
+.pdf-controls button { min-height: 36px; padding: .4rem; border: 1px solid #52668f; border-radius: 4px; color: inherit; background: transparent; }
+.pdf-preview canvas { display: block; max-width: 100%; height: auto; margin: auto; background: white; }
+.pdf-preview canvas[hidden] { display: none; }
+.pdf-preview details { margin-top: .7rem; }
+.delimited-preview table { border-collapse: collapse; font-size: .8rem; }
+.delimited-preview th, .delimited-preview td { max-width: 40rem; padding: .45rem; border: 1px solid #52668f; white-space: pre-wrap; overflow-wrap: anywhere; }
+html[data-theme="light"] .open-file-tabs button { color: #26344e; }
+html[data-theme="light"] .open-file-tabs [aria-selected="true"] { color: white; }
+@media (pointer: coarse) { .open-file-tabs button, .pdf-controls button { min-height: 44px; } }
 .file-viewer > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viewer-meta { padding: .35rem .6rem; color: #7e8da9; font-size: .72rem; }
 .file-viewer nav { display: flex; padding: 0 .4rem .35rem; border-bottom: 1px solid #30466e; }
@@ -100,6 +131,7 @@ html[data-theme="light"] .file-viewer nav button.active { color: #fff; backgroun
   .workspace-panel { display: none; }
   .workspace-panel.panel-open { position: fixed; z-index: 38; top: 0; right: 0; bottom: 0; width: min(560px, calc(100vw - 48px)) !important; min-width: 0; max-width: 100vw; display: flex; box-shadow: -12px 0 36px #0009; }
   .panel-resizer { display: none; }
+  .workspace-panel.viewer-open.viewer-expanded > .open-file-tabs { min-height: 48px; padding-inline: 48px; }
 }
 @media (max-width: 640px) {
   .workspace-panel.panel-open { left: 0; width: 100vw !important; }

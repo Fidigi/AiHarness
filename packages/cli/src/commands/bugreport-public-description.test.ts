@@ -1,0 +1,27 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { ExtensionRegistry, JsonlSessionStore, MockProvider, SessionManager } from '@ai-harness/core';
+import { CommandHandler } from './handler.js';
+import type { TerminalUI } from '../tui/terminal-ui.js';
+const roots:string[]=[];
+afterEach(async()=>{vi.unstubAllEnvs();await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
+it.each(['PUBLIC_DESCRIPTION',''])('bugreport uses only an explicit public description/environment, no history or execution (%s)',async description=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'aih-bugreport-public-'));roots.push(root);
+  const store=new JsonlSessionStore(root),manager=new SessionManager({store});const session=await manager.create({title:'PRIVATE_TITLE'});
+  await manager.addMessage(session.id,{role:'user',content:'PRIVATE_USER_BODY'},{skipAutoCompaction:true});
+  await manager.addMessage(session.id,{role:'assistant',content:'PRIVATE_ANSWER',blocks:[{type:'reasoning',text:'PRIVATE_THINKING'}],metadata:{signature:'PRIVATE_SIGNATURE'}},{skipAutoCompaction:true});
+  const before=await manager.getRawEntries(session.id),provider=new MockProvider({type:'mock'}),chat=vi.spyOn(provider,'chat'),stream=vi.spyOn(provider,'streamChat');
+  const registry=new ExtensionRegistry(),execute=vi.spyOn(registry,'executeTool'),output=vi.fn(),error=vi.fn();
+  const handler=new CommandHandler(manager,store,{writeOutput:output,showError:error} as unknown as TerminalUI,registry,undefined,{cwd:root,providers:new Map([['mock',provider]])});
+  const ctx=handler.getContext();ctx.currentSessionId=session.id;
+  const unexpected=vi.fn(async()=>{throw new Error('Unexpected MCP activity.');}),finish=vi.fn();ctx.mcpControl={overview:unexpected,prepare:unexpected,reconnect:unexpected,finish};
+  vi.stubEnv('AI_HARNESS_ISSUES_URL','https://example.invalid/issues/new');
+  await handler.execute('/bug'+(description?' '+description:''));expect(error).not.toHaveBeenCalled();
+  const values=output.mock.calls.map(args=>String(args[0])),link=values.find(value=>value.startsWith('https://example.invalid/'));expect(link).toBeDefined();
+  const url=new URL(link!),body=url.searchParams.get('body')!;expect(url.pathname).toBe('/issues/new');
+  expect(body).toContain(description||'Décrivez le problème rencontré.');expect(body).toContain('Node: '+process.version);expect(body).toContain(`Platform: ${process.platform}/${process.arch}`);
+  expect(values.join('\n')).not.toContain('PRIVATE_');expect(chat).not.toHaveBeenCalled();expect(stream).not.toHaveBeenCalled();expect(execute).not.toHaveBeenCalled();expect(unexpected).not.toHaveBeenCalled();expect(finish).not.toHaveBeenCalled();
+  expect(await manager.getRawEntries(session.id)).toEqual(before);
+});

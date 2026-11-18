@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { defaultKeybindings, shortcutActions, type Keybindings } from '../services/keyboard';
 
 export type ThemePreference = 'system' | 'light' | 'dark' | 'mist' | 'rose' | 'pine';
+export type SendMode = 'enter' | 'mod-enter';
 export interface BrowserPreferences {
-  version: 3;
+  version: 4;
   theme: ThemePreference;
+  sendMode: SendMode;
   contentWidth: number;
   fontSize: number;
   reasoningOpen: boolean;
@@ -22,13 +24,13 @@ export interface BrowserPreferences {
   keybindings: Keybindings;
 }
 
-const KEY = 'ai-harness-preferences-v3';
-const LEGACY_KEY = 'ai-harness-preferences-v2';
-const OLDEST_KEY = 'ai-harness-preferences-v1';
+const KEY = 'ai-harness-preferences-v4';
+const LEGACY_KEYS = ['ai-harness-preferences-v3', 'ai-harness-preferences-v2', 'ai-harness-preferences-v1'] as const;
 const EVENT = 'aih-preferences';
 const defaults: BrowserPreferences = {
-  version: 3,
+  version: 4,
   theme: 'system',
+  sendMode: 'enter',
   contentWidth: 1000,
   fontSize: 16,
   reasoningOpen: false,
@@ -58,8 +60,9 @@ function validated(value: unknown): BrowserPreferences {
     }
   }
   return {
-    version: 3,
+    version: 4,
     theme: themes.includes(input.theme as ThemePreference) ? input.theme as ThemePreference : defaults.theme,
+    sendMode: input.sendMode === 'mod-enter' ? 'mod-enter' : defaults.sendMode,
     contentWidth: Math.max(820, Math.min(2000, Number(input.contentWidth) || defaults.contentWidth)),
     fontSize: Math.max(12, Math.min(24, Number(input.fontSize) || defaults.fontSize)),
     reasoningOpen: input.reasoningOpen === true,
@@ -88,7 +91,9 @@ function validated(value: unknown): BrowserPreferences {
 export function readPreferences(): BrowserPreferences {
   try {
     const current = window.localStorage.getItem(KEY);
-    const legacy = current === null ? window.localStorage.getItem(LEGACY_KEY) ?? window.localStorage.getItem(OLDEST_KEY) : null;
+    const legacy = current === null
+      ? LEGACY_KEYS.map(key => window.localStorage.getItem(key)).find(value => value !== null) ?? null
+      : null;
     const preferences = validated(JSON.parse(current ?? legacy ?? 'null'));
     if (current === null && legacy !== null) {
       try { window.localStorage.setItem(KEY, JSON.stringify(preferences)); } catch { /* Migration is best effort. */ }
@@ -120,7 +125,7 @@ export function usePreferences(): [BrowserPreferences, (changes: Partial<Browser
     applyPreferences(preferences);
     const custom = (event: Event) => setPreferences(validated((event as CustomEvent).detail));
     const storage = (event: StorageEvent) => {
-      if (event.key === KEY || event.key === LEGACY_KEY || event.key === OLDEST_KEY) setPreferences(readPreferences());
+      if (event.key === KEY || LEGACY_KEYS.includes(event.key as typeof LEGACY_KEYS[number])) setPreferences(readPreferences());
     };
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
     const system = () => { if (readPreferences().theme === 'system') applyPreferences(readPreferences()); };
@@ -133,5 +138,10 @@ export function usePreferences(): [BrowserPreferences, (changes: Partial<Browser
       media?.removeEventListener('change', system);
     };
   }, []); // Preferences update through the custom event below.
-  return [preferences, changes => writePreferences({ ...preferences, ...changes, version: 3 })];
+  return [preferences, changes => {
+    const next = validated({ ...preferences, ...changes, version: 4 });
+    // Own writes must update this hook even before its passive subscription exists.
+    setPreferences(next);
+    writePreferences(next);
+  }];
 }

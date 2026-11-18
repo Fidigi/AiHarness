@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking (architecture COMP-01 / PERF-04):** removed the legacy RPC `{id,method,params}` engine without an adapter; it now receives fixed `INVALID_REQUEST` rejection. Canonical `type` commands remain. JSON input is limited to 32 MiB UTF-8 per frame (excluding LF/terminal CR), with a 64-MiB accumulated/pending-handler budget and read backpressure. Individual overflow closes stdin and exits nonzero with body-free `RPC_FRAME_TOO_LARGE` after owned cleanup; already-admitted writes are not rolled back.
 - Migrated repository tooling to npm 12 workspaces with a single root `package-lock.json` as the dependency source of truth.
 - Updated the supported runtime to Node.js 22.22.2+, 24.15.0+, or 26+, and refreshed TypeScript, Vitest, Playwright, React, Vite, Zustand, and related dependencies.
 - Reworked the provider contract to return structured responses, expose usage and tool calls, accept chat options and abort signals, and support native streaming.
@@ -48,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - HTML exports and public share pages escape conversation content before rendering.
 
 ### Removed
+
+- **Breaking (architecture COMP-02):** removed legacy Web stateless chat clients, the transport selector and historical chat HTTP/WebSocket endpoints. Authenticated `/api/chat`, `/api/chat/stream`, `/api/chat/compact` and `/api/chat/ws` requests now receive fixed HTTP404 `{error:"Not found"}`, with no adapter, upgrade or provider dispatch. Use detached agent runs/session events/compaction. Accepted detached runs, outbound provider WebSockets and persisted migrations are preserved; the old Web transport preference is ignored.
+- **Breaking (architecture DEAD-03):** removed public Core `fetchWithRetry`, `formatDate` and `deepClone`, without compatibility aliases. `AI_HARNESS_CORE_API_VERSION` and SDK `capabilities.coreApiVersion` advance to 2; extension API 1, journal schema 2 and JSON events 3 remain unchanged. Use provider-owned network policy, native date formatting and `structuredClone` as appropriate.
 
 - Removed the package-local core lockfile in favor of the single npm workspace lockfile at the repository root.
 - Removed the obsolete roadmap checklist that listed already implemented features as planned work.

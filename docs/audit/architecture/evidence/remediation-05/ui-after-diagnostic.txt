@@ -1,0 +1,16 @@
+
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+
+[WebServer] npm notice run vite
+
+Running 2 tests using 1 worker
+
+[1/2] [chromium] › e2e/chat.spec.ts:688:3 › Conversation detached agent › préserve le scroll de lecture et permet de revenir en bas
+[chromium] › e2e/chat.spec.ts:688:3 › Conversation detached agent › préserve le scroll de lecture et permet de revenir en bas
+UI_DIAGNOSTIC {"scenario":"scroll","samples":[{"top":0,"height":10756,"client":499},{"top":78,"height":10756,"client":451},{"top":3457,"height":10756,"client":451},{"top":9288,"height":10756,"client":451},{"top":10257,"height":10756,"client":499}]}
+
+[2/2] [chromium] › e2e/visual.spec.ts:825:5 › Régression visuelle du pilotage et des commandes › desktop-dark garde les files et la commande lisibles
+[chromium] › e2e/visual.spec.ts:825:5 › Régression visuelle du pilotage et des commandes › desktop-dark garde les files et la commande lisibles
+UI_DIAGNOSTIC {"scenario":"retry","requests":51,"retryElements":1,"phase":["Retry 2/3: Temporary provider overload"]}
+
+  2 passed (7.0s)

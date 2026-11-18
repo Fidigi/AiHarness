@@ -1,0 +1,4 @@
+{
+  "sameSourceSha256": "f3bd3951e00fb77d34113931fe6ba0515b4b1ca0bd344ea51359d73fa63bec51",
+  "note": "Identical earlier probe source for both successful paired captures; ALL user-timing events removed from the archived timelines, without rewriting CPU profiles, numeric React metrics or screenshots. Narrow current capture is a separate mode and is not mixed into that timing pair."
+}

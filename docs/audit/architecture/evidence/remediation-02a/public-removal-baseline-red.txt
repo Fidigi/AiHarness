@@ -1,0 +1,1 @@
+{"expectedCore":2,"actualCore":1,"removedNamesPresent":["fetchWithRetry","formatDate","deepClone"],"extension":1}

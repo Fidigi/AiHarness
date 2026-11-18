@@ -1,0 +1,99 @@
+{
+  "node": "v24.15.0",
+  "rows": 393,
+  "target": "anthropic/claude-sonnet-5.5",
+  "iterations": 500,
+  "metadata": [
+    {
+      "wallMs": 10.139989000000014,
+      "cpu": {
+        "user": 13341,
+        "system": 3899
+      },
+      "transientHeapDelta": 15349392
+    },
+    {
+      "wallMs": 6.7657709999999724,
+      "cpu": {
+        "user": 10669,
+        "system": 0
+      },
+      "transientHeapDelta": 15152192
+    },
+    {
+      "wallMs": 6.3460340000000315,
+      "cpu": {
+        "user": 11801,
+        "system": 0
+      },
+      "transientHeapDelta": 15142440
+    },
+    {
+      "wallMs": 5.007951999999989,
+      "cpu": {
+        "user": 8016,
+        "system": 0
+      },
+      "transientHeapDelta": 15148144
+    },
+    {
+      "wallMs": 4.662221000000045,
+      "cpu": {
+        "user": 7371,
+        "system": 0
+      },
+      "transientHeapDelta": 15131664
+    }
+  ],
+  "storage": [
+    {
+      "files": 10,
+      "messagesPerFile": 64,
+      "bytes": 473590,
+      "passes": [
+        {
+          "wallMs": 37.090787999999975,
+          "cpu": {
+            "user": 30988,
+            "system": 7836
+          },
+          "loadCalls": 10,
+          "transientHeapDelta": 12276640
+        }
+      ]
+    },
+    {
+      "files": 100,
+      "messagesPerFile": 64,
+      "bytes": 4747510,
+      "passes": [
+        {
+          "wallMs": 271.37326400000006,
+          "cpu": {
+            "user": 188001,
+            "system": 85987
+          },
+          "loadCalls": 100,
+          "transientHeapDelta": 24347768
+        }
+      ]
+    },
+    {
+      "files": 500,
+      "messagesPerFile": 64,
+      "bytes": 23794310,
+      "passes": [
+        {
+          "wallMs": 1294.7263429999998,
+          "cpu": {
+            "user": 692439,
+            "system": 585202
+          },
+          "loadCalls": 500,
+          "transientHeapDelta": 86257568
+        }
+      ]
+    }
+  ],
+  "limits": "Warm OS caches; five CPU/wall metadata batches, one staged-load sequence per size. Heap deltas are noisy transient observations, not total allocations/RSS or production latency. Startup load counts need separate actual-host controls."
+}

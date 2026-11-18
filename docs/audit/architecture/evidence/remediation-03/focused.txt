@@ -1,0 +1,472 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/providers/model-metadata.test.ts packages/core/src/providers/openrouter packages/core/src/sessions/session-manager.test.ts packages/cli/src/sessions/startup-session.test.ts packages/cli/src/cli/startup-fork-state-process.test.ts packages/cli/src/cli/context-settings-process.test.ts packages/server/src/api/session-provider-redaction-process.test.ts packages/server/src/runtime/services.test.ts
+
+ RUN  v5.0.3 /app
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > create() > serializes cross-manager creation of the same durable ID
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > addMessage() > keeps memory unchanged when message persistence fails
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > delete() > keeps in-memory state when an unsafe durable target prevents update or deletion
+[SessionManager] Failed to save session.
+
+stderr | packages/core/src/sessions/session-manager.test.ts > SessionManager with JSONL Persistence > delete() > keeps in-memory state when an unsafe durable target prevents update or deletion
+[SessionManager] Failed to delete session.
+
+ ✓ packages/core/src/sessions/session-manager.test.ts (95 tests) 3237ms
+   ✓ JsonlSessionStore (29)
+     ✓ appendMessage() (7)
+       ✓ serializes concurrent appends from independent store instances 950ms
+       ✓ does not lose appends racing with atomic session rewrites 468ms
+ ✓ packages/core/src/providers/openrouter-messages.test.ts (22 tests) 4336ms
+   ✓ native OpenRouter Anthropic Messages (22)
+     ✓ compares independent whole private A arrays through both owning SDKs for anthropic/claude-fable-5 363ms
+ ❯ packages/core/src/providers/openrouter-completions.test.ts (386 tests | 1 failed) 111127ms
+   ❯ native OpenRouter Chat Completions (386)
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~anthropic/claude-fable-latest 395ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~anthropic/claude-haiku-latest 313ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~anthropic/claude-opus-latest 300ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~anthropic/claude-sonnet-latest 284ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~deepseek/deepseek-flash-latest 288ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~deepseek/deepseek-pro-latest 282ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~deepseek/deepseek-v4-flash-latest 270ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~google/gemini-flash-latest 270ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~google/gemini-pro-latest 276ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~moonshotai/kimi-latest 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~openai/gpt-astra-latest 269ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~openai/gpt-luna-latest 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~openai/gpt-mini-latest 273ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~openai/gpt-sol-latest 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~openai/gpt-terra-latest 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~x-ai/grok-latest 268ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~z-ai/glm-flash-latest 270ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ~z-ai/glm-latest 266ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for aion-labs/aion-2.0 268ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for aion-labs/aion-3.0 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for aion-labs/aion-3.0-mini 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for aion-labs/aion-3.5 273ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for aion-labs/aion-3.5-mini 269ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for amazon/nova-2-lite-v1 277ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for amazon/nova-lite-v1 273ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for amazon/nova-micro-v1 278ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for amazon/nova-premier-v1 275ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for amazon/nova-pro-v1 271ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-fable-5:batch 270ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-fable-5.1:batch 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-haiku-4.5:batch 273ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-haiku-5.5:batch 275ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-4.1:batch 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-4.5:batch 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-4.6:batch 266ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-4.7:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-4.8:batch 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-5:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-opus-5.5:batch 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-sonnet-4.5:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-sonnet-4.6:batch 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-sonnet-5:batch 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for anthropic/claude-sonnet-5.5:batch 271ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for apodex/apodex-1.1-mini:free 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for arcee-ai/trinity-large-thinking 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for auto 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-1.6 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-1.6-flash 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-2-1-turbo 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-2.0-code 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-2.0-lite 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for bytedance-seed/seed-2.0-mini 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for cohere/command-a-plus 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for cohere/command-r-08-2024 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for cohere/command-r-plus-08-2024 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for cohere/north-mini-code:free 249ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-chat 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-chat-v3-0324 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-chat-v3.1 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-r1 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-r1-0528 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v3.1-terminus 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v3.2 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v3.2-exp 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4-flash 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4-flash-0731 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4-flash-vision-exp 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4-pro 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4-pro-0813 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4.1-flash 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for deepseek/deepseek-v4.1-flash:batch 250ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for dots-studio/dots-3-note-preview:free 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for fireworks/ember-1 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-flash 294ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-flash-lite 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-flash-lite:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-flash:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-pro 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-pro-preview 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-2.5-pro:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3-flash-preview 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3-flash-preview:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3-pro-image 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-flash-lite 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-flash-lite-preview 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-flash-lite:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-pro-preview 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-pro-preview-customtools 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.1-pro-preview:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.5-flash 910ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.5-flash-lite 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.5-flash-lite:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.5-flash:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.6-flash 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.6-flash:batch 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.7-flash 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.7-flash:batch 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.8-flash 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-3.8-flash:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemini-nano-banana-2.1 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-3-12b-it 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-3-27b-it 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-4-26b-a4b-it 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-4-26b-a4b-it:free 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-4-31b-it 248ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for google/gemma-4-31b-it:free 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for ibm-granite/granite-4.2-8b 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inception/mercury-2 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inception/mercury-2.5 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inclusionai/ling-3.0-flash 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inclusionai/ling-3.0-flash-fin 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inclusionai/ling-3.0-flash-sante 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inclusionai/ling-3.0-flash-vl 249ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for inclusionai/ling-3.1-flash 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for liquid/lfm-2.5-2.6b:free 247ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meituan/longcat-2.0 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta-llama/llama-3.1-70b-instruct 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta-llama/llama-3.1-8b-instruct 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta-llama/llama-3.3-70b-instruct 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta-llama/llama-4-maverick 543ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta-llama/llama-4-scout 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-glimmer-30b 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-spark-1.1 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-spark-1.2 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-spark-1.2-contributor 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-spark-1.3 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-spark-1.3-contributor 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for meta/muse-wonder 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m1 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m2 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m2.1 266ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m2.5 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m2.7 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for minimax/minimax-m3 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/codestral-2508 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/codestral-2508:batch 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/devstral-2512 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/ministral-14b-2512 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/ministral-3b-2512 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/ministral-8b-2512 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/ministral-8b-2512:batch 276ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-large 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-large-2407 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-large-2512 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-large-2512:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-large-4-0 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-medium-3 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-medium-3-5 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-medium-3-5:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-medium-3.1 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-medium-3.1:batch 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-nemo 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-saba 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-small-2603 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-small-2603:batch 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-small-3.1-24b-instruct 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mistral-small-3.2-24b-instruct 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/mixtral-8x22b-instruct 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for mistralai/voxtral-small-24b-2507 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2-0905 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2-thinking 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2.5 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2.6 1204ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k2.7-code 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k3 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for moonshotai/kimi-k3:batch 280ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nex-agi/nex-n2.5-pro 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-nano-30b-a3b 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-super-120b-a12b 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-super-120b-a12b:free 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-ultra-550b-a55b 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3-ultra-550b-a55b:free 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3.5-lightning 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for nvidia/nemotron-3.5-lightning:free 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-3.5-turbo 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-3.5-turbo-0613 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-3.5-turbo-16k 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-3.5-turbo:batch 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4-turbo 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4-turbo:batch 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1-mini 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1-mini:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1-nano 269ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1-nano:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4.1:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-2024-05-13 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-2024-08-06 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-2024-11-20 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-mini 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-mini-2024-07-18 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o-mini:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-4o:batch 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-mini 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-mini:batch 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-nano 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-nano:batch 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-pro 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5-pro:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5:batch 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.1 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.1-codex 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.1-codex-max 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.1-codex-mini 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.1:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2 249ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2-chat 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2-codex 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2-pro 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2-pro:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.2:batch 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.3-codex 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-mini 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-mini:batch 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-nano 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-nano:batch 270ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-pro 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4-pro:batch 280ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.4:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.5 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.5-pro 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.5-pro:batch 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.5:batch 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-luna 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-luna-pro 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-luna-pro:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-luna:batch 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-sol 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-sol-pro 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-sol-pro:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-sol:batch 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-terra 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-terra-pro 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-terra-pro:batch 3132ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-5.6-terra:batch 548ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-astra 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-astra-pro 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-astra-pro:batch 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-astra:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-luna 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-luna-pro 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-luna-pro:batch 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-luna:batch 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-sol 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-sol-pro 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-sol-pro:batch 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6-sol:batch 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6.1-sol 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6.1-sol-pro 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6.1-sol-pro:batch 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-6.1-sol:batch 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-audio 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-audio-mini 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-chat-latest 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-oss-120b 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-oss-120b:batch 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-oss-20b 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-oss-20b:batch 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/gpt-oss-safeguard-20b 268ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o1 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3-mini 268ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3-mini-high 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3-mini:batch 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3-pro 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o3:batch 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o4-mini 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o4-mini-high 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openai/o4-mini:batch 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openrouter/auto 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openrouter/auto-beta 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openrouter/free 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for openrouter/fusion 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for perceptron/perceptron-mk1.5 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for poolside/laguna-s-2.1 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for poolside/laguna-s-2.1:free 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for poolside/laguna-xs-2.1 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for poolside/laguna-xs-2.1:free 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for prism-ml/ternary-bonsai-2-27b 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen-2.5-72b-instruct 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen-2.5-7b-instruct 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen-plus 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-14b 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-235b-a22b-2507 250ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-235b-a22b-thinking-2507 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-30b-a3b 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-30b-a3b-instruct-2507 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-32b 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-coder 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-coder-30b-a3b-instruct 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-coder-flash 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-coder-next 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-next-80b-a3b-instruct 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-next-80b-a3b-thinking 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-vl-235b-a22b-instruct 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-vl-30b-a3b-instruct 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-vl-30b-a3b-thinking 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3-vl-8b-instruct 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-122b-a10b 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-27b 277ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-35b-a3b 277ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-397b-a17b 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-9b 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-flash-02-23 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-plus-02-15 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.5-plus-20260420 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.6-27b 249ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.6-35b-a3b 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.6-flash 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.6-plus 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.7-flash 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.7-max 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.7-plus 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-2.4t-a95b 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-27b 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-flash 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-max-0902 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-max-prime 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for qwen/qwen3.8-omni-flash 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for rekaai/reka-edge 250ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for relace/relace-search 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for sakana/fugu-max 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for sakana/fugu-ultra 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for sakana/fugu-ultra-v2 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for sakana/sakana-namazu 251ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for stepfun/step-3.5-flash 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for stepfun/step-3.7-flash 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for stepfun/step-5-preview 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for tencent/hy3 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for tencent/hy3-preview 253ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for tencent/hy4-preview 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for thinkingmachines/inkling 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for thinkingmachines/inkling-small 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for thinkingmachines/inkling-small:free 259ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for thinkingmachines/inkling:free 264ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for typesafe/jev-router 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for unbiased/pareto 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for unbiased/pareto-26.10-preview 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for upstage/solar-mini4 254ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for upstage/solar-pro-3 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for upstage/solar-pro4 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.20 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.3 252ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.3:batch 255ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.5 258ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.6 263ms
+     × compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.7 7006ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-build-0.1 302ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for xiaomi/mimo-v2.5 272ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for xiaomi/mimo-v2.5-pro 269ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for xiaomi/mimo-v2.6-flash 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for xiaomi/mimo-v2.6-pro 537ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for xiaomi/mimo-v2.6-pro-ultraspeed 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.5 268ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.5-air 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.5v 266ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.6 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.6v 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.7 267ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-4.7-flash 263ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5-turbo 266ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.1 265ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.2 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3 321ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3-flash 260ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3-flash:batch 256ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3-flashx 262ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3-prime 257ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5.3:batch 261ms
+     ✓ compares independently bound whole private OpenRouter C bodies and typed carriers for z-ai/glm-5v-turbo 264ms
+     ✓ pins private C body identity/prices and marker policy, awaits publication and refuses forged grants 28ms
+     ✓ keeps existing C tool-image attribution once and refuses undeclared images without decoding 548ms
+     ✓ withdraws private C pending tools on EOF, provider error and awaited abort without opaque callbacks 6ms
+     ✓ owns 377 C projections without inheriting A/I/T or ambiguous zero prices 1ms
+     ✓ uses actual Bearer C requests, nested effort, cache accounting and awaited reasoning/tools independently of operator names 2ms
+     ✓ executes every C identity with independent per-profile arithmetic and owned descriptors 123ms
+     ✓ uses strict tier thresholds and omits invalid or incomplete primary accounting 4ms
+     ✓ refuses private endpoint/header values before I/O and keeps derived replay refusals separate 4ms
+     ✓ withdraws buffered callbacks, tools and completion after awaited cancellation 1ms
+ ✓ packages/core/src/providers/openrouter-images.test.ts (6 tests) 217ms
+ ✓ packages/core/src/providers/openrouter-user-models.test.ts (11 tests) 95ms
+ ✓ packages/core/src/providers/model-metadata.test.ts (11 tests) 16ms
+ ✓ packages/core/src/providers/openrouter-classifiers.test.ts (6 tests) 122ms
+ ✓ packages/core/src/providers/openrouter.test.ts (3 tests) 54ms
+ ✓ packages/core/src/providers/openrouter-oauth.test.ts (7 tests) 313ms
+ ✓ packages/cli/src/sessions/startup-session.test.ts (5 tests) 7ms
+ ✓ packages/cli/src/cli/startup-fork-state-process.test.ts (11 tests) 15383ms
+   ✓ retains private state through actual startup --fork: print/id 1523ms
+   ✓ retains private state through actual startup --fork: print/prefix 1502ms
+   ✓ retains private state through actual startup --fork: print/file 1482ms
+   ✓ retains private state through actual startup --fork: json/id 1486ms
+   ✓ retains private state through actual startup --fork: json/prefix 1512ms
+   ✓ retains private state through actual startup --fork: json/file 1478ms
+   ✓ retains private state through actual startup --fork: rpc/id 1482ms
+   ✓ retains private state through actual startup --fork: rpc/prefix 1492ms
+   ✓ retains private state through actual startup --fork: rpc/file 1480ms
+   ✓ retains private state through actual startup --fork: terminal/regular-durable 922ms
+   ✓ retains private state through actual startup --fork: terminal/fullscreen-durable 1023ms
+ ✓ packages/cli/src/cli/context-settings-process.test.ts (14 tests) 9678ms
+   ✓ actual CLI context-settings file reload (14)
+     ✓ thresholds preserves scoped authority, effective policy, framing and durable history 803ms
+     ✓ gates preserves scoped authority, effective policy, framing and durable history 819ms
+     ✓ untrusted preserves scoped authority, effective policy, framing and durable history 568ms
+     ✓ trusted preserves scoped authority, effective policy, framing and durable history 600ms
+     ✓ saved-trust preserves scoped authority, effective policy, framing and durable history 619ms
+     ✓ abort preserves scoped authority, effective policy, framing and durable history 576ms
+     ✓ eof preserves scoped authority, effective policy, framing and durable history 576ms
+     ✓ print-below preserves scoped authority, effective policy, framing and durable history 702ms
+     ✓ print-above preserves scoped authority, effective policy, framing and durable history 731ms
+     ✓ json-below preserves scoped authority, effective policy, framing and durable history 716ms
+     ✓ json-above preserves scoped authority, effective policy, framing and durable history 715ms
+     ✓ native-rpc preserves scoped authority, effective policy, framing and durable history 769ms
+     ✓ native-print preserves scoped authority, effective policy, framing and durable history 729ms
+     ✓ native-json preserves scoped authority, effective policy, framing and durable history 752ms
+ ✓ packages/server/src/api/session-provider-redaction-process.test.ts (2 tests) 890ms
+   ✓ emitted public Server preserves provider metadata at the cold credential boundary 458ms
+   ✓ emitted public Server preserves provider metadata at the boundary credential boundary 431ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/core/src/providers/openrouter-completions.test.ts > native OpenRouter Chat Completions > compares independently bound whole private OpenRouter C bodies and typed carriers for x-ai/grok-4.7
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ packages/core/src/providers/openrouter-completions.test.ts:45:28
+     43|
+     44| describe('native OpenRouter Chat Completions', () => {
+     45|   it.each(completionModels)('compares independently bound whole privat…
+       |                            ^
+     46|     const reference = completions.rows.find((row: { model: string }) =…
+     47|     const { calls, baseUrl } = await fixture(events, replies);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 12 passed (13)
+      Tests  1 failed | 578 passed (579)
+   Start at  14:41:39
+   Duration  149.77s (tests 98%, import 1%, transform 1%)

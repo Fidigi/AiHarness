@@ -1,0 +1,26 @@
+{
+  "image": "e8fc137c0f3ed488e853b348e599bf6e960b349f28511223ec028d1cff2478ec",
+  "captures": [
+    {
+      "name": "final-source6-terminal",
+      "messages": 0,
+      "browser": "156.0.8078.79",
+      "online": true,
+      "mountedMessages": 0,
+      "commits": 24,
+      "timelineSha256": "fb68b85b35b56f6f23d269f8157e7132848fb8798dc4dc530019f5ae59406fbb",
+      "privacy": "Unmodified raw layout/script timeline/CPU; no user-timing category or credential canary."
+    },
+    {
+      "name": "final-source6-320-messages",
+      "messages": 320,
+      "browser": "156.0.8078.79",
+      "online": true,
+      "mountedMessages": 20,
+      "commits": 41,
+      "timelineSha256": "3fbf77444b5c6b4e666b4c465c1f11c8880011535acf222fde7fa0a1f9c8ee49",
+      "privacy": "Unmodified raw layout/script timeline/CPU; no user-timing category or credential canary."
+    }
+  ],
+  "qualification": "Both existing performance scenarios pass within the complete standard suite, which still failed two other cases. No full E2E pass inferred."
+}

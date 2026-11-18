@@ -49,6 +49,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     { id: 'settings', group: t('palette.settings'), label: t('settings.title'), shortcut: preferences.keybindings.openSettings,
       run: () => navigate('/settings') },
     { id: 'appearance', group: t('palette.settings'), label: t('settings.appearance'), run: () => navigate('/settings#appearance') },
+    { id: 'mcp', group: t('palette.settings'), label: t('settings.mcp.title'), run: () => navigate('/settings#mcp') },
     { id: 'skills', group: t('palette.settings'), label: t('settings.skills.title'), run: () => navigate('/settings#skills') },
     { id: 'subagents', group: t('palette.settings'), label: t('subagents.title'), run: () => navigate('/settings#subagents') },
     { id: 'keyboard', group: t('palette.settings'), label: t('settings.shortcuts'), run: () => navigate('/settings#shortcuts') },
@@ -57,7 +58,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   useFocusTrap(true, dialog, onClose);
 
   useEffect(() => {
-    if (!workspace?.trusted || query.trim().length < 1) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted) || query.trim().length < 1) {
       setFiles([]);
       return;
     }
@@ -66,7 +67,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       if (!controller.signal.aborted && result.success && result.data) setFiles(result.data.files);
     }), 120);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace?.cwd, workspace?.trusted]);
+  }, [query, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   const needle = query.trim().toLocaleLowerCase();
   const entries: PaletteEntry[] = [

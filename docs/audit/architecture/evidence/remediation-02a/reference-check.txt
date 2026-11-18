@@ -1,0 +1,8 @@
+Remaining code occurrences after DEAD-02 removal (expected: none)
+
+Removed public utilities: only deliberate contract tests should remain
+tests/functional-parity/fixtures/sdk/runtime-probe.mjs:15:for (const name of ['fetchWithRetry', 'formatDate', 'deepClone']) assert.equal(Object.hasOwn(core, name), false);
+tests/functional-parity/fixtures/sdk/types-positive.ts:23:import { fetchWithRetry } from '@ai-harness/core';
+tests/functional-parity/fixtures/sdk/types-positive.ts:25:import { formatDate } from '@ai-harness/core';
+tests/functional-parity/fixtures/sdk/types-positive.ts:27:import { deepClone } from '@ai-harness/core';
+tests/functional-parity/fixtures/sdk/types-positive.ts:28:void [fetchWithRetry, formatDate, deepClone];

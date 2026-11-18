@@ -1,0 +1,7152 @@
+{
+  "schema": "minimax-usage-reference-v1",
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "e54ab2787a1e11d19264ee9123c402a3c55374cc545c385159145227d6cefed6",
+  "programSha256": "ddf7b8c68530d276aeede6428616894065958e480f55c70394fbea90df6d7cc8",
+  "pinnedManifestSha256": "d56393e043172cb50cf3af588f78d30aa21077084e90545543a3795daec3f09d",
+  "dependencyManifestSha256": "312276820f0ce96c6595e59ce267f254e0046c2246ee10a5d312e6d881564710",
+  "profiles": 6,
+  "sdkRequests": 66,
+  "supersededSdkRequests": 66,
+  "totalSdkExecutions": 132,
+  "supersededCaptureSha256": "bc7cb90559e19eb6dd1f8968f25dc9eca8479baede5fad6362e3b14a6c15fe5d",
+  "commonCasesPerProfile": 10,
+  "m3AdditionalCasesPerProfile": 3,
+  "limits": "Observed pinned SDK SSE usage/request bodies; JSON usage below is an explicit synthetic projection of observed counters,not SDK JSON/service/account/billing acceptance. Optional reported-counter presence is distinct from SDK zero defaults;reasoning detail remains reference-only,not a new public Core field.",
+  "rows": [
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000039
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000005265
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001575,
+          "total": 0.000005715
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000021,
+          "output": 0.0000036,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.000001725,
+          "total": 0.000007785
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001575,
+          "total": 0.000005715
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.00000195,
+          "total": 0.00000609
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000024,
+          "output": 0.000006,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.0000025499999999999997,
+          "total": 0.00001131
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.000006,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000008865
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M2.7-highspeed",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M2.7-highspeed",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000032999999999999997,
+          "output": 0.0000036,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0.000002625,
+          "total": 0.000010304999999999999
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000078
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000009165
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000002775,
+          "total": 0.000010814999999999999
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000042,
+          "output": 0.0000072,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.000002325,
+          "total": 0.000014085
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000002775,
+          "total": 0.000010814999999999999
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.00000315,
+          "total": 0.00001119
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000048,
+          "output": 0.000012,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.00000435,
+          "total": 0.000021510000000000002
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.000012,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000016365
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M3",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M3",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000065999999999999995,
+          "output": 0.0000072,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0.000002625,
+          "total": 0.000017205
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000039
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0,
+          "total": 0.00000414
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000021,
+          "output": 0.0000036,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 6e-7,
+          "total": 0.00000666
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000024,
+          "output": 0.000006,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.0000018,
+          "total": 0.00001056
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.000006,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0,
+          "total": 0.00000774
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M2.7",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M2.7",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000032999999999999997,
+          "output": 0.0000036,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0,
+          "total": 0.00000768
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-511999",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511992,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511992,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511992,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512001,
+        "cost": {
+          "input": 0.1535976,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.15360144000000003
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-512000",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511993,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511993,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511993,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512002,
+        "cost": {
+          "input": 0.15359789999999998,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.15360174000000001
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-512001",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511994,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511994,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511994,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512003,
+        "cost": {
+          "input": 0.3071964,
+          "output": 0.0000048,
+          "cacheRead": 4.8e-7,
+          "cacheWrite": 0.0000024,
+          "total": 0.30720408000000005
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000039
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000005265
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001575,
+          "total": 0.000005715
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000021,
+          "output": 0.0000036,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.000001725,
+          "total": 0.000007785
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001575,
+          "total": 0.000005715
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.00000195,
+          "total": 0.00000609
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000024,
+          "output": 0.000006,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.0000025499999999999997,
+          "total": 0.00001131
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.000006,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000008865
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M2.7-highspeed",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M2.7-highspeed",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000032999999999999997,
+          "output": 0.0000036,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0.000002625,
+          "total": 0.000010304999999999999
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000078
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000009165
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000002775,
+          "total": 0.000010814999999999999
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000042,
+          "output": 0.0000072,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.000002325,
+          "total": 0.000014085
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000002775,
+          "total": 0.000010814999999999999
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.0000048,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.00000315,
+          "total": 0.00001119
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000048,
+          "output": 0.000012,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.00000435,
+          "total": 0.000021510000000000002
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.000003,
+          "output": 0.000012,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.000001125,
+          "total": 0.000016365
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M2.7-highspeed",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M3",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M3",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000065999999999999995,
+          "output": 0.0000072,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0.000002625,
+          "total": 0.000017205
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "plain",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": false,
+        "cacheWrite": false
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 7,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0000039
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "cache-disjoint",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0,
+          "total": 0.00000414
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "one-hour-write",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "delta-revision",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 7,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 1
+        }
+      },
+      "usage": {
+        "input": 7,
+        "output": 3,
+        "cacheRead": 6,
+        "cacheWrite": 4,
+        "totalTokens": 20,
+        "cost": {
+          "input": 0.0000021,
+          "output": 0.0000036,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 6e-7,
+          "total": 0.00000666
+        },
+        "cacheWrite1h": 1
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "delta-nulls",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": 2,
+            "cache_read_input_tokens": null,
+            "cache_creation_input_tokens": null,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": null
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 14,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "delta-zero-reset",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "delta-one-hour-preserved",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {}
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 4,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 4,
+        "totalTokens": 15,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.00000534
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "multi-delta",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": null,
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 7,
+            "output_tokens": 2,
+            "cache_creation_input_tokens": 4,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 1
+            }
+          }
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "input_tokens": 8,
+            "output_tokens": 5,
+            "cache_read_input_tokens": 6,
+            "cache_creation_input_tokens": 5,
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 8,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 6,
+        "cache_creation_input_tokens": 5,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 8,
+        "output": 5,
+        "cacheRead": 6,
+        "cacheWrite": 5,
+        "totalTokens": 24,
+        "cost": {
+          "input": 0.0000024,
+          "output": 0.000006,
+          "cacheRead": 3.5999999999999994e-7,
+          "cacheWrite": 0.0000018,
+          "total": 0.00001056
+        },
+        "cacheWrite1h": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "reasoning-details",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "thinking_tokens": 3
+            }
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 5,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        },
+        "output_tokens_details": {
+          "thinking_tokens": 3
+        }
+      },
+      "usage": {
+        "input": 5,
+        "output": 5,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 17,
+        "cost": {
+          "input": 0.0000015,
+          "output": 0.000006,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0,
+          "total": 0.00000774
+        },
+        "cacheWrite1h": 0,
+        "reasoning": 3
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "different-response-model",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "MiniMax-M2.7",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "MiniMax-M2.7",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 11,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 13,
+              "cache_creation_input_tokens": 7
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 3
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 11,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 13,
+        "cache_creation_input_tokens": 7,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "usage": {
+        "input": 11,
+        "output": 3,
+        "cacheRead": 13,
+        "cacheWrite": 7,
+        "totalTokens": 34,
+        "cost": {
+          "input": 0.0000032999999999999997,
+          "output": 0.0000036,
+          "cacheRead": 7.799999999999999e-7,
+          "cacheWrite": 0,
+          "total": 0.00000768
+        },
+        "cacheWrite1h": 0
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-511999",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511992,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511992,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511992,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512001,
+        "cost": {
+          "input": 0.1535976,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.15360144000000003
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-512000",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511993,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511993,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511993,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512002,
+        "cost": {
+          "input": 0.15359789999999998,
+          "output": 0.0000024,
+          "cacheRead": 2.4e-7,
+          "cacheWrite": 0.0000012,
+          "total": 0.15360174000000001
+        },
+        "cacheWrite1h": 2
+      }
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "id": "m3-gross-512001",
+      "sdkBeta": null,
+      "expectedBody": {
+        "model": "MiniMax-M3",
+        "messages": [
+          {
+            "role": "user",
+            "content": "probe"
+          }
+        ],
+        "max_tokens": 4096,
+        "stream": true,
+        "thinking": {
+          "type": "disabled"
+        }
+      },
+      "responseModel": "untrusted-response-label",
+      "responseEvents": [
+        {
+          "type": "message_start",
+          "message": {
+            "id": "msg_usage",
+            "type": "message",
+            "role": "assistant",
+            "model": "untrusted-response-label",
+            "content": [],
+            "stop_reason": null,
+            "stop_sequence": null,
+            "usage": {
+              "input_tokens": 511994,
+              "output_tokens": 0,
+              "cache_read_input_tokens": 4,
+              "cache_creation_input_tokens": 3,
+              "cache_creation": {
+                "ephemeral_1h_input_tokens": 2
+              }
+            }
+          }
+        },
+        {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "ok"
+          }
+        },
+        {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn",
+            "stop_sequence": null
+          },
+          "usage": {
+            "output_tokens": 2
+          }
+        },
+        {
+          "type": "message_stop"
+        }
+      ],
+      "reported": {
+        "cacheRead": true,
+        "cacheWrite": true
+      },
+      "jsonUsage": {
+        "input_tokens": 511994,
+        "output_tokens": 2,
+        "cache_read_input_tokens": 4,
+        "cache_creation_input_tokens": 3,
+        "cache_creation": {
+          "ephemeral_1h_input_tokens": 2
+        }
+      },
+      "usage": {
+        "input": 511994,
+        "output": 2,
+        "cacheRead": 4,
+        "cacheWrite": 3,
+        "totalTokens": 512003,
+        "cost": {
+          "input": 0.3071964,
+          "output": 0.0000048,
+          "cacheRead": 4.8e-7,
+          "cacheWrite": 0.0000024,
+          "total": 0.30720408000000005
+        },
+        "cacheWrite1h": 2
+      }
+    }
+  ]
+}

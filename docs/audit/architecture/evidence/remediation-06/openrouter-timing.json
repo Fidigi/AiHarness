@@ -1,0 +1,720 @@
+{
+  "beforeImage": "sha256:b9115c5499aa4ba36bbe1d433af111cb1daed53433be7cdaec0ad035720b6bb3",
+  "afterImage": "sha256:e8fc137c0f3ed488e853b348e599bf6e960b349f28511223ec028d1cff2478ec",
+  "originalTestHash": "b95ac0187135f9d79f03dcac55c51670e3380040731810ee5b56040de0dbdeed",
+  "originalBeforeTestHash": "b95ac0187135f9d79f03dcac55c51670e3380040731810ee5b56040de0dbdeed",
+  "diagnosticTestHash": "7bf5a6ed4f6059597991b05aa7f8e40e5f562457b4a2121214836a7b96e88c3c",
+  "runtime": "unchanged image defaults, Node24.15.0, no product/flag/budget changes",
+  "selection": "Two original failed model cases with phase/time/CPU observers; 384 cases filter-unselected in each image; --network=none, loopback fixture only",
+  "samples": {
+    "before": [
+      {
+        "event": "finished",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "stage": "final-108-requests-assertion",
+        "iteration": 4,
+        "elapsedMs": 382.2677620000002,
+        "cpuUserUs": 306881,
+        "cpuSystemUs": 90119,
+        "stages": [
+          {
+            "stage": "provider-create",
+            "iteration": 1,
+            "ms": 3.85
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 1,
+            "ms": 4.01
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 1,
+            "ms": 55.35
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 1,
+            "ms": 73.1
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 1,
+            "ms": 93.47
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 1,
+            "ms": 98
+          },
+          {
+            "stage": "compaction",
+            "iteration": 1,
+            "ms": 118.89
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 1,
+            "ms": 132.78
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 2,
+            "ms": 133.62
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 2,
+            "ms": 133.7
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 2,
+            "ms": 155.39
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 2,
+            "ms": 166.32
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 2,
+            "ms": 186.31
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 2,
+            "ms": 190.04
+          },
+          {
+            "stage": "compaction",
+            "iteration": 2,
+            "ms": 206.26
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 2,
+            "ms": 218.31
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 3,
+            "ms": 218.72
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 3,
+            "ms": 218.96
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 3,
+            "ms": 239.09
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 3,
+            "ms": 250.31
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 3,
+            "ms": 265.45
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 3,
+            "ms": 268.77
+          },
+          {
+            "stage": "compaction",
+            "iteration": 3,
+            "ms": 284.31
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 3,
+            "ms": 295.7
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 4,
+            "ms": 296.21
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 4,
+            "ms": 296.3
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 4,
+            "ms": 318.13
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 4,
+            "ms": 328.39
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 4,
+            "ms": 346.69
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 4,
+            "ms": 350.54
+          },
+          {
+            "stage": "compaction",
+            "iteration": 4,
+            "ms": 367.07
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 4,
+            "ms": 379.48
+          },
+          {
+            "stage": "final-108-requests-assertion",
+            "iteration": 4,
+            "ms": 379.94
+          }
+        ]
+      },
+      {
+        "event": "finished",
+        "model": "prism-ml/ternary-bonsai-2-27b",
+        "stage": "final-108-requests-assertion",
+        "iteration": 4,
+        "elapsedMs": 324.65356299999985,
+        "cpuUserUs": 184695,
+        "cpuSystemUs": 83985,
+        "stages": [
+          {
+            "stage": "provider-create",
+            "iteration": 1,
+            "ms": 0.71
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 1,
+            "ms": 0.75
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 1,
+            "ms": 25.48
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 1,
+            "ms": 35.96
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 1,
+            "ms": 52.32
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 1,
+            "ms": 55.78
+          },
+          {
+            "stage": "compaction",
+            "iteration": 1,
+            "ms": 71.93
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 1,
+            "ms": 83.75
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 2,
+            "ms": 84.21
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 2,
+            "ms": 84.24
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 2,
+            "ms": 104.54
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 2,
+            "ms": 115.81
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 2,
+            "ms": 133.73
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 2,
+            "ms": 137.19
+          },
+          {
+            "stage": "compaction",
+            "iteration": 2,
+            "ms": 152.77
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 2,
+            "ms": 163.34
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 3,
+            "ms": 163.81
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 3,
+            "ms": 163.86
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 3,
+            "ms": 183.96
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 3,
+            "ms": 193.73
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 3,
+            "ms": 209.6
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 3,
+            "ms": 212.68
+          },
+          {
+            "stage": "compaction",
+            "iteration": 3,
+            "ms": 229.36
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 3,
+            "ms": 241.13
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 4,
+            "ms": 241.56
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 4,
+            "ms": 241.6
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 4,
+            "ms": 261.5
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 4,
+            "ms": 272.3
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 4,
+            "ms": 289.05
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 4,
+            "ms": 293.49
+          },
+          {
+            "stage": "compaction",
+            "iteration": 4,
+            "ms": 310.11
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 4,
+            "ms": 321.32
+          },
+          {
+            "stage": "final-108-requests-assertion",
+            "iteration": 4,
+            "ms": 321.74
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "event": "finished",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "stage": "final-108-requests-assertion",
+        "iteration": 4,
+        "elapsedMs": 386.9537419999999,
+        "cpuUserUs": 288071,
+        "cpuSystemUs": 71249,
+        "stages": [
+          {
+            "stage": "provider-create",
+            "iteration": 1,
+            "ms": 2.89
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 1,
+            "ms": 3.09
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 1,
+            "ms": 47.82
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 1,
+            "ms": 64.95
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 1,
+            "ms": 86.59
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 1,
+            "ms": 91.65
+          },
+          {
+            "stage": "compaction",
+            "iteration": 1,
+            "ms": 112.85
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 1,
+            "ms": 127.37
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 2,
+            "ms": 128.37
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 2,
+            "ms": 128.47
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 2,
+            "ms": 151.59
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 2,
+            "ms": 164.38
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 2,
+            "ms": 186.23
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 2,
+            "ms": 190.06
+          },
+          {
+            "stage": "compaction",
+            "iteration": 2,
+            "ms": 207.34
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 2,
+            "ms": 219.07
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 3,
+            "ms": 219.58
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 3,
+            "ms": 219.87
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 3,
+            "ms": 239.35
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 3,
+            "ms": 249.83
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 3,
+            "ms": 266
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 3,
+            "ms": 270.45
+          },
+          {
+            "stage": "compaction",
+            "iteration": 3,
+            "ms": 287.57
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 3,
+            "ms": 299.41
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 4,
+            "ms": 299.87
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 4,
+            "ms": 299.97
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 4,
+            "ms": 322.33
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 4,
+            "ms": 333.08
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 4,
+            "ms": 351.38
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 4,
+            "ms": 355.06
+          },
+          {
+            "stage": "compaction",
+            "iteration": 4,
+            "ms": 371.73
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 4,
+            "ms": 384.1
+          },
+          {
+            "stage": "final-108-requests-assertion",
+            "iteration": 4,
+            "ms": 384.58
+          }
+        ]
+      },
+      {
+        "event": "finished",
+        "model": "prism-ml/ternary-bonsai-2-27b",
+        "stage": "final-108-requests-assertion",
+        "iteration": 4,
+        "elapsedMs": 332.749196,
+        "cpuUserUs": 199686,
+        "cpuSystemUs": 72967,
+        "stages": [
+          {
+            "stage": "provider-create",
+            "iteration": 1,
+            "ms": 0.71
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 1,
+            "ms": 0.73
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 1,
+            "ms": 26.27
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 1,
+            "ms": 37.56
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 1,
+            "ms": 54.4
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 1,
+            "ms": 57.94
+          },
+          {
+            "stage": "compaction",
+            "iteration": 1,
+            "ms": 73.92
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 1,
+            "ms": 85.91
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 2,
+            "ms": 86.4
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 2,
+            "ms": 86.43
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 2,
+            "ms": 106.87
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 2,
+            "ms": 118.28
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 2,
+            "ms": 135.69
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 2,
+            "ms": 139.28
+          },
+          {
+            "stage": "compaction",
+            "iteration": 2,
+            "ms": 154.59
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 2,
+            "ms": 165.14
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 3,
+            "ms": 165.52
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 3,
+            "ms": 165.57
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 3,
+            "ms": 185.43
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 3,
+            "ms": 197.02
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 3,
+            "ms": 213.24
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 3,
+            "ms": 216.48
+          },
+          {
+            "stage": "compaction",
+            "iteration": 3,
+            "ms": 233.02
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 3,
+            "ms": 244.86
+          },
+          {
+            "stage": "provider-create",
+            "iteration": 4,
+            "ms": 245.41
+          },
+          {
+            "stage": "initial-and-replay-requests",
+            "iteration": 4,
+            "ms": 245.48
+          },
+          {
+            "stage": "create-private-store",
+            "iteration": 4,
+            "ms": 266.58
+          },
+          {
+            "stage": "tool-loop",
+            "iteration": 4,
+            "ms": 276.54
+          },
+          {
+            "stage": "reload-export",
+            "iteration": 4,
+            "ms": 294.58
+          },
+          {
+            "stage": "edit-clone",
+            "iteration": 4,
+            "ms": 299.03
+          },
+          {
+            "stage": "compaction",
+            "iteration": 4,
+            "ms": 316.58
+          },
+          {
+            "stage": "cleanup",
+            "iteration": 4,
+            "ms": 328.2
+          },
+          {
+            "stage": "final-108-requests-assertion",
+            "iteration": 4,
+            "ms": 328.69
+          }
+        ]
+      }
+    ]
+  },
+  "conclusion": "Both diagnostic cases finish below the unchanged 5s deadline in both frozen hosts. Original root timeout failures remain unresolved and unwaived. Single isolated observations do not diagnose cause, rule out suite-order/load effects, establish absence of regression, or qualify the complete gate."
+}

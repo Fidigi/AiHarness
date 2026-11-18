@@ -1,0 +1,49 @@
+.sidebar-organisation { margin: .4rem .65rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; font-size: .8rem; }
+.sidebar-organisation summary { cursor: pointer; padding: .35rem 0; }
+.sidebar-organisation label { display: flex; align-items: center; gap: .35rem; padding: .3rem 0; }
+.sidebar-organisation button { min-height: 32px; padding: .3rem .45rem; border: 1px solid #52668f; border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
+.sidebar-organisation button:disabled { opacity: .5; cursor: default; }
+.organisation-actions { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: .4rem; }
+.sidebar-projects ul { list-style: none; padding: 0; max-height: 28vh; overflow: auto; }
+.sidebar-projects li { padding: .4rem 0; border-bottom: 1px solid #52668f; }
+.sidebar-projects a { display: block; color: inherit; overflow-wrap: anywhere; padding: .3rem; }
+.sidebar-projects form { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sidebar-projects input { width: 100%; min-width: 0; padding: .3rem; }
+.sidebar .family-selector { flex: 0 0 24px; min-height: 32px; align-self: center; }
+@media (pointer: coarse) { .sidebar-organisation button, .sidebar-organisation summary { min-height: 44px; } .sidebar .family-selector { min-height: 44px; } }
+.workspace-linked-directories { width: 100%; margin-top: .45rem; padding: .4rem; border: 1px solid #52668f; border-radius: 5px; color: #d9e3f4; background: #223154; text-align: left; cursor: pointer; }
+html[data-theme="light"] .workspace-linked-directories { color: #26344e; background: #f8f9fc; border-color: #9eabc1; }
+.workspace-control { display: flex; align-items: stretch; gap: .35rem; }
+.workspace-file-manager { flex: 0 0 42px; border: 1px solid #30466e; border-radius: 7px; color: #d9e3f4; background: #223154; cursor: pointer; }
+.workspace-file-manager:disabled { opacity: .55; cursor: wait; }
+.directory-footer-spacer { flex: 1; }
+.directory-truncated { margin: 0 1rem .5rem; color: #ffd478; font-size: .78rem; }
+.directory-create-backdrop { z-index: 51; }
+.directory-create-dialog form label { display: grid; gap: .4rem; color: #c6cddd; }
+.directory-create-dialog input { width: 100%; margin-top: .3rem; padding: .65rem; border: 1px solid #52668f; border-radius: 5px; color: #fff; background: #10182f; }
+.directory-create-dialog footer { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.25rem; }
+html[data-theme="light"] .workspace-file-manager { color: #26344e; background: #f8f9fc; border-color: #c5cede; }
+html[data-theme="light"] .directory-picker { color: #172033; background: #fff; border-color: #9eabc1; box-shadow: 0 20px 60px #1b294033; }
+html[data-theme="light"] .directory-picker input, html[data-theme="light"] .directory-create-dialog input,
+html[data-theme="light"] .directory-picker button, html[data-theme="light"] .recent-workspaces button {
+  color: #26344e; background: #f8f9fc; border-color: #9eabc1;
+}
+html[data-theme="light"] .directory-list button { background: transparent; }
+html[data-theme="light"] .directory-list button:hover { background: #e6ebf4; }
+html[data-theme="light"] .directory-truncated { color: #744d00; }
+html[data-theme="light"] .directory-create-dialog form label { color: #4c5b73; }
+html[data-theme="light"] .directory-picker footer .primary { color: #fff; background: #d63250; border-color: #d63250; }
+/* Native links retain the Sidebar's existing control presentation. */
+.sidebar-nav a.session-main { display: block; width: 100%; border: 0; border-radius: 4px; color: #ccc; background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.sidebar-nav a.session-main:hover, .sidebar-nav a.session-new-tab:hover { background: rgba(233,69,96,.1); }
+.session-actions a.session-new-tab { align-self: center; padding: .35rem; border-radius: 4px; color: #ccc; text-decoration: none; font: 400 13.3333px Arial, sans-serif; }
+.search-results a.session-search-link { display: block; width: 100%; padding: .55rem; border: 0; border-radius: 4px; color: #ccd4e3; background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.search-results a.session-search-link:hover, .search-results a.session-search-link:focus-visible { background: #223154; }
+.sidebar .search-results small { color: #b7c2d7; }
+a.workspace-new-tab { display: grid; place-items: center; flex: 0 0 32px; border: 1px solid #30466e; border-radius: 7px; color: #d9e3f4; background: #223154; text-decoration: none; }
+html[data-theme="light"] .sidebar-nav a.session-main, html[data-theme="light"] .session-actions a.session-new-tab { color: #26344e; }
+html[data-theme="light"] a.workspace-new-tab { color: #26344e; background: #f8f9fc; border-color: #c5cede; }
+html[data-theme="light"] .sidebar .search-results a.session-search-link { color: #26344e; }
+html[data-theme="light"] .sidebar .search-results small { color: #52627b; }
+html[data-theme="light"] .sidebar .search-results a.session-search-link:hover,
+html[data-theme="light"] .sidebar .search-results a.session-search-link:focus-visible { background: #e6ebf4; }

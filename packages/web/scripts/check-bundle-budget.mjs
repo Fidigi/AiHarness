@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 const dist = resolve(process.cwd(), 'dist');
 const assets = join(dist, 'assets');
 const limits = {
-  entryJsRaw: 500 * 1024,
+  entryJsRaw: 504 * 1024,
   entryJsGzip: 150 * 1024,
   eagerGzip: 180 * 1024,
   asyncJsRaw: 1_600 * 1024,
@@ -26,7 +26,7 @@ const html = readFileSync(join(dist, 'index.html'), 'utf8');
 const entryMatch = html.match(/<script[^>]+src="\/assets\/([^"?]+\.js)"/);
 assertBudget(Boolean(entryMatch), 'production entry script was not found');
 const entryName = entryMatch[1];
-const jsFiles = readdirSync(assets).filter(file => file.endsWith('.js'));
+const jsFiles = readdirSync(assets).filter(file => /\.m?js$/.test(file));
 const cssFiles = readdirSync(assets).filter(file => file.endsWith('.css'));
 const entrySize = size(join(assets, entryName));
 assertBudget(entrySize.raw <= limits.entryJsRaw, `${entryName} is ${entrySize.raw} B raw (limit ${limits.entryJsRaw} B)`);

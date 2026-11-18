@@ -1,0 +1,2401 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "135242d9f348381b0cb8ac6d922f8c7225349b8718624753128d0b746e847318",
+  "requests": 168,
+  "rows": [
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16448,
+      "thinkingBudget": 15424,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-answer1",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 16385,
+      "thinkingBudget": 15361,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "minimal-answer64",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 64
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1088,
+      "thinkingBudget": 64,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "minimal-answer1",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 1025,
+      "thinkingBudget": 1,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "minimal-answer1023",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1023
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "minimal-answer1024",
+      "options": {
+        "thinking": "minimal",
+        "maxTokens": 1024
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "low-answer1",
+      "options": {
+        "thinking": "low",
+        "maxTokens": 1
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 2049,
+      "thinkingBudget": 1025,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-override32000-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 32000
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 32064,
+      "thinkingBudget": 31040,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-default",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-huge-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 9007199254740991
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 62976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-zero-answer64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "high-zero-answer64000",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64000,
+        "thinkingBudgets": {
+          "high": 0
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "minimal-override1023",
+      "options": {
+        "thinking": "minimal",
+        "thinkingBudgets": {
+          "minimal": 1023
+        }
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "omitted",
+      "options": {},
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {},
+      "estimatedContextTokens": 2,
+      "maxTokens": 64000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context10000-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context2048-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193856
+      },
+      "estimatedContextTokens": 193856,
+      "maxTokens": 2048,
+      "thinkingBudget": 1024,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context2047-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 193857
+      },
+      "estimatedContextTokens": 193857,
+      "maxTokens": 2047,
+      "thinkingBudget": 1023,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context1024-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 194880
+      },
+      "estimatedContextTokens": 194880,
+      "maxTokens": 1024,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context1-high",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 195903
+      },
+      "estimatedContextTokens": 195903,
+      "maxTokens": 1,
+      "thinkingBudget": 1024,
+      "refusedByCore": true
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context10000-explicit64",
+      "options": {
+        "thinking": "high",
+        "maxTokens": 64
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context10000-omitted",
+      "options": {},
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "context10000-off",
+      "options": {
+        "thinking": "off"
+      },
+      "context": {
+        "usage": 185904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "usage-components",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 0,
+        "input": 100000,
+        "output": 30000,
+        "cacheRead": 30000,
+        "cacheWrite": 25904
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "usage-trailing",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185900,
+        "trailing": "abcdefghijklmn"
+      },
+      "estimatedContextTokens": 185904,
+      "maxTokens": 10000,
+      "thinkingBudget": 8976,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "stale-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "stale": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "failed-usage",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "usage": 185904,
+        "failed": true
+      },
+      "estimatedContextTokens": 3,
+      "maxTokens": 64000,
+      "thinkingBudget": 16384,
+      "refusedByCore": false
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "case": "text-system-tools-images",
+      "options": {
+        "thinking": "high"
+      },
+      "context": {
+        "textChars": 649250,
+        "system": "System",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object"
+            }
+          }
+        ],
+        "images": 1
+      },
+      "estimatedContextTokens": 186894,
+      "maxTokens": 9010,
+      "thinkingBudget": 7986,
+      "refusedByCore": false
+    }
+  ]
+}

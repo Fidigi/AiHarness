@@ -1,0 +1,12 @@
+.codemode-card { min-width: 0; max-width: 100%; margin: .6rem 0; padding: .8rem; border: 1px solid #52668f; border-radius: 8px; color: #eef2fa; background: #16213e; }
+.codemode-card-running { max-height: min(40vh, 420px); overflow: auto; flex-shrink: 0; }
+.codemode-card header, .codemode-card li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem; }
+.codemode-card header { justify-content: space-between; }
+.codemode-card ol { list-style: none; padding: 0; margin: .6rem 0; max-height: 320px; overflow: auto; }
+.codemode-card li { padding: .35rem 0; border-bottom: 1px solid #40527b; }
+.codemode-call-name { flex: 1 1 140px; overflow-wrap: anywhere; }
+.codemode-card details { margin-top: .5rem; min-width: 0; }
+.codemode-card summary { cursor: pointer; }
+.codemode-card pre { max-width: 100%; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+html[data-theme="light"] .codemode-card { color: #172033; border-color: #9eabc1; background: #f8f9fc; }
+html[data-theme="light"] .codemode-card li { border-color: #aeb9ca; }

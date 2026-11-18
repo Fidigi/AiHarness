@@ -1,0 +1,402 @@
+[BUILD] Construction de l'image de production...
+docker build -f .docker/Dockerfile.prod \
+	-t ai-harness:prod-latest \
+	--target prod \
+	.
+#1 [internal] load build definition from Dockerfile.prod
+#1 sha256:ace95accb7f260eadf6db4f56337ffe208c1f891df6888cc13bf9b8b2c96a3f4
+#1 transferring dockerfile: 2.79kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26-bookworm-slim
+#2 sha256:a061323f35f2d0fc275510aae458a278599392c59b89fbd1a2ea39d31f27ce44
+#2 DONE 0.6s
+
+#3 [internal] load .dockerignore
+#3 sha256:196dda05042bdfadb83752a153b3408bb6f743e7d2dc21dbeb81564bf81196f9
+#3 transferring context: 1.27kB done
+#3 DONE 0.0s
+
+#10 [builder  1/11] FROM docker.io/library/node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1
+#10 sha256:84e9b3cef48d66eacf7fd9b69c89592f328147a7ca8f66372918ba8d5b9c134a
+#10 resolve docker.io/library/node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 0.0s done
+#10 DONE 0.0s
+
+#6 [internal] load build context
+#6 sha256:3add71ea318c4cc63f1f5e23a79093acde4ddba3e79c3a523183afa4f6ffa7ca
+#6 transferring context: 198.37kB 0.1s done
+#6 DONE 0.1s
+
+#20 [prod  3/15] RUN groupadd -r aiharness && useradd -r -g aiharness -d /app -s /sbin/nologin aiharness
+#20 sha256:fbd77602539e679c9e619bda369950601d30bae57a0c66ead912d1efba83d168
+#20 CACHED
+
+#9 [prod  6/15] COPY packages/core/package.json packages/core/
+#9 sha256:8afd820fdb7614d3aa22142bfbba9c205b524dce646ce6fde9e56bba8c1face4
+#9 CACHED
+
+#18 [prod  4/15] WORKDIR /app
+#18 sha256:b73ec898c511144ef5e5fbae5e235601842a752173281a34b04cf1967822bc70
+#18 CACHED
+
+#25 [prod  7/15] COPY packages/cli/package.json packages/cli/
+#25 sha256:82fa905a2f427d5539d559f41ce422ce2bf6e8df5d7354c1d2d931c36baf9f6d
+#25 CACHED
+
+#11 [builder  2/11] RUN npm install --global npm@12.1.0     && apt-get update     && apt-get install -y --no-install-recommends g++ make python3     && rm -rf /var/lib/apt/lists/*
+#11 sha256:70c039b6b8a1ddbc5811cc16383b609ce131981ba2e760df34dff0a23ced92e9
+#11 CACHED
+
+#26 [prod  5/15] COPY package.json package-lock.json .npmrc ./
+#26 sha256:cc1ecd7b6bc8ac59495358c3a9d6e39de694d9b140b84b402b2d004c08237375
+#26 CACHED
+
+#5 [prod  8/15] COPY packages/server/package.json packages/server/
+#5 sha256:5f4eb2757f4798efce361052aa46fe7fbf0489b1ae7ad33a5025a2851ca8d270
+#5 CACHED
+
+#15 [builder  3/11] WORKDIR /app
+#15 sha256:85c0cfc83b4172f366c8f9c9e3057c5a2d5cbc6e3f41704278a16959aeb774cb
+#15 CACHED
+
+#28 [builder  4/11] COPY package.json package-lock.json .npmrc ./
+#28 sha256:52ac8ae56a73bab1d249abf9becb32fd17937082df377bb19b9dfc73473644bb
+#28 CACHED
+
+#22 [builder  6/11] COPY packages/cli/package.json packages/cli/
+#22 sha256:90dbc10beff532429833ff07d8474865c9ff3c406060fd393d47780cecc7f3bb
+#22 CACHED
+
+#8 [builder  5/11] COPY packages/core/package.json packages/core/
+#8 sha256:76d549afc8ae471dad863894513679d27799ce5c991302b214c7251ef843331f
+#8 CACHED
+
+#21 [builder  7/11] COPY packages/server/package.json packages/server/
+#21 sha256:2d448bbbb9b301785919f193ee6cd54759e9ca0f771c42eb4a134c9cd54e25f2
+#21 CACHED
+
+#16 [prod  9/15] COPY packages/web/package.json packages/web/
+#16 sha256:14e47d8ee2a811237df2fbfa4b666c9ca2b6fd986b03eab11e52feb732c91ff7
+#16 CACHED
+
+#7 [builder  8/11] COPY packages/web/package.json packages/web/
+#7 sha256:3f828f1501fd2e3f325b30288248d8f3732cced0e7f3ce3ccdf1ffe5a08f2ae7
+#7 CACHED
+
+#17 [builder  9/11] RUN npm ci
+#17 sha256:274f9e001a513bdf2338defd72bc8ababeeeffea935eb784cd38c7f6cf221226
+#17 1.742 npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+#17 2.289 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#17 2.406 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+#17 3.124 npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+#17 3.203 npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+#17 6.490 npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+#17 ...
+
+#13 [prod 10/15] RUN npm ci --omit=dev     && apt-get purge -y --auto-remove g++ make python3     && rm -rf /var/lib/apt/lists/* /root/.npm
+#13 sha256:58041369e3bb19d935eca70441fd4cb287117636e6975e17ba51c89e60850b72
+#13 9.813
+#13 9.813 added 314 packages, and audited 319 packages in 10s
+#13 9.813
+#13 9.814 154 packages are looking for funding
+#13 9.814   run `npm fund` for details
+#13 9.823
+#13 9.823 14 vulnerabilities (4 low, 5 moderate, 4 high, 1 critical)
+#13 9.823
+#13 9.823 To address issues that do not require attention, run:
+#13 9.823   npm audit fix
+#13 9.823
+#13 9.823 To address all issues (including breaking changes), run:
+#13 9.823   npm audit fix --force
+#13 9.823
+#13 9.823 Run `npm audit` for details.
+#13 9.824 npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:
+#13 9.824 npm warn install-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+#13 9.824 npm warn install-scripts
+#13 9.824 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+#13 9.825 npm notice
+#13 9.825 npm notice New minor version of npm available! 12.1.0 -> 12.2.2
+#13 9.825 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+#13 9.825 npm notice To update run: npm install -g npm@12.2.2
+#13 9.825 npm notice
+#13 7.589 Reading package lists...
+#13 7.597 Building dependency tree...
+#13 7.598 Reading state information...
+#13 7.601 The following packages will be REMOVED:
+#13 7.601   binutils* binutils-common* binutils-x86-64-linux-gnu* cpp* cpp-12* g++*
+#13 7.601   g++-12* gcc* gcc-12* libasan8* libbinutils* libc-dev-bin* libc6-dev*
+#13 7.601   libcc1-0* libcrypt-dev* libctf-nobfd0* libctf0* libexpat1* libgcc-12-dev*
+#13 7.601   libgomp1* libgprofng0* libgssapi-krb5-2* libisl23* libitm1* libjansson4*
+#13 7.601   libk5crypto3* libkeyutils1* libkrb5-3* libkrb5support0* liblsan0* libmpc3*
+#13 7.601   libmpfr6* libncursesw6* libnsl-dev* libnsl2* libpython3-stdlib*
+#13 7.601   libpython3.11-minimal* libpython3.11-stdlib* libquadmath0* libreadline8*
+#13 7.601   libsqlite3-0* libssl3* libstdc++-12-dev* libtirpc-common* libtirpc-dev*
+#13 7.601   libtirpc3* libtsan2* libubsan1* linux-libc-dev* make* media-types* python3*
+#13 7.601   python3-minimal* python3.11* python3.11-minimal* readline-common*
+#13 7.601   rpcsvc-proto*
+#13 7.738 0 upgraded, 0 newly installed, 57 to remove and 0 not upgraded.
+#13 7.738 After this operation, 294 MB disk space will be freed.
+#13 7.765 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 10264 files and directories currently installed.)
+#13 7.792 Removing g++ (4:12.2.0-3) ...
+#13 7.948 Removing g++-12 (12.2.0-14+deb12u1) ...
+#13 8.065 Removing gcc (4:12.2.0-3) ...
+#13 8.196 Removing gcc-12 (12.2.0-14+deb12u1) ...
+#13 8.356 Removing binutils (2.40-2) ...
+#13 8.465 Removing binutils-x86-64-linux-gnu (2.40-2) ...
+#13 8.582 Removing libgprofng0:amd64 (2.40-2) ...
+#13 8.686 Removing libctf0:amd64 (2.40-2) ...
+#13 8.807 Removing libbinutils:amd64 (2.40-2) ...
+#13 8.957 Removing binutils-common:amd64 (2.40-2) ...
+#13 9.062 Removing cpp (4:12.2.0-3) ...
+#13 9.239 Removing cpp-12 (12.2.0-14+deb12u1) ...
+#13 9.414 Removing libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#13 9.613 Removing libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#13 9.751 Removing libasan8:amd64 (12.2.0-14+deb12u1) ...
+#13 9.914 Removing libc6-dev:amd64 (2.36-9+deb12u14) ...
+#13 10.10 Removing libc-dev-bin (2.36-9+deb12u14) ...
+#13 10.26 Removing libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+#13 10.36 Removing libcrypt-dev:amd64 (1:4.4.33-2) ...
+#13 10.43 Removing libctf-nobfd0:amd64 (2.40-2) ...
+#13 10.52 Removing python3 (3.11.2-1+b1) ...
+#13 10.60 Removing python3.11 (3.11.2-6+deb12u9) ...
+#13 10.70 Removing python3-minimal (3.11.2-1+b1) ...
+#13 10.81 Removing python3.11-minimal (3.11.2-6+deb12u9) ...
+#13 10.82 Unlinking and removing bytecode for runtime python3.11
+#13 10.86 Removing libexpat1:amd64 (2.5.0-1+deb12u5) ...
+#13 10.90 Removing libgomp1:amd64 (12.2.0-14+deb12u1) ...
+#13 10.92 Removing libnsl-dev:amd64 (1.3.0-2) ...
+#13 10.95 Removing libtirpc-dev:amd64 (1.3.3+ds-1) ...
+#13 10.97 Removing libpython3-stdlib:amd64 (3.11.2-1+b1) ...
+#13 11.00 Removing libpython3.11-stdlib:amd64 (3.11.2-6+deb12u9) ...
+#13 11.02 find: '/usr/lib/python3': No such file or directory
+#13 11.05 Removing libnsl2:amd64 (1.3.0-2) ...
+#13 11.07 Removing libtirpc3:amd64 (1.3.3+ds-1) ...
+#13 11.10 Removing libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#13 11.12 Removing libisl23:amd64 (0.25-1.1) ...
+#13 11.14 Removing libitm1:amd64 (12.2.0-14+deb12u1) ...
+#13 11.17 Removing libjansson4:amd64 (2.14-2) ...
+#13 11.19 Removing libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+#13 11.23 Removing libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+#13 11.25 Removing libkeyutils1:amd64 (1.6.3-2) ...
+#13 11.28 Removing libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+#13 11.30 Removing liblsan0:amd64 (12.2.0-14+deb12u1) ...
+#13 11.32 Removing libmpc3:amd64 (1.3.1-1) ...
+#13 11.35 Removing libmpfr6:amd64 (4.2.0-1) ...
+#13 11.37 Removing libncursesw6:amd64 (6.4-4) ...
+#13 11.40 Removing libpython3.11-minimal:amd64 (3.11.2-6+deb12u9) ...
+#13 11.42 find: '/usr/lib/python3': No such file or directory
+#13 11.45 Removing libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+#13 11.47 Removing libreadline8:amd64 (8.2-1.3) ...
+#13 11.49 Removing libsqlite3-0:amd64 (3.40.1-2+deb12u2) ...
+#13 11.52 Removing libssl3:amd64 (3.0.22-1~deb12u2) ...
+#13 11.54 Removing libtirpc-common (1.3.3+ds-1) ...
+#13 11.56 Removing libtsan2:amd64 (12.2.0-14+deb12u1) ...
+#13 11.59 Removing libubsan1:amd64 (12.2.0-14+deb12u1) ...
+#13 11.61 Removing linux-libc-dev:amd64 (6.1.192-2) ...
+#13 11.67 Removing make (4.3-4.1) ...
+#13 11.69 Removing media-types (10.0.0) ...
+#13 11.71 Removing readline-common (8.2-1.3) ...
+#13 11.73 Removing rpcsvc-proto (1.4.3-1) ...
+#13 11.76 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#13 11.78 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6104 files and directories currently installed.)
+#13 11.78 Purging configuration files for media-types (10.0.0) ...
+#13 11.80 Purging configuration files for python3.11-minimal (3.11.2-6+deb12u9) ...
+#13 11.82 Purging configuration files for libtirpc-common (1.3.3+ds-1) ...
+#13 11.84 Purging configuration files for binutils-common:amd64 (2.40-2) ...
+#13 11.86 Purging configuration files for python3 (3.11.2-1+b1) ...
+#13 11.88 Purging configuration files for libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+#13 11.90 Purging configuration files for libcrypt-dev:amd64 (1:4.4.33-2) ...
+#13 11.93 Purging configuration files for libpython3.11-minimal:amd64 (3.11.2-6+deb12u9) ...
+#13 11.95 Purging configuration files for readline-common (8.2-1.3) ...
+#13 DONE 12.1s
+
+#17 [builder  9/11] RUN npm ci
+#17 sha256:274f9e001a513bdf2338defd72bc8ababeeeffea935eb784cd38c7f6cf221226
+#17 32.36
+#17 32.36 added 537 packages, and audited 542 packages in 32s
+#17 32.36
+#17 32.36 223 packages are looking for funding
+#17 32.36   run `npm fund` for details
+#17 32.46
+#17 32.46 28 vulnerabilities (4 low, 10 moderate, 11 high, 3 critical)
+#17 32.46
+#17 32.46 To address issues that do not require attention, run:
+#17 32.46   npm audit fix
+#17 32.46
+#17 32.46 To address all issues (including breaking changes), run:
+#17 32.46   npm audit fix --force
+#17 32.46
+#17 32.46 Run `npm audit` for details.
+#17 32.46 npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:
+#17 32.46 npm warn install-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+#17 32.46 npm warn install-scripts
+#17 32.46 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+#17 32.46 npm notice
+#17 32.46 npm notice New minor version of npm available! 12.1.0 -> 12.2.2
+#17 32.46 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+#17 32.46 npm notice To update run: npm install -g npm@12.2.2
+#17 32.46 npm notice
+#17 DONE 32.6s
+
+#4 [builder 10/11] COPY . .
+#4 sha256:f4fd17ed03b80f32089917e10753f1da14e3a482168fe51adfb52a5700f0ea1e
+#4 DONE 0.7s
+
+#19 [builder 11/11] RUN npm run build
+#19 sha256:78dbede2c69dfed015b2098fe48769571dd9449db9734c0fc9837ffb186c1a3f
+#19 0.213 npm notice run ai-harness@0.1.0 build
+#19 0.213 npm notice run npm run build --workspace @ai-harness/core && npm run build --workspace @ai-harness/cli && npm run build --workspace @ai-harness/server && npm run build --workspace @ai-harness/web
+#19 0.286 npm notice run @ai-harness/core@0.1.0 build
+#19 0.286 npm notice run node ../../scripts/run-typescript.mjs
+#19 13.99 npm notice run @ai-harness/cli@0.1.0 build
+#19 13.99 npm notice run node ../../scripts/run-typescript.mjs && node scripts/copy-assets.mjs
+#19 18.63 ✅ CLI assets copied successfully
+#19 18.71 npm notice run @ai-harness/server@0.1.0 build
+#19 18.71 npm notice run node ../../scripts/run-typescript.mjs && node scripts/copy-assets.mjs
+#19 23.45 ✅ ai-harness-web executable prepared
+#19 23.53 npm notice run @ai-harness/web@0.1.0 build
+#19 23.53 npm notice run node scripts/build.mjs
+#19 36.68 vite v8.3.1 building client environment for production...
+#19 36.69 transforming...
+#19 36.93 ✓ 475 modules transformed.
+#19 37.05 rendering chunks...
+#19 37.26 computing gzip size...
+#19 37.28 dist/index.html                                           0.89 kB │ gzip:   0.46 kB
+#19 37.28 dist/assets/KaTeX_Size3-Regular-CTq5MqoE.woff             4.42 kB
+#19 37.28 dist/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2            4.92 kB
+#19 37.28 dist/assets/KaTeX_Size2-Regular-Dy4dx90m.woff2            5.20 kB
+#19 37.28 dist/assets/KaTeX_Size1-Regular-mCD8mA8B.woff2            5.46 kB
+#19 37.28 dist/assets/KaTeX_Size4-Regular-BF-4gkZK.woff             5.98 kB
+#19 37.28 dist/assets/KaTeX_Size2-Regular-oD1tc_U0.woff             6.18 kB
+#19 37.28 dist/assets/KaTeX_Size1-Regular-C195tn64.woff             6.49 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2      6.90 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2         6.91 kB
+#19 37.28 dist/assets/KaTeX_Size3-Regular-DgpXs0kz.ttf              7.58 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff       7.65 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff          7.71 kB
+#19 37.28 dist/assets/KaTeX_Script-Regular-D3wIWfF6.woff2           9.64 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2       10.34 kB
+#19 37.28 dist/assets/KaTeX_Size4-Regular-DWFBv043.ttf             10.36 kB
+#19 37.28 dist/assets/KaTeX_Script-Regular-D5yQViql.woff           10.58 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2         11.31 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2            11.34 kB
+#19 37.28 dist/assets/KaTeX_Size2-Regular-B7gKUWhC.ttf             11.50 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2        12.02 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2          12.21 kB
+#19 37.28 dist/assets/KaTeX_Size1-Regular-Dbsnue_I.ttf             12.22 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff        12.31 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf       12.34 kB
+#19 37.28 dist/assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf          12.36 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff          13.20 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Bold-BsDP51OF.woff             13.29 kB
+#19 37.28 dist/assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2      13.56 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Italic-DN2j7dab.woff         14.11 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff           14.40 kB
+#19 37.28 dist/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff       16.02 kB
+#19 37.28 dist/assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2         16.40 kB
+#19 37.28 dist/assets/KaTeX_Math-Italic-t53AETM-.woff2             16.44 kB
+#19 37.28 dist/assets/KaTeX_Script-Regular-C5JkGWo-.ttf            16.64 kB
+#19 37.28 dist/assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2         16.78 kB
+#19 37.28 dist/assets/KaTeX_Main-Italic-NWA7e6Wa.woff2             16.98 kB
+#19 37.28 dist/assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff          18.66 kB
+#19 37.28 dist/assets/KaTeX_Math-Italic-DA0__PXp.woff              18.74 kB
+#19 37.28 dist/assets/KaTeX_Main-BoldItalic-SpSLRI95.woff          19.41 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf         19.43 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Regular-CB_wures.ttf           19.57 kB
+#19 37.28 dist/assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf              19.58 kB
+#19 37.28 dist/assets/KaTeX_Main-Italic-BMLOBm91.woff              19.67 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf          22.36 kB
+#19 37.28 dist/assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf            24.50 kB
+#19 37.28 dist/assets/KaTeX_Main-Bold-Cx986IdX.woff2               25.32 kB
+#19 37.28 dist/assets/KaTeX_Main-Regular-B22Nviop.woff2            26.27 kB
+#19 37.28 dist/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf        27.55 kB
+#19 37.28 dist/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2             28.07 kB
+#19 37.28 dist/assets/KaTeX_Main-Bold-Jm3AIy58.woff                29.91 kB
+#19 37.28 dist/assets/KaTeX_Main-Regular-Dr94JaBh.woff             30.77 kB
+#19 37.28 dist/assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf           31.19 kB
+#19 37.28 dist/assets/KaTeX_Math-Italic-flOr_0UB.ttf               31.30 kB
+#19 37.28 dist/assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf           32.96 kB
+#19 37.28 dist/assets/KaTeX_AMS-Regular-DMm9YOAa.woff              33.51 kB
+#19 37.28 dist/assets/KaTeX_Main-Italic-3WenGoN9.ttf               33.58 kB
+#19 37.28 dist/assets/KaTeX_Main-Bold-waoOVXN0.ttf                 51.33 kB
+#19 37.28 dist/assets/KaTeX_Main-Regular-ypZvNtVU.ttf              53.58 kB
+#19 37.28 dist/assets/KaTeX_AMS-Regular-DRggAlZN.ttf               63.63 kB
+#19 37.28 dist/assets/pdf.worker.min-CjEcRF4W.mjs               1,264.34 kB
+#19 37.28 dist/assets/ExtensionInteractionDialog-BkTE3gLz.css       0.87 kB │ gzip:   0.42 kB
+#19 37.28 dist/assets/CodemodeCard-DPRsy6d_.css                     0.96 kB │ gzip:   0.46 kB
+#19 37.28 dist/assets/SessionRowCopyMenu-Bu6cdfMU.css               1.06 kB │ gzip:   0.50 kB
+#19 37.28 dist/assets/mobile-keyboard-Biz3w2xO.css                  1.23 kB │ gzip:   0.41 kB
+#19 37.28 dist/assets/ToolProgressCard-CVL-4jww.css                 1.57 kB │ gzip:   0.60 kB
+#19 37.28 dist/assets/LinkedDirectoryModal-CUYT_9Zc.css             3.35 kB │ gzip:   0.99 kB
+#19 37.28 dist/assets/TerminalPanel-BrP-ENHg.css                    3.93 kB │ gzip:   1.01 kB
+#19 37.28 dist/assets/Sidebar-gQbA3UNf.css                          4.49 kB │ gzip:   1.16 kB
+#19 37.28 dist/assets/workspace-panel-BUqCfWGC.css                 10.62 kB │ gzip:   2.76 kB
+#19 37.28 dist/assets/SettingsView-DxmN-lLF.css                    19.06 kB │ gzip:   3.82 kB
+#19 37.28 dist/assets/MarkdownContentRenderer-Ckgt_JB4.css         29.92 kB │ gzip:   8.03 kB
+#19 37.28 dist/assets/index-DzR7s52m.css                           59.21 kB │ gzip:  11.67 kB
+#19 37.28 dist/assets/workspace-refresh-Bov1uzSP.js                 0.75 kB │ gzip:   0.40 kB
+#19 37.28 dist/assets/prepare-image-MdTymuU5.js                     0.87 kB │ gzip:   0.53 kB
+#19 37.28 dist/assets/cache-notice-messages-D9Yoiw2a.js             0.92 kB │ gzip:   0.51 kB
+#19 37.28 dist/assets/rolldown-runtime-Dd_uD5pT.js                  1.10 kB │ gzip:   0.62 kB
+#19 37.28 dist/assets/ToolProgressCard-B_yxTCFL.js                  1.11 kB │ gzip:   0.49 kB
+#19 37.28 dist/assets/CacheNotices-Ccq7mIlr.js                      1.30 kB │ gzip:   0.58 kB
+#19 37.28 dist/assets/SelectionActions-CQg5-5kI.js                  1.85 kB │ gzip:   0.94 kB
+#19 37.28 dist/assets/CodemodeCard-DZQk683s.js                      1.87 kB │ gzip:   0.74 kB
+#19 37.28 dist/assets/terminal-replay-DxFeKilB.js                   2.01 kB │ gzip:   0.91 kB
+#19 37.28 dist/assets/useFocusTrap-4GaAr3lm.js                      2.54 kB │ gzip:   1.10 kB
+#19 37.28 dist/assets/ProcessBlock-D2iumn16.js                      2.67 kB │ gzip:   1.29 kB
+#19 37.28 dist/assets/SubagentPanel-BxcbOTOE.js                     3.74 kB │ gzip:   1.42 kB
+#19 37.28 dist/assets/CommandPalette-ChbstZjv.js                    4.18 kB │ gzip:   1.58 kB
+#19 37.28 dist/assets/SessionRowCopyMenu-D8kypajZ.js                4.37 kB │ gzip:   1.95 kB
+#19 37.28 dist/assets/ExtensionInteractionDialog-CZjqmpKp.js        8.36 kB │ gzip:   2.78 kB
+#19 37.28 dist/assets/LinkedDirectoryBoundary-rHG6tSvw.js           8.85 kB │ gzip:   3.64 kB
+#19 37.28 dist/assets/LinkedDirectoryModal-RWdmXLPE.js              9.16 kB │ gzip:   3.20 kB
+#19 37.28 dist/assets/PluginSettings-CPGvUIyh.js                   12.94 kB │ gzip:   3.72 kB
+#19 37.28 dist/assets/WorkspacePanel-bmw-QrNx.js                   23.04 kB │ gzip:   8.26 kB
+#19 37.28 dist/assets/Sidebar-BnLWWfhk.js                          25.40 kB │ gzip:   7.91 kB
+#19 37.28 dist/assets/settings-locale-C_Gf6y6c.js                  29.74 kB │ gzip:   8.12 kB
+#19 37.28 dist/assets/SettingsView-BbSqm2y6.js                    168.26 kB │ gzip:  43.76 kB
+#19 37.28 dist/assets/TerminalPanel-lXQjc4rY.js                   345.67 kB │ gzip:  88.50 kB
+#19 37.28 dist/assets/PdfPreview-BuDkoQUl.js                      432.23 kB │ gzip: 129.99 kB
+#19 37.28 dist/assets/MarkdownContentRenderer-VJkbtuLG.js         471.79 kB │ gzip: 144.73 kB
+#19 37.28 dist/assets/index-CpvAEkrB.js                           509.74 kB │ gzip: 151.40 kB
+#19 37.28 dist/assets/dist-C0JcN9vC.js                          1,522.92 kB │ gzip: 469.39 kB
+#19 37.28
+#19 37.28 ✓ built in 601ms
+#19 37.42 Bundle budgets OK: entry 147 KiB gzip; eager 159 KiB gzip; 28 JS chunks.
+#19 37.43 npm notice run ai-harness@0.1.0 postbuild
+#19 37.43 npm notice run npm rebuild
+#19 39.06 npm warn rebuild 1 package had install scripts blocked because they are not covered by allowScripts. Run `npm install-scripts ls` to review.
+#19 39.06 rebuilt dependencies successfully
+#19 DONE 39.1s
+
+#27 [prod 11/15] COPY --from=builder /app/packages/core/dist ./packages/core/dist
+#27 sha256:003f59c2d9e7e6f74b79c38218888ee362cf373c161e03a7e6919ae8556e9300
+#27 DONE 0.1s
+
+#12 [prod 12/15] COPY --from=builder /app/packages/cli/dist ./packages/cli/dist
+#12 sha256:bb1903fa300fdcb4373ad5c174d5b52e5f0cef02ff3b58ebc171dd368bd92aae
+#12 DONE 0.0s
+
+#23 [prod 13/15] COPY --from=builder /app/packages/server/dist ./packages/server/dist
+#23 sha256:f12c7b260e347eb9c5840b7442255f3405e62ce587ebc5d67f12c2f62c5469ef
+#23 DONE 0.0s
+
+#24 [prod 14/15] COPY --from=builder /app/packages/web/dist ./packages/web/dist
+#24 sha256:01d2a27539782157e0e54f90d16e42e358e3146674412a5e8f0dc5a8cea787cd
+#24 DONE 0.0s
+
+#14 [prod 15/15] RUN mkdir -p /app/.ai-harness     && chmod +x /app/packages/server/dist/web-cli.js     && ln -s /app/packages/server/dist/web-cli.js /usr/local/bin/ai-harness-web     && chown -R aiharness:aiharness /app
+#14 sha256:bb775e680838ef74ad12313f8b4b9024ee00d77485642ca9eb64f1f8454b5773
+#14 DONE 12.5s
+
+#29 exporting to image
+#29 sha256:0fb7f7f9b2c7b86d00963415e63709a54cf5251d464d01d9df521037ab5e6911
+#29 exporting layers
+#29 exporting layers 8.4s done
+#29 exporting manifest sha256:c0d4637cf1d3a854bc305d26a08e96ba53f2b609612ec265138e14d16cb51698 done
+#29 exporting config sha256:bbb6092b838ee32c73d3840ca1f5c3c29fecf39008034163eb93a6f5d9b9c656 done
+#29 naming to docker.io/library/ai-harness:prod-latest done
+#29 unpacking to docker.io/library/ai-harness:prod-latest
+#29 unpacking to docker.io/library/ai-harness:prod-latest 4.5s done
+#29 DONE 12.9s

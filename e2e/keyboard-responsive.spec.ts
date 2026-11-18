@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 
 test.describe('Palette globale et raccourcis', () => {
@@ -25,6 +25,8 @@ test.describe('Palette globale et raccourcis', () => {
     await expect(composer).toBeFocused();
     await composer.evaluate(element => {
       const transfer = new DataTransfer();
+      // Clipboard plaintext is authoritative; HTML supplies only inert link metadata.
+      transfer.setData('text/plain', '## Safe title\n\n**Bold**');
       transfer.setData('text/html', '<h2>Safe title</h2><p><strong>Bold</strong> <script>bad()</script></p>');
       element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }));
     });

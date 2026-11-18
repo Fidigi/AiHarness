@@ -7,21 +7,29 @@ import type {
   AgentEvent,
   AgentRunSnapshot,
   AgentStateSnapshot,
+  ExtensionInteractionSnapshot,
   CustomModelDefinition,
   CustomProviderDefinition,
   EffectiveConfiguration,
   GitWorktree,
   Message,
+  McpConfigInventory,
   ModelCatalog,
   PluginCatalog,
+  PluginEnableBatchResult,
+  PluginEnableChange,
   PluginReloadResult,
   PluginScope,
   PluginUpdateResult,
+  ProjectTrustStatus,
   ProviderAuthStatus,
   SkillCatalog,
   SkillRegistry,
   SkillRegistryEntry,
   SerializedSession,
+  Session,
+  ShellCommandEvent,
+  ShellCommandSnapshot,
   SubagentConfiguration,
   SubagentProfile,
   SubagentRunSnapshot,
@@ -29,36 +37,10 @@ import type {
   WorkspaceDescriptor,
 } from '@ai-harness/core';
 
+import { apiFetch, authenticateXhr, boundedSseRecords, setAuthToken } from './api-transport';
+export { apiFetch, boundedSseRecords, setAuthToken } from './api-transport';
+
 const API_BASE = '/api';
-let authToken = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ai-harness-auth-token') ?? '' : '';
-let chatTransport: 'sse' | 'websocket' = typeof localStorage !== 'undefined' && localStorage.getItem('ai-harness-transport') === 'websocket'
-  ? 'websocket' : 'sse';
-
-export function setChatTransport(transport: 'sse' | 'websocket'): void {
-  chatTransport = transport;
-  if (typeof localStorage !== 'undefined') localStorage.setItem('ai-harness-transport', transport);
-}
-
-export function getChatTransport(): 'sse' | 'websocket' {
-  return chatTransport;
-}
-
-export function setAuthToken(token: string): void {
-  authToken = token.trim();
-  if (typeof sessionStorage !== 'undefined') {
-    if (authToken) sessionStorage.setItem('ai-harness-auth-token', authToken);
-    else sessionStorage.removeItem('ai-harness-auth-token');
-  }
-}
-
-function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
-  if (authToken) headers.Authorization = `Bearer ${authToken}`;
-  return fetch(input, { ...init, headers, credentials: init.credentials ?? 'same-origin' }).then(response => {
-    if (response.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('aih-auth-required'));
-    return response;
-  });
-}
 
 export interface WebAuthStatus {
   required: boolean;
@@ -127,10 +109,11 @@ export async function getAppUpdateStatus(refresh = false): Promise<ApiResponse<A
 }
 
 /** Standardized response wrapper */
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: string;
 }
 
 export interface SessionMessagePageInfo {
@@ -146,9 +129,13 @@ export interface SessionMessagePageInfo {
 }
 
 /** Session JSON contract. Dates are ISO strings until the store hydrates them. */
-export type ApiSession = SerializedSession & { messagePage?: SessionMessagePageInfo };
+export interface CacheNoticeProjection {
+  cacheNotices?: import('@ai-harness/core').CacheTranscriptNotice[];
+  showCacheMissNotices?: boolean;
+}
+export type ApiSession = SerializedSession & CacheNoticeProjection & { messagePage?: SessionMessagePageInfo };
 
-export interface SessionMessagePage extends SessionMessagePageInfo {
+export interface SessionMessagePage extends SessionMessagePageInfo, CacheNoticeProjection {
   messages: SerializedSession['messages'];
   /** Compatibility with the first server-side pagination response. */
   hasMore?: boolean;
@@ -168,6 +155,12 @@ export interface WorkspaceBrowseResponse {
   cwd: string;
   parent?: string;
   entries: Array<{ name: string; path: string; isDirectory: boolean; isSymbolicLink: boolean }>;
+  truncated?: boolean;
+}
+
+export interface FileManagerAvailability {
+  available: boolean;
+  reason?: 'remote-request' | 'unsupported-platform';
 }
 
 /** Provider configuration from backend */
@@ -289,26 +282,11 @@ export async function enqueueAgentMessage(
   }
 }
 
-export interface CommandSnapshot {
-  id: string;
-  sessionId: string;
-  command: string;
-  cwd: string;
-  excludedFromContext: boolean;
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
-  startedAt: string;
-  completedAt?: string;
-  exitCode?: number;
-  output: string;
-  truncated: boolean;
-  lastSequence: number;
-}
+export type CommandSnapshot = ShellCommandSnapshot;
 
-export interface CommandEvent {
-  sequence: number;
-  type: 'output' | 'exit' | 'error' | 'cancelled';
+export type CommandEvent = Omit<ShellCommandEvent, 'data'> & {
   data: { stream?: string; chunk?: string; truncated?: boolean; exitCode?: number; message?: string };
-}
+};
 
 export interface PaletteItem {
   name: string;
@@ -410,14 +388,96 @@ export async function runExtensionCommand(
   }
 }
 
+/** Validate partial transport payloads before any declarative controls consume them. */
+function isInteraction(value: unknown): value is ExtensionInteractionSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  const optionsValid = (options: unknown) => options === undefined || (Array.isArray(options)
+    && options.every(option => option && typeof option === 'object'
+      && typeof option.value === 'string' && typeof option.label === 'string'));
+  return typeof request.id === 'string' && request.id.length > 0 && typeof request.title === 'string'
+    && typeof request.createdAt === 'string' && ['confirm', 'input', 'select', 'editor', 'custom'].includes(String(request.kind))
+    && ['message', 'placeholder', 'output'].every(key => request[key] === undefined || typeof request[key] === 'string')
+    && optionsValid(request.options) && (request.fields === undefined || (Array.isArray(request.fields)
+      && request.fields.every(field => field && typeof field === 'object' && typeof field.name === 'string'
+        && typeof field.label === 'string' && ['text', 'textarea', 'select', 'checkbox'].includes(field.type)
+        && (field.required === undefined || typeof field.required === 'boolean')
+        && (field.placeholder === undefined || typeof field.placeholder === 'string') && optionsValid(field.options))));
+}
+
+/** Explicit plural (including []) wins; only absent plural uses the legacy primary. */
+export function orderedExtensionRequests(run?: AgentRunSnapshot): ExtensionInteractionSnapshot[] {
+  if (!run || ['completed', 'failed', 'stopped'].includes(run.phase)) return [];
+  const requests = run.extensionRequests === undefined ? (run.extensionRequest ? [run.extensionRequest] : []) : run.extensionRequests;
+  if (!Array.isArray(requests)) return [];
+  const ordered = new Map<string, ExtensionInteractionSnapshot>();
+  for (const request of requests.slice(0, 16)) if (isInteraction(request)) ordered.set(request.id, request);
+  return [...ordered.values()];
+}
+
+export function reconcileInteractionSnapshot(run?: AgentRunSnapshot, closed: ReadonlySet<string> = new Set()): AgentRunSnapshot | undefined {
+  if (!run) return undefined;
+  const extensionRequests = orderedExtensionRequests(run).filter(request => !closed.has(request.id));
+  return { ...run, extensionRequests, extensionRequest: extensionRequests[0] };
+}
+
+/** Compare session-wide sequences, not just IDs: old runs and missing-run snapshots can be stale too. */
+export function isFreshInteractionSnapshot(snapshot: AgentStateSnapshot, current: AgentRunSnapshot | undefined, watermark: number): boolean {
+  return !(current && snapshot.run?.id === current.id && snapshot.run.lastSequence === current.lastSequence
+    && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase)
+    && JSON.stringify(orderedExtensionRequests(snapshot.run).map(request => request.id)) !== JSON.stringify(orderedExtensionRequests(current).map(request => request.id)))
+    && Number.isSafeInteger(snapshot.lastSequence) && snapshot.lastSequence >= Math.max(watermark, current?.lastSequence ?? 0)
+    && (!snapshot.run || (snapshot.run.sessionId === snapshot.sessionId
+      && Number.isSafeInteger(snapshot.run.lastSequence) && snapshot.run.lastSequence >= 0 && snapshot.run.lastSequence <= snapshot.lastSequence
+      && (snapshot.run.id !== current?.id || snapshot.run.lastSequence >= current.lastSequence)))
+    && !(current && snapshot.run && current.id !== snapshot.run.id && snapshot.lastSequence <= current.lastSequence)
+    && !(current && ['completed', 'failed', 'stopped'].includes(current.phase)
+      && snapshot.run?.id === current.id && !['completed', 'failed', 'stopped'].includes(snapshot.run.phase));
+}
+
+export function extensionInteractionChanges(run: AgentRunSnapshot, data: unknown, closed: ReadonlySet<string> = new Set()): Partial<AgentRunSnapshot> {
+  const event = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  let requests = orderedExtensionRequests(run);
+  if (event.action === 'request' && isInteraction(event.request) && !closed.has(event.request.id)
+    && !['completed', 'failed', 'stopped'].includes(run.phase)) {
+    const request = event.request;
+    const index = requests.findIndex(entry => entry.id === request.id);
+    requests = index < 0 ? [...requests, request].slice(0, 16)
+      : requests.map((entry, position) => position === index ? request : entry);
+  } else if (event.action === 'resolved' && typeof event.requestId === 'string') {
+    requests = requests.filter(request => request.id !== event.requestId);
+  }
+  return { extensionRequests: requests, extensionRequest: requests[0] };
+}
+
+/** Same-ID replacements retain only values compatible with both the old and new schema. */
+export function interactionDraft(request: ExtensionInteractionSnapshot, previous?: ExtensionInteractionSnapshot, value?: unknown): unknown {
+  const same = request.id === previous?.id && request.kind === previous.kind;
+  if (request.kind === 'custom') {
+    const values = same && value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    return Object.fromEntries((request.fields ?? []).map(field => {
+      const old = previous?.fields?.find(entry => entry.name === field.name);
+      const compatible = same && old?.type === field.type;
+      const draft = compatible ? values[field.name] : undefined;
+      return [field.name, field.type === 'checkbox' ? draft === true
+        : field.type === 'select' ? field.options?.some(option => option.value === draft) ? draft
+          : field.required ? field.options?.[0]?.value ?? '' : ''
+          : typeof draft === 'string' ? draft : ''];
+    }));
+  }
+  if (request.kind === 'select') return same && request.options?.some(option => option.value === value) ? value : request.options?.[0]?.value ?? '';
+  return same && typeof value === 'string' ? value : '';
+}
+
 export async function respondToExtensionInteraction(
   sessionId: string,
   requestId: string,
   responseValue: { cancelled: boolean; value?: unknown },
+  signal?: AbortSignal,
 ): Promise<ApiResponse<AgentRunSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/agent/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(requestId)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(responseValue),
     });
     const data = await response.json().catch(() => ({})) as AgentRunSnapshot & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
@@ -513,30 +573,12 @@ export async function* streamCommandEvents(
     { headers: { Accept: 'text/event-stream' }, signal },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No command event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = '';
-  let data = '';
-  while (true) {
-    const read = await reader.read();
-    buffer += decoder.decode(read.value, { stream: !read.done });
-    const lines = buffer.split('\n');
-    buffer = read.done ? '' : lines.pop() ?? '';
-    for (const raw of lines) {
-      const line = raw.replace(/\r$/, '');
-      if (line.startsWith('event:')) eventName = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trimStart();
-      else if (!line && data) {
-        const parsed = JSON.parse(data) as CommandEvent | { snapshot: CommandSnapshot };
-        if (eventName === 'connection.ready' && 'snapshot' in parsed) yield { snapshot: parsed.snapshot };
-        else if ('sequence' in parsed) yield { event: parsed };
-        eventName = '';
-        data = '';
-      }
-    }
-    if (read.done) break;
+  for await (const record of boundedSseRecords(response)) {
+    const parsed: unknown = JSON.parse(record.data);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Command event stream was invalid.');
+    if (record.event === 'connection.ready' && 'snapshot' in parsed) {
+      yield { snapshot: (parsed as { snapshot: CommandSnapshot }).snapshot };
+    } else if ('sequence' in parsed) yield { event: parsed as CommandEvent };
   }
 }
 
@@ -572,204 +614,21 @@ export async function* streamAgentEvents(
     const payload = await response.json().catch(() => ({})) as { error?: string };
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No agent event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = 'message';
-  let dataLines: string[] = [];
-  const records: AgentStreamRecord[] = [];
-  const consumeLine = (rawLine: string): void => {
-    const line = rawLine.replace(/\r$/, '');
-    if (!line) {
-      if (dataLines.length) {
-        try {
-          const data = JSON.parse(dataLines.join('\n')) as AgentEvent | {
-            snapshot: AgentStateSnapshot;
-            reset?: boolean;
-          };
-          if (eventName === 'connection.ready' && 'snapshot' in data) {
-            records.push({ type: 'connection.ready', snapshot: data.snapshot, reset: Boolean(data.reset) });
-          } else if ('sequence' in data) {
-            records.push({ type: 'event', event: data });
-          }
-        } catch { /* Ignore malformed records and continue the replay. */ }
-      }
-      eventName = 'message';
-      dataLines = [];
-    } else if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const line of lines) consumeLine(line);
-    while (records.length) yield records.shift()!;
-    if (done) {
-      if (buffer) consumeLine(buffer);
-      consumeLine('');
-      while (records.length) yield records.shift()!;
-      break;
+  for await (const record of boundedSseRecords(response)) {
+    const data: unknown = JSON.parse(record.data);
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Agent event stream was invalid.');
+    if (record.event === 'connection.ready' && 'snapshot' in data) {
+      const ready = data as { snapshot: AgentStateSnapshot; reset?: boolean };
+      yield { type: 'connection.ready', snapshot: ready.snapshot, reset: Boolean(ready.reset) };
+    } else if ('sequence' in data) {
+      yield { type: 'event', event: data as AgentEvent };
     }
   }
 }
 
 // ===================================================================
-// Legacy stateless chat API - retained for API compatibility
+// Bounded SSE transport for detached agents, commands and terminals
 // ===================================================================
-
-/** Send a chat message and stream the response back */
-export async function* streamChat(
-  providerType: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  options?: Record<string, unknown>,
-): AsyncGenerator<{ type: string; content?: string }, void> {
-  if (options?.transport === 'websocket' || (!options?.transport && chatTransport === 'websocket')) {
-    yield* streamChatWebSocket(providerType, messages, options ?? {});
-    return;
-  }
-  try {
-    const response = await apiFetch(`${API_BASE}/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: providerType, messages, options }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({})) as { error?: string };
-      throw new Error(errorData.error || `HTTP ${response.status}`);
-    }
-
-    // Parse SSE stream
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('No streaming body');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let currentEvent = 'message';
-
-    let streamDone = false;
-    while (!streamDone) {
-      const { done, value } = await reader.read();
-      streamDone = done;
-      if (value) buffer += decoder.decode(value, { stream: !done });
-      if (done) buffer += decoder.decode();
-
-      const lines = buffer.split('\n');
-      buffer = done ? '' : lines.pop() || '';
-
-      for (const rawLine of lines) {
-        const line = rawLine.replace(/\r$/, '');
-        // Parse SSE format: "event: <type>\ndata: <json>"
-        if (!line) {
-          currentEvent = 'message';
-          continue;
-        }
-
-        if (line.startsWith('data: ')) {
-          try {
-            const dataStr = line.slice(6);
-            const data = JSON.parse(dataStr) as { type?: unknown; content?: unknown };
-            const type = typeof data.type === 'string' ? data.type : currentEvent;
-            const content = typeof data.content === 'string'
-              ? data.content
-              : typeof (data as { message?: unknown }).message === 'string'
-                ? (data as { message: string }).message
-                : undefined;
-            yield { type, content };
-          } catch {
-            // Skip malformed SSE events
-          }
-        } else if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7).trim() || 'message';
-        }
-      }
-    }
-  } catch (error) {
-    yield { type: 'error', content: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-async function* streamChatWebSocket(
-  provider: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  options: Record<string, unknown>,
-): AsyncGenerator<{ type: string; content?: string }, void> {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${location.host}/api/chat/ws`;
-  const socket = authToken
-    ? new WebSocket(url, `aih.bearer.${encodeBase64Url(authToken)}`)
-    : new WebSocket(url);
-  const queue: Array<{ type: string; content?: string }> = [];
-  let wake: (() => void) | undefined;
-  let complete = false;
-  socket.onopen = () => socket.send(JSON.stringify({ provider, messages, options: { ...options, transport: undefined } }));
-  socket.onmessage = event => {
-    const lines = String(event.data).split('\n');
-    let eventType = 'message';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-      if (!line.startsWith('data: ')) continue;
-      try {
-        const data = JSON.parse(line.slice(6)) as { content?: unknown; message?: unknown };
-        queue.push({
-          type: eventType,
-          content: typeof data.content === 'string' ? data.content : typeof data.message === 'string' ? data.message : undefined,
-        });
-      } catch { /* Ignore malformed event frames. */ }
-    }
-    wake?.();
-  };
-  socket.onerror = () => {
-    queue.push({ type: 'error', content: 'Connexion WebSocket impossible' });
-    complete = true;
-    wake?.();
-  };
-  socket.onclose = () => { complete = true; wake?.(); };
-  while (!complete || queue.length) {
-    if (!queue.length) await new Promise<void>(resolve => { wake = resolve; });
-    wake = undefined;
-    while (queue.length) yield queue.shift()!;
-  }
-}
-
-function encodeBase64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-/** Non-streaming chat request */
-export async function sendChat(
-  providerType: string,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  options?: Record<string, unknown>,
-): Promise<ApiResponse<{ content: string; model?: string; usage?: Record<string, number> }>> {
-  try {
-    const response = await apiFetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: providerType, messages, options }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
 
 // ===================================================================
 // Session API - CRUD operations via backend
@@ -1017,7 +876,7 @@ export async function deleteSession(sessionId: string, cascade = false): Promise
 /** Fork a session from a specific message index */
 export async function forkSession(
   sessionId: string,
-  options?: { messageIndex?: number; messageId?: string; title?: string },
+  options?: { messageIndex?: number; messageId?: string; before?: boolean; title?: string },
 ): Promise<ApiResponse<{ id: string; title?: string }>> {
   try {
     const response = await apiFetch(`${API_BASE}/sessions/${sessionId}/fork`, {
@@ -1124,6 +983,52 @@ export async function browseWorkspace(path?: string, parent = false): Promise<Ap
   }
 }
 
+export async function createWorkspaceDirectory(parent: string, name: string): Promise<ApiResponse<{ path: string }>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/browse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent, name }),
+    });
+    const data = await response.json().catch(() => ({})) as { path?: string; error?: string; code?: string };
+    if (!response.ok || !data.path) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
+    return { success: true, data: { path: data.path } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to create directory' };
+  }
+}
+
+export async function getFileManagerAvailability(signal?: AbortSignal): Promise<ApiResponse<FileManagerAvailability>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, { signal, cache: 'no-store' });
+    const data = await response.json().catch(() => ({})) as FileManagerAvailability & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'File manager availability failed' };
+  }
+}
+
+export async function openWorkspaceInFileManager(cwd: string): Promise<ApiResponse<void>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/workspaces/file-manager`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd }),
+    });
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return { success: false, error: data.error || `HTTP ${response.status}`, code: data.code };
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to open the file manager' };
+  }
+}
+
 export async function listWorktrees(cwd: string, signal?: AbortSignal): Promise<ApiResponse<GitWorktree[]>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/worktrees?cwd=${encodeURIComponent(cwd)}`, { signal });
@@ -1163,22 +1068,28 @@ export async function removeWorktree(cwd: string, path: string, force = false): 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, path, force, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) return {
+      success: false,
+      error: data.error || `HTTP ${response.status}`,
+      code: data.code,
+    };
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to remove worktree' };
   }
 }
 
-export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<{ cwd: string; trusted: boolean }>> {
+export type WorkspaceTrustStatus = ProjectTrustStatus & { operationTrusted: boolean };
+
+export async function setWorkspaceTrust(cwd: string, trusted: boolean): Promise<ApiResponse<WorkspaceTrustStatus>> {
   try {
     const response = await apiFetch(`${API_BASE}/workspaces/trust`, {
       method: trusted ? 'POST' : 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, confirm: true }),
     });
-    const data = await response.json().catch(() => ({})) as { cwd: string; trusted: boolean; error?: string };
+    const data = await response.json().catch(() => ({})) as WorkspaceTrustStatus & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return { success: true, data };
   } catch (error) {
@@ -1314,8 +1225,14 @@ export async function uploadFiles(
     signal?: AbortSignal;
   } = {},
 ): Promise<ApiResponse<{ files: string[]; collision?: string }>> {
-  const totalSourceBytes = files.reduce((total, file) => total + file.size, 0);
   try {
+    if (!Array.isArray(files) || files.length < 1 || files.length > 20
+      || files.some(file => !file || !Number.isSafeInteger(file.size) || file.size < 0
+        || file.size > 6 * 1024 * 1024 || typeof file.name !== 'string' || file.name.length > 255)) {
+      throw new Error('Invalid upload selection.');
+    }
+    const totalSourceBytes = files.reduce((total, file) => total + file.size, 0);
+    if (totalSourceBytes > 9 * 1024 * 1024) throw new Error('Upload selection is too large.');
     const encoded: Array<{ name: string; content: string }> = [];
     let preparedBytes = 0;
     options.onProgress?.({
@@ -1325,12 +1242,15 @@ export async function uploadFiles(
     for (const [fileIndex, file] of files.entries()) {
       if (options.signal?.aborted) throw new DOMException('Upload cancelled.', 'AbortError');
       const bytes = new Uint8Array(await file.arrayBuffer());
+      if (bytes.byteLength > 6 * 1024 * 1024 || preparedBytes + bytes.byteLength > 9 * 1024 * 1024) {
+        throw new Error('Upload selection is too large.');
+      }
       let binary = '';
       for (let index = 0; index < bytes.length; index += 0x8000) {
         binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
       }
       encoded.push({ name: file.name, content: btoa(binary) });
-      preparedBytes += file.size;
+      preparedBytes += bytes.byteLength;
       options.onProgress?.({
         phase: 'preparing', loadedBytes: preparedBytes, totalBytes: totalSourceBytes,
         completedFiles: fileIndex + 1, totalFiles: files.length,
@@ -1342,9 +1262,10 @@ export async function uploadFiles(
       const request = new XMLHttpRequest();
       const abort = () => request.abort();
       request.open('POST', `${API_BASE}/files/upload`);
+      request.timeout = 120_000;
       request.withCredentials = true;
       request.setRequestHeader('Content-Type', 'application/json');
-      if (authToken) request.setRequestHeader('Authorization', `Bearer ${authToken}`);
+      authenticateXhr(request);
       request.upload.addEventListener('progress', event => {
         options.onProgress?.({
           phase: 'uploading', loadedBytes: event.loaded,
@@ -1355,8 +1276,10 @@ export async function uploadFiles(
       request.addEventListener('load', () => {
         options.signal?.removeEventListener('abort', abort);
         let response: { files: string[]; collision?: string; error?: string };
-        try { response = JSON.parse(request.responseText || '{}') as typeof response; }
-        catch { response = { files: [], error: `HTTP ${request.status}` }; }
+        try {
+          if (request.responseText.length > 1024 * 1024) throw new Error('limit');
+          response = JSON.parse(request.responseText || '{}') as typeof response;
+        } catch { response = { files: [], error: `HTTP ${request.status}` }; }
         if (request.status === 401 && typeof window !== 'undefined') window.dispatchEvent(new Event('aih-auth-required'));
         if (request.status < 200 || request.status >= 300) reject(new Error(response.error || `HTTP ${request.status}`));
         else resolve(response);
@@ -1368,6 +1291,10 @@ export async function uploadFiles(
       request.addEventListener('abort', () => {
         options.signal?.removeEventListener('abort', abort);
         reject(new DOMException('Upload cancelled.', 'AbortError'));
+      });
+      request.addEventListener('timeout', () => {
+        options.signal?.removeEventListener('abort', abort);
+        reject(new Error('Upload timed out.'));
       });
       options.signal?.addEventListener('abort', abort, { once: true });
       request.send(body);
@@ -1392,32 +1319,14 @@ export async function* streamFileChanges(
     { headers: { Accept: 'text/event-stream' }, signal },
   );
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No file event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = 'connection.ready';
-  let data = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const raw of lines) {
-      const line = raw.replace(/\r$/, '');
-      if (line.startsWith('event:')) eventName = line.slice(6).trim();
-      else if (line.startsWith('data:')) data += line.slice(5).trimStart();
-      else if (!line && data) {
-        const payload = JSON.parse(data) as { revision?: number };
-        if (eventName === 'connection.ready' || eventName === 'file.changed' || eventName === 'file.unavailable') {
-          yield { type: eventName, revision: payload.revision ?? 0 };
-        }
-        eventName = '';
-        data = '';
-      }
+  for await (const record of boundedSseRecords(response)) {
+    const payload: unknown = JSON.parse(record.data);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('File event stream was invalid.');
+    const revision = (payload as { revision?: unknown }).revision ?? 0;
+    if (!Number.isSafeInteger(revision) || (revision as number) < 0) throw new Error('File event stream was invalid.');
+    if (record.event === 'connection.ready' || record.event === 'file.changed' || record.event === 'file.unavailable') {
+      yield { type: record.event, revision: revision as number };
     }
-    if (done) break;
   }
 }
 
@@ -1450,9 +1359,9 @@ export type TerminalStreamRecord =
   | { type: 'connection.ready'; snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number }
   | { type: 'event'; event: TerminalEvent };
 
-export async function listTerminals(cwd: string): Promise<ApiResponse<TerminalSnapshot[]>> {
+export async function listTerminals(cwd: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot[]>> {
   try {
-    const response = await apiFetch(`${API_BASE}/terminals?cwd=${encodeURIComponent(cwd)}`);
+    const response = await apiFetch(`${API_BASE}/terminals?cwd=${encodeURIComponent(cwd)}`, { signal });
     const data = await response.json().catch(() => []) as TerminalSnapshot[] & { error?: string };
     if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
     return { success: true, data };
@@ -1466,9 +1375,10 @@ export async function createTerminal(input: {
   name?: string;
   cols?: number;
   rows?: number;
-}): Promise<ApiResponse<TerminalSnapshot>> {
+}, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals`, {
+      signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -1481,10 +1391,10 @@ export async function createTerminal(input: {
   }
 }
 
-export async function writeTerminal(terminalId: string, data: string): Promise<ApiResponse<TerminalSnapshot>> {
+export async function writeTerminal(terminalId: string, data: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}/input`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }),
     });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -1494,10 +1404,10 @@ export async function writeTerminal(terminalId: string, data: string): Promise<A
   }
 }
 
-export async function resizeTerminal(terminalId: string, cols: number, rows: number): Promise<ApiResponse<TerminalSnapshot>> {
+export async function resizeTerminal(terminalId: string, cols: number, rows: number, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
     const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}/resize`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cols, rows }),
+      signal, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cols, rows }),
     });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
@@ -1507,9 +1417,9 @@ export async function resizeTerminal(terminalId: string, cols: number, rows: num
   }
 }
 
-export async function closeTerminal(terminalId: string): Promise<ApiResponse<TerminalSnapshot>> {
+export async function closeTerminal(terminalId: string, signal?: AbortSignal): Promise<ApiResponse<TerminalSnapshot>> {
   try {
-    const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}`, { method: 'DELETE' });
+    const response = await apiFetch(`${API_BASE}/terminals/${encodeURIComponent(terminalId)}`, { method: 'DELETE', signal });
     const payload = await response.json().catch(() => ({})) as TerminalSnapshot & { error?: string };
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
     return { success: true, data: payload };
@@ -1523,52 +1433,8 @@ export async function* streamTerminalEvents(
   after = 0,
   signal?: AbortSignal,
 ): AsyncGenerator<TerminalStreamRecord, void> {
-  const response = await apiFetch(
-    `${API_BASE}/terminals/${encodeURIComponent(terminalId)}/events?after=${after}`,
-    { headers: { Accept: 'text/event-stream' }, signal },
-  );
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(payload.error || `HTTP ${response.status}`);
-  }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error('No terminal event stream');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = '';
-  let dataLines: string[] = [];
-  const records: TerminalStreamRecord[] = [];
-  const consume = (raw: string): void => {
-    const line = raw.replace(/\r$/, '');
-    if (!line) {
-      if (dataLines.length) {
-        const data = JSON.parse(dataLines.join('\n')) as TerminalEvent | {
-          snapshot: TerminalSnapshot; reset: boolean; oldestOffset: number; lastOffset: number;
-        };
-        if (eventName === 'connection.ready' && 'snapshot' in data) {
-          records.push({ type: 'connection.ready', ...data });
-        } else if ('terminalId' in data) records.push({ type: 'event', event: data });
-      }
-      eventName = '';
-      dataLines = [];
-    } else if (line.startsWith('event:')) eventName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-  };
-  while (true) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: !done });
-    if (done) buffer += decoder.decode();
-    const lines = buffer.split('\n');
-    buffer = done ? '' : lines.pop() ?? '';
-    for (const line of lines) consume(line);
-    while (records.length) yield records.shift()!;
-    if (done) {
-      if (buffer) consume(buffer);
-      consume('');
-      while (records.length) yield records.shift()!;
-      break;
-    }
-  }
+  const { readTerminalEvents } = await import('./terminal-replay');
+  yield* readTerminalEvents(terminalId, after, signal);
 }
 
 // ===================================================================
@@ -1649,6 +1515,20 @@ export async function updateEnabledSkills(
   }
 }
 
+/** Read a redacted file-only inventory. The server never connects or resolves MCP values for this request. */
+export async function getMcpConfig(cwd?: string): Promise<ApiResponse<McpConfigInventory>> {
+  try {
+    const query = new URLSearchParams();
+    if (cwd) query.set('cwd', cwd);
+    const response = await apiFetch(`${API_BASE}/mcp${query.size ? `?${query}` : ''}`);
+    const data = await response.json().catch(() => ({})) as McpConfigInventory & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to load MCP configuration' };
+  }
+}
+
 export type PluginMutationAction = 'install' | 'enable' | 'disable' | 'remove' | 'update';
 
 /** Read metadata only. Install and remote checks always require an explicit POST action. */
@@ -1690,6 +1570,25 @@ export async function mutatePlugin(input: {
     return { success: true, data };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Plugin action failed' };
+  }
+}
+
+export async function setPluginsEnabled(input: {
+  cwd?: string;
+  projectId?: string;
+  changes: PluginEnableChange[];
+}): Promise<ApiResponse<PluginEnableBatchResult>> {
+  try {
+    const response = await apiFetch(`${API_BASE}/plugins/enabled`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const data = await response.json().catch(() => ({})) as PluginEnableBatchResult & { error?: string };
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Plugin group action failed' };
   }
 }
 
@@ -1761,16 +1660,24 @@ export interface ProviderOAuthFlow {
   userCode?: string;
   verificationUri?: string;
   verificationUriComplete?: string;
+  authorizationUrl?: string;
   expiresAt: string;
   error?: string;
 }
 
-export function startProviderOAuth(type: string): Promise<ApiResponse<ProviderOAuthFlow>> {
-  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST' });
+export function startProviderOAuth(type: string, signal?: AbortSignal, method: 'device' | 'browser' | 'copy-code' = 'device'): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}/oauth`, { method: 'POST', signal,
+    ...(method !== 'device' ? { body: JSON.stringify({ method }) } : {}) });
 }
 
-export function getProviderOAuth(flowId: string): Promise<ApiResponse<ProviderOAuthFlow>> {
-  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}`);
+export function submitProviderOAuthRedirect(flowId: string, redirectUrl: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}/redirect`, {
+    method: 'POST', signal, body: JSON.stringify({ redirectUrl }),
+  });
+}
+
+export function getProviderOAuth(flowId: string, signal?: AbortSignal): Promise<ApiResponse<ProviderOAuthFlow>> {
+  return jsonApi(`/provider-registry/auth/oauth/${encodeURIComponent(flowId)}`, { signal });
 }
 
 export function cancelProviderOAuth(flowId: string): Promise<ApiResponse<{ state: 'cancelled' }>> {
@@ -1785,8 +1692,33 @@ export function disconnectProvider(type: string): Promise<ApiResponse<unknown>> 
   return jsonApi(`/provider-registry/auth/${encodeURIComponent(type)}`, { method: 'DELETE' });
 }
 
-export function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]>> {
-  return jsonApi('/provider-registry/custom');
+export interface ProviderRenameCapability {
+  supported: boolean;
+  mode: 'disabled' | 'exclusive-host-single-writer';
+  reason: 'exclusive-host-required' | 'restricted-single-writer' | 'unavailable';
+}
+
+/** Array data remains compatible; capability is additive to the client envelope.
+ * Missing/invalid metadata fails closed, including older/shared hosts. */
+export async function getCustomProviders(): Promise<ApiResponse<CustomProviderDefinition[]> & {
+  renameCapability: ProviderRenameCapability;
+}> {
+  const disabled: ProviderRenameCapability = { supported: false, mode: 'disabled', reason: 'unavailable' };
+  try {
+    const response = await apiFetch(`${API_BASE}/provider-registry/custom`);
+    if (!response.ok) return { success: false, renameCapability: disabled };
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) return { success: false, renameCapability: disabled };
+    let renameCapability = disabled;
+    try {
+      const metadata = JSON.parse(response.headers.get('X-AiHarness-Provider-Rename') || '{}') as ProviderRenameCapability;
+      if (metadata.supported === true && metadata.mode === 'exclusive-host-single-writer'
+        && metadata.reason === 'restricted-single-writer') renameCapability = metadata;
+      else if (metadata.supported === false && metadata.mode === 'disabled'
+        && metadata.reason === 'exclusive-host-required') renameCapability = metadata;
+    } catch { /* Older hosts have no capability metadata. */ }
+    return { success: true, data: data as CustomProviderDefinition[], renameCapability };
+  } catch { return { success: false, renameCapability: disabled }; }
 }
 
 export function saveCustomProvider(
@@ -1859,8 +1791,16 @@ export function getToolSettings(cwd?: string, projectId?: string): Promise<ApiRe
 
 export function updateToolSettings(input: {
   enabledTools: string[]; toolPreset: string; powershellEnabled: boolean; cwd?: string; projectId?: string;
+  codemodeEnabled?: boolean; codemodeMode?: 'on' | 'only'; codemodeInlineBudget?: number;
+  codemodeLimits?: NonNullable<ToolSettings['codemode']>['limits'];
 }): Promise<ApiResponse<ToolSettings>> {
   return jsonApi('/tools', { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function saveNewSessionDefault(
+  input: ({ kind: 'model'; provider: string; model: string } | { kind: 'thinking'; thinking: NonNullable<Session['thinking']> }) & { projectId?: string },
+): Promise<ApiResponse<{ values: Record<string, unknown>; overridden: string[]; effective: EffectiveConfiguration }>> {
+  return jsonApi('/configuration/defaults', { method: 'PATCH', body: JSON.stringify(input) });
 }
 
 export function getConfigurationScope(scope: 'global' | 'project', scopeId?: string): Promise<ApiResponse<{ values: Record<string, unknown> }>> {
@@ -1897,12 +1837,13 @@ export async function setProviderApiKey(
   type: string,
   apiKey: string,
   baseUrl?: string,
+  vertexAuthMode?: 'api-key' | 'bearer',
 ): Promise<ApiResponse<{ success: boolean; message: string }>> {
   try {
     const response = await apiFetch(`${API_BASE}/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, apiKey, baseUrl }),
+      body: JSON.stringify({ type, apiKey, baseUrl, vertexAuthMode }),
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1998,7 +1939,10 @@ export async function updateSubagentProfile(
 ): Promise<ApiResponse<SubagentConfiguration>> {
   return subagentRequest<SubagentConfiguration>(`/subagents/profiles/${encodeURIComponent(profileId)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ profile, cwd, projectId, scope: scope ?? (projectId ? 'project' : 'global') }),
+    body: JSON.stringify({ profile: { ...profile,
+      ...(Object.hasOwn(profile, 'model') ? { model: profile.model ?? null } : {}),
+      ...(Object.hasOwn(profile, 'thinking') ? { thinking: profile.thinking ?? null } : {}),
+    }, cwd, projectId, scope: scope ?? (projectId ? 'project' : 'global') }),
   });
 }
 
@@ -2026,30 +1970,17 @@ export async function deleteSubagentProfile(
   });
 }
 
-export async function listSubagentRuns(parentSessionId?: string): Promise<ApiResponse<SubagentRunSnapshot[]>> {
+export async function listSubagentRuns(parentSessionId?: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot[]>> {
   const query = parentSessionId ? `?parentSessionId=${encodeURIComponent(parentSessionId)}` : '';
-  return subagentRequest<SubagentRunSnapshot[]>(`/subagents/runs${query}`);
+  return subagentRequest<SubagentRunSnapshot[]>(`/subagents/runs${query}`, { signal });
 }
 
-export async function startSubagentRun(input: {
-  parentSessionId: string;
-  profileId: string;
-  task: string;
-  provider: string;
-  background?: boolean;
-}): Promise<ApiResponse<SubagentRunSnapshot>> {
-  return subagentRequest<SubagentRunSnapshot>('/subagents/runs', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+export async function stopSubagentRun(runId: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot>> {
+  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST', signal });
 }
 
-export async function stopSubagentRun(runId: string): Promise<ApiResponse<SubagentRunSnapshot>> {
-  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/stop`, { method: 'POST' });
-}
-
-export async function acknowledgeSubagentRun(runId: string): Promise<ApiResponse<SubagentRunSnapshot>> {
-  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/acknowledge`, { method: 'POST' });
+export async function acknowledgeSubagentRun(runId: string, signal?: AbortSignal): Promise<ApiResponse<SubagentRunSnapshot>> {
+  return subagentRequest<SubagentRunSnapshot>(`/subagents/runs/${encodeURIComponent(runId)}/acknowledge`, { method: 'POST', signal });
 }
 
 /** Check if the backend server is running */

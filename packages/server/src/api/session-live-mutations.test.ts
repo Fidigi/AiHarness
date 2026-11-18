@@ -1,0 +1,255 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { MockProvider } from '@ai-harness/core';
+import { start, stop } from '../index.js';
+import { createRuntimeServices, type RuntimeServices } from '../runtime/services.js';
+
+describe('live session snapshots', () => {
+  let root: string;
+  let base: string;
+  let services: RuntimeServices;
+  const json = { 'Content-Type': 'application/json' };
+  const request = (route: string, method = 'GET', body?: unknown) => fetch(`${base}${route}`, {
+    method, headers: json, ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+
+  const branchFixture = async () => {
+    const source = await services.sessionManager.create({ cwd: root, title: 'Cancellation source' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Selected user' });
+    const target = source.activeLeafId!;
+    await services.sessionManager.appendCustomEntry(source.id, 'fixture:http-branch', { revision: 1 });
+    return { source, target, raw: await services.sessionManager.getRawEntries(source.id),
+      inventory: services.sessionManager.list().map(item => item.id).sort(),
+      bytes: await readFile(services.sessionStore.getSessionFilePath(source.id)!) };
+  };
+  const latch = () => { let release!: () => void; return { promise: new Promise<void>(resolve => { release = resolve; }), release: () => release() }; };
+
+  beforeAll(async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), 'ai-harness-live-sessions-'));
+    const server = await start({ port: 0, host: '127.0.0.1', dataDir: path.join(root, '.data'),
+      allowedRoots: [root], defaultCwd: root, enableMockProvider: true,
+      runtimeServicesFactory: async (proxy, options) => {
+        services = await createRuntimeServices(proxy, options);
+        return services;
+      },
+    });
+    base = `http://127.0.0.1:${server.port}`;
+    expect((await request('/api/workspaces/trust', 'POST', { cwd: root, confirm: true })).status).toBe(200);
+  });
+  afterAll(async () => { await stop(); await rm(root, { recursive: true, force: true }); });
+
+  it('forks and clones stable persisted prefixes without stopping the source or switching its active leaf', async () => {
+    const source = await services.sessionManager.create({ cwd: root, title: 'Source' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Original question' });
+    const targetId = source.activeLeafId!;
+    await services.sessionManager.addMessage(source.id, { role: 'assistant', content: 'Original answer' });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => {
+      await gate; complete?.({ content: 'Source keeps running' });
+    });
+    let runId: string | undefined;
+    try {
+      const response = await request('/api/agent/runs', 'POST', { sessionId: source.id, cwd: root,
+        provider: 'mock', input: 'Continue source' });
+      expect(response.status).toBe(202);
+      const { run } = await response.json() as { run: { id: string } };
+      runId = run.id;
+      await vi.waitFor(() => expect(stream).toHaveBeenCalledOnce());
+      const activeLeaf = source.activeLeafId;
+      for (const action of ['fork', 'clone']) {
+        expect((await request(`/api/sessions/${source.id}/${action}`, 'POST', {})).status).toBe(409);
+        expect((await request(`/api/sessions/${source.id}/${action}`, 'POST', { messageId: 'stream:unwritten' })).status).toBe(404);
+        const snapshot = await request(`/api/sessions/${source.id}/${action}`, 'POST', { messageId: targetId });
+        expect(snapshot.status).toBe(201);
+        const copy = await snapshot.json() as { messages: Array<{ content: string }>; parentId?: string };
+        expect(copy.messages.map(message => message.content)).toEqual(['Original question']);
+        expect(copy.parentId).toBe(action === 'fork' ? source.id : undefined);
+      }
+      const edit = await request(`/api/sessions/${source.id}/fork`, 'POST', { messageId: targetId, before: true });
+      expect(edit.status).toBe(201);
+      expect(await edit.json()).toHaveProperty('messages', []);
+      expect((await request(`/api/sessions/${source.id}/fork`, 'POST', { messageId: targetId, before: 'true' })).status).toBe(400);
+      expect((await request(`/api/sessions/${source.id}`, 'PATCH', { activeLeafId: targetId })).status).toBe(409);
+      expect(source.activeLeafId).toBe(activeLeaf);
+      expect(services.agentRuntime.getRun(run.id)?.phase).toBe('streaming');
+      release();
+      await services.agentRuntime.wait(run.id);
+      expect(source.messages.map(message => message.content)).toEqual([
+        'Original question', 'Original answer', 'Continue source', 'Source keeps running',
+      ]);
+    } finally {
+      release();
+      if (runId) await services.agentRuntime.wait(runId);
+      stream.mockRestore();
+    }
+  });
+
+  it('clones a persisted message prefix without severing its interleaved command ancestry', async () => {
+    const source = await services.sessionManager.create({ cwd: root, title: 'Interleaved source' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Inspect prefix' });
+    const command = await services.sessionManager.addCommand(source.id, {
+      command: 'pwd', cwd: root, status: 'completed', output: root,
+    });
+    await services.sessionManager.addMessage(source.id, { role: 'assistant', content: 'Prefix result' });
+    const targetId = source.activeLeafId!;
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Keep source only' });
+    const sourceBefore = structuredClone(source);
+    const response = await request(`/api/sessions/${source.id}/clone`, 'POST', { messageId: targetId });
+    expect(response.status).toBe(201);
+    const copy = await response.json() as { id: string; activeLeafId: string;
+      messages: Array<{ id: string; content: string; parentMessageId?: string }>;
+      commands: Array<{ id: string; parentEntryId?: string }> };
+    expect(copy.messages.map(message => message.content)).toEqual(['Inspect prefix', 'Prefix result']);
+    expect(copy.commands).toHaveLength(1);
+    expect(copy.commands[0]!.id).not.toBe(command!.id);
+    expect(copy.commands[0]!.parentEntryId).toBe(copy.messages[0]!.id);
+    expect(copy.messages[1]!.parentMessageId).toBe(copy.commands[0]!.id);
+    expect(copy.activeLeafId).toBe(copy.messages[1]!.id);
+    const reloaded = await services.sessionStore.loadSession(copy.id);
+    expect(reloaded?.messages.map(message => message.content)).toEqual(['Inspect prefix', 'Prefix result']);
+    expect(reloaded?.commands?.[0]?.id).toBe(copy.commands[0]!.id);
+    expect(source).toEqual(sourceBefore);
+  });
+
+  it('refuses a target removed between HTTP validation and the serialized copy snapshot', async () => {
+    const source = await services.sessionManager.create({ cwd: root });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Target to abandon' });
+    const target = source.activeLeafId!;
+    await services.sessionManager.addMessage(source.id, { role: 'assistant', content: 'Answer' });
+    const fork = services.sessionManager.forkSession.bind(services.sessionManager);
+    const intercepted = vi.spyOn(services.sessionManager, 'forkSession').mockImplementationOnce(async (...args) => {
+      await services.sessionManager.branchBeforeEntry(source.id, target);
+      return fork(...args);
+    });
+    try {
+      const count = services.sessionManager.list().length;
+      const response = await request(`/api/sessions/${source.id}/fork`, 'POST', { messageId: target });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ code: 'MESSAGE_TARGET_CHANGED' });
+      expect(services.sessionManager.list()).toHaveLength(count);
+    } finally { intercepted.mockRestore(); }
+  });
+
+  it('bounds Stop acknowledgements without publishing terminal state before an uncooperative tool settles', async () => {
+    const source = await services.sessionManager.create({ cwd: root });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    await services.extensionRegistry.load('uncooperative-tool', api => api.registerTool({ name: 'hold', description: 'Wait',
+      execute: async () => { await gate; return { content: 'Late output must not survive Stop' }; } }));
+    const stream = vi.spyOn(MockProvider.prototype, 'streamChat').mockImplementation(async (_messages, _chunk, complete) => {
+      complete?.({ content: '', toolCalls: [{ id: 'pending-tool', name: 'hold', input: {} }] });
+    });
+    let runId: string | undefined;
+    try {
+      const started = await request('/api/agent/runs', 'POST', { sessionId: source.id, cwd: root, provider: 'mock', input: 'wait' });
+      expect(started.status).toBe(202);
+      const { run } = await started.json() as { run: { id: string } };
+      runId = run.id;
+      await vi.waitFor(() => expect(services.agentRuntime.getRun(run.id)?.phase).toBe('tool'));
+      const startedAt = Date.now();
+      const stopped = await request(`/api/agent/runs/${run.id}/stop`, 'POST');
+      expect(Date.now() - startedAt).toBeLessThan(8_000);
+      expect(stopped.status).toBe(202);
+      expect(await stopped.json()).toMatchObject({ phase: 'tool' });
+      expect(services.agentRuntime.getRun(run.id)?.completedAt).toBeUndefined();
+      expect(services.agentRuntime.journal.replay(source.id).events.some(event => event.type === 'run.stopped')).toBe(false);
+      expect(() => services.agentRuntime.enqueue(run.id, 'steer', 'late')).toThrow('terminée');
+      expect(services.agentRuntime.stop(run.id).phase).toBe('stopped');
+      expect(await services.agentRuntime.requestExtensionInteraction(source.id, { kind: 'confirm', title: 'Late dialog' }))
+        .toEqual({ cancelled: true });
+      release();
+      await services.agentRuntime.wait(run.id);
+      expect(source.messages.at(-1)).toMatchObject({ role: 'tool', isError: true,
+        content: 'Tool execution interrupted.', metadata: { interrupted: true } });
+      expect(services.agentRuntime.journal.replay(source.id).events.at(-1)?.type).toBe('run.stopped');
+    } finally {
+      release();
+      if (runId) await services.agentRuntime.wait(runId);
+      stream.mockRestore();
+      await services.extensionRegistry.unload('uncooperative-tool');
+    }
+  }, 15_000);
+
+  it('rejects running command prefixes and edits targeting non-user entries', async () => {
+    const source = await services.sessionManager.create({ cwd: root });
+    await services.sessionManager.addCommand(source.id, { command: 'pending', cwd: root, status: 'running', output: '' });
+    await services.sessionManager.addMessage(source.id, { role: 'user', content: 'Target' });
+    const target = source.activeLeafId;
+    for (const action of ['fork', 'clone']) {
+      const response = await request(`/api/sessions/${source.id}/${action}`, 'POST', { messageId: target });
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ code: 'RUNNING_COMMAND_SOURCE' });
+    }
+    const other = await services.sessionManager.create({ cwd: root });
+    await services.sessionManager.addMessage(other.id, { role: 'assistant', content: 'Not editable' });
+    expect((await request(`/api/sessions/${other.id}/fork`, 'POST', { messageId: other.activeLeafId, before: true })).status).toBe(400);
+  });
+
+  for (const [action, before] of [['fork', false], ['fork', true], ['clone', false]] as const) {
+    const name = `${action}${before ? '-before' : ''}`;
+    it(`returns an explicit 409 ${name} veto without publishing or touching the source`, async () => {
+      const f = await branchFixture(), plugin = `http-veto-${name}`; let calls = 0;
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', event => {
+        expect(event.operation).toBe(action); expect(event.position).toBe(before ? 'before' : 'at'); calls++; return { cancel: true };
+      }); });
+      try {
+        const response = await request(`/api/sessions/${f.source.id}/${action}`, 'POST', action === 'fork' ? { messageId: f.target, before } : {});
+        expect(response.status).toBe(409); expect(await response.json()).toEqual({ error: 'Session branch operation cancelled.', code: 'SESSION_BRANCH_CANCELLED' });
+        expect(calls).toBe(1); expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+        expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+      } finally { await services.extensionRegistry.unload(plugin); }
+    });
+
+    it(`withdraws a disconnected ${name} request even if its hook ignores cancellation`, async () => {
+      const f = await branchFixture(), plugin = `http-disconnect-${name}`, gate = latch(), entered = latch(), controller = new AbortController();
+      let signal!: AbortSignal;
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', async event => {
+        signal = event.signal; entered.release(); await gate.promise;
+      }); });
+      try {
+        const pending = fetch(`${base}/api/sessions/${f.source.id}/${action}`, { method: 'POST', headers: json,
+          body: JSON.stringify(action === 'fork' ? { messageId: f.target, before } : {}), signal: controller.signal });
+        await entered.promise; controller.abort(); await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(signal.aborted).toBe(true)); gate.release();
+        await new Promise<void>(resolve => setImmediate(resolve));
+        expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+        expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+      } finally { gate.release(); await services.extensionRegistry.unload(plugin); }
+    });
+
+    it(`withdraws ${name} admission on extension unload before the ignored hook completes`, async () => {
+      const f = await branchFixture(), plugin = `http-unload-${name}`, gate = latch(), entered = latch();
+      await services.extensionRegistry.load(plugin, api => { api.before('before:session:branch', async () => { entered.release(); await gate.promise; }); });
+      try {
+        const pending = request(`/api/sessions/${f.source.id}/${action}`, 'POST', action === 'fork' ? { messageId: f.target, before } : {});
+        await entered.promise; await services.extensionRegistry.unload(plugin);
+        const response = await pending; expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ code: 'SESSION_BRANCH_CANCELLED' });
+        gate.release(); expect(services.sessionManager.list().map(item => item.id).sort()).toEqual(f.inventory);
+        expect(await services.sessionManager.getRawEntries(f.source.id)).toEqual(f.raw);
+      } finally { gate.release(); await services.extensionRegistry.unload(plugin); }
+    });
+  }
+
+  it('finishes a durable clone already admitted before request disconnection', async () => {
+    const f = await branchFixture(), gate = latch(), entered = latch(), controller = new AbortController();
+    const save = services.sessionStore.saveSession.bind(services.sessionStore);
+    const intercepted = vi.spyOn(services.sessionStore, 'saveSession').mockImplementation(async (session, entries, options) => {
+      if (session.id !== f.source.id) { entered.release(); await gate.promise; }
+      await save(session, entries, options);
+    });
+    try {
+      const pending = fetch(`${base}/api/sessions/${f.source.id}/clone`, { method: 'POST', headers: json, body: '{}', signal: controller.signal });
+      await entered.promise; controller.abort(); await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      gate.release(); await vi.waitFor(() => expect(services.sessionManager.list()).toHaveLength(f.inventory.length + 1));
+      const copied = services.sessionManager.list().find(item => !f.inventory.includes(item.id))!;
+      expect(copied.metadata?.clonedFromSessionId).toBe(f.source.id);
+      expect(await services.sessionStore.loadSession(copied.id)).toMatchObject({ id: copied.id });
+      expect(await readFile(services.sessionStore.getSessionFilePath(f.source.id)!)).toEqual(f.bytes);
+    } finally { gate.release(); intercepted.mockRestore(); }
+  });
+});

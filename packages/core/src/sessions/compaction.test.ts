@@ -326,6 +326,7 @@ describe('CompactionService', () => {
 
       // With 3 messages, it should work for manual compaction (manualCompact requires >= 3)
       const result = await service.compact(entries, mockSummaryFn);
+      expect(capturedPrompt).toBeDefined();
       expect(result.summary).toBe('Short conversation summary');
     });
 
@@ -398,7 +399,7 @@ describe('CompactionService', () => {
 
   describe('setCompactFunction()', () => {
     it('should allow setting a custom compact function', () => {
-      const mockFn = async (msgs: any[]) => 'Custom summary';
+      const mockFn = async (_msgs: any[]) => 'Custom summary';
       service.setCompactFunction(mockFn);
       // The function is stored for later use by SessionManager
       expect(service).toBeDefined();

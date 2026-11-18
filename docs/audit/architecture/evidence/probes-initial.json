@@ -1,0 +1,93 @@
+{
+  "node": "v24.15.0",
+  "coreImportMs": 351.342225,
+  "startup": [
+    {
+      "wallMs": 276.391219,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 256.20801399999993,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 259.218701,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 256.10259900000005,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    },
+    {
+      "wallMs": 260.7724529999998,
+      "stdoutBytes": 5499,
+      "stderrBytes": 0
+    }
+  ],
+  "metadata": {
+    "modelCount": 393,
+    "target": "anthropic/claude-sonnet-5.5",
+    "iterations": 500,
+    "freshProjectionMs": [
+      1179.585978,
+      1165.1513210000003,
+      1159.9697520000004,
+      1154.7864120000004,
+      1160.9518349999998
+    ],
+    "requestLocalSnapshotLookupMs": [
+      0.017575000000306318,
+      0.01746400000001813,
+      0.015947000000778644,
+      0.016135999999278283,
+      0.015848000000005413
+    ]
+  },
+  "storage": [
+    {
+      "files": 10,
+      "messagesPerFile": 64,
+      "bytes": 483930,
+      "passes": [
+        {
+          "wallMs": 36.25307799999973,
+          "loadSessionCalls": 10
+        },
+        {
+          "wallMs": 25.842192000000068,
+          "loadSessionCalls": 10
+        }
+      ]
+    },
+    {
+      "files": 100,
+      "messagesPerFile": 64,
+      "bytes": 4850910,
+      "passes": [
+        {
+          "wallMs": 254.9104070000003,
+          "loadSessionCalls": 100
+        },
+        {
+          "wallMs": 250.82947200000035,
+          "loadSessionCalls": 100
+        }
+      ]
+    }
+  ],
+  "legacy": {
+    "receivedSignal": false,
+    "requestedTools": false,
+    "eventNames": [
+      "text_delta",
+      "message_end"
+    ],
+    "responseToolCalls": 1,
+    "persistedAssistantToolCalls": 0
+  },
+  "limits": "Local synthetic observations only. Startup samples use warm OS caches. Snapshot lookup is an illustrative local alternative, not a product patch or validated cache. Storage sizes use one two-pass sequence each, not a distribution. No browser render, vendor, production or global-suite qualification."
+}

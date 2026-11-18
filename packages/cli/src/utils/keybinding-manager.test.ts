@@ -15,6 +15,10 @@ describe('KeyBindingManager', () => {
   beforeEach(() => {
     // Create a fresh instance for each test
     manager = new KeyBindingManager();
+    // Default bindings are declarative; only the host grants effects.
+    for (const id of ['app.interrupt', 'app.exit', 'terminal.clear']) {
+      manager.registerAction(id, { handler: vi.fn() });
+    }
   });
 
   afterEach(() => {
@@ -85,14 +89,10 @@ describe('KeyBindingManager', () => {
 
   describe('registerHandler()', () => {
     it('should register a custom keybinding', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['ctrl+x'],
         description: 'Custom action',
-        handler: () => {
-          handlerCalled = true;
-        },
+        handler: () => undefined,
       });
 
       const bindings = manager.getBindings();
@@ -100,17 +100,15 @@ describe('KeyBindingManager', () => {
     });
 
     it('should register multiple handlers for the same keys', async () => {
-      let callCount = 0;
-      
       // Register two handlers for the same key sequence
       manager.registerHandler({
         keys: ['ctrl+a'],
-        handler: () => { callCount++; },
+        handler: () => undefined,
       });
       
       manager.registerHandler({
         keys: ['ctrl+a'],
-        handler: () => { callCount++; },
+        handler: () => undefined,
       });
 
       // Both should be registered (handlers array has 2 items)
@@ -119,13 +117,11 @@ describe('KeyBindingManager', () => {
     });
 
     it('should handle when() condition correctly', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['alt+m'],
         description: 'Conditional binding',
         when: () => false, // Always returns false
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const bindings = manager.getBindings();
@@ -133,11 +129,9 @@ describe('KeyBindingManager', () => {
     });
 
     it('should normalize key case for matching', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['CTRL+Z'], // Uppercase
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const binding = manager.matchKey(['ctrl+z']); // Lowercase lookup
@@ -148,11 +142,9 @@ describe('KeyBindingManager', () => {
 
   describe('unregister()', () => {
     it('should remove a registered keybinding', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['ctrl+y'],
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       // Verify it's registered
@@ -172,11 +164,9 @@ describe('KeyBindingManager', () => {
     });
 
     it('should handle case-insensitive unregistration', () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['CTRL+X'], // Uppercase registration
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const result = manager.unregister(['ctrl', 'x']); // Lowercase unregistration
@@ -186,11 +176,9 @@ describe('KeyBindingManager', () => {
 
   describe('clearAll()', () => {
     it('should remove all registered keybindings', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['ctrl+a'],
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       manager.clearAll();
@@ -210,6 +198,8 @@ describe('KeyBindingManager', () => {
       }
 
       const beforeClear = manager.getBindings().length;
+      expect(initialCount).toBeGreaterThan(0);
+      expect(beforeClear).toBe(initialCount + 5);
       
       // Clear all
       manager.clearAll();
@@ -225,11 +215,9 @@ describe('KeyBindingManager', () => {
     });
 
     it('should match registered key sequences exactly', async () => {
-      let matched = false;
-      
       manager.registerHandler({
         keys: ['ctrl+shift+t'],
-        handler: () => { matched = true; },
+        handler: () => undefined,
       });
 
       const result = manager.matchKey(['ctrl', 'shift', 't']);
@@ -237,13 +225,11 @@ describe('KeyBindingManager', () => {
     });
 
     it('should respect when() condition', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['alt+q'],
         description: 'Conditional binding',
         when: () => true, // Always returns true
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const result = manager.matchKey(['alt', 'q']);
@@ -251,13 +237,11 @@ describe('KeyBindingManager', () => {
     });
 
     it('should skip handlers that fail their when() condition', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['ctrl+k'],
         description: 'Conditional binding',
         when: () => false, // Always returns false
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const result = manager.matchKey(['ctrl', 'k']);
@@ -267,7 +251,7 @@ describe('KeyBindingManager', () => {
     });
 
     it('should match first valid handler when multiple are registered for same keys', async () => {
-      let callOrder: string[] = [];
+      const callOrder: string[] = [];
       
       manager.registerHandler({
         keys: ['ctrl+m'],
@@ -403,7 +387,6 @@ describe('KeyBindingManager', () => {
     it('should affect interrupt handling', async () => {
       // Test that setStreaming updates internal state correctly
       manager.setStreaming(false);
-      const ctx1: any = {};
       
       let handlerCalledWithStreaming = false;
       manager.registerHandler({
@@ -530,13 +513,11 @@ describe('KeyBindingManager', () => {
     });
 
     it('should handle when() function that throws an error', async () => {
-      let handlerCalled = false;
-      
       manager.registerHandler({
         keys: ['ctrl+f'],
         description: 'Test binding with broken condition',
         when: () => { throw new Error('Condition failed'); },
-        handler: () => { handlerCalled = true; },
+        handler: () => undefined,
       });
 
       const result = manager.matchKey(['ctrl', 'f']);
@@ -559,6 +540,7 @@ describe('KeyBindingManager', () => {
       const result = await manager.processKey(['ctrl', 'alt', 'shift', 'a']);
       
       expect(result).toBe(true);
+      expect(handlerCalled).toBe(true);
     });
 
     it('should dispatch Node readline keypress events', () => {

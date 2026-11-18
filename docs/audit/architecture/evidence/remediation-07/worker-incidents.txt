@@ -1,0 +1,53 @@
+npm notice run ai-harness@0.1.0 npx
+npm notice run 'vitest' run packages/cli/src/providers/provider-runtime.test.ts packages/server/src/api/queue-reconciliation-http.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/providers/provider-runtime.test.ts (61 tests) 27149ms
+   ✓ CLI provider runtime (61)
+     ✓ resolves native cerebras environment, command and encrypted credentials without registration 772ms
+     ✓ resolves native mistral-conversations environment, command and encrypted credentials without registration 771ms
+     ✓ resolves native deepseek environment, command and encrypted credentials without registration 761ms
+     ✓ resolves native groq environment, command and encrypted credentials without registration 749ms
+     ✓ resolves native zai environment, command and encrypted credentials without registration 741ms
+     ✓ resolves native nvidia environment, command and encrypted credentials without registration 753ms
+     ✓ resolves native minimax environment, command and encrypted credentials without registration 758ms
+     ✓ resolves native minimax-cn environment, command and encrypted credentials without registration 744ms
+     ✓ resolves native kimi-coding environment, command and encrypted credentials without registration 751ms
+     ✓ resolves native moonshotai environment, command and encrypted credentials without registration 733ms
+     ✓ resolves native moonshotai-cn environment, command and encrypted credentials without registration 757ms
+     ✓ resolves native ant-ling environment, command and encrypted credentials without registration 741ms
+     ✓ resolves native baseten environment, command and encrypted credentials without registration 768ms
+     ✓ resolves native together environment, command and encrypted credentials without registration 766ms
+     ✓ resolves native huggingface environment, command and encrypted credentials without registration 754ms
+     ✓ resolves native xiaomi environment, command and encrypted credentials without registration 768ms
+     ✓ resolves native meta environment, command and encrypted credentials without registration 756ms
+     ✓ resolves native xai environment, command and encrypted credentials without registration 773ms
+     ✓ resolves native fireworks environment, command and encrypted credentials without registration 766ms
+     ✓ resolves native opencode environment, command and encrypted credentials without registration 782ms
+     ✓ resolves native opencode-go environment, command and encrypted credentials without registration 771ms
+     ✓ resolves native openrouter environment, command and encrypted credentials without registration 778ms
+     ✓ resolves native cloudflare-workers-ai environment, command and encrypted credentials without registration 777ms
+     ✓ resolves native qwen-token-plan environment, command and encrypted credentials without registration 776ms
+     ✓ resolves native qwen-token-plan-cn environment, command and encrypted credentials without registration 782ms
+     ✓ resolves native qwen-token-plan-individual environment, command and encrypted credentials without registration 771ms
+     ✓ resolves native xiaomi-token-plan-ams environment, command and encrypted credentials without registration 772ms
+     ✓ resolves native xiaomi-token-plan-cn environment, command and encrypted credentials without registration 770ms
+     ✓ resolves native xiaomi-token-plan-sgp environment, command and encrypted credentials without registration 779ms
+     ✓ resolves native zai-coding-cn environment, command and encrypted credentials without registration 776ms
+     ✓ resolves native typesafe environment, command and encrypted credentials without registration 772ms
+     ✓ resolves native cloudflare-ai-gateway environment, command and encrypted credentials without registration 781ms
+     ✓ resolves native vercel-ai-gateway environment, command and encrypted credentials without registration 781ms
+     ✓ resolves native openai-native environment, command and encrypted credentials without registration 778ms
+     ✓ does not resolve absent credential sources while preserving fresh external reload admission 570ms
+     ✓ persists credentials encrypted and resolves only their process-local value 439ms
+stdout | packages/server/src/api/queue-reconciliation-http.test.ts > real HTTP command interaction generation authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/queue-reconciliation-http.test.ts (4 tests) 799ms
+
+ Test Files  2 passed (2)
+      Tests  65 passed (65)
+   Start at  18:27:38
+   Duration  30.39s (tests 92%, transform 5%, import 2%)

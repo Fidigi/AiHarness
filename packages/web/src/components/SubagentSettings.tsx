@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { SubagentConfiguration, SubagentProfile } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
 import {
@@ -10,6 +11,7 @@ import {
   updateSubagentSettings,
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
 
 interface EditorValue {
   /** Existing profile id; present means update mode. */
@@ -55,6 +57,13 @@ function list(value: string): string[] {
 }
 
 export function SubagentSettings() {
+  const [targetScope, setTargetScope] = useSettingsScope('subagents', 'project');
+  return <ScopedSubagentSettings key={targetScope} targetScope={targetScope} setTargetScope={setTargetScope} />;
+}
+
+function ScopedSubagentSettings({ targetScope, setTargetScope }: {
+  targetScope: 'global' | 'project'; setTargetScope(scope: 'global' | 'project'): void;
+}) {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [configuration, setConfiguration] = useState<SubagentConfiguration>();
@@ -62,7 +71,8 @@ export function SubagentSettings() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
-  const [targetScope, setTargetScope] = useState<'global' | 'project'>('project');
+  const editorRef = useRef<HTMLFormElement>(null);
+  useFocusTrap(Boolean(editor), editorRef, () => setEditor(undefined));
   const scope = [
     workspace?.cwd,
     targetScope === 'project' ? workspace?.id : undefined,
@@ -78,7 +88,7 @@ export function SubagentSettings() {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, [workspace?.id, targetScope]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [workspace?.id, targetScope]);
 
   const visible = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase();
@@ -131,11 +141,11 @@ export function SubagentSettings() {
         <div className="subagent-engine-settings">
           <label className="subagent-scope-control">
             <span>{t('subagents.targetScope')}</span>
-            <select value={targetScope} disabled={loading} onChange={event => {
+            <select data-settings-focus="scope" value={targetScope} disabled={loading} onChange={event => {
               setEditor(undefined);
               setTargetScope(event.target.value as 'global' | 'project');
             }}>
-              <option value="project">{t('subagents.scope.project')}</option>
+              <option value="project" disabled={!workspace?.id}>{t('subagents.scope.project')}</option>
               <option value="global">{t('subagents.scope.global')}</option>
             </select>
           </label>
@@ -164,7 +174,7 @@ export function SubagentSettings() {
       {error && <p role="alert" className="status-warning">{error}</p>}
 
       {editor && (
-        <form className="subagent-profile-editor" role="dialog" aria-labelledby="subagent-editor-title"
+        <form ref={editorRef} tabIndex={-1} className="subagent-profile-editor" role="dialog" aria-labelledby="subagent-editor-title"
           onSubmit={event => void saveEditor(event)}>
           <h4 id="subagent-editor-title">{editor.id ? t('subagents.edit') : t('subagents.create')}</h4>
           <div className="subagent-editor-grid">
@@ -215,9 +225,9 @@ export function SubagentSettings() {
         </form>
       )}
 
-      <div className="subagent-profile-list">
+      <div className="subagent-profile-list" data-settings-group={targetScope}>
         {visible.map(profile => (
-          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind}>
+          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind} data-settings-selection={profile.id}>
             <header>
               <div><strong>{profile.name}</strong><small>{profile.id}</small></div>
               <span>{t(`subagents.kind.${profile.kind}`)}{profile.builtIn ? ` · ${t('subagents.builtIn')}` : ''}</span>
@@ -234,7 +244,7 @@ export function SubagentSettings() {
                 aria-label={t('subagents.toggleProfile', { profile: profile.name })}
                 onChange={event => void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope))} />
                 {t('subagents.profileEnabled')}</label>
-              <button type="button" onClick={() => setEditor(editorValue(profile))}>{t('common.edit')}</button>
+              <button type="button" disabled={loading} onClick={() => setEditor(editorValue(profile))}>{t('common.edit')}</button>
               <button type="button" disabled={loading}
                 onClick={() => void apply(duplicateSubagentProfile(profile.id, ...scope))}>{t('subagents.duplicate')}</button>
               {!profile.builtIn && <button type="button" disabled={loading}

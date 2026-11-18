@@ -1,0 +1,11 @@
+[WebServer] npm notice run @ai-harness/core@0.1.0 build
+[WebServer] npm notice run node ../../scripts/run-typescript.mjs
+[WebServer] npm notice run @ai-harness/server@0.1.0 start
+[WebServer] npm notice run tsx src/index.ts --port 3099
+[WebServer] npm notice run ai-harness@0.1.0 npx
+[WebServer] npm notice run 'vite' preview --host 0.0.0.0 --port 3080
+
+Running 18 tests using 1 worker
+··················
+  18 passed (22.0s)
+::notice title=🎭 Playwright Run Summary::  18 passed (22.0s)

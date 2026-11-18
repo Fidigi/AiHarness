@@ -1,16 +1,17 @@
 # Containerized Execution
 
-The repository images use Node.js 26 and npm 12.1.0. Dependencies are installed with `npm ci` from the monorepo lockfile.
+The test image defaults to pinned Node.js 24.15.0 LTS; the production image defaults to the floating Node.js 26 tag. Both install npm 12.1.0 and use `npm ci` with the monorepo lockfile. The Dockerfiles expose `NODE_VERSION` and `NPM_VERSION` build arguments; overriding them is not equivalent to validation on the defaults.
 
 ## CLI
 
-AiHarness can run without writing sessions to disk:
+Build the production image, then run the CLI without writing sessions to disk:
 
 ```sh
+make build-prod
 docker run --rm -it \
   --entrypoint node \
   -e ANTHROPIC_API_KEY \
-  ai-harness:latest \
+  ai-harness:prod-latest \
   packages/cli/dist/index.js --no-session --regular
 ```
 
@@ -28,11 +29,14 @@ The production image starts `ai-harness-web` on port 3080 without opening a brow
 
 ### With Make
 
-From the repository root, build the image then start the container in the background:
+From the repository root, provide an authentication token, build the image and start the container in the background:
 
 ```sh
-make run-prod
+export AI_HARNESS_AUTH_TOKEN="$(openssl rand -hex 32)"
+make run-prod PROD_DOCKER_ARGS='--env AI_HARNESS_AUTH_TOKEN'
 ```
+
+Keep that token privately for browser sign-in. To preserve encrypted provider credentials as well, pass a stable `AI_HARNESS_MASTER_KEY` from your secret manager on each start.
 
 The application is available at `http://127.0.0.1:3080`. The container is named `ai-harness-prod` and data persists in the `ai-harness-data` volume. Running `make run-prod` again rebuilds the image and replaces the existing container without deleting that volume.
 
@@ -67,4 +71,4 @@ docker run --rm \
   ai-harness:latest
 ```
 
-Then open `http://127.0.0.1:3080`. The image sets `AI_HARNESS_WEB_HOSTNAME=0.0.0.0` and `AI_HARNESS_WEB_NO_OPEN=1`; `AI_HARNESS_WEB_PORT` lets you change the internal port.
+Then open `http://127.0.0.1:3080`. The image sets `AI_HARNESS_WEB_HOSTNAME=0.0.0.0` and `AI_HARNESS_WEB_NO_OPEN=1`; `AI_HARNESS_WEB_PORT` lets you change the internal port. Because the application binds to all container interfaces, supply `AI_HARNESS_AUTH_TOKEN` or `AI_HARNESS_ADMIN_TOKEN` even when Docker publishes only to host loopback; otherwise startup is refused. Do not use the insecure remote override as a production workaround.

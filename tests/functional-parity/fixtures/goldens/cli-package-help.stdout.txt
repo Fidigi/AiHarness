@@ -1,0 +1,24 @@
+AiHarness package administration
+
+Usage:
+  ai-harness package list [--scope global|project] [--json]
+  ai-harness package install <npm:|git:|path> [--global|--project]
+  ai-harness package configure <selector> [filters] [--scope ...]
+  ai-harness package enable|disable <selector> [--scope ...]
+  ai-harness package remove|uninstall <selector> [--scope ...]
+  ai-harness package check [selector] [--scope ...] [--json]
+  ai-harness package update [selector] [--scope ...]
+  ai-harness package reload [--json]
+
+Filters:
+  --extensions <selectors>       Narrow extension files; an empty value disables the kind
+  --skills <selectors>           Narrow skills
+  --prompts <selectors>          Narrow prompt templates
+  --themes <selectors>           Narrow themes
+  --reset                        Remove all package-level filters
+
+Selectors use comma-separated globs, !glob exclusions, +exact includes, and -exact
+exclusions. Filters only narrow resources already declared by the package manifest.
+Installing, configuring, enabling, or updating project packages requires saved trust or
+--approve; disabling and removal remain safe while blocked.
+Listing and refresh never contact npm/Git; only check, install, and update can do so.

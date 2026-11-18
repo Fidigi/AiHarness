@@ -1,0 +1,39 @@
+/* Chat-local only: Settings/MCP dialogs, drawers and safe-area rules are untouched. */
+@media (max-width: 959px) {
+  .chat-view[data-mobile-keyboard="true"] {
+    position: fixed;
+    top: var(--mobile-keyboard-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--mobile-keyboard-height);
+    max-height: var(--mobile-keyboard-height);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .chat-view[data-mobile-keyboard="true"] .mobile-chat-actions,
+  .chat-view[data-mobile-keyboard="true"] .composer-setting-scopes:not(:focus-within),
+  .chat-view[data-mobile-keyboard="true"] .composer-controls > label:not(:focus-within),
+  .chat-view[data-mobile-keyboard="true"] .composer-controls > .composer-setting:not(:focus) {
+    display: none;
+  }
+  .chat-view[data-mobile-keyboard="true"] .input-container {
+    flex-shrink: 0;
+    padding: .5rem .75rem max(.75rem, env(safe-area-inset-bottom, 0px));
+  }
+  .chat-view[data-mobile-keyboard="true"] .input-container > textarea {
+    max-height: min(160px, calc(var(--mobile-keyboard-height) * .3));
+  }
+  .chat-view[data-mobile-keyboard="true"] .composer-controls {
+    flex-wrap: nowrap;
+  }
+  /* The compact primary action keeps normal-sized white text at AA contrast. */
+  .chat-view[data-mobile-keyboard="true"] .composer-controls > button[type="submit"] {
+    background-color: #bb2844;
+    color: #fff;
+  }
+  .chat-view[data-mobile-keyboard="true"] .composer-controls > button,
+  .chat-view[data-mobile-keyboard="true"] .queue-mode {
+    min-height: 44px;
+  }
+}

@@ -1,23 +1,46 @@
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   AgentRuntime,
+  assertCompactionTranscript,
+  getSummaryModelMessages,
+  compactionMessagesFromEntries,
+  copyCompactionResponse,
   ExtensionModuleLoader,
   ExtensionRegistry,
   JsonlSessionStore,
+  loadAgentSettings,
+  McpSessionHost,
+  normalizeProviderUsage,
   ProjectTrustManager,
+  registerWorkspaceTools,
+  resolveAgentProviderNetworkSettings,
+  resolveInstructionPrompt,
   SessionManager,
+  testCodemodeSandbox,
+  type CodemodeSelfTest,
   WorkspaceManager,
+  WorkspacePathError,
 } from '@ai-harness/core';
-import type { AiProvider, ChatResponse } from '@ai-harness/core';
+import type {
+  AiProvider,
+  ChatResponse,
+  CredentialRedactionStream,
+  ResolvedAgentSettings,
+} from '@ai-harness/core';
 import type { AiProxyServer } from '../api/proxy.js';
-import { registerWorkspaceTools } from '../agent/workspace-tools.js';
 import { ConfigurationStore } from '../config/config-store.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { CommandRuntime } from './command-runtime.js';
+import { createConfiguredPluginService, type ConfiguredPluginOperation } from './configured-plugin-service.js';
+import { LinkedDirectoriesService } from './linked-directories-service.js';
+import { McpInventoryService } from './mcp-inventory-service.js';
 import { ModelCatalogService } from './model-catalog.js';
 import { PluginService } from './plugin-service.js';
 import { ProviderRegistryService } from './provider-registry.js';
+import { ProviderAdministration, assertProviderAdministrationRoots, assertProviderReferenceOwners } from './provider-administration.js';
+import { createRuntimeCloser } from './runtime-lifecycle.js';
 import { PushService } from './push-service.js';
 import { SkillCatalogService } from './skill-catalog.js';
 import { SkillRegistryService } from './skill-registry.js';
@@ -32,19 +55,29 @@ export interface RuntimeServiceOptions {
   defaultCwd?: string;
   trustFile?: string;
   configurationFile?: string;
+  /** Temporary restricted SINGLE-WRITER administration; no shared CLI/server writers. */
+  providerRenameExclusiveHost?: boolean;
 }
 
 export interface RuntimeServices {
   sessionManager: SessionManager;
   sessionStore: JsonlSessionStore;
   workspaceManager: WorkspaceManager;
+  /** Descriptor-scoped explicit reads; never an allowed-root or execution grant. */
+  linkedDirectories: LinkedDirectoriesService;
   trustManager: ProjectTrustManager;
   configurationStore: ConfigurationStore;
+  providerAdministration: ProviderAdministration;
+  agentSettings: ResolvedAgentSettings;
+  codemodeSelfTest?: CodemodeSelfTest;
   extensionRegistry: ExtensionRegistry;
   agentRuntime: AgentRuntime;
   commandRuntime: CommandRuntime;
+  mcpHost: McpSessionHost;
+  mcpInventory: McpInventoryService;
   modelCatalog: ModelCatalogService;
   pluginService: PluginService;
+  resolvePluginOperation(input?: { cwd?: string; projectId?: string }): Promise<ConfiguredPluginOperation>;
   providerRegistry: ProviderRegistryService;
   pushService: PushService;
   skillCatalog: SkillCatalogService;
@@ -59,6 +92,11 @@ export interface RuntimeServices {
   }>;
   resolveProvider(provider: string): AiProvider | undefined;
   recordUsage(provider: string, model: string | undefined, usage: NonNullable<ChatResponse['usage']>): number | undefined;
+  redactText(value: string): string;
+  redactJson<T>(value: T): T;
+  createTextRedactor(): CredentialRedactionStream;
+  /** Idempotently abort process-local work and release runtime-owned resources. */
+  close(): Promise<void>;
 }
 
 function environmentRoots(): string[] | undefined {
@@ -66,34 +104,83 @@ function environmentRoots(): string[] | undefined {
   return value?.split(path.delimiter).map(item => item.trim()).filter(Boolean);
 }
 
+let codemodeSelfTestPromise: Promise<CodemodeSelfTest> | undefined;
+
 export async function createRuntimeServices(
   proxy: AiProxyServer,
   options: RuntimeServiceOptions = {},
 ): Promise<RuntimeServices> {
-  const dataDir = options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
-    ?? path.join(os.homedir(), '.ai-harness');
-  const defaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
-  const sessionStore = new JsonlSessionStore(options.sessionsDir ?? path.join(dataDir, 'sessions'));
-  const sessionManager = new SessionManager();
+  const dataDir = path.resolve(options.dataDir ?? process.env.AI_HARNESS_DATA_DIR
+    ?? path.join(os.homedir(), '.ai-harness'));
+  const requestedDefaultCwd = options.defaultCwd ?? process.env.AI_HARNESS_DEFAULT_CWD ?? process.cwd();
+  const exclusiveHost = options.providerRenameExclusiveHost ?? process.env.AI_HARNESS_PROVIDER_RENAME_EXCLUSIVE_HOST === '1';
+  const sessionsDir = options.sessionsDir ?? path.join(dataDir, 'sessions');
+  const configurationStore = new ConfigurationStore(options.configurationFile ?? path.join(dataDir, 'config.json'));
+  // ALL modes must fail before initializing any executable/provider generation.
+  await configurationStore.load();
+  const sessionStore = new JsonlSessionStore(sessionsDir);
+  const sessionManager = new SessionManager({
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+  });
   sessionManager.setStore(sessionStore);
-  await sessionManager.loadAllSessions();
 
   const workspaceManager = new WorkspaceManager({
     allowedRoots: options.allowedRoots ?? environmentRoots(),
-    defaultCwd,
+    defaultCwd: requestedDefaultCwd,
   });
   await workspaceManager.initialize();
+  let defaultCwd: string | undefined;
+  try { defaultCwd = await workspaceManager.getDefaultCwd(); }
+  catch (error) {
+    // Valid explicit roots may remain usable even when the default is unavailable.
+    // Do not select another workspace or hide unrelated initialization failures.
+    if (!(error instanceof WorkspacePathError)) throw error;
+  }
+  if (exclusiveHost) await assertProviderAdministrationRoots(workspaceManager.getAllowedRoots(), [
+    dataDir, sessionsDir, options.configurationFile ?? path.join(dataDir, 'config.json'),
+    options.trustFile ?? path.join(dataDir, 'trust.json'),
+    // File tools must not be able to replace host/worker/dependency code that
+    // a later operation would execute with access to private reference stores.
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'),
+    path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@ai-harness/core'))), '..'),
+    path.resolve(path.dirname(fileURLToPath(import.meta.resolve('express'))), '..'),
+  ]);
+  // No session consumers are published until credential discovery and hydration below.
+  const codemodeSelfTest = await (codemodeSelfTestPromise ??= testCodemodeSandbox());
 
   const trustManager = new ProjectTrustManager(options.trustFile ?? path.join(dataDir, 'trust.json'));
   await trustManager.load();
-  const configurationStore = new ConfigurationStore(
-    options.configurationFile ?? path.join(dataDir, 'config.json'),
-  );
-  await configurationStore.load();
+  const providerSettings = await loadAgentSettings({
+    cwd: defaultCwd ?? dataDir,
+    agentDir: dataDir,
+    agentDirTrusted: true,
+    projectTrusted: defaultCwd ? await trustManager.isTrusted(defaultCwd) : false,
+  });
+  proxy.setNetworkSettings(resolveAgentProviderNetworkSettings(providerSettings.settings));
+  const extensionRegistry = new ExtensionRegistry();
+  proxy.setVirtualModelRegistry(extensionRegistry);
+  const mcpHost = new McpSessionHost({
+    registeredServers: extensionRegistry.mcpServers,
+    agentDir: dataDir,
+    redactText: value => proxy.redactText(value),
+    trustManager,
+    resolveWorkingDirectory: (configured, base) => workspaceManager.resolve(configured, {
+      base,
+      kind: 'directory',
+    }),
+  });
+  const linkedDirectories = new LinkedDirectoriesService(workspaceManager, trustManager, {
+    storeDirectory: dataDir,
+    protectedPaths: [sessionsDir, path.dirname(options.trustFile ?? path.join(dataDir, 'trust.json'))],
+  }, value => proxy.redactText(value));
+  const mcpInventory = new McpInventoryService(dataDir, workspaceManager, trustManager, { host: mcpHost });
   const subagentService = new SubagentService(
     workspaceManager,
     trustManager,
     path.join(dataDir, 'subagents.json'),
+    value => proxy.redactText(value),
+    value => proxy.redactJson(value),
   );
   await subagentService.load();
   const pluginService = new PluginService(
@@ -109,7 +196,9 @@ export async function createRuntimeServices(
     path.join(dataDir, 'provider-secrets.enc'),
   );
   await providerRegistry.load();
-  const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels());
+  // Hydrate once, after encrypted provider secrets join the full locked legacy scrub.
+  await sessionManager.loadAllSessions();
+  const modelCatalog = new ModelCatalogService(proxy, () => providerRegistry.getModels(), undefined, () => extensionRegistry.virtualModels);
   await proxy.initializeUsage(
     path.join(dataDir, 'usage-metrics.json'),
     (provider, model) => modelCatalog.getPricing(provider, model),
@@ -130,9 +219,14 @@ export async function createRuntimeServices(
     skillCatalog,
     dataDir,
   );
-  const extensionRegistry = new ExtensionRegistry();
   extensionRegistry.attachSessionManager(sessionManager);
   await registerWorkspaceTools(extensionRegistry, workspaceManager);
+  if (exclusiveHost) await extensionRegistry.load('builtin:provider-administration-policy', api => {
+    // Shell tools bypass the file-path boundary. Git-backed search tools can
+    // invoke repository-controlled fsmonitor helpers too. Neither is sandboxed
+    // to allowed roots with the server's OS identity.
+    api.before('before:tool', data => ['bash', 'powershell', 'grep', 'find', 'codemode'].includes(data.tool) ? false : undefined);
+  });
   await extensionRegistry.load('builtin:skills', api => {
     api.registerTool({
       name: 'load_skill',
@@ -175,19 +269,63 @@ export async function createRuntimeServices(
     sessionManager,
     extensionRegistry,
     resolveProvider: provider => proxy.getAgentProvider(provider),
+    specializedProviders: () => new Map(providerRegistry.listProviders()
+      .filter(provider => ['typesafe', 'openrouter', 'opencode', 'cloudflare-workers-ai', 'openai', 'vercel-ai-gateway'].includes(provider.dialect))
+      .flatMap(provider => {
+        const adapter = proxy.getAgentProvider(provider.id);
+        return adapter ? [[provider.id, adapter] as const] : [];
+      })),
+    resolveImageOptions: async cwd => (await loadAgentSettings({ cwd, agentDir: providerSettings.agentDir,
+      agentDirTrusted: true, projectTrusted: await trustManager.isTrusted(cwd) })).settings.images ?? {},
+    resolveThinking: session => resolveEffectiveConfiguration({ configurationStore }, {
+      projectId: session.workspaceId, sessionId: session.id, session,
+    }).values.thinking,
     isProjectTrusted: cwd => trustManager.isTrusted(cwd),
     onUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+    // Third-party MCP processes/tools are not sandboxed to allowed roots.
+    ...(exclusiveHost ? {} : { mcpHost }),
     onNotification: (category, run) => {
       const session = sessionManager.get(run.sessionId);
-      return pushService.notify(category, {
+      return pushService.notify(category, proxy.redactJson({
         title: session?.title || 'AiHarness',
         body: category === 'completion' ? 'Agent completed.' : run.extensionRequest?.message || run.error || 'Agent needs attention.',
         tag: `agent:${run.sessionId}:${category}`,
         url: `/chat/${encodeURIComponent(run.sessionId)}?cwd=${encodeURIComponent(run.cwd)}`,
-      });
+      }));
     },
   });
-  const subagentRuntime = new SubagentRuntime(subagentService, agentRuntime, sessionManager);
+  const subagentRuntime = new SubagentRuntime(
+    subagentService,
+    agentRuntime,
+    sessionManager,
+    async ({ cwd, basePrompt }) => (await resolveInstructionPrompt({
+      cwd,
+      agentDir: providerSettings.agentDir,
+      agentDirTrusted: true,
+      projectTrusted: await trustManager.isTrusted(cwd),
+      systemPromptText: basePrompt,
+    })).systemPrompt,
+    value => proxy.redactText(value),
+    value => proxy.redactJson(value),
+  );
+  const providerAdministration = new ProviderAdministration(configurationStore, oldId => assertProviderReferenceOwners({
+    oldId,
+    sessions: sessionManager.list(),
+    running: [
+      ...agentRuntime.listRunning(),
+      ...subagentRuntime.list().filter(run => ['queued', 'running'].includes(run.status)),
+      ...terminalRuntime.list().filter(terminal => terminal.status === 'running'),
+    ],
+    sessionsDir,
+    subagentsFile: path.join(dataDir, 'subagents.json'),
+    agentSettingsFile: path.join(providerSettings.agentDir, 'settings.json'),
+    projectDirectories: [...(defaultCwd ? [defaultCwd] : []), ...sessionManager.list().flatMap(session => session.cwd ? [session.cwd] : [])],
+    projectRoots: workspaceManager.getAllowedRoots(),
+    extensionIds: extensionRegistry.list().map(extension => extension.id),
+  }));
   await extensionRegistry.load('builtin:subagents', api => {
     api.registerTool({
       name: 'spawn_subagent',
@@ -208,14 +346,16 @@ export async function createRuntimeServices(
         if (typeof values.profile !== 'string' || typeof values.task !== 'string') {
           throw new Error('profile and task are required.');
         }
-        const run = await subagentRuntime.start({
+        const childInput = {
           parentSessionId: context.currentSessionId,
           profileId: values.profile,
           task: values.task,
           provider: context.providerName,
           parentToolPreset: context.toolPreset,
+          signal,
           ...(typeof values.background === 'boolean' ? { background: values.background } : {}),
-        });
+        };
+        const run = await providerAdministration.withOperation(() => subagentRuntime.start(childInput));
         if (run.background) return {
           content: `Subagent ${run.profileName} started in the background.`,
           details: { runId: run.id, childSessionId: run.childSessionId, background: true },
@@ -224,6 +364,7 @@ export async function createRuntimeServices(
           try { subagentRuntime.stop(run.id); } catch { /* Child already completed. */ }
         };
         signal?.addEventListener('abort', stop, { once: true });
+        if (signal?.aborted) stop();
         try {
           const completed = await subagentRuntime.wait(run.id);
           if (!completed || completed.status !== 'completed') return {
@@ -241,29 +382,10 @@ export async function createRuntimeServices(
       },
     });
   });
-  let extensionContext = {
-    cwd: await workspaceManager.getDefaultCwd(),
-    projectId: undefined as string | undefined,
-    trusted: false,
-  };
-  extensionContext.trusted = await trustManager.isTrusted(extensionContext.cwd);
-  extensionContext.projectId = (await workspaceManager.describe(extensionContext.cwd, extensionContext.trusted)).id;
-  const extensionLoader = new ExtensionModuleLoader(extensionRegistry, {
-    cwd: extensionContext.cwd,
-    includeGlobalLocation: false,
-    includeProjectLocation: false,
-    paths: async () => [
-      path.join(dataDir, 'extensions'),
-      ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions')] : []),
-      ...await pluginService.getEnabledExtensionFiles({
-        cwd: extensionContext.cwd,
-        projectId: extensionContext.projectId,
-      }),
-    ],
-    isProjectTrusted: () => extensionContext.trusted,
-  });
-  const reloadResources: RuntimeServices['reloadResources'] = async (input = {}) => {
-    const cwd = await workspaceManager.resolve(input.cwd ?? extensionContext.cwd, { kind: 'directory' });
+  let extensionContext: { cwd?: string; projectId?: string; trusted: boolean } = { cwd: defaultCwd, trusted: false };
+  let extensionLoader: ExtensionModuleLoader | undefined;
+  const reloadResources: RuntimeServices['reloadResources'] = async (input = {}) => providerAdministration.withOperation(async () => {
+    const cwd = await workspaceManager.resolve(input.cwd ?? extensionContext.cwd ?? await workspaceManager.getDefaultCwd(), { kind: 'directory' });
     const trusted = await trustManager.isTrusted(cwd);
     const descriptor = await workspaceManager.describe(cwd, trusted);
     if (input.projectId && input.projectId !== descriptor.id) {
@@ -271,24 +393,55 @@ export async function createRuntimeServices(
     }
     const contextChanged = cwd !== extensionContext.cwd;
     extensionContext = { cwd, projectId: descriptor.id, trusted };
-    let result = await extensionLoader.reload();
+    // Bind discovery only after a real workspace has been validated; the private
+    // data directory is never a substitute workspace for executable discovery.
+    extensionLoader ??= new ExtensionModuleLoader(extensionRegistry, {
+      cwd,
+      includeGlobalLocation: false,
+      includeProjectLocation: false,
+      // Restricted hosts never execute an arbitrary Node generation.
+      paths: async () => exclusiveHost || !extensionContext.cwd ? [] : [
+        path.join(dataDir, 'extensions') + path.sep,
+        ...(extensionContext.trusted ? [path.join(extensionContext.cwd, '.ai-harness', 'extensions') + path.sep] : []),
+        ...await pluginService.getEnabledExtensionFiles({ cwd: extensionContext.cwd, projectId: extensionContext.projectId }),
+      ],
+      isProjectTrusted: () => extensionContext.trusted,
+    });
+    let result = await extensionLoader.reload(cwd);
     // Never keep executable handlers from another workspace when its replacement is invalid.
-    if (contextChanged && !result.committed) result = {
-      ...await extensionLoader.clear(),
-      errors: result.errors,
-      committed: false,
-    };
-    if (result.committed) skillCatalog.invalidate(cwd);
+    if (contextChanged && !result.committed) {
+      const cleared = await extensionLoader.clear();
+      agentRuntime.clearExtensionInteractions();
+      result = { ...cleared, errors: result.errors, committed: false };
+    }
+    if (result.committed) {
+      agentRuntime.clearExtensionInteractions();
+      skillCatalog.invalidate(cwd);
+    }
     return {
       generation: result.generation,
       loadedExtensions: result.loaded,
-      errors: result.errors.map(item => ({ path: item.path, message: item.error.message })),
+      errors: result.errors.map(item => ({
+        path: proxy.redactText(item.path),
+        message: proxy.redactText(item.error.message),
+      })),
     };
-  };
+  });
   extensionRegistry.setReloadHandler(async () => { await reloadResources(); });
-  const initialExtensionLoad = await reloadResources();
-  for (const error of initialExtensionLoad.errors) {
-    console.error(`[ExtensionLoader] ${error.path}: ${error.message}`);
+  // No executable generation is selected on behalf of an unavailable workspace.
+  if (defaultCwd) {
+    try {
+      const initialExtensionLoad = await reloadResources();
+      for (const error of initialExtensionLoad.errors) {
+        console.error(proxy.redactText(`[ExtensionLoader] ${error.path}: ${error.message}`));
+      }
+    } catch (error) {
+      // The default can also disappear during the preceding bootstrap awaits.
+      if (!(error instanceof WorkspacePathError)) throw error;
+      defaultCwd = undefined;
+      extensionContext = { trusted: false };
+      extensionLoader = undefined;
+    }
   }
 
   sessionManager.setAutoCompactionPolicy(session => {
@@ -328,45 +481,82 @@ export async function createRuntimeServices(
       ?? session?.providerConfig?.type
       ?? effective.values.provider
       ?? 'mock');
-    const provider = proxy.getAgentProvider(providerName);
+    const provider = proxy.getAgentProvider(providerName) ?? extensionRegistry.getVirtualProvider(providerName);
     if (!provider) throw new Error(`Provider unavailable: ${providerName}`);
     const requestedModel = effective.values.model ?? activeRun?.model;
-    const response = await provider.chat(toCompact
-      .filter((entry): entry is typeof entry & { role: 'user' | 'assistant' | 'system' | 'tool'; content: string } => entry.type === 'message')
-      .map(entry => ({
-        id: entry.id,
-        role: entry.role,
-        content: entry.content,
-        timestamp: new Date(entry.timestamp),
-      })), {
-        model: requestedModel,
-        systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
-        signal,
-      });
-    if (response.usage) proxy.recordUsage(providerName, response.model ?? requestedModel, response.usage);
-    return response.content;
+    assertCompactionTranscript(toCompact);
+    const messages = getSummaryModelMessages(compactionMessagesFromEntries(toCompact));
+    assertCompactionTranscript(messages);
+    const recordUsage = proxy.recordUsage.bind(proxy);
+    const rawResponse = await extensionRegistry.chat(provider, messages, {
+      model: requestedModel,
+      systemPrompt: 'Summarize this conversation while preserving decisions and unresolved tasks.',
+      tools: [], maxTokens: 4096,
+      signal,
+    }, name => proxy.getAgentProvider(name));
+    const content = Object.getOwnPropertyDescriptor(rawResponse, 'content');
+    if (content && 'value' in content && typeof content.value === 'string' && !content.value.trim()) {
+      throw new Error('Automatic compaction produced an empty summary.');
+    }
+    const response = copyCompactionResponse(rawResponse);
+    if (response.usage) recordUsage(response.provider ?? providerName, response.model ?? requestedModel, response.usage);
+    return {
+      summary: response.content,
+      provider: response.provider ?? providerName,
+      model: response.model ?? requestedModel,
+      usage: normalizeProviderUsage(response.usage),
+    };
+  });
+
+  const commandRuntime = new CommandRuntime(sessionManager, {
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+  });
+  const terminalRuntime = new TerminalRuntime({
+    createRedactionStream: () => proxy.getCredentialRedactor().createStream(),
+  });
+  const close = createRuntimeCloser({
+    terminal: terminalRuntime,
+    subagents: subagentRuntime,
+    mcp: mcpInventory,
+    extensions: extensionRegistry,
+    agents: agentRuntime,
   });
 
   return {
     sessionManager,
     sessionStore,
     workspaceManager,
+    linkedDirectories,
     trustManager,
     configurationStore,
+    providerAdministration,
+    agentSettings: providerSettings,
+    codemodeSelfTest,
     extensionRegistry,
     agentRuntime,
-    commandRuntime: new CommandRuntime(sessionManager),
+    commandRuntime,
+    mcpHost,
+    mcpInventory,
     modelCatalog,
     pluginService,
+    resolvePluginOperation: input => createConfiguredPluginService({
+      workspaceManager, trustManager, dataDir, restricted: exclusiveHost,
+    }, input),
     providerRegistry,
     pushService,
     skillCatalog,
     skillRegistry,
     subagentService,
     subagentRuntime,
-    terminalRuntime: new TerminalRuntime(),
+    terminalRuntime,
     reloadResources,
-    resolveProvider: provider => proxy.getAgentProvider(provider),
+    resolveProvider: provider => proxy.getAgentProvider(provider) ?? extensionRegistry.getVirtualProvider(provider),
     recordUsage: (provider, model, usage) => proxy.recordUsage(provider, model, usage),
+    redactText: value => proxy.redactText(value),
+    redactJson: value => proxy.redactJson(value),
+    createTextRedactor: () => proxy.getCredentialRedactor().createStream(),
+    close,
   };
 }

@@ -1,0 +1,366 @@
+{
+  "scenario": "virtualise une conversation longue et restaure sa vue bornée avant le réseau",
+  "messages": 320,
+  "browser": "156.0.8078.79",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "online": true,
+  "commits": [
+    {
+      "path": "/chat/long",
+      "time": 128.60000000149012,
+      "duration": 7.600000001490116
+    },
+    {
+      "path": "/chat/long",
+      "time": 160.5,
+      "duration": 2.8000000044703484
+    },
+    {
+      "path": "/chat/long",
+      "time": 181.19999999925494,
+      "duration": 2.300000000745058
+    },
+    {
+      "path": "/chat/long",
+      "time": 186.10000000149012,
+      "duration": 0
+    },
+    {
+      "path": "/chat/long",
+      "time": 193.30000000074506,
+      "duration": 1.199999999254942
+    },
+    {
+      "path": "/chat/long",
+      "time": 476.30000000074506,
+      "duration": 15.00000000372529
+    },
+    {
+      "path": "/chat/long",
+      "time": 509.80000000074506,
+      "duration": 13.300000000745058
+    },
+    {
+      "path": "/chat/long",
+      "time": 530.1999999992549,
+      "duration": 6.899999998509884
+    },
+    {
+      "path": "/chat/long",
+      "time": 683.6999999992549,
+      "duration": 128.59999999776483
+    },
+    {
+      "path": "/chat/long",
+      "time": 814.1000000014901,
+      "duration": 118.80000000447035
+    },
+    {
+      "path": "/chat/long",
+      "time": 920.3000000007451,
+      "duration": 0
+    },
+    {
+      "path": "/chat/long",
+      "time": 953.3999999985099,
+      "duration": 22.699999999254942
+    },
+    {
+      "path": "/chat/long",
+      "time": 961.1999999992549,
+      "duration": 3.8000000044703484
+    },
+    {
+      "path": "/chat/long",
+      "time": 975.6000000014901,
+      "duration": 2.300000000745058
+    },
+    {
+      "path": "/chat/long",
+      "time": 979.8000000007451,
+      "duration": 2.100000001490116
+    },
+    {
+      "path": "/chat/long",
+      "time": 983.8999999985099,
+      "duration": 2.0999999940395355
+    },
+    {
+      "path": "/chat/long",
+      "time": 987.6999999992549,
+      "duration": 1.7000000029802322
+    },
+    {
+      "path": "/chat/long",
+      "time": 991.8999999985099,
+      "duration": 2.099999997764826
+    },
+    {
+      "path": "/chat/long",
+      "time": 995.8999999985099,
+      "duration": 2
+    },
+    {
+      "path": "/chat/long",
+      "time": 999.8999999985099,
+      "duration": 2.399999998509884
+    },
+    {
+      "path": "/chat/long",
+      "time": 1037.699999999255,
+      "duration": 34.69999999925494
+    },
+    {
+      "path": "/chat/long",
+      "time": 1074.5,
+      "duration": 34.80000000074506
+    },
+    {
+      "path": "/chat/long",
+      "time": 1120.300000000745,
+      "duration": 35.19999999925494
+    },
+    {
+      "path": "/chat/long",
+      "time": 1165.8999999985099,
+      "duration": 36.900000002235174
+    },
+    {
+      "path": "/chat/long",
+      "time": 1182.6000000014901,
+      "duration": 0.6999999992549419
+    },
+    {
+      "path": "/chat/long",
+      "time": 139.09999999776483,
+      "duration": 1.9000000022351742
+    },
+    {
+      "path": "/chat/long",
+      "time": 152.59999999776483,
+      "duration": 2.100000001490116
+    },
+    {
+      "path": "/chat/long",
+      "time": 167.19999999925494,
+      "duration": 1.300000000745058
+    },
+    {
+      "path": "/chat/long",
+      "time": 171.09999999776483,
+      "duration": 1.0999999977648258
+    },
+    {
+      "path": "/chat/long",
+      "time": 458,
+      "duration": 14.099999997764826
+    },
+    {
+      "path": "/chat/long",
+      "time": 508.8999999985099,
+      "duration": 34.400000005960464
+    },
+    {
+      "path": "/chat/long",
+      "time": 541.3999999985099,
+      "duration": 29.200000002980232
+    },
+    {
+      "path": "/chat/long",
+      "time": 587,
+      "duration": 38.599999997764826
+    },
+    {
+      "path": "/chat/long",
+      "time": 626.0999999977648,
+      "duration": 36.400000002235174
+    },
+    {
+      "path": "/chat/long",
+      "time": 677.5999999977648,
+      "duration": 33.49999999627471
+    },
+    {
+      "path": "/chat/long",
+      "time": 715.5999999977648,
+      "duration": 35.80000000074506
+    },
+    {
+      "path": "/chat/long",
+      "time": 775.8999999985099,
+      "duration": 40.69999999552965
+    },
+    {
+      "path": "/chat/long",
+      "time": 808.3000000007451,
+      "duration": 0.09999999776482582
+    },
+    {
+      "path": "/chat/long",
+      "time": 826.3000000007451,
+      "duration": 1.199999999254942
+    },
+    {
+      "path": "/chat/long",
+      "time": 835.0999999977648,
+      "duration": 0.8000000007450581
+    },
+    {
+      "path": "/chat/long",
+      "time": 842.6999999992549,
+      "duration": 0.7999999970197678
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Timestamp",
+      "value": 19348.171054
+    },
+    {
+      "name": "AudioHandlers",
+      "value": 0
+    },
+    {
+      "name": "AudioWorkletProcessors",
+      "value": 0
+    },
+    {
+      "name": "Documents",
+      "value": 6
+    },
+    {
+      "name": "Frames",
+      "value": 5
+    },
+    {
+      "name": "JSEventListeners",
+      "value": 1451
+    },
+    {
+      "name": "LayoutObjects",
+      "value": 1205
+    },
+    {
+      "name": "MediaKeySessions",
+      "value": 0
+    },
+    {
+      "name": "MediaKeys",
+      "value": 0
+    },
+    {
+      "name": "Nodes",
+      "value": 2976
+    },
+    {
+      "name": "Resources",
+      "value": 210
+    },
+    {
+      "name": "ContextLifecycleStateObservers",
+      "value": 36
+    },
+    {
+      "name": "V8PerContextDatas",
+      "value": 4
+    },
+    {
+      "name": "WorkerGlobalScopes",
+      "value": 0
+    },
+    {
+      "name": "UACSSResources",
+      "value": 0
+    },
+    {
+      "name": "RTCPeerConnections",
+      "value": 0
+    },
+    {
+      "name": "ResourceFetchers",
+      "value": 6
+    },
+    {
+      "name": "AdSubframes",
+      "value": 0
+    },
+    {
+      "name": "DetachedScriptStates",
+      "value": 2
+    },
+    {
+      "name": "ArrayBufferContents",
+      "value": 10
+    },
+    {
+      "name": "LayoutCount",
+      "value": 14
+    },
+    {
+      "name": "RecalcStyleCount",
+      "value": 20
+    },
+    {
+      "name": "LayoutDuration",
+      "value": 0.004849
+    },
+    {
+      "name": "RecalcStyleDuration",
+      "value": 0.004657
+    },
+    {
+      "name": "DevToolsCommandDuration",
+      "value": 0.022328
+    },
+    {
+      "name": "ScriptDuration",
+      "value": 0.325977
+    },
+    {
+      "name": "V8CompileDuration",
+      "value": 0
+    },
+    {
+      "name": "TaskDuration",
+      "value": 0.42348
+    },
+    {
+      "name": "TaskOtherDuration",
+      "value": 0.065669
+    },
+    {
+      "name": "ThreadTime",
+      "value": 0.40275
+    },
+    {
+      "name": "ProcessTime",
+      "value": 1.99
+    },
+    {
+      "name": "JSHeapUsedSize",
+      "value": 33570108
+    },
+    {
+      "name": "JSHeapTotalSize",
+      "value": 55980032
+    },
+    {
+      "name": "FirstMeaningfulPaint",
+      "value": 0
+    },
+    {
+      "name": "DomContentLoaded",
+      "value": 19347.568662
+    },
+    {
+      "name": "NavigationStart",
+      "value": 19347.434289
+    }
+  ],
+  "mountedMessages": 20,
+  "timelineBytes": 2202961,
+  "limits": "One instrumented owning-host scenario, not production latency or an optimization gain. Commit timings exclude props/state; CPU/trace instrumentation overhead is present in both comparisons."
+}

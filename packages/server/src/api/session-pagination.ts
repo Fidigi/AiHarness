@@ -1,5 +1,5 @@
-import type { SerializedSession, Session } from '@ai-harness/core';
-import { serializeSession } from '@ai-harness/core';
+import type { CacheTranscriptNotice, SerializedSession, Session, SessionManager } from '@ai-harness/core';
+import { getCacheTranscriptNotices, serializeSession } from '@ai-harness/core';
 
 export const DEFAULT_MESSAGE_PAGE_SIZE = 80;
 export const MAX_MESSAGE_PAGE_SIZE = 250;
@@ -85,6 +85,22 @@ export function getSessionMessagePage(
     ...(targetIndex === undefined ? {} : { targetIndex }),
   };
   return { messages: session.messages.slice(start, end), page };
+}
+
+/** Presentation projection only: private router state and usage receipts never cross HTTP. */
+export async function sessionCacheNotices(manager: SessionManager, sessionId: string,
+  messageIds: readonly string[], enabled: boolean): Promise<{ cacheNotices: CacheTranscriptNotice[]; showCacheMissNotices: boolean }> {
+  const visible = new Set(messageIds);
+  let cacheNotices: CacheTranscriptNotice[] = [];
+  if (enabled && visible.size) {
+    try {
+      cacheNotices = getCacheTranscriptNotices(await manager.getActiveBranchEntries(sessionId))
+        .filter(notice => visible.has(notice.afterEntryId));
+    } catch {
+      // Auxiliary presentation requires complete owned ancestry; never guess from a raw journal.
+    }
+  }
+  return { showCacheMissNotices: enabled, cacheNotices };
 }
 
 export function serializeSessionPage(

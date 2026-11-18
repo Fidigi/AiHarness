@@ -1,0 +1,1 @@
+Error: Print and JSON modes require a prompt, @file, or piped input.

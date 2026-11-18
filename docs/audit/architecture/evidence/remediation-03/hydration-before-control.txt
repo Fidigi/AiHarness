@@ -1,0 +1,305 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/cli/startup-fork-state-process.test.ts packages/server/src/api/session-provider-redaction-process.test.ts
+
+ RUN  v5.0.3 /app
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts (11 tests | 9 failed) 15761ms
+   × retains private state through actual startup --fork: print/id 1700ms
+   × retains private state through actual startup --fork: print/prefix 1527ms
+   × retains private state through actual startup --fork: print/file 1515ms
+   × retains private state through actual startup --fork: json/id 1535ms
+   × retains private state through actual startup --fork: json/prefix 1501ms
+   × retains private state through actual startup --fork: json/file 1526ms
+   × retains private state through actual startup --fork: rpc/id 1514ms
+   × retains private state through actual startup --fork: rpc/prefix 1516ms
+   × retains private state through actual startup --fork: rpc/file 1462ms
+   ✓ retains private state through actual startup --fork: terminal/regular-durable 925ms
+   ✓ retains private state through actual startup --fork: terminal/fullscreen-durable 1039ms
+stderr | packages/server/src/api/session-provider-redaction-process.test.ts > emitted public Server preserves provider metadata at the cold credential boundary
+[session-provider-redaction] Child failed. {
+  kind: 'cold',
+  code: 1,
+  signal: null,
+  killed: false,
+  spawnErrorCode: null
+}
+
+stderr | packages/server/src/api/session-provider-redaction-process.test.ts > emitted public Server preserves provider metadata at the boundary credential boundary
+[session-provider-redaction] Child failed. {
+  kind: 'boundary',
+  code: 1,
+  signal: null,
+  killed: false,
+  spawnErrorCode: null
+}
+
+ ❯ packages/server/src/api/session-provider-redaction-process.test.ts (2 tests | 2 failed) 771ms
+   × emitted public Server preserves provider metadata at the cold credential boundary 419ms
+   × emitted public Server preserves provider metadata at the boundary credential boundary 350ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/server/src/api/session-provider-redaction-process.test.ts > emitted public Server preserves provider metadata at the cold credential boundary
+Error: Command failed: /usr/local/bin/node /app/packages/server/src/api/session-provider-redaction.process.mjs cold
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Hydrate once after custom-provider credential enrollment, before publishing services.
+
+2 !== 1
+
+    at file:///app/packages/server/src/api/session-provider-redaction.process.mjs:25:10
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.15.0
+
+ ❯ packages/server/src/api/session-provider-redaction.process.mjs:25:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  packages/server/src/api/session-provider-redaction-process.test.ts > emitted public Server preserves provider metadata at the boundary credential boundary
+Error: Command failed: /usr/local/bin/node /app/packages/server/src/api/session-provider-redaction.process.mjs boundary
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Hydrate once after custom-provider credential enrollment, before publishing services.
+
+2 !== 1
+
+    at file:///app/packages/server/src/api/session-provider-redaction.process.mjs:25:10
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.15.0
+
+ ❯ packages/server/src/api/session-provider-redaction.process.mjs:25:10
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: print/id
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-oylLxe\",\"mode\":\"print\",\"selector\":\"id\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: print/prefix
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-0VqnpZ\",\"mode\":\"print\",\"selector\":\"prefix\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: print/file
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-AMxUam\",\"mode\":\"print\",\"selector\":\"file\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: json/id
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-vTauA5\",\"mode\":\"json\",\"selector\":\"id\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: json/prefix
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-B3djDl\",\"mode\":\"json\",\"selector\":\"prefix\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: json/file
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-jjTcoU\",\"mode\":\"json\",\"selector\":\"file\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: rpc/id
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-HAoyCO\",\"mode\":\"rpc\",\"selector\":\"id\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: rpc/prefix
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-kS078I\",\"mode\":\"rpc\",\"selector\":\"prefix\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  packages/cli/src/cli/startup-fork-state-process.test.ts > retains private state through actual startup --fork: rpc/file
+AssertionError: {"code":1,"signal":null,"stdout":"{\"root\":\"/tmp/startup-fork-native-3Jv3To\",\"mode\":\"rpc\",\"selector\":\"file\",\"node\":\"24.15.0\"}\n","stderr":"node:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   2,\n+   2\n-   1,\n-   1\n  ]\n\n    at file:///app/packages/cli/src/cli/fixtures/startup-fork-state.mjs:109:10 {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [ 2, 2 ],\n  expected: [ 1, 1 ],\n  operator: 'deepStrictEqual',\n  diff: 'simple'\n}\n\nNode.js v24.15.0\n"}: expected { code: 1, signal: null, …(2) } to match object { code: +0, signal: null }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": 0,
++   "code": 1,
+    "signal": null,
+  }
+
+ ❯ packages/cli/src/cli/startup-fork-state-process.test.ts:27:44
+     25|       child.once('close', (code, signal) => { clearTimeout(timer); res…
+     26|     });
+     27|     expect(result, JSON.stringify(result)).toMatchObject({ code: 0, si…
+       |                                            ^
+     28|     expect(result.stdout).toContain(scenario.marker);
+     29|   }, 25_000);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  11 failed | 2 passed (13)
+   Start at  14:37:47
+   Duration  16.70s (tests 100%)

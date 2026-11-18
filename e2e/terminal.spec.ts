@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
 
 test.describe('Terminal PTY du workspace', () => {

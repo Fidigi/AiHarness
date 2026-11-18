@@ -1,5 +1,11 @@
+import os from 'node:os';
+import path from 'node:path';
 import {
   ExtensionModuleLoader,
+  resolveBuiltinExtensionPolicy,
+  type BuiltinExtensionPolicy,
+  type ExtensionModuleSelector,
+  type ResolvedAgentSettings,
   type ExtensionModuleLoaderOptions,
   type ExtensionModuleLoadResult,
   type ExtensionRegistry,
@@ -13,6 +19,45 @@ export class ExtensionLoader extends ExtensionModuleLoader {
   constructor(registry: ExtensionRegistry, options: ExtensionLoaderOptions = {}) {
     super(registry, options);
   }
+}
+
+/** Keep selectors ordered until Core has discovered actual files. Built-in
+ * capability switches are not executable paths and remain host-owned. */
+export function configuredBuiltinExtensions(settings: ResolvedAgentSettings, options: {
+  extensions?: readonly string[]; noExtensions?: boolean; noMcp?: boolean;
+}): BuiltinExtensionPolicy {
+  const policy = resolveBuiltinExtensionPolicy({
+    global: settings.globalSettings.extensions,
+    project: settings.projectSettings.extensions,
+    projectTrusted: settings.projectTrusted,
+    noExtensions: options.noExtensions,
+    explicit: options.extensions,
+  });
+  // An explicit host denial wins over settings and explicit capability IDs.
+  // Other built-ins/executable extensions retain their native policy.
+  return options.noMcp === true ? Object.freeze({ ...policy, mcp: false }) : policy;
+}
+
+export function explicitExtensionFiles(entries: readonly string[] = []): string[] {
+  return entries.filter(entry => !entry.startsWith('builtin:'));
+}
+
+export function configuredExtensionSelectors(settings: ResolvedAgentSettings, noExtensions = false): ExtensionModuleSelector[] {
+  if (noExtensions) return [];
+  const layer = (entries: readonly string[] | undefined, baseDir: string): ExtensionModuleSelector[] => (
+    (entries ?? []).filter(entry => !/^[+!-]?builtin:/u.test(entry)).map(entry => {
+      const marker = /^[+!-]/u.test(entry) ? entry[0]! : '';
+      const value = marker ? entry.slice(1) : entry;
+      if (value === '~' || value.startsWith('~/') || value.startsWith('~\\')) {
+        return { pattern: `${marker}${value === '~' ? '.' : value.slice(2)}`, baseDir: os.homedir() };
+      }
+      return { pattern: entry, baseDir };
+    })
+  );
+  return [
+    ...layer(settings.globalSettings.extensions, settings.agentDir),
+    ...(settings.projectTrusted ? layer(settings.projectSettings.extensions, path.dirname(settings.paths.project)) : []),
+  ];
 }
 
 /** Parse repeatable `--extension <path>` and `--extension=<path>` arguments. */

@@ -1,14 +1,16 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
 
 test.describe('Workspaces et worktrees', () => {
   test('parcourt, annule et restaure un workspace partageable sans créer de session', async ({ page }) => {
     const api = await installMockApi(page, {
+      fileManagerAvailable: true,
       workspaceBrowse: {
         '/workspace/project': {
           cwd: '/workspace/project',
           parent: '/workspace',
           entries: [{ name: 'src', path: '/workspace/project/src', isDirectory: true, isSymbolicLink: false }],
+          truncated: true,
         },
       },
     });
@@ -26,6 +28,20 @@ test.describe('Workspaces et worktrees', () => {
     await picker.getByRole('button', { name: 'Browse' }).click();
     await expect(path).toHaveValue('/workspace/project');
     await expect(picker.getByRole('button', { name: '📁 src' })).toBeVisible();
+    await expect(picker.getByText('Only the first 500 entries are shown. Enter a path to continue.')).toBeVisible();
+
+    await picker.getByRole('button', { name: 'New folder' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create a folder' });
+    await expect(createDialog.getByLabel('Folder name')).toBeFocused();
+    await createDialog.getByLabel('Folder name').fill('created-here');
+    await createDialog.getByRole('button', { name: 'Create folder' }).click();
+    await expect(createDialog).toBeHidden();
+    await expect(path).toHaveValue('/workspace/project/created-here');
+    expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/workspaces/browse')?.body)
+      .toEqual({ parent: '/workspace/project', name: 'created-here' });
+
+    await picker.getByRole('button', { name: 'Parent directory' }).click();
+    await expect(path).toHaveValue('/workspace/project');
     await picker.getByRole('button', { name: 'Parent directory' }).click();
     await expect(path).toHaveValue('/workspace');
 
@@ -35,6 +51,10 @@ test.describe('Workspaces et worktrees', () => {
     await expect(page).toHaveURL(/\?cwd=%2Fworkspace%2Fproject$/);
     await expect(page.locator('.workspace-button')).toContainText('project');
     expect(api.requests.some(request => request.method === 'POST' && request.path === '/api/sessions')).toBe(false);
+
+    await page.getByRole('button', { name: 'Open workspace in file manager' }).click();
+    expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/workspaces/file-manager')?.body)
+      .toEqual({ cwd: '/workspace/project' });
 
     await page.locator('.workspace-button').click();
     await expect(page.getByLabel('Recent workspaces')).toContainText('/workspace/project');
@@ -126,6 +146,7 @@ test.describe('Workspaces et worktrees', () => {
         { path: '/workspace', branch: 'main', bare: false, detached: false },
         { path: '/workspace-existing', branch: 'feature/existing', bare: false, detached: false },
       ],
+      worktreeForceRequired: ['/workspace-existing'],
     });
     await page.goto('/');
 
@@ -143,10 +164,24 @@ test.describe('Workspaces et worktrees', () => {
       .toMatchObject({ cwd: '/workspace-existing', path: '/workspace-new', branch: 'feature/new', createBranch: true });
 
     await page.getByRole('button', { name: 'Create a worktree' }).click();
-    page.once('dialog', dialog => dialog.accept());
+    const confirmations: string[] = [];
+    page.on('dialog', async dialog => {
+      confirmations.push(dialog.message());
+      await dialog.accept();
+    });
     await page.getByRole('button', { name: /feature\/existing/ }).click();
     await expect.poll(() => api.worktrees.some(item => item.path === '/workspace-existing')).toBe(false);
-    expect(api.requests.find(request => request.method === 'DELETE' && request.path === '/api/workspaces/worktrees')?.body)
-      .toMatchObject({ cwd: '/workspace-new', path: '/workspace-existing', confirm: true });
+    const removals = api.requests.filter(request => request.method === 'DELETE' && request.path === '/api/workspaces/worktrees');
+    expect(removals).toHaveLength(2);
+    expect(removals[0]?.body).toMatchObject({
+      cwd: '/workspace-new', path: '/workspace-existing', confirm: true, force: false,
+    });
+    expect(removals[1]?.body).toMatchObject({
+      cwd: '/workspace-new', path: '/workspace-existing', confirm: true, force: true,
+    });
+    expect(confirmations).toEqual([
+      expect.stringContaining('Remove worktree'),
+      expect.stringContaining('Force removal'),
+    ]);
   });
 });

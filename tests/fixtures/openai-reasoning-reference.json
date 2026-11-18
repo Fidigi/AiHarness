@@ -1,0 +1,3383 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "sourceCaptureSha256": "90399dbf1bdce9867e6d5ddfdca2c73f0cc6a34a94af007c55600c4f8ab25bc2",
+  "scope": "Actual pinned factory reasoning/include request fields only. All source captures intentionally receive owned HTTP 400; not successful response, account or service qualification. Output/default/context surfaces remain separate.",
+  "rows": [
+    {
+      "model": "gpt-4",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4-turbo",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4.1",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4.1-mini",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4.1-nano",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4o",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4o-2024-05-13",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4o-2024-08-06",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4o-2024-11-20",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-4o-mini",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-5",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5-chat-latest",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-5-mini",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5-nano",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.1",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.2",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.2-chat-latest",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.2-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-chat-latest",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {}
+        },
+        {
+          "thinking": "minimal",
+          "fields": {}
+        },
+        {
+          "thinking": "low",
+          "fields": {}
+        },
+        {
+          "thinking": "medium",
+          "fields": {}
+        },
+        {
+          "thinking": "high",
+          "fields": {}
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {}
+        },
+        {
+          "thinking": "max",
+          "fields": {}
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-codex",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-nano",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.4-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.5",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.5-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-astra",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-luna",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-daybreak-blue-latest",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-daybreak-red-latest",
+      "cases": [
+        {
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "none"
+            }
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "gpt-realtime-2.1",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "minimal",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "xhigh",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o1",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o1-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o3",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o3-mini",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o3-pro",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "model": "o4-mini",
+      "cases": [
+        {
+          "fields": {}
+        },
+        {
+          "thinking": "off",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "minimal",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "low",
+          "fields": {
+            "reasoning": {
+              "effort": "low",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "medium",
+          "fields": {
+            "reasoning": {
+              "effort": "medium",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "high",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "xhigh",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        },
+        {
+          "thinking": "max",
+          "fields": {
+            "reasoning": {
+              "effort": "high",
+              "summary": "auto"
+            },
+            "include": [
+              "reasoning.encrypted_content"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

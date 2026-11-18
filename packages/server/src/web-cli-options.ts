@@ -20,7 +20,7 @@ function isEnabled(value: string | undefined): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
 }
 
-/** Parse pi-web-style startup flags. Command-line values override the environment. */
+/** Parse Web launcher startup flags. Command-line values override the environment. */
 export function parseWebCliArgs(
   args: string[],
   environment: NodeJS.ProcessEnv = process.env,

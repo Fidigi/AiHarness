@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   CustomModelDefinition,
   CustomProviderDefinition,
@@ -7,7 +7,15 @@ import type {
   ToolSettings,
 } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
+import { ProviderRenamePanel } from './ProviderRenamePanel';
+import { CacheNoticeSettings } from './CacheNoticeSettings';
+import { OAuthPastePanel } from './OAuthPastePanel';
+import { isRenameableProvider, type ProviderRenameResult } from '../services/provider-lifecycle';
+import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
+import { reasoningSettingsMessage } from './reasoning-settings-messages';
+import { settingsAdminMessage, type SettingsAdminMessage } from './settings-admin-messages';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -18,6 +26,8 @@ import {
   getCustomModels,
   getEffectiveConfiguration,
   getCustomProviders,
+  getProviders,
+  getModelCatalog,
   getProviderAuthStatuses,
   getProviderOAuth,
   getSkillRegistry,
@@ -27,45 +37,170 @@ import {
   saveCustomModel,
   saveCustomProvider,
   startProviderOAuth,
+  submitProviderOAuthRedirect,
   testCustomModel,
   testProviderConnection,
   updateConfigurationScope,
   updateRegistrySkills,
   updateToolSettings,
   type ProviderOAuthFlow,
+  type ProviderRenameCapability,
 } from '../services/api';
 
 function error(message?: string): void {
   publishNotice(message || 'Operation failed.', { level: 'error' });
 }
 
-export function ProviderLifecycleSettings() {
-  const { t } = useI18n();
+export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
+  onCanonicalReload?: () => void;
+  onSelectionInvalidated?: () => void;
+  onProvidersLoaded?: (providers: CustomProviderDefinition[]) => void;
+}) {
+  const { t, locale } = useI18n();
+  const epoch = useRef(0);
+  const mounted = useRef(false);
+  const origin = useSessionStore.getState();
+  const loadSequence = useRef(0);
+  const [renameCapability, setRenameCapability] = useState<ProviderRenameCapability>({ supported: false, mode: 'disabled', reason: 'unavailable' });
   const hydrateProviders = useSessionStore(state => state.hydrateProviders);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const [statuses, setStatuses] = useState<ProviderAuthStatus[]>([]);
   const [providers, setProviders] = useState<CustomProviderDefinition[]>([]);
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
+  const [oauthStarting, setOauthStarting] = useState(false);
+  const oauthOperation = useRef<{ provider: string; method: 'device' | 'browser' | 'copy-code'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
+  const retireOAuth = () => {
+    const previous = oauthOperation.current;
+    oauthOperation.current = undefined;
+    if (previous) ++loadSequence.current;
+    previous?.controller.abort();
+    if (previous?.flow?.state === 'pending') void cancelProviderOAuth(previous.flow.id);
+  };
   const [form, setForm] = useState({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
   const [busy, setBusy] = useState(false);
   const load = async () => {
+    const generation = epoch.current;
+    const sequence = ++loadSequence.current;
     const [auth, custom] = await Promise.all([getProviderAuthStatuses(), getCustomProviders()]);
+    if (!mounted.current || generation !== epoch.current || sequence !== loadSequence.current) return;
     if (auth.success && auth.data) setStatuses(auth.data);
-    if (custom.success && custom.data) setProviders(custom.data);
+    setRenameCapability(custom.renameCapability);
+    if (custom.success && custom.data) { setProviders(custom.data); onProvidersLoaded?.(custom.data); }
   };
-  useEffect(() => { void load(); }, []);
+  const reconcile = async (outcome?: ProviderRenameResult, notify = true, renameTarget?: string) => {
+    const generation = epoch.current;
+    const sequence = ++loadSequence.current;
+    // Bound to the operation's rendered selection, not the selection after a
+    // delayed mutation response. Navigation must never retarget this result.
+    const initial = origin;
+    const [auth, custom, actual, catalog, global, project, effective] = await Promise.all([
+      getProviderAuthStatuses(), getCustomProviders(), getProviders(), getModelCatalog(initial.workspace?.id, true),
+      getConfigurationScope('global'),
+      initial.workspace?.id ? getConfigurationScope('project', initial.workspace.id) : Promise.resolve({ success: true }),
+      getEffectiveConfiguration(initial.workspace?.id, initial.activeSessionId ?? undefined),
+    ]);
+    if (![auth, custom, actual, catalog, global, project, effective].every(result => result.success)
+      || !actual.data || !custom.data || !catalog.data) throw new Error('Canonical reload failed');
+    const current = useSessionStore.getState();
+    if (!mounted.current || generation !== epoch.current || sequence !== loadSequence.current || current.workspace?.id !== initial.workspace?.id
+      || current.activeSessionId !== initial.activeSessionId || current.providers.active !== initial.providers.active
+      || outcome && current.providers.available[current.providers.active] !== initial.providers.available[initial.providers.active]) {
+      // Ask the still-mounted Settings owner for a fresh, selection-bound read;
+      // never apply this old operation's mutation result to the new selection.
+      if (outcome) onSelectionInvalidated?.();
+      else if (mounted.current && generation === epoch.current && sequence === loadSequence.current) await load();
+      return;
+    }
+    // Navigation/new selection owns its own reload.
+    setStatuses(auth.data ?? []); setProviders(custom.data); setRenameCapability(custom.renameCapability);
+    onProvidersLoaded?.(custom.data);
+    useSessionStore.setState(state => {
+      if (state.workspace?.id !== initial.workspace?.id || state.activeSessionId !== initial.activeSessionId
+        || state.providers.active !== initial.providers.active
+        || outcome && state.providers.available[state.providers.active] !== initial.providers.available[initial.providers.active]) return state;
+      // Built-in credential inputs/selection are independent of discovery and
+      // must remain present even if the server lists only configured providers.
+      const builtins = Object.fromEntries((['openai', 'anthropic', 'google', 'azure', 'vertex', 'bedrock', 'local', 'mock'] as const)
+        .map(type => [type, state.providers.available[type]]));
+      const available = { ...builtins, ...Object.fromEntries(actual.data!.map(provider => {
+        const group = catalog.data!.providers.find(item => item.provider === provider.type);
+        const existing = state.providers.available[provider.type as keyof typeof state.providers.available];
+        // Keep model selection only when still present at the same canonical source.
+        const model = group?.models.some(item => item.id === existing?.model) ? existing!.model ?? ''
+          : group?.models.find(item => item.enabled && item.available)?.id ?? '';
+        return [provider.type, { type: provider.type, model, ...(provider.configured ? { apiKey: 'configured' } : {}) }];
+      })) } as typeof state.providers.available;
+      const renamed = outcome?.success && outcome.data && custom.data!.some(item => item.id === outcome.data!.id)
+        ? outcome.data.id : undefined;
+      const active = renamed && available[renamed as keyof typeof available]
+        && (state.providers.active === renameTarget || !available[state.providers.active]) ? renamed
+        : available[state.providers.active] ? state.providers.active : actual.data![0]?.type ?? 'mock';
+      return { providers: { ...state.providers, available, active: active as typeof state.providers.active,
+        catalog: catalog.data, catalogLoading: false, catalogError: undefined } };
+    });
+    if (notify) onCanonicalReload?.();
+    if (outcome) {
+      const refusal = ({ PROVIDER_IN_USE: 'inUse', PROVIDER_EXISTS: 'collision', PROVIDER_REGISTRY_STALE: 'stale',
+        PROVIDER_ADMISSION_UNAVAILABLE: 'disabled', PROVIDER_ADMINISTRATION_BUSY: 'busy',
+        PROVIDER_REBIND_UNAVAILABLE: 'unavailable', PROVIDER_ENVIRONMENT_LOCKED: 'environment',
+        PROVIDER_UNSUPPORTED_REFERENCES: 'unsupported', PROVIDER_REFERENCE_STORE_UNAVAILABLE: 'unsupported' } as Record<string, ProviderSettingsMessage>)[
+        outcome.code ?? ''];
+      publishNotice(providerSettingsMessage(locale, outcome.success ? 'renamed' : outcome.uncertain ? 'uncertain' : refusal ?? 'failed'),
+        { level: outcome.success ? 'success' : 'warning' });
+    }
+  };
   useEffect(() => {
-    if (!oauthFlow || oauthFlow.state !== 'pending') return;
+    mounted.current = true;
+    ++epoch.current;
+    void load();
+    void reconcile(undefined, false).catch(() => {
+      if (mounted.current) { setRenameCapability({ supported: false, mode: 'disabled', reason: 'unavailable' }); void load(); }
+    });
+    return () => { mounted.current = false; ++epoch.current; retireOAuth(); };
+  }, []);
+  useEffect(() => {
+    const operation = oauthOperation.current;
+    if (!oauthFlow || oauthFlow.state !== 'pending' || !operation) return;
+    let active = true;
     const timer = window.setTimeout(async () => {
-      const result = await getProviderOAuth(oauthFlow.id);
+      const result = await getProviderOAuth(oauthFlow.id, operation.controller.signal);
+      if (!active || !mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) return;
       if (result.success && result.data) {
+        operation.flow = result.data;
         setOauthFlow(result.data);
-        if (result.data.state === 'connected') await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
+        if (result.data.state === 'connected') await reconcile().catch(() => {
+          if (mounted.current && oauthOperation.current === operation) error();
+        });
       } else error(result.error);
     }, 2_000);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [oauthFlow]);
+  const login = async (provider: string, method: 'device' | 'browser' | 'copy-code' = 'device') => {
+    retireOAuth();
+    const operation = { provider, method, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
+    oauthOperation.current = operation;
+    setOauthFlow(undefined); setOauthStarting(true);
+    const result = await startProviderOAuth(provider, operation.controller.signal, method);
+    if (!mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) {
+      if (result.data?.state === 'pending') void cancelProviderOAuth(result.data.id);
+      return;
+    }
+    setOauthStarting(false);
+    if (!result.success || !result.data) error(result.error);
+    else { operation.flow = result.data; setOauthFlow(result.data); }
+  };
+  const completeOAuth = async (value: string) => {
+    const operation = oauthOperation.current;
+    if (!operation?.flow?.authorizationUrl || operation.flow.state !== 'pending') return;
+    const result = await submitProviderOAuthRedirect(operation.flow.id, value, operation.controller.signal);
+    if (!mounted.current || oauthOperation.current !== operation || operation.controller.signal.aborted) return;
+    if (!result.success || !result.data) error(result.error);
+    else {
+      operation.flow = result.data; setOauthFlow(result.data);
+      await reconcile().catch(() => { if (mounted.current && oauthOperation.current === operation) error(); });
+    }
+  };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -89,8 +224,9 @@ export function ProviderLifecycleSettings() {
   };
   return <section className="settings-section" id="provider-lifecycle">
     <h3>{t('settings.providerLifecycle')}</h3>
-    <div className="provider-lifecycle-list">
-      {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card">
+    <CacheNoticeSettings />
+    <div className="provider-lifecycle-list" data-settings-group="builtin">
+      {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card" data-settings-selection={status.type}>
         <div><strong>{status.name}</strong><code>{status.type}</code></div>
         <span className={status.connected ? 'status-success' : 'status-warning'}>
           {status.connected ? t('settings.connected') : t('settings.disconnected')} · {status.method}
@@ -98,10 +234,10 @@ export function ProviderLifecycleSettings() {
           {status.usage ? ` · ${status.usage.requests ?? 0} requests · ${(status.usage.inputTokens ?? 0) + (status.usage.outputTokens ?? 0)} tokens · $${(status.usage.costUsd ?? 0).toFixed(4)}` : ''}
         </span>
         <div>
-          {status.method === 'oauth' && <button type="button" onClick={async () => {
-            const result = await startProviderOAuth(status.type);
-            if (!result.success || !result.data) error(result.error); else setOauthFlow(result.data);
+          {status.method === 'oauth' && <button type="button" disabled={oauthStarting} onClick={() => {
+            void login(status.type);
           }}>{status.connected ? t('settings.reconnect') : t('settings.connect')}</button>}
+          {status.type === 'openai-codex' && <button type="button" disabled={oauthStarting} onClick={() => { void login(status.type, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
           <button type="button" disabled={!status.connected} onClick={async () => {
             const result = await testProviderConnection(status.type);
             if (result.success) {
@@ -110,19 +246,38 @@ export function ProviderLifecycleSettings() {
             } else error(result.error);
           }}>{t('settings.testConnection')}</button>
           {status.disconnectSupported && <button type="button" onClick={async () => {
+            const generation = epoch.current;
+            if (oauthOperation.current?.provider === status.type) {
+              retireOAuth(); setOauthFlow(undefined); setOauthStarting(false);
+            }
             const result = await disconnectProvider(status.type);
-            if (!result.success) error(result.error); else await load();
+            if (!mounted.current || epoch.current !== generation) return;
+            if (!result.success) error(result.error); else await reconcile().catch(() => {
+              if (mounted.current && epoch.current === generation) error();
+            });
           }}>{t('settings.disconnect')}</button>}
         </div>
       </article>)}
     </div>
-    {oauthFlow && <aside className="oauth-device-flow" role="status">
-      <strong>{t('settings.oauth.title')}</strong>
+    {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status">
+      {oauthOperation.current?.method === 'browser' || oauthOperation.current?.method === 'copy-code' ? <strong>PKCE</strong> :
+      <strong>{t('settings.oauth.title')}</strong>}
+      {oauthStarting && <button type="button" onClick={() => {
+        retireOAuth(); setOauthStarting(false);
+      }}>{t('common.cancel')}</button>}
+      {oauthFlow && <>
       {oauthFlow.state === 'pending' ? <>
+        {oauthFlow.authorizationUrl ? <>
+          <p className="settings-help">{providerSettingsMessage(locale, oauthOperation.current?.method === 'copy-code' ? 'copyCodeHelp' : 'browserHelp')}</p>
+          <OAuthPastePanel active operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl} inputKind={oauthOperation.current?.method === 'copy-code' ? 'code' : 'redirect'}
+            onPaste={completeOAuth} onCancel={() => { retireOAuth(); setOauthFlow(undefined); }} />
+        </> : <>
         <p>{t('settings.oauth.code')}: <code>{oauthFlow.userCode}</code></p>
         <a href={oauthFlow.verificationUriComplete || oauthFlow.verificationUri} target="_blank" rel="noopener noreferrer">{t('settings.oauth.open')}</a>
-        <button type="button" onClick={async () => { await cancelProviderOAuth(oauthFlow.id); setOauthFlow(undefined); }}>{t('common.cancel')}</button>
+        <button type="button" onClick={() => { retireOAuth(); setOauthFlow(undefined); }}>{t('common.cancel')}</button>
+        </>}
       </> : <p>{oauthFlow.state === 'connected' ? t('settings.oauth.connected') : oauthFlow.error || oauthFlow.state}</p>}
+      </>}
     </aside>}
     <details className="custom-resource-editor" open={Boolean(editing)}>
       <summary>{t('settings.customProviders.manage')}</summary>
@@ -138,6 +293,40 @@ export function ProviderLifecycleSettings() {
           onChange={event => setForm(current => ({ ...current, dialect: event.target.value }))}>
           <option value="openai-completions">OpenAI Chat Completions</option>
           <option value="openai-responses">OpenAI Responses</option>
+          <option value="openai">OpenAI mixed Responses / Decisions</option>
+          <option value="mistral-conversations">Mistral Chat / Conversations</option>
+          <option value="openrouter">OpenRouter mixed A/C/I/T</option>
+          <option value="cloudflare-workers-ai">Cloudflare Workers AI mixed C/S</option>
+          <option value="cerebras">Cerebras Chat Completions</option>
+          <option value="deepseek">DeepSeek Chat Completions</option>
+          <option value="groq">Groq Chat Completions</option>
+          <option value="zai">Z.ai Coding Chat Completions</option>
+          <option value="moonshot">Moonshot Chat Completions</option>
+          <option value="nvidia">NVIDIA Chat Completions</option>
+          <option value="ant-ling">Ant Ling Chat Completions</option>
+          <option value="baseten">Baseten Chat Completions</option>
+          <option value="fireworks">Fireworks Messages / Chat Completions</option>
+          <option value="huggingface">Hugging Face Chat Completions</option>
+          <option value="kimi-coding">Kimi Coding Messages (API key)</option>
+          <option value="meta">Meta Responses (API key or Muse)</option>
+          <option value="minimax">MiniMax Messages</option>
+          <option value="minimax-cn">MiniMax CN Messages</option>
+          <option value="opencode-go">OpenCode Go Messages / Chat / Responses</option>
+          <option value="opencode">OpenCode Zen Messages / Google / Chat / Responses</option>
+          <option value="together">Together Chat Completions</option>
+          <option value="xai">xAI Responses (API key or Grok/X)</option>
+          <option value="xiaomi">Xiaomi Chat Completions</option>
+          <option value="moonshot-cn">Moonshot CN Chat Completions</option>
+          <option value="qwen-token-plan">Qwen Token Plan</option>
+          <option value="qwen-token-plan-cn">Qwen Token Plan CN</option>
+          <option value="qwen-token-plan-individual">Qwen Token Plan Individual</option>
+          <option value="xiaomi-token-plan-ams">Xiaomi Token Plan AMS</option>
+          <option value="xiaomi-token-plan-cn">Xiaomi Token Plan CN</option>
+          <option value="xiaomi-token-plan-sgp">Xiaomi Token Plan SGP</option>
+          <option value="zai-coding-cn">Z.ai Coding CN</option>
+          <option value="typesafe">TypeSafe System One</option>
+          <option value="cloudflare-ai-gateway">Cloudflare AI Gateway (gateway root URL)</option>
+          <option value="vercel-ai-gateway">Vercel AI Gateway (gateway root URL)</option>
           <option value="anthropic">Anthropic Messages</option>
           <option value="google">Google Generative Language</option>
         </select></label>
@@ -150,11 +339,18 @@ export function ProviderLifecycleSettings() {
           setEditing(undefined); setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
         }}>{t('common.cancel')}</button>}</div>
       </form>
-      <div className="settings-resource-list">
-        {providers.map(provider => <article key={provider.id} className="settings-resource-card">
+      <div className="settings-resource-list" data-settings-group="custom">
+        {providers.map(provider => <article key={provider.id} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`} data-settings-selection={provider.id}>
           <div><strong>{provider.name}</strong><code>{provider.id}</code><small>{provider.dialect} · {provider.baseUrl}</small></div>
+          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id)} capability={renameCapability}
+            disabled={busy || Boolean(editing) || oauthFlow?.state === 'pending' || !renameCapability.supported}
+            disabledReason={!renameCapability.supported ? renameCapability.reason === 'exclusive-host-required' ? 'disabled' : 'capabilityUnknown' : undefined} />
+            : null}
           <span>{provider.configured ? t('settings.connected') : t('settings.disconnected')} · {provider.modelCount} models</span>
           <div>
+            {['kimi-coding', 'meta', 'xai'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id); }}>{provider.configured ? t('settings.reconnect') : t('settings.connect')}</button>}
+            {['openrouter', 'anthropic'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
+            {provider.dialect === 'anthropic' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'copy-code'); }}>{providerSettingsMessage(locale, 'copyCode')}</button>}
             <button type="button" onClick={() => {
               setEditing(provider.id);
               setForm({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' });
@@ -165,18 +361,20 @@ export function ProviderLifecycleSettings() {
               else error(result.error);
             }}>{t('settings.testConnection')}</button>
             {provider.configured && <button type="button" onClick={async () => {
+              if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await disconnectProvider(provider.id);
-              if (!result.success) error(result.error); else await load();
+              if (!result.success) error(result.error); else if (['kimi-coding', 'openrouter', 'anthropic', 'meta', 'xai'].includes(provider.dialect)) await reconcile(); else await load();
             }}>{t('settings.disconnect')}</button>}
             <button type="button" onClick={async () => {
               const result = await importCustomProviderModels(provider.id);
               if (result.success) {
                 publishNotice(t('settings.modelsImported', { count: result.data?.length ?? 0 }), { level: 'success' });
-                await hydrateModelCatalog(true);
+                await hydrateModelCatalog(true); await load();
               } else error(result.error);
             }}>{t('settings.importModels')}</button>
             <button type="button" onClick={async () => {
               if (!window.confirm(t('settings.customProviders.deleteConfirm', { name: provider.name }))) return;
+              if (oauthOperation.current?.provider === provider.id) { retireOAuth(); setOauthFlow(undefined); setOauthStarting(false); }
               const result = await deleteCustomProvider(provider.id);
               if (!result.success) error(result.error);
               else await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
@@ -242,7 +440,7 @@ export function CustomModelSettings() {
       </form>
     </details>
     <div className="settings-resource-list">
-      {models.map(model => <article key={model.key} className="settings-resource-card">
+      {models.map(model => <article key={model.key} className="settings-resource-card" data-settings-selection={model.key}>
         <div><strong>{model.name}</strong><code>{model.key}</code><small>{model.contextWindow ?? '—'} context · {model.maxOutputTokens ?? '—'} max output</small></div>
         <div>
           <button type="button" onClick={() => {
@@ -259,7 +457,8 @@ export function CustomModelSettings() {
           }}>{t('common.edit')}</button>
           <button type="button" onClick={async () => {
             const result = await testCustomModel(model.key);
-            result.success ? publishNotice(t('settings.connectionOk', { count: 1 }), { level: 'success' }) : error(result.error);
+            if (result.success) publishNotice(t('settings.connectionOk', { count: 1 }), { level: 'success' });
+            else error(result.error);
           }}>{t('settings.testConnection')}</button>
           <button type="button" onClick={async () => {
             const result = await deleteCustomModel(model.key);
@@ -275,27 +474,37 @@ export function ToolSettingsPanel() {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [settings, setSettings] = useState<ToolSettings>();
-  const [scope, setScope] = useState<'global' | 'project'>('project');
+  const [scope, setScope] = useSettingsScope('tools', workspace?.id ? 'project' : 'global');
   const [busy, setBusy] = useState(false);
+  const epoch = useRef(0);
   const projectScoped = scope === 'project';
   const load = async () => {
+    const generation = epoch.current;
     const result = await getToolSettings(projectScoped ? workspace?.cwd : undefined, projectScoped ? workspace?.id : undefined);
+    if (generation !== epoch.current) return;
     if (result.success && result.data) setSettings(result.data); else error(result.error);
   };
-  useEffect(() => { void load(); }, [scope, workspace?.cwd, workspace?.id]);
+  useEffect(() => {
+    epoch.current++; setSettings(undefined); setBusy(false); void load();
+    return () => { epoch.current++; };
+  }, [scope, workspace?.cwd, workspace?.id]);
   const persist = async (next: ToolSettings) => {
-    setSettings(next); setBusy(true);
+    const generation = epoch.current;
+    setBusy(true);
     const result = await updateToolSettings({
       enabledTools: next.tools.filter(tool => tool.enabled).map(tool => tool.name),
       toolPreset: next.preset ?? 'default', powershellEnabled: next.powershellEnabled,
       cwd: projectScoped ? workspace?.cwd : undefined, projectId: projectScoped ? workspace?.id : undefined,
+      ...(next.codemode ? { codemodeEnabled: next.codemode.enabled, codemodeMode: next.codemode.mode,
+        codemodeInlineBudget: next.codemode.inlineBudget } : {}),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) setSettings(result.data); else { error(result.error); await load(); }
     setBusy(false);
   };
   return <section className="settings-section" id="tools">
     <h3>{t('settings.tools.title')}</h3>
-    <label>{t('settings.scope')}<select value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
+    <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
       <option value="global">{t('chat.scope.global')}</option>
       <option value="project" disabled={!workspace?.id}>{t('chat.scope.project')}</option>
     </select></label>
@@ -305,11 +514,38 @@ export function ToolSettingsPanel() {
         onChange={event => void persist({ ...settings, preset: event.target.value as ToolSettings['preset'] })}>
         {['configured', 'chat-only', 'read-only', 'default', 'full'].map(preset => <option key={preset}>{preset}</option>)}
       </select></label>
+      {settings.codemode && <fieldset className="codemode-settings">
+        <legend>{t('settings.codemode.title')}</legend>
+        <p role="status">QuickJS · {t(`settings.codemode.selfTest.${settings.codemode.selfTest.state}`)}</p>
+        <label>{t('settings.codemode.activation')}<select value={settings.codemode.enabled ? 'on' : 'automatic'} disabled={busy || settings.codemode.selfTest.state !== 'passed'}
+          onChange={event => void persist({ ...settings,
+            tools: settings.tools.map(tool => tool.name === 'codemode' ? { ...tool, enabled: true } : tool),
+            codemode: { ...settings.codemode!, enabled: event.target.value === 'on' } })}>
+          <option value="automatic">{t('settings.codemode.automatic')}</option>
+          <option value="on">{t('settings.codemode.always')}</option>
+        </select></label>
+        <label>{t('settings.codemode.mode')}<select value={settings.codemode.mode} disabled={busy}
+          onChange={event => void persist({ ...settings, codemode: { ...settings.codemode!, mode: event.target.value as 'on' | 'only' } })}>
+          <option value="on">on</option><option value="only">only</option>
+        </select></label>
+        <label>{t('settings.codemode.inlineBudget')}<input key={`${scope}:${settings.codemode.inlineBudget}`} type="number" min="0" max="3000" step="100" defaultValue={settings.codemode.inlineBudget} disabled={busy}
+          onBlur={event => {
+            const value = event.currentTarget.valueAsNumber;
+            if (Number.isSafeInteger(value) && value >= 0 && value <= 3000 && value !== settings.codemode!.inlineBudget) {
+              void persist({ ...settings, codemode: { ...settings.codemode!, inlineBudget: value } });
+            } else event.currentTarget.value = String(settings.codemode!.inlineBudget);
+          }} /></label>
+        <p className="settings-help">{t('settings.codemode.limits')}</p>
+        <p className="settings-help">{t('settings.codemode.warning')}</p>
+      </fieldset>}
       <div className="tool-settings-list">
-        {settings.tools.map(tool => <label key={tool.name} title={tool.unavailableReason}>
+        {settings.tools.map(tool => <label key={tool.name}>
           <input type="checkbox" checked={tool.enabled} disabled={busy || !tool.available}
             onChange={event => void persist({ ...settings, tools: settings.tools.map(item => item.name === tool.name ? { ...item, enabled: event.target.checked } : item) })} />
-          <span><strong>{tool.name}</strong><small>{tool.description} · {tool.extensionId}</small></span>
+          <span><strong>{tool.name}</strong><small>{tool.description} · {tool.extensionId}</small>
+            {tool.disabledReason && <small>{t(`settings.tools.reason.${tool.disabledReason}`)}</small>}
+            {tool.unavailableReason && <small>{tool.unavailableReason}</small>}
+          </span>
         </label>)}
       </div>
       <label><input type="checkbox" checked={settings.powershellEnabled} disabled={busy || !settings.powershellAvailable}
@@ -324,7 +560,7 @@ export function SkillRegistryPanel() {
   const hydrateSkills = useSessionStore(state => state.hydrateSkillCatalog);
   const [registry, setRegistry] = useState<SkillRegistry>();
   const [query, setQuery] = useState('');
-  const [scope, setScope] = useState<'global' | 'project'>('project');
+  const [scope, setScope] = useSettingsScope('registry', 'project');
   const [busy, setBusy] = useState(false);
   const load = async (refresh = false) => {
     const result = await getSkillRegistry(query, workspace?.cwd, workspace?.id, refresh);
@@ -343,12 +579,12 @@ export function SkillRegistryPanel() {
     }
     setBusy(false);
   };
-  return <details className="skill-registry">
+  return <details className="skill-registry" data-settings-group="registry">
     <summary>{t('settings.skills.registry')}</summary>
     <div className="model-catalog-toolbar">
       <label>{t('settings.skills.registrySearch')}<input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <select aria-label={t('settings.skills.installScope')} value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
-        <option value="project">{t('settings.skills.scope.project')}</option><option value="global">{t('settings.skills.scope.global')}</option>
+        <option value="project" disabled={!workspace?.id}>{t('settings.skills.scope.project')}</option><option value="global">{t('settings.skills.scope.global')}</option>
       </select>
       <button type="button" disabled={busy} onClick={() => void load(true)}>{t('common.refresh')}</button>
       <button type="button" disabled={busy || !registry?.entries.some(entry => entry.installed?.scope === scope && entry.installed.updateAvailable)}
@@ -361,7 +597,7 @@ export function SkillRegistryPanel() {
     </div>
     {registry?.error && <p role="alert" className="status-warning">{registry.error}</p>}
     <div className="settings-resource-list">
-      {registry?.entries.map(entry => <article className="settings-resource-card" key={entry.id}>
+      {registry?.entries.map(entry => <article className="settings-resource-card" key={entry.id} data-settings-selection={entry.id}>
         <div><strong>{entry.name}</strong><span>{entry.description}</span><code>v{entry.version}</code></div>
         <div>
           {entry.installed && <small>{t('settings.skills.installedVersion', { version: entry.installed.version ?? '?' })}</small>}
@@ -374,24 +610,56 @@ export function SkillRegistryPanel() {
 }
 
 export function DefaultModelSettings() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
-  const [scope, setScope] = useState<'global' | 'project'>('project');
-  const [values, setValues] = useState({ provider: '', model: '', toolPreset: '' });
+  const [scope, setScope] = useSettingsScope('defaults', workspace?.id ? 'project' : 'global');
+  const [values, setValues] = useState({ provider: '', model: '', thinking: '', thinkingBudgets: '', toolPreset: '' });
+  const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
+  const [busy, setBusy] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [overrideWarning, setOverrideWarning] = useState(false);
+  const [feedback, setFeedback] = useState<SettingsAdminMessage>();
+  const epoch = useRef(0);
+  const change = (key: keyof typeof values, value: string) => {
+    setValues(current => ({ ...current, [key]: value }));
+    setDirty(current => [...new Set([...current, key])]);
+  };
   const [effective, setEffective] = useState<Awaited<ReturnType<typeof getEffectiveConfiguration>>['data']>();
   const scopeId = scope === 'project' ? workspace?.id : undefined;
-  useEffect(() => {
-    void Promise.all([getConfigurationScope(scope, scopeId), getEffectiveConfiguration(scopeId)]).then(([configured, resolved]) => {
-      if (!configured.success || !configured.data) { error(configured.error); return; }
-      setValues({
-        provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
-        model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
-        toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
-      });
-      if (resolved.success) setEffective(resolved.data);
+  const readSaved = async (generation: number) => {
+    const [configured, resolved] = await Promise.all([
+      getConfigurationScope(scope, scopeId), getEffectiveConfiguration(workspace?.id),
+    ]);
+    if (generation !== epoch.current) return;
+    if (!configured.success || !configured.data || !resolved.success || !resolved.data) {
+      setReady(false); setEffective(undefined); return;
+    }
+    setValues({
+      provider: typeof configured.data.values.provider === 'string' ? configured.data.values.provider : '',
+      model: typeof configured.data.values.model === 'string' ? configured.data.values.model : '',
+      thinking: typeof configured.data.values.thinking === 'string' ? configured.data.values.thinking : '',
+      thinkingBudgets: configured.data.values.thinkingBudgets === undefined ? '' : JSON.stringify(configured.data.values.thinkingBudgets),
+      toolPreset: typeof configured.data.values.toolPreset === 'string' ? configured.data.values.toolPreset : '',
     });
-  }, [scope, scopeId]);
-  const environmentLocked = (key: 'provider' | 'model' | 'toolPreset') => effective?.provenance[key]?.scope === 'environment';
+    setDirty([]); setReady(true); setEffective(resolved.data);
+    return resolved.data;
+  };
+  const reload = async () => {
+    const generation = epoch.current;
+    setBusy(true); setReady(false); setOverrideWarning(false); setFeedback(undefined);
+    const resolved = await readSaved(generation);
+    if (generation !== epoch.current) return;
+    if (!resolved) setFeedback('readFailed');
+    setBusy(false);
+  };
+  useEffect(() => {
+    ++epoch.current;
+    setDirty([]); setEffective(undefined);
+    if (scope === 'project' && !scopeId) { setScope('global'); return; }
+    void reload();
+    return () => { ++epoch.current; };
+  }, [scope, scopeId, workspace?.id]);
+  const environmentLocked = (key: keyof typeof values) => effective?.provenance[key]?.scope === 'environment';
   return <section className="settings-section" id="defaults">
     <h3>{t('settings.defaults.title')}</h3>
     <p className="settings-help">{t('settings.defaults.help')}</p>
@@ -401,34 +669,58 @@ export function DefaultModelSettings() {
         model: String(effective.values.model ?? '—'),
         preset: String(effective.values.toolPreset ?? 'default'),
       })}
-      {' · '}{['provider', 'model', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
+      {' · '}{['provider', 'model', 'thinking', 'thinkingBudgets', 'toolPreset'].map(key => `${key}: ${effective.provenance[key as keyof typeof effective.provenance]?.source ?? 'built-in'}`).join(' · ')}
     </p>}
     {scope === 'project' && Object.values(values).some(value => !value) && <p className="status-warning">{t('settings.defaults.inheritanceWarning')}</p>}
-    <label>{t('settings.scope')}<select value={scope} onChange={event => setScope(event.target.value as typeof scope)}>
+    {overrideWarning && <p role="status" className="status-warning">{t('settings.defaults.overrideWarning')}</p>}
+    {feedback && <p role="alert">{settingsAdminMessage(locale, feedback)}</p>}
+    {!ready && !busy && <button type="button" onClick={() => void reload()}>{settingsAdminMessage(locale, 'refresh')}</button>}
+    <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
       <option value="global">{t('chat.scope.global')}</option><option value="project" disabled={!workspace?.id}>{t('chat.scope.project')}</option>
     </select></label>
-    <label>{t('settings.provider')}<input value={values.provider} disabled={environmentLocked('provider')}
+    <label>{t('settings.provider')}<input value={values.provider} disabled={busy || !ready || environmentLocked('provider')}
       placeholder={`${t('chat.setting.auto')} · ${String(effective?.values.provider ?? '—')}`}
-      onChange={event => setValues(current => ({ ...current, provider: event.target.value }))} /></label>
-    <label>{t('settings.model')}<input value={values.model} disabled={environmentLocked('model')}
+      onChange={event => change('provider', event.target.value)} /></label>
+    <label>{t('settings.model')}<input value={values.model} disabled={busy || !ready || environmentLocked('model')}
       placeholder={`${t('chat.setting.auto')} · ${String(effective?.values.model ?? '—')}`}
-      onChange={event => setValues(current => ({ ...current, model: event.target.value }))} /></label>
-    <label>{t('settings.tools.defaultPreset')}<select value={values.toolPreset} disabled={environmentLocked('toolPreset')}
-      onChange={event => setValues(current => ({ ...current, toolPreset: event.target.value }))}>
+      onChange={event => change('model', event.target.value)} /></label>
+    <label>{t('chat.thinking')}<select value={values.thinking} disabled={busy || !ready || environmentLocked('thinking')}
+      onChange={event => change('thinking', event.target.value)}>
+      <option value="">{t('chat.setting.auto')} · {String(effective?.values.thinking ?? 'off')}</option>
+      {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level}>{level}</option>)}
+    </select></label>
+    <label>{reasoningSettingsMessage(locale, 'label')}<input value={values.thinkingBudgets}
+      style={{ color: 'inherit', backgroundColor: 'transparent' }} maxLength={256} placeholder={JSON.stringify(effective?.values.thinkingBudgets ?? {})}
+      disabled={busy || !ready || environmentLocked('thinkingBudgets')} aria-describedby="thinking-budgets-help"
+      onChange={event => change('thinkingBudgets', event.target.value)} /></label>
+    <p id="thinking-budgets-help" className="settings-help">{reasoningSettingsMessage(locale, 'help')}</p>
+    <label>{t('settings.tools.defaultPreset')}<select value={values.toolPreset} disabled={busy || !ready || environmentLocked('toolPreset')}
+      onChange={event => change('toolPreset', event.target.value)}>
       <option value="">{t('chat.setting.auto')} · {String(effective?.values.toolPreset ?? 'default')}</option>
       {['configured', 'chat-only', 'read-only', 'default', 'full'].map(preset => <option key={preset}>{preset}</option>)}
     </select></label>
-    <button type="button" disabled={scope === 'project' && !scopeId} onClick={async () => {
-      const result = await updateConfigurationScope(scope, {
-        provider: values.provider || null,
-        model: values.model || null,
-        toolPreset: values.toolPreset || null,
-      }, scopeId);
-      if (result.success) {
-        publishNotice(t('settings.defaults.saved'), { level: 'success' });
-        const resolved = await getEffectiveConfiguration(scopeId);
-        if (resolved.success) setEffective(resolved.data);
-      } else error(result.error);
+    <button type="button" disabled={busy || !ready || !dirty.length || scope === 'project' && !scopeId} onClick={async () => {
+      const generation = epoch.current;
+      setBusy(true); setFeedback(undefined); setOverrideWarning(false);
+      try {
+        const changed = dirty.filter(key => !environmentLocked(key));
+        let patch: Record<string, unknown>;
+        try {
+          patch = Object.fromEntries(changed.map(key => [key, key === 'thinkingBudgets'
+            ? values[key].trim() ? JSON.parse(values[key]) as unknown : null : values[key] || null]));
+        } catch { error(reasoningSettingsMessage(locale, 'invalid')); return; }
+        const result = await updateConfigurationScope(scope, patch, scopeId);
+        if (generation !== epoch.current) return;
+        // A failed response may follow a durable write. Never infer rollback or
+        // report success until both saved values and provenance are readable.
+        const resolved = await readSaved(generation);
+        if (generation !== epoch.current) return;
+        if (!resolved) { setFeedback('readbackFailed'); return; }
+        if (!result.success) { setFeedback('saveFailed'); return; }
+        const overridden = scope === 'global' && changed.some(key => ['project', 'environment'].includes(resolved.provenance[key]?.scope ?? ''));
+        setOverrideWarning(overridden);
+        publishNotice(t(overridden ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'), { level: overridden ? 'warning' : 'success' });
+      } finally { if (generation === epoch.current) setBusy(false); }
     }}>{t('common.save')}</button>
   </section>;
 }

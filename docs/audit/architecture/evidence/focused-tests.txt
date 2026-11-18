@@ -1,0 +1,36 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-server.test.ts packages/core/src/providers/model-metadata.test.ts packages/core/src/config/agent-settings.test.ts packages/core/src/sessions/session-manager.test.ts packages/web/src/store/session-store.test.ts packages/web/src/store/preferences.test.ts packages/server/src/security/request-security.test.ts
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.3 [39m[90m/app[39m
+
+[90mstderr[2m | packages/core/src/sessions/session-manager.test.ts[2m > [22m[2mSessionManager with JSONL Persistence[2m > [22m[2mcreate()[2m > [22m[2mserializes cross-manager creation of the same durable ID
+[22m[39m[SessionManager] Failed to save session.
+
+[90mstderr[2m | packages/core/src/sessions/session-manager.test.ts[2m > [22m[2mSessionManager with JSONL Persistence[2m > [22m[2maddMessage()[2m > [22m[2mkeeps memory unchanged when message persistence fails
+[22m[39m[SessionManager] Failed to save session.
+
+[90mstderr[2m | packages/core/src/sessions/session-manager.test.ts[2m > [22m[2mSessionManager with JSONL Persistence[2m > [22m[2mdelete()[2m > [22m[2mkeeps in-memory state when an unsafe durable target prevents update or deletion
+[22m[39m[SessionManager] Failed to save session.
+
+[90mstderr[2m | packages/core/src/sessions/session-manager.test.ts[2m > [22m[2mSessionManager with JSONL Persistence[2m > [22m[2mdelete()[2m > [22m[2mkeeps in-memory state when an unsafe durable target prevents update or deletion
+[22m[39m[SessionManager] Failed to delete session.
+
+ [32m✓[39m packages/core/src/sessions/session-manager.test.ts [2m([22m[2m95 tests[22m[2m)[22m[33m 3193[2mms[22m[39m
+   [32m✓[39m JsonlSessionStore [2m(29)[22m
+     [32m✓[39m appendMessage() [2m(7)[22m
+       [33m[2m✓[22m[39m serializes concurrent appends from independent store instances[33m 963[2mms[22m[39m
+       [33m[2m✓[22m[39m does not lose appends racing with atomic session rewrites[33m 454[2mms[22m[39m
+ [32m✓[39m packages/web/src/store/session-store.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m packages/core/src/config/agent-settings.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 40[2mms[22m[39m
+ [32m✓[39m packages/core/src/providers/model-metadata.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+ [32m✓[39m packages/server/src/security/request-security.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m packages/cli/src/rpc/rpc-server.test.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 491[2mms[22m[39m
+ [32m✓[39m packages/web/src/store/preferences.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m150 passed[39m[22m[90m (150)[39m
+[2m   Start at [22m 11:11:20
+[2m   Duration [22m 6.43s[2m (tests 63%, transform 23%, import 14%)[22m
+
+[2m    Isolate [22m [33m7 workers spawned[39m[2m · ~56ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~334ms faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m

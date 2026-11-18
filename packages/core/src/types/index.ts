@@ -13,6 +13,8 @@ export interface ToolCall {
   id: string;
   name: string;
   input: unknown;
+  /** Sensitive opaque native continuation data, not a fabricated or portable signature. */
+  thoughtSignature?: string;
 }
 
 /** Normalized token and cost accounting. All counters are optional when unavailable. */
@@ -27,8 +29,8 @@ export interface TokenUsage {
 
 /** Rich message blocks. `Message.content` remains the plain-text compatibility view. */
 export type MessageContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'reasoning'; text: string; durationMs?: number }
+  | { type: 'text'; text: string; textSignature?: string }
+  | { type: 'reasoning'; text: string; durationMs?: number; thinkingSignature?: string; redacted?: boolean }
   | {
       type: 'image';
       mediaType: string;
@@ -39,12 +41,14 @@ export type MessageContentBlock =
       width?: number;
       height?: number;
     }
-  | { type: 'tool_call'; id: string; name: string; input: unknown }
+  | { type: 'tool_call'; id: string; name: string; input: unknown; thoughtSignature?: string }
   | {
       type: 'tool_result';
       toolCallId: string;
       name?: string;
       content: string;
+      /** Bounded inert native structured result; plain-text compatibility remains in content. */
+      structuredContent?: unknown;
       /** Complete result retained when `content` was bounded for the model context. */
       fullContent?: string;
       isError?: boolean;
@@ -71,6 +75,8 @@ export interface ShellCommandRecord {
   cwd: string;
   timestamp: Date;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  /** Previous durable session entry, when known. */
+  parentEntryId?: string;
   output?: string;
   exitCode?: number;
   durationMs?: number;
@@ -93,6 +99,8 @@ export interface Message {
   isError?: boolean;
   provider?: string;
   model?: string;
+  /** API recorded at generation time, never inferred when replaying legacy history. */
+  api?: string;
   usage?: TokenUsage;
   durationMs?: number;
   parentMessageId?: string;
@@ -105,8 +113,23 @@ export interface ProviderConfig {
   /** Built-in provider type or an operator-defined provider id. */
   type: ProviderType | string;
   apiKey?: string;
+  /** Explicit Kimi Coding credential transport; absent keeps API-key authentication. */
+  kimiAuthMode?: 'api-key' | 'oauth';
+  /** Vertex Cloud API key is explicit; absence preserves the existing Bearer transport. */
+  vertexAuthMode?: 'api-key' | 'bearer';
   model?: string;
   baseUrl?: string;
+  /** Explicit Azure protocol or native per-model v1 dispatch; absence preserves legacy endpoints and recognizes /openai/v1. */
+  azureApi?: 'completions' | 'responses' | 'native';
+  azureDeploymentMap?: Readonly<Record<string, string>>;
+  /** Shared network settings resolved from agent settings. */
+  transport?: 'auto' | 'sse' | 'websocket' | 'websocket-cached';
+  httpProxy?: string;
+  httpIdleTimeoutMs?: number;
+  websocketConnectTimeoutMs?: number;
+  requestTimeoutMs?: number;
+  providerMaxRetries?: number;
+  providerMaxRetryDelayMs?: number;
   [key: string]: unknown;
 }
 
@@ -124,7 +147,11 @@ export interface ModelPricing {
   cacheWritePerMillion?: number;
 }
 
-export type ProviderDialect = 'openai-completions' | 'openai-responses' | 'anthropic' | 'google';
+export type ProviderDialect = 'openai' | 'openai-completions' | 'openai-responses' | 'anthropic' | 'google' | 'mistral-conversations' | 'openrouter' | 'cloudflare-workers-ai' | 'cerebras' | 'deepseek' | 'groq' | 'zai' | 'moonshot' | 'nvidia'
+  | 'ant-ling' | 'baseten' | 'fireworks' | 'huggingface' | 'kimi-coding' | 'meta' | 'minimax' | 'minimax-cn'
+  | 'opencode-go' | 'opencode' | 'together' | 'xai' | 'xiaomi' | 'moonshot-cn'
+  | 'qwen-token-plan' | 'qwen-token-plan-cn' | 'qwen-token-plan-individual'
+  | 'xiaomi-token-plan-ams' | 'xiaomi-token-plan-cn' | 'xiaomi-token-plan-sgp' | 'zai-coding-cn' | 'typesafe' | 'cloudflare-ai-gateway' | 'vercel-ai-gateway';
 
 /** Public metadata for an operator-managed provider. Header values and credentials never cross the API. */
 export interface CustomProviderDefinition {
@@ -177,7 +204,7 @@ export interface CustomModelDefinition {
   updatedAt: string;
 }
 
-export type ModelCatalogSource = 'published' | 'configured' | 'discovered' | 'custom';
+export type ModelCatalogSource = 'published' | 'configured' | 'discovered' | 'custom' | 'virtual';
 
 /** A non-secret model descriptor returned by the server catalogue. */
 export interface ModelCatalogEntry {
@@ -189,6 +216,8 @@ export interface ModelCatalogEntry {
   available: boolean;
   enabled: boolean;
   source: ModelCatalogSource;
+  /** Published API, overridden by a declared live provider binding when configured. */
+  api?: string;
   capabilities: ModelCapabilities;
   contextWindow?: number;
   maxOutputTokens?: number;
@@ -223,6 +252,23 @@ export interface SkillCatalogEntry {
   trusted: boolean;
   defaultModelInvocable: boolean;
   modelInvocable: boolean;
+  /** Core discovery provenance; contains metadata only, never resource contents. */
+  provenance?: {
+    scope: 'user' | 'project' | 'temporary';
+    source: 'auto' | 'settings' | 'package' | 'cli';
+    origin: 'top-level';
+    path: string;
+    selector: string;
+    trusted: boolean;
+  };
+}
+
+/** Explicit, freshly authorized Markdown read; never a generic file capability. */
+export interface SkillContent {
+  key: string;
+  relativePath: string;
+  markdown: string;
+  fragment?: string;
 }
 
 export interface SkillDiagnostic {
@@ -265,6 +311,9 @@ export type PluginScope = 'global' | 'project';
 export type PluginSourceType = 'npm' | 'git' | 'path';
 export type PluginResourceKind = 'extension' | 'skill' | 'prompt' | 'theme';
 
+/** Optional package-level selectors. Omitted kinds keep all manifest-approved resources. */
+export type PluginResourceFilters = Partial<Record<`${PluginResourceKind}s`, string[]>>;
+
 export interface PluginResourceCounts {
   extensions: number;
   skills: number;
@@ -305,6 +354,8 @@ export interface PluginPackageInfo {
   installedRevision?: string;
   counts: PluginResourceCounts;
   resources: PluginResourceInfo[];
+  /** User filters can only narrow resources already allowed by the package manifest. */
+  resourceFilters?: PluginResourceFilters;
   diagnostics: PluginDiagnostic[];
   status: 'active' | 'installed' | 'missing' | 'disabled' | 'error';
   /** Executable extension changes cannot be applied by a metadata-only resource reload. */
@@ -331,6 +382,26 @@ export interface PluginCatalog {
   standaloneExtensions: PluginStandaloneExtensionInfo[];
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
+}
+
+export interface PluginEnableChange {
+  key: string;
+  scope: PluginScope;
+  enabled: boolean;
+}
+
+export interface PluginEnableOutcome extends PluginEnableChange {
+  state: 'changed' | 'unchanged' | 'failed';
+  code?: 'PLUGIN_NOT_FOUND' | 'PROJECT_TRUST_REQUIRED';
+  /** Fixed, value-free diagnostic suitable for administrative clients. */
+  message?: string;
+}
+
+export interface PluginEnableBatchResult {
+  catalog: PluginCatalog;
+  outcomes: PluginEnableOutcome[];
+  /** Executable changes remain pending until the explicit runtime reload action succeeds. */
+  reloadRequired: boolean;
 }
 
 export type PluginUpdateState = 'update-available' | 'up-to-date' | 'unsupported' | 'error';
@@ -414,10 +485,14 @@ export interface SubagentRunSnapshot {
 }
 
 /** Supported AI provider types */
+export type { CodemodeCall, CodemodeProgress, CodemodeDetails } from './codemode.js';
+
 export enum ProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   GOOGLE = 'google',
+  CEREBRAS = 'cerebras',
+  MISTRAL_CONVERSATIONS = 'mistral-conversations',
   AZURE = 'azure',
   BEDROCK = 'bedrock',
   VERTEX = 'vertex',
@@ -446,7 +521,7 @@ export interface Session {
   workspaceId?: string;
   gitBranch?: string;
   model?: string;
-  thinking?: 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  thinking?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   toolPreset?: 'configured' | 'chat-only' | 'read-only' | 'default' | 'full';
   /** Explicit per-session override. Undefined inherits the effective scoped policy. */
   autoCompaction?: boolean;
@@ -486,13 +561,20 @@ export interface ScopedConfigurationValues {
   provider?: string;
   model?: string;
   thinking?: Session['thinking'];
+  thinkingBudgets?: import('../providers/thinking-budgets.js').ThinkingBudgets;
   toolPreset?: Session['toolPreset'];
   autoCompaction?: boolean;
+  /** Global Web presentation only; never disables billable cache warming. */
+  showCacheMissNotices?: boolean;
   enabledModels?: string[];
   enabledSkills?: string[];
   enabledPlugins?: string[];
   enabledTools?: string[];
   powershellEnabled?: boolean;
+  codemodeEnabled?: boolean;
+  codemodeMode?: 'on' | 'only';
+  codemodeInlineBudget?: number;
+  codemodeLimits?: import('../config/codemode-limits.js').ConfiguredCodemodeLimits;
   systemPrompt?: string;
 }
 
@@ -514,6 +596,7 @@ export interface ToolSettingsEntry {
   enabled: boolean;
   available: boolean;
   unavailableReason?: string;
+  disabledReason?: 'chat-only' | 'read-only' | 'not-selected' | 'hidden' | 'automatic' | 'sandbox-unavailable';
 }
 
 export interface ToolSettings {
@@ -522,6 +605,13 @@ export interface ToolSettings {
   preset: Session['toolPreset'];
   powershellAvailable: boolean;
   powershellEnabled: boolean;
+  codemode?: {
+    enabled: boolean;
+    mode: 'on' | 'only';
+    inlineBudget: number;
+    limits?: import('../config/codemode-limits.js').ConfiguredCodemodeLimits;
+    selfTest: { state: 'passed' | 'failed' | 'not-run'; engine: 'QuickJS' };
+  };
   tools: ToolSettingsEntry[];
 }
 

@@ -1,0 +1,1 @@
+Error: RPC mode does not accept initial messages or @file arguments.

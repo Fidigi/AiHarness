@@ -1,0 +1,61 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/openai-codex-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] Request failed.
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held token without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held catalogue without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held catalogue-body without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held inference-body without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/openai-codex-http.test.ts (7 tests) 15862ms
+   ✓ routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect 1237ms
+   ✓ owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal 4403ms
+   ✓ retires Codex HTTP credential or detached inference work at held token without undoing committed credentials 1446ms
+   ✓ retires Codex HTTP credential or detached inference work at held catalogue without undoing committed credentials 1462ms
+   ✓ retires Codex HTTP credential or detached inference work at held catalogue-body without undoing committed credentials 1435ms
+   ✓ retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials 4700ms
+   ✓ retires Codex HTTP credential or detached inference work at held inference-body without undoing committed credentials 1178ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  13:48:23
+   Duration  17.95s (tests 89%, transform 8%, import 3%)

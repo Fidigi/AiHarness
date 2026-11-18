@@ -1,0 +1,1 @@
+{"payloadBytes":33554433,"command":"get_state","canonicalReply":false,"error":"RPC_FRAME_TOO_LARGE","echoedPadding":false,"limits":"Framing admission comparison only. Embedded fatal rejection is distinct from the emitted/installed nonzero-exit and held-operation cleanup controls. No RSS/throughput or rollback claim."}

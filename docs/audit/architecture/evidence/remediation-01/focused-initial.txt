@@ -1,0 +1,38 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-server.test.ts packages/cli/src/rpc/rpc-input.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 151ms
+ ❯ packages/cli/src/rpc/rpc-input.test.ts (9 tests | 1 failed) 5325ms
+   ❯ RPC byte-framed input (9)
+     ✓ preserves fragmented UTF-8, LF/CRLF, empty lines, Unicode separators and final EOF 3ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "" 66ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\n" 69ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\r\n" 85ms
+     ✓ rejects one extra byte before dispatch, with delimiter "" 17ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\n" 16ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\r\n" 17ms
+     ✓ counts UTF-8 bytes rather than characters and rejects a nonterminal extra CR 29ms
+     × stops pulling at 64 MiB until a handler releases its frame, including a partial frame 5023ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/cli/src/rpc/rpc-input.test.ts > RPC byte-framed input > stops pulling at 64 MiB until a handler releases its frame, including a partial frame
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ packages/cli/src/rpc/rpc-input.test.ts:48:3
+     46|   });
+     47|
+     48|   it('stops pulling at 64 MiB until a handler releases its frame, incl…
+       |   ^
+     49|     expect(MAX_RPC_INPUT_BYTES).toBe(2 * MAX_RPC_FRAME_BYTES);
+     50|     const payload = Buffer.alloc(MAX_RPC_FRAME_BYTES, 97);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 15 passed (16)
+   Start at  11:57:44
+   Duration  7.37s (tests 76%, transform 18%, import 6%)

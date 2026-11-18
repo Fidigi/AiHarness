@@ -3,6 +3,7 @@
 // ============================================================
 
 import { create } from 'zustand';
+import { rememberRetirement, remembersRetirement, mergeRetirements, type RetirementFilter } from './run-retirement-filter.js';
 import type {
   ProviderType,
   AgentRunSnapshot,
@@ -20,12 +21,15 @@ import {
   getProviders,
   getSkillCatalog,
   listSessions,
+  orderedExtensionRequests,
+  reconcileInteractionSnapshot,
   updateEnabledModels as updateEnabledModelsApi,
   updateEnabledSkills as updateEnabledSkillsApi,
   validateWorkspace,
 } from '../services/api.js';
 import type {
   ApiSession,
+  CacheNoticeProjection,
   SessionMessagePage,
   SessionMessagePageInfo,
 } from '../services/api.js';
@@ -47,24 +51,166 @@ export interface StoredMessagePage extends SessionMessagePageInfo {
   loadedRanges: LoadedMessageRange[];
 }
 
-export interface StoredSession extends Session {
+export interface StoredSession extends Session, CacheNoticeProjection {
   draft?: boolean;
   unread?: boolean;
   attention?: boolean;
   messagePage?: StoredMessagePage;
 }
 
+// Session journal sequences span runs. Keep authority when visible run state disappears.
+export interface RunAuthority {
+  sequence: number;
+  runId?: string;
+  terminal: boolean;
+  retired: string[];
+  /** Conservative fixed-size negative history; a possible collision needs fresh current-state discovery. */
+  retiredFilter?: RetirementFilter;
+  /** Empty zero-sequence discovery, with no observed run or journal history. */
+  pristine?: boolean;
+  deleted?: boolean;
+}
+export interface RunRequestGuard {
+  epoch: number;
+  /** Only fresh current-session state/running discovery or acknowledged start, never historical run GET. */
+  canonical?: boolean;
+  /** Session-wide observation can advance without changing the current run snapshot version. */
+  snapshotSequence?: number;
+  /** Authoritative missing-run snapshot watermark; never supplied by unversioned discovery. */
+  absenceSequence?: number;
+  authority?: RunAuthority;
+  activeSessionId?: string | null;
+  [INTERACTION_REPLY]?: object;
+}
+
+export function getRunAuthority(authorities: Readonly<Record<string, RunAuthority>>, sessionId: string): RunAuthority | undefined {
+  return Object.hasOwn(authorities, sessionId) ? authorities[sessionId] : undefined;
+}
+
+const INTERACTION_REPLY = Symbol('captured interaction reply');
+const interactionReplyWitnesses = new WeakMap<object, { sessionId: string; runId: string; requestId: string }>();
+
+/** Internal browser completion witness, not server authority or a closure event. */
+export function captureInteractionReplyGuard(state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId' | 'runs'>, sessionId: string, requestId: string): RunRequestGuard {
+  const guard = { epoch: state.runEpoch, authority: getRunAuthority(state.runAuthorities, sessionId), activeSessionId: state.activeSessionId };
+  const run = getStoredRun(state.runs, sessionId);
+  if (!run || orderedExtensionRequests(run)[0]?.id !== requestId) return guard;
+  const witness = {};
+  interactionReplyWitnesses.set(witness, { sessionId, runId: run.id, requestId });
+  return { ...guard, [INTERACTION_REPLY]: witness };
+}
+
+/** A current captured HTTP reply compares against precisely its acknowledged
+ * head removal, without changing sequence or granting arbitrary membership.
+ * The setter independently verifies the private witness against the real run. */
+export function interactionReplyComparison(state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId' | 'runs'>,
+  sessionId: string, guard?: RunRequestGuard): AgentRunSnapshot | undefined {
+  const run = getStoredRun(state.runs, sessionId);
+  const reply = guard?.[INTERACTION_REPLY] && interactionReplyWitnesses.get(guard[INTERACTION_REPLY]);
+  if (!run || !reply || reply.sessionId !== sessionId || reply.runId !== run.id
+    || orderedExtensionRequests(run)[0]?.id !== reply.requestId || guard?.epoch !== state.runEpoch
+    || guard.authority !== getRunAuthority(state.runAuthorities, sessionId)
+    || guard.activeSessionId !== state.activeSessionId) return run;
+  return reconcileInteractionSnapshot(run, new Set([reply.requestId]));
+}
+
+export function getSessionRecord<T>(records: Readonly<Record<string, T>>, sessionId: string): T | undefined {
+  return Object.hasOwn(records, sessionId) ? records[sessionId] : undefined;
+}
+
+export function getStoredRun(runs: Readonly<Record<string, AgentRunSnapshot>>, sessionId: string): AgentRunSnapshot | undefined {
+  return Object.hasOwn(runs, sessionId) ? runs[sessionId] : undefined;
+}
+interface CollectionHistory { generation: number; deleted?: RetirementFilter; retired?: RetirementFilter }
+// Workspace/reset creates a new collection and retires its runEpoch. History is
+// transient, not cached/persisted, and does not retain obsolete collections.
+const collectionHistory = new WeakMap<object, CollectionHistory>();
+const historyFor = (authorities: object): CollectionHistory => collectionHistory.get(authorities) ?? { generation: 0 };
+function retainRunAuthority(authorities: Record<string, RunAuthority>, sessionId: string, authority: RunAuthority): Record<string, RunAuthority> {
+  const entries = Object.entries(authorities).filter(([id]) => id !== sessionId);
+  let history = historyFor(authorities);
+  if (entries.length > 255) {
+    history = { ...history, generation: history.generation + 1 };
+    for (const [id, retired] of entries.slice(0, -255)) {
+      if (retired.deleted) history.deleted = rememberRetirement(history.deleted, id);
+      history.retired = mergeRetirements(history.retired, retired.retiredFilter);
+      for (const runId of [...retired.retired, ...(retired.runId ? [retired.runId] : [])]) {
+        history.retired = rememberRetirement(history.retired, JSON.stringify([id, runId]));
+      }
+    }
+  }
+  const next = Object.fromEntries([...entries.slice(-255), [sessionId, authority]]);
+  collectionHistory.set(next, history);
+  return next;
+}
+function authorityPublication(_state: SessionState, authorities: Record<string, RunAuthority>) {
+  return { runAuthorities: authorities };
+}
+const CANONICAL = Symbol('current-state discovery');
+const canonicalWitnesses = new WeakMap<object, { generation: number; sessionId: string }>();
+export function captureCanonicalRunGuard(state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId'>,
+  sessionId: string, observeActive = true): RunRequestGuard {
+  const witness = Object.freeze({});
+  canonicalWitnesses.set(witness, { generation: historyFor(state.runAuthorities).generation, sessionId });
+  return Object.freeze({ epoch: state.runEpoch, authority: getRunAuthority(state.runAuthorities, sessionId), canonical: true,
+    ...(observeActive ? { activeSessionId: state.activeSessionId } : {}), [CANONICAL]: witness });
+}
+function canonicalGeneration(guard: RunRequestGuard | undefined): number | undefined {
+  const witness = (guard as (RunRequestGuard & { [CANONICAL]?: object }) | undefined)?.[CANONICAL];
+  return guard?.canonical && witness ? canonicalWitnesses.get(witness)?.generation : undefined;
+}
+
+/** Transcript publication is not run/queue admission. A fresh canonical read
+ * may contain durable messages after later SSE for the same run has retired its
+ * captured run setter. Never grant that reply authority to reopen a run. */
+export function canSyncCanonicalSession(
+  state: Pick<SessionState, 'runEpoch' | 'runAuthorities' | 'activeSessionId' | 'runs' | 'workspace'>,
+  sessionId: string,
+  snapshot: { sessionId: string; lastSequence: number; run?: AgentRunSnapshot; session: { id: string; cwd?: string } },
+  guard: RunRequestGuard,
+  watermark: number,
+): boolean {
+  const generation = canonicalGeneration(guard);
+  const authority = getRunAuthority(state.runAuthorities, sessionId);
+  const current = getStoredRun(state.runs, sessionId);
+  const witness = (guard as RunRequestGuard & { [CANONICAL]?: object })[CANONICAL];
+  if (generation === undefined || !witness || canonicalWitnesses.get(witness)?.sessionId !== sessionId
+    || generation !== historyFor(state.runAuthorities).generation
+    || guard.epoch !== state.runEpoch || guard.activeSessionId !== state.activeSessionId
+    || authority?.deleted || snapshot.sessionId !== sessionId || snapshot.session.id !== sessionId
+    || !state.workspace || snapshot.session.cwd !== state.workspace.cwd
+    || !Number.isSafeInteger(snapshot.lastSequence)
+    || snapshot.lastSequence < Math.max(watermark, authority?.sequence ?? 0, current?.lastSequence ?? 0)) return false;
+  if (!snapshot.run) return !current && guard.authority === authority;
+  const run = snapshot.run;
+  if (run.sessionId !== sessionId || run.cwd !== state.workspace.cwd
+    || (run.workspaceId && run.workspaceId !== state.workspace.id)
+    || !Number.isSafeInteger(run.lastSequence) || run.lastSequence < 0 || run.lastSequence > snapshot.lastSequence) return false;
+  if (current) return current.id === run.id && run.lastSequence >= current.lastSequence
+    && (guard.authority === authority || guard.authority?.runId === run.id);
+  // An empty poll can retire completed work before its canonical read returns.
+  // Only its known terminal transcript is eligible; the run remains absent.
+  return authority?.terminal === true && authority.retired.includes(run.id)
+    && ['completed', 'failed', 'stopped'].includes(run.phase)
+    && (guard.authority === authority || guard.authority?.runId === run.id);
+}
+
 export interface SessionState {
   sessions: StoredSession[];
   activeSessionId: string | null;
   workspace: WorkspaceDescriptor | null;
+  workspaceUnavailable: boolean;
   recentWorkspaces: WorkspaceDescriptor[];
   runs: Record<string, AgentRunSnapshot>;
+  runAuthorities: Record<string, RunAuthority>;
+  runEpoch: number;
   drafts: Record<string, string>;
   attachments: Record<string, DraftAttachment[]>;
   createSession: (title?: string) => void;
   createRemoteSession: (title?: string) => Promise<string | undefined>;
   hydrateWorkspace: (requestedCwd?: string) => Promise<void>;
+  /** Revalidate the selected workspace without optimistic trust changes or fallback selection. */
+  refreshWorkspace: () => Promise<void>;
   setWorkspace: (workspace: WorkspaceDescriptor) => Promise<void>;
   hydrateSessions: () => Promise<void>;
   replaceSession: (localId: string, session: ApiSession) => void;
@@ -76,7 +222,8 @@ export interface SessionState {
   addMessage: (sessionId: string, message: Omit<Message, 'id' | 'timestamp'>) => void;
   upsertAssistantMessage: (sessionId: string, messageId: string, content: string, reasoning?: string) => void;
   setActiveSession: (id: string | null) => void;
-  setRun: (sessionId: string, run?: AgentRunSnapshot) => void;
+  /** Browser-local admission receipt, including accepted no-ops; not server settlement. */
+  setRun: (sessionId: string, run?: AgentRunSnapshot, guard?: RunRequestGuard) => boolean;
   setDraft: (sessionId: string, value: string) => void;
   addAttachments: (sessionId: string, attachments: DraftAttachment[]) => void;
   removeAttachment: (sessionId: string, attachmentId: string) => void;
@@ -154,6 +301,12 @@ function asDate(value: Date | string): Date {
   return value instanceof Date ? new Date(value.getTime()) : new Date(value);
 }
 
+function omitRecordKey<T>(source: Readonly<Record<string, T>>, key: string): Record<string, T> {
+  const result = { ...source };
+  delete result[key];
+  return result;
+}
+
 function normalizeRanges(ranges: LoadedMessageRange[]): LoadedMessageRange[] {
   const sorted = ranges
     .filter(range => range.end > range.start)
@@ -174,9 +327,12 @@ function storedPage(page: SessionMessagePageInfo, ranges?: LoadedMessageRange[])
   };
 }
 
+const cloneDto = structuredClone;
+
 function toStoredSession(session: ApiSession | StoredSession): StoredSession {
   const existingPage = session.messagePage as StoredMessagePage | undefined;
-  return {
+  // Accepted JSON/Date DTOs become store-owned, including unknown metadata.
+  return cloneDto({
     ...session,
     createdAt: asDate(session.createdAt),
     updatedAt: asDate(session.updatedAt),
@@ -185,7 +341,7 @@ function toStoredSession(session: ApiSession | StoredSession): StoredSession {
       commands: session.commands.map(command => ({ ...command, timestamp: asDate(command.timestamp) })),
     } : {}),
     ...(existingPage ? { messagePage: storedPage(existingPage, existingPage.loadedRanges) } : {}),
-  } as StoredSession;
+  }) as StoredSession;
 }
 
 function indexedMessages(session: StoredSession): Map<number, Message> {
@@ -213,9 +369,9 @@ function indexedMessages(session: StoredSession): Map<number, Message> {
 function mergeMessageWindow(
   session: StoredSession,
   rawMessages: SessionMessagePage['messages'],
-  page: SessionMessagePageInfo,
+  page: SessionMessagePageInfo & CacheNoticeProjection,
 ): StoredSession {
-  const hydrated = rawMessages.map(message => ({ ...message, timestamp: asDate(message.timestamp) }));
+  const hydrated = cloneDto(rawMessages).map(message => ({ ...message, timestamp: asDate(message.timestamp) }));
   const reset = !session.messagePage || page.total < session.messagePage.total;
   const indexed = reset ? new Map<number, Message>() : indexedMessages(session);
   const indexById = new Map([...indexed].map(([index, message]) => [message.id, index]));
@@ -242,6 +398,10 @@ function mergeMessageWindow(
   return {
     ...session,
     messages: entries.map(([, message]) => message),
+    cacheNotices: page.showCacheMissNotices === false ? [] : [
+      ...(reset ? [] : (session.cacheNotices ?? []).filter(notice => !hydrated.some(message => message.id === notice.afterEntryId))),
+      ...(page.cacheNotices ?? []),
+    ].filter(notice => entries.some(([, message]) => message.id === notice.afterEntryId)),
     messagePage: storedPage({
       ...page,
       start: firstIndex,
@@ -292,7 +452,10 @@ function mergeStoredSession(previous: StoredSession | undefined, remote: ApiSess
     ...base,
     messages: previous.messages,
     messagePage: previous.messagePage,
-  }, remote.messages, incoming.messagePage);
+    cacheNotices: previous.cacheNotices,
+  }, remote.messages, { ...incoming.messagePage,
+    cacheNotices: incoming.cacheNotices, showCacheMissNotices: incoming.showCacheMissNotices,
+  });
 }
 
 function workspaceDraftId(): string {
@@ -387,7 +550,7 @@ function normalizedCachedAttachments(
       encodedCharacters += item.url.length;
       return true;
     });
-    if (items.length) normalized[sessionId] = items;
+    if (items.length) Object.defineProperty(normalized, sessionId, { value: items, enumerable: true, configurable: true, writable: true });
   }
   return normalized;
 }
@@ -466,7 +629,7 @@ function writeSessionViewCache(state: SessionCacheState): void {
         : []
     )));
     const orderedAttachmentCandidates = Object.fromEntries(localDrafts.map(session => (
-      [session.id, state.attachments[session.id] ?? []]
+      [session.id, getSessionRecord(state.attachments, session.id) ?? []]
     )));
     let attachments = normalizedCachedAttachments(
       orderedAttachmentCandidates,
@@ -500,10 +663,7 @@ function writeSessionViewCache(state: SessionCacheState): void {
       const id = Object.keys(attachments).at(-1)!;
       const remaining = attachments[id]!.slice(0, -1);
       if (remaining.length) attachments = { ...attachments, [id]: remaining };
-      else {
-        const { [id]: _removed, ...rest } = attachments;
-        attachments = rest;
-      }
+      else attachments = omitRecordKey(attachments, id);
       payload = serialize();
     }
     while (exceedsBudget() && localDrafts.length > 1) {
@@ -540,12 +700,24 @@ function scheduleSessionViewCache(state: SessionCacheState): void {
 
 function readWorkspaceState(): { current?: string; recent: WorkspaceDescriptor[] } {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(WORKSPACE_STATE_KEY) || '{}') as {
+    const raw = window.localStorage.getItem(WORKSPACE_STATE_KEY) || '{}';
+    if (raw.length > 65_536) return { recent: [] };
+    const parsed = JSON.parse(raw) as {
       version?: number;
       current?: string;
       recent?: WorkspaceDescriptor[];
     };
-    if (parsed.version === 1 && Array.isArray(parsed.recent)) return { current: parsed.current, recent: parsed.recent.slice(0, 8) };
+    if (parsed.version === 1 && Array.isArray(parsed.recent)) {
+      const boundedPath = (value: unknown): value is string => typeof value === 'string'
+        && value.length > 0 && value.length <= 4_096 && !value.includes('\0');
+      const recent = parsed.recent.filter(item => item && boundedPath(item.cwd)
+        && typeof item.id === 'string' && item.id.length <= 256
+        && typeof item.name === 'string' && item.name.length <= 256).slice(0, 8)
+        .map(item => ({ id: item.id, cwd: item.cwd, name: item.name, trusted: false,
+          ...(boundedPath(item.displayPath) ? { displayPath: item.displayPath } : {}),
+        }));
+      return { ...(boundedPath(parsed.current) ? { current: parsed.current } : {}), recent };
+    }
   } catch { /* Storage is optional. */ }
   return { recent: [] };
 }
@@ -564,8 +736,11 @@ export const useSessionStore = create<AppState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   workspace: null,
+  workspaceUnavailable: false,
   recentWorkspaces: [],
   runs: {},
+  runAuthorities: {},
+  runEpoch: 0,
   drafts: {},
   attachments: {},
   providers: {
@@ -604,11 +779,28 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const stored = readWorkspaceState();
     const candidate = requestedCwd || stored.current;
     const selected = candidate ? await validateWorkspace(candidate) : await getDefaultWorkspace();
-    const fallback = !selected.success || !selected.data ? await getDefaultWorkspace() : selected;
-    if (sequence !== workspaceHydrationSequence || !fallback.success || !fallback.data) return;
+    const fallback = candidate && (!selected.success || !selected.data) ? await getDefaultWorkspace() : selected;
+    if (sequence !== workspaceHydrationSequence) return;
+    if (!fallback.success || !fallback.data) {
+      set({ workspace: null, workspaceUnavailable: true });
+      return;
+    }
     const recent = [fallback.data, ...stored.recent.filter(item => item.cwd !== fallback.data!.cwd)].slice(0, 8);
-    set({ workspace: fallback.data, recentWorkspaces: recent });
+    set({ workspace: fallback.data, workspaceUnavailable: false, recentWorkspaces: recent });
     writeWorkspaceState(fallback.data, recent);
+  },
+
+  refreshWorkspace: async () => {
+    const workspace = get().workspace;
+    if (!workspace) return;
+    const sequence = ++workspaceHydrationSequence;
+    // Only Settings requests this optional reread. Keep its implementation out
+    // of the eager chat chunk, without weakening the private workspace epoch.
+    const module = await import('./workspace-refresh').catch(() => undefined);
+    if (!module) return; // Failed optional assets publish no descriptor or cached trust.
+    await module.refreshWorkspacePresentation(workspace,
+      () => sequence === workspaceHydrationSequence && get().workspace?.cwd === workspace.cwd,
+      () => { modelCatalogRequestSequence++; skillCatalogRequestSequence++; }, writeWorkspaceState);
   },
 
   setWorkspace: async workspace => {
@@ -620,10 +812,12 @@ export const useSessionStore = create<AppState>((set, get) => ({
     const recent = [workspace, ...get().recentWorkspaces.filter(item => item.cwd !== workspace.cwd)].slice(0, 8);
     set(state => ({
       workspace,
+      workspaceUnavailable: false,
       recentWorkspaces: recent,
       activeSessionId: null,
       sessions: [],
       runs: {},
+      runEpoch: state.runEpoch + 1,
       drafts: {},
       attachments: {},
       providers: {
@@ -703,7 +897,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
       drafts: Object.fromEntries(Object.entries(state.drafts).filter(([id]) => id !== localId)),
       attachments: localId === session.id ? state.attachments : {
         ...Object.fromEntries(Object.entries(state.attachments).filter(([id]) => id !== localId)),
-        ...(state.attachments[localId] ? { [session.id]: state.attachments[localId] } : {}),
+        ...(getSessionRecord(state.attachments, localId) ? { [session.id]: getSessionRecord(state.attachments, localId)! } : {}),
       },
     };
   }),
@@ -723,9 +917,11 @@ export const useSessionStore = create<AppState>((set, get) => ({
   })),
 
   removeSession: sessionId => set(state => {
-    const { [sessionId]: _draft, ...drafts } = state.drafts;
-    const { [sessionId]: _attachments, ...attachments } = state.attachments;
-    const { [sessionId]: _run, ...runs } = state.runs;
+    const drafts = omitRecordKey(state.drafts, sessionId);
+    const attachments = omitRecordKey(state.attachments, sessionId);
+    const runs = omitRecordKey(state.runs, sessionId);
+    const previous = getStoredRun(state.runs, sessionId);
+    const prior = getRunAuthority(state.runAuthorities, sessionId);
     return {
       sessions: state.sessions.filter(session => session.id !== sessionId),
       activeSessionId: state.activeSessionId === sessionId
@@ -734,6 +930,13 @@ export const useSessionStore = create<AppState>((set, get) => ({
       drafts,
       attachments,
       runs,
+      ...authorityPublication(state, retainRunAuthority(state.runAuthorities, sessionId, {
+        sequence: prior?.sequence ?? previous?.lastSequence ?? 0,
+        terminal: true,
+        retired: [...new Set([...(prior?.retired ?? []), ...(prior?.runId ? [prior.runId] : []), ...(previous ? [previous.id] : [])])].slice(-16),
+        retiredFilter: previous ? rememberRetirement(prior?.retiredFilter, JSON.stringify([sessionId, previous.id])) : prior?.retiredFilter,
+        deleted: true,
+      })),
     };
   }),
 
@@ -793,33 +996,105 @@ export const useSessionStore = create<AppState>((set, get) => ({
       : session) : state.sessions,
   })),
 
-  setRun: (sessionId, run) => set(state => {
+  setRun: (sessionId, run, guard) => {
+    let admitted = false;
+    set(state => {
+    const authority = getRunAuthority(state.runAuthorities, sessionId);
+    if (guard && (guard.epoch !== state.runEpoch || guard.authority !== authority
+      || ('activeSessionId' in guard && guard.activeSessionId !== state.activeSessionId))) return state;
+    const previous = getStoredRun(state.runs, sessionId);
+    const history = historyFor(state.runAuthorities);
+    const canonical = canonicalGeneration(guard);
+    // Undefined can recur after eviction. Only the captured collection generation
+    // can authorize a collision-recovery read; literal canonical flags cannot.
+    if (canonical !== undefined && !guard?.authority && canonical !== history.generation) return state;
+    const sequence = Math.max(authority?.sequence ?? 0, previous?.lastSequence ?? 0);
+    if (!run && guard?.absenceSequence !== undefined
+      && (!Number.isSafeInteger(guard.absenceSequence) || guard.absenceSequence < sequence)) return state;
+    // Zero before any run is startup absence, not evidence of terminal history.
+    // Positive absence, deletion or any observed/retired run can never be pristine.
+    const pristine = !previous && !authority?.runId && !authority?.deleted
+      && !(authority?.retired.length) && sequence === 0 && (guard?.absenceSequence ?? 0) === 0
+      && (!authority || authority.pristine === true);
     if (!run) {
-      const { [sessionId]: _removed, ...runs } = state.runs;
-      return { runs };
+      const nextAuthority: RunAuthority = {
+        sequence: Math.max(sequence, guard?.absenceSequence ?? 0),
+        terminal: !pristine,
+        pristine,
+        retired: [...new Set([...(authority?.retired ?? []), ...(authority?.runId ? [authority.runId] : []), ...(previous ? [previous.id] : [])])].slice(-16),
+        retiredFilter: previous ? rememberRetirement(authority?.retiredFilter, JSON.stringify([sessionId, previous.id])) : authority?.retiredFilter,
+        deleted: authority?.deleted,
+      };
+      admitted = true;
+      if (!previous && JSON.stringify(nextAuthority) === JSON.stringify(authority)) return state;
+      return { runs: omitRecordKey(state.runs, sessionId),
+        ...authorityPublication(state, retainRunAuthority(state.runAuthorities, sessionId, nextAuthority)) };
     }
-    const previous = state.runs[sessionId];
-    if (previous?.id === run.id && previous.lastSequence > run.lastSequence) return state;
+    const observed = guard?.snapshotSequence ?? run.lastSequence;
+    if (!Number.isSafeInteger(observed) || observed < run.lastSequence) return state;
+    const priorRunId = authority?.runId ?? previous?.id;
+    if (run.sessionId !== sessionId || !Number.isSafeInteger(run.lastSequence) || run.lastSequence < 0 || authority?.deleted
+      || (state.workspace && (run.workspaceId ? run.workspaceId !== state.workspace.id : run.cwd !== state.workspace.cwd))
+      || (priorRunId === run.id ? run.lastSequence < (previous?.lastSequence ?? 0) : observed < sequence)
+      || authority?.retired.includes(run.id)
+      || (canonical === undefined && ((!authority && remembersRetirement(history.deleted, sessionId))
+        || (run.id !== previous?.id && (remembersRetirement(authority?.retiredFilter, JSON.stringify([sessionId, run.id]))
+          || remembersRetirement(history.retired, JSON.stringify([sessionId, run.id]))))))
+      || (authority && !authority.runId && !(authority.pristine && run.lastSequence === 0) && observed <= sequence)
+      || (priorRunId && priorRunId !== run.id && (canonical === undefined ? observed <= sequence : observed < sequence))) return state;
     const terminal = ['completed', 'failed', 'stopped'].includes(run.phase);
+    if (previous?.id === run.id && previous.lastSequence === run.lastSequence && !terminal) {
+      const before = orderedExtensionRequests(previous).map(request => request.id);
+      const after = orderedExtensionRequests(run).map(request => request.id);
+      if (before.length !== after.length || before.some((id, index) => id !== after[index])) {
+        const reply = guard?.[INTERACTION_REPLY] && interactionReplyWitnesses.get(guard[INTERACTION_REPLY]);
+        // Only a still-current successful HTTP response for the captured head
+        // may acknowledge precisely that closure at an unchanged run version.
+        // No snapshot flag, other removal, invented ID or reordering is admitted.
+        const expected = reply && reply.sessionId === sessionId && reply.runId === run.id && before[0] === reply.requestId
+          ? before.slice(1) : undefined;
+        if (!expected || expected.length !== after.length || expected.some((id, index) => id !== after[index])) return state;
+      }
+    }
+    if (priorRunId === run.id && (authority?.terminal || (previous && ['completed', 'failed', 'stopped'].includes(previous.phase))) && !terminal) return state;
+    const retired = [...new Set([...(authority?.retired ?? []),
+      ...(authority?.runId && authority.runId !== run.id ? [authority.runId] : [])])].slice(-16);
+    const nextAuthority: RunAuthority = {
+      sequence: Math.max(sequence, observed), runId: run.id, terminal, retired,
+      retiredFilter: priorRunId && priorRunId !== run.id
+        ? rememberRetirement(authority?.retiredFilter, JSON.stringify([sessionId, priorRunId])) : authority?.retiredFilter,
+    };
+    // Mere observations do not revoke outstanding callbacks. Retire the record
+    // only when its version/correlation/terminal/negative-history meaning changes.
+    const unchangedAuthority = JSON.stringify(nextAuthority) === JSON.stringify(authority);
+    const runAuthorities = unchangedAuthority ? state.runAuthorities
+      : retainRunAuthority(state.runAuthorities, sessionId, nextAuthority);
+    // A terminal snapshot has no dialog authority, even if a transport retained its queue.
+    const acceptedRun = terminal ? { ...run, extensionRequests: [], extensionRequest: undefined } : run;
     const previousTerminal = previous ? ['completed', 'failed', 'stopped'].includes(previous.phase) : true;
     const backgroundCompletion = terminal && !previousTerminal && state.activeSessionId !== sessionId;
+    admitted = true;
+    if (unchangedAuthority && JSON.stringify(previous) === JSON.stringify(acceptedRun)) return state;
     return {
-      runs: { ...state.runs, [sessionId]: run },
+      runs: { ...state.runs, [sessionId]: cloneDto(acceptedRun) },
+      ...authorityPublication(state, runAuthorities),
       sessions: backgroundCompletion ? state.sessions.map(session => session.id === sessionId ? {
         ...session,
         unread: true,
-        attention: run.phase === 'failed' || session.attention,
+        attention: acceptedRun.phase === 'failed' || session.attention,
       } : session) : state.sessions,
     };
-  }),
+    });
+    return admitted;
+  },
 
   setDraft: (sessionId, value) => set(state => ({ drafts: { ...state.drafts, [sessionId]: value } })),
 
   addAttachments: (sessionId, attachments) => set(state => ({
-    attachments: { ...state.attachments, [sessionId]: [...(state.attachments[sessionId] ?? []), ...attachments].slice(0, 8) },
+    attachments: { ...state.attachments, [sessionId]: [...(getSessionRecord(state.attachments, sessionId) ?? []), ...attachments].slice(0, 8) },
   })),
   removeAttachment: (sessionId, attachmentId) => set(state => ({
-    attachments: { ...state.attachments, [sessionId]: (state.attachments[sessionId] ?? []).filter(item => item.id !== attachmentId) },
+    attachments: { ...state.attachments, [sessionId]: (getSessionRecord(state.attachments, sessionId) ?? []).filter(item => item.id !== attachmentId) },
   })),
   clearAttachments: sessionId => set(state => ({ attachments: { ...state.attachments, [sessionId]: [] } })),
 
@@ -985,6 +1260,3 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('pagehide', flushSessionViewCache);
 }
-
-export const baseStore = useSessionStore;
-export const providerStore = useSessionStore;

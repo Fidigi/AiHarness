@@ -6,24 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { AiProvider } from '@ai-harness/core';
 import { AiProxyServer } from './proxy';
 
 // ===================================================================
 // Test helpers
 // ===================================================================
 
-function createMockFetchResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    text: () => Promise.resolve(typeof body === 'string' ? body : JSON.stringify(body)),
-    json: () => Promise.resolve(body),
-    body: null as ReadableStream | null,
-  } as Response;
-}
-
 function createMockReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
-  let index = 0;
   return new ReadableStream({
     start(controller) {
       for (const chunk of chunks) {
@@ -78,7 +68,7 @@ describe('AiProxyServer', () => {
   describe('getProviders()', () => {
     it('should return list of providers with configured status', () => {
       const providers = proxy.getProviders();
-      expect(providers).toHaveLength(7);
+      expect(providers).toHaveLength(9);
       expect(providers[0]).toEqual({ type: 'openai', configured: false });
       expect(providers[1]).toEqual({ type: 'anthropic', configured: false });
       expect(providers[2]).toEqual({ type: 'google', configured: false });
@@ -86,6 +76,8 @@ describe('AiProxyServer', () => {
       expect(providers[4]).toEqual({ type: 'vertex', configured: false });
       expect(providers[5]).toEqual({ type: 'bedrock', configured: false });
       expect(providers[6]).toEqual({ type: 'local', configured: false });
+      expect(providers[7]).toEqual({ type: 'github-copilot', configured: false });
+      expect(providers[8]).toEqual({ type: 'openai-codex', configured: false });
     });
 
     it('should reflect configuration status after setting keys', () => {
@@ -192,6 +184,77 @@ describe('AiProxyServer', () => {
       const result2 = await proxy.sendChatSSE('OpenAI', []);
       expect(result2.stream).toBeDefined();
     });
+  });
+
+  it('redacts raw and encoded runtime credentials from provider SSE errors', async () => {
+    const secret = 'short+runtime-secret';
+    const provider = {
+      config: { type: 'untrusted', apiKey: secret, customHeaders: { 'X-Private': 'header-secret' } },
+      validateConfig: () => true,
+      getAvailableModels: async () => [],
+      getConfiguredModel: () => 'model',
+      chat: async () => { throw new Error('unused'); },
+      streamChat: async (_messages: unknown, _chunk: unknown, _complete: unknown, onError?: (error: Error) => void) => {
+        onError?.(new Error(`failed ${secret} ${encodeURIComponent(secret)} ${Buffer.from(secret).toString('base64')} header-secret`));
+      },
+    } as unknown as AiProvider;
+    proxy.setCustomProvider('untrusted', provider);
+
+    const result = await proxy.sendChatSSE('untrusted', []);
+    const reader = result.stream.getReader();
+    let output = '';
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      output += new TextDecoder().decode(item.value);
+    }
+
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain(encodeURIComponent(secret));
+    expect(output).not.toContain(Buffer.from(secret).toString('base64'));
+    expect(output).not.toContain('header-secret');
+    expect(output).toContain('Provider request failed.');
+  });
+
+  it('redacts every encoded credential variant split across provider SSE chunks', async () => {
+    const secret = 'split+server-secret';
+    const variants = [
+      secret,
+      encodeURIComponent(secret),
+      encodeURI(secret),
+      Buffer.from(secret).toString('base64'),
+      Buffer.from(secret).toString('base64url'),
+      Buffer.from(secret).toString('hex'),
+      JSON.stringify(secret).slice(1, -1),
+    ];
+    const provider = {
+      config: { type: 'fragmented', apiKey: secret },
+      validateConfig: () => true,
+      getAvailableModels: async () => [],
+      getConfiguredModel: () => 'model',
+      chat: async () => ({ content: 'unused' }),
+      streamChat: async (_messages: unknown, onChunk: (chunk: string) => Promise<void>, onComplete?: () => void) => {
+        for (const variant of variants) {
+          const split = Math.max(1, Math.floor(variant.length / 2));
+          await onChunk(variant.slice(0, split));
+          await onChunk(`${variant.slice(split)}|`);
+        }
+        onComplete?.();
+      },
+    } as unknown as AiProvider;
+    proxy.setCustomProvider('fragmented', provider);
+
+    const result = await proxy.sendChatSSE('fragmented', []);
+    const reader = result.stream.getReader();
+    let output = '';
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      output += new TextDecoder().decode(item.value);
+    }
+
+    for (const variant of variants) expect(output).not.toContain(variant);
+    expect(output.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(variants.length);
   });
 
   describe('setApiKey()', () => {

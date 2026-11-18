@@ -3,7 +3,7 @@
 // Generates summaries of old messages to reduce context size
 // ============================================================
 
-import { Message } from '../types/index.js';
+import type { Message } from '../types/index.js';
 import type { MessageEntry, SessionEntry } from './session-manager.js';
 export type { SessionEntry } from './session-manager.js';
 
@@ -140,7 +140,7 @@ export class CompactionService {
       .filter(e => e.type === 'message')
       .map(e => ({
         id: e.id,
-        role: (e as any).role || 'user',
+        role: e.role || 'user',
         content: e.content,
         timestamp: new Date(e.timestamp),
       }));
@@ -180,7 +180,7 @@ export class CompactionService {
       keptMessages: target.keptEntries,
       tokenEstimate: TokenEstimator.totalEntries([
         ...target.keptEntries,
-        { id: 'compaction-summary', type: 'message' as const, role: 'system' as any, content: summary, timestamp: Date.now() },
+        { id: 'compaction-summary', type: 'message' as const, role: 'system' as const, content: summary, timestamp: Date.now() },
       ]),
     };
   }

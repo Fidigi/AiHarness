@@ -1,0 +1,96 @@
+npm notice run @ai-harness/server@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/websocket.test.ts packages/server/src/api/groq-http.test.ts packages/server/src/api/cerebras-http.test.ts packages/server/src/api/deepseek-http.test.ts packages/server/src/api/nvidia-http.test.ts packages/server/src/api/zai-http.test.ts packages/server/src/api/moonshot-http.test.ts packages/server/src/api/native-dialects-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/moonshot-http.test.ts > reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/moonshot-http.test.ts (2 tests) 2647ms
+   ✓ reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1262ms
+   ✓ keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart 1384ms
+stdout | packages/server/src/api/nvidia-http.test.ts > reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/nvidia-http.test.ts > reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/nvidia-http.test.ts (1 test) 1403ms
+   ✓ reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1402ms
+stdout | packages/server/src/api/zai-http.test.ts > reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/zai-http.test.ts > reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/zai-http.test.ts (1 test) 1343ms
+   ✓ reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1342ms
+stdout | packages/server/src/api/groq-http.test.ts > reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/groq-http.test.ts > reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/groq-http.test.ts (1 test) 1362ms
+   ✓ reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1361ms
+stdout | packages/server/src/api/deepseek-http.test.ts > reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/deepseek-http.test.ts > reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/deepseek-http.test.ts (1 test) 1312ms
+   ✓ reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1311ms
+stdout | packages/server/src/api/cerebras-http.test.ts > reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/cerebras-http.test.ts > reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/cerebras-http.test.ts (1 test) 1347ms
+   ✓ reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1346ms
+stdout | packages/server/src/api/native-dialects-http.test.ts > uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/native-dialects-http.test.ts > uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/native-dialects-http.test.ts (1 test) 8997ms
+   ✓ uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart 8996ms
+stdout | packages/server/src/api/websocket.test.ts > rejects retired HTTP and WebSocket chat without dispatch, retaining authentication and Origin checks
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/websocket.test.ts (1 test) 115ms
+
+ Test Files  8 passed (8)
+      Tests  9 passed (9)
+   Start at  13:13:36
+   Duration  23.15s (tests 82%, import 12%, transform 6%)

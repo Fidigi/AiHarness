@@ -1,0 +1,427 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "model": {
+    "id": "anthropic.claude-opus-4-6-v1",
+    "name": "Claude Opus 4.6",
+    "api": "bedrock-converse-stream",
+    "provider": "amazon-bedrock",
+    "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
+    "reasoning": true,
+    "input": [
+      "text",
+      "image"
+    ],
+    "cost": {
+      "input": 5.5,
+      "output": 27.5,
+      "cacheRead": 0.55,
+      "cacheWrite": 6.875
+    },
+    "contextWindow": 1000000,
+    "maxTokens": 128000,
+    "compat": {
+      "supportsStrictMode": true
+    },
+    "thinkingLevelMap": {
+      "max": "max"
+    },
+    "inputLimits": {
+      "images": {
+        "maxPerMessage": 20,
+        "resize": {
+          "maxWidth": 2000,
+          "maxHeight": 2000,
+          "maxBytes": 4718592,
+          "jpegQuality": 80
+        }
+      }
+    },
+    "type": "chat"
+  },
+  "sourceFixture": {
+    "path": "test-results/mod01-bedrock-nonnumeric-candidate-20261029/isolated-source/tests/fixtures/bedrock-reasoning-reference.json",
+    "sha256": "ed379ba9463355e2f6d1eb1814185d33b3c08b6253499402391632673e3b63aa"
+  },
+  "sourceCaptures": [
+    {
+      "path": "/app/projects/AiHarness/test-results/mod01-bedrock-entrypoint-reasoning-20261029/reference/observed.json",
+      "sha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256"
+    },
+    {
+      "path": "/tmp/aih-mod01-originals-20261027/bedrock-nonnumeric-reasoning-20261029/reference/observed.json",
+      "sha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb"
+    }
+  ],
+  "rows": [
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "off",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "off",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        }
+      },
+      "rawSource": {
+        "captureSha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256",
+        "rowIndex": 82,
+        "entrypoint": "stream",
+        "sdkReasoning": null
+      },
+      "simpleSource": {
+        "captureSha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256",
+        "rowIndex": 83,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": null
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "minimal",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "minimal",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "low"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 30,
+        "entrypoint": "stream",
+        "sdkReasoning": "minimal"
+      },
+      "simpleSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 31,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "minimal"
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "low",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "low",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "low"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 32,
+        "entrypoint": "stream",
+        "sdkReasoning": "low"
+      },
+      "simpleSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 33,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "low"
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "medium",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "medium",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "medium"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 34,
+        "entrypoint": "stream",
+        "sdkReasoning": "medium"
+      },
+      "simpleSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 35,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "medium"
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "high",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256",
+        "rowIndex": 84,
+        "entrypoint": "stream",
+        "sdkReasoning": "high"
+      },
+      "simpleSource": {
+        "captureSha256": "e35627194953d0d793c6a4fc53ffed34b0a91e120c62f40141803f9203763256",
+        "rowIndex": 85,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "high"
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "xhigh",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "xhigh",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "high"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 36,
+        "entrypoint": "stream",
+        "sdkReasoning": "xhigh"
+      },
+      "simpleSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 37,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "xhigh"
+      }
+    },
+    {
+      "model": "anthropic.claude-opus-4-6-v1",
+      "api": "bedrock-converse-stream",
+      "thinking": "max",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "max",
+        "cacheRetention": "none",
+        "systemPrompt": "owned tool system"
+      },
+      "expectedBody": {
+        "messages": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "system": [
+          {
+            "text": "owned tool system"
+          }
+        ],
+        "inferenceConfig": {
+          "maxTokens": 64,
+          "temperature": 0.7
+        },
+        "additionalModelRequestFields": {
+          "thinking": {
+            "type": "adaptive",
+            "display": "summarized"
+          },
+          "output_config": {
+            "effort": "max"
+          }
+        }
+      },
+      "rawSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 38,
+        "entrypoint": "stream",
+        "sdkReasoning": "max"
+      },
+      "simpleSource": {
+        "captureSha256": "9011dc64aee4c190e78aff09f50521669f3aaaf3b769a1d2731dc6b742dfebeb",
+        "rowIndex": 39,
+        "entrypoint": "streamSimple",
+        "sdkReasoning": "max"
+      }
+    }
+  ],
+  "limits": "Seven historical request compositions only; synthetic text-only responses do not qualify reasoning/signature lifecycle or live service semantics."
+}

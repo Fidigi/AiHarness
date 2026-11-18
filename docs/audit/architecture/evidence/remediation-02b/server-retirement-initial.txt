@@ -1,0 +1,10 @@
+npm notice run @ai-harness/server@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+src/api/websocket.ts(7,10): error TS2305: Module '"../security/request-security.js"' has no exported member 'authenticateUpgrade'.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /app/packages/server
+npm error workspace @ai-harness/server@0.1.0
+npm error location /app/packages/server
+npm error command failed
+npm error command sh -c node ../../scripts/run-typescript.mjs --noEmit

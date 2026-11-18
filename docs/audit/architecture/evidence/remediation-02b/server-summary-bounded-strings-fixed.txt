@@ -1,0 +1,19 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/summary-public-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/summary-public-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/summary-public-http.test.ts > retains the canonical two-million-byte ceiling before stripping oversized private metadata
+[Server] Request failed.
+
+ ✓ packages/server/src/api/summary-public-http.test.ts (2 tests) 930ms
+   ✓ retains the canonical two-million-byte ceiling before stripping oversized private metadata 734ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  13:37:15
+   Duration  2.80s (transform 51%, tests 34%, import 15%)

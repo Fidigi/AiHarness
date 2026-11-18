@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { GitHubCopilotProvider, type ProviderOAuthCredential, OpenAiMixedProvider, OpenAiProvider, OpenRouterProvider, CloudflareWorkersAiMixedProvider, type CustomModelDefinition } from '@ai-harness/core';
 import { AiProxyServer } from '../api/proxy.js';
 import { ModelCatalogService } from './model-catalog.js';
 
@@ -7,6 +8,26 @@ describe('ModelCatalogService', () => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('refreshes account-scoped availability without retaining stale grants on logout or discovery failure', async () => {
+    let current: ProviderOAuthCredential | undefined = { version: 1, type: 'oauth', accessToken: 'private-subscription-token', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot', availableModelIds: ['gpt-5-mini'] } };
+    const source = vi.fn(async () => current);
+    const provider = new GitHubCopilotProvider({ type: 'github-copilot', model: 'gpt-5-mini' }, source);
+    const proxy = new AiProxyServer(); proxy.setCustomProvider('account-test', provider);
+    const catalog = new ModelCatalogService(proxy);
+    const available = async () => (await catalog.getCatalog()).find(row => row.provider === 'account-test')!.models.filter(model => model.available).map(model => model.id);
+    expect(await available()).toEqual(['gpt-5-mini']);
+    current = undefined;
+    expect(await available()).toEqual([]);
+    current = { version: 1, type: 'oauth', accessToken: 'private-subscription-token', expiresAt: Date.now() + 120000,
+      subscription: { provider: 'github-copilot', availableModelIds: ['claude-fable-5'] } };
+    expect(await available()).toEqual(['claude-fable-5']);
+    source.mockRejectedValueOnce(new Error('private-credential-error'));
+    expect(await available()).toEqual([]);
+    expect(source).toHaveBeenCalledTimes(4);
+    expect(catalog.getPricing('account-test', 'claude-fable-5')).toBeUndefined();
   });
 
   it('groups published models and augments a configured provider with live discovery', async () => {
@@ -35,6 +56,134 @@ describe('ModelCatalogService', () => {
     const cachedAfterFailure = await catalog.getCatalog(true);
     expect(cachedAfterFailure.find(provider => provider.provider === 'local')?.models)
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'qwen-tool', source: 'discovered' })]));
+  });
+
+  it('joins refreshes, expires the memory cache and preserves only the same source on failure', async () => {
+    const proxy = new AiProxyServer();
+    const provider = new OpenAiProvider({ type: 'cache-test', apiKey: 'disposable', model: 'configured' });
+    let release!: (models: string[]) => void;
+    const discover = vi.spyOn(provider, 'getAvailableModels').mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    proxy.setCustomProvider('cache-test', provider);
+    const catalog = new ModelCatalogService(proxy, () => [], 300_000);
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    const first = catalog.getCatalog(), joined = catalog.getCatalog(true);
+    expect(discover).toHaveBeenCalledTimes(1);
+    release(['live']);
+    expect(await first).toEqual(await joined);
+    const cached = await catalog.getCatalog();
+    expect(discover).toHaveBeenCalledTimes(1);
+    cached.find(row => row.provider === 'cache-test')!.models[0]!.name = 'mutated';
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')!.models[0]!.name).not.toBe('mutated');
+    discover.mockRejectedValue(new Error('disposable remote failure'));
+    now.mockReturnValue(301_000);
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')?.models)
+      .toContainEqual(expect.objectContaining({ id: 'live', source: 'discovered' }));
+    expect(discover).toHaveBeenCalledTimes(4); // One successful attempt, three bounded failures.
+    await catalog.getCatalog();
+    expect(discover).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not republish a pending discovery after explicit invalidation of the same adapter', async () => {
+    const proxy = new AiProxyServer();
+    const provider = new OpenAiProvider({ type: 'cache-test', apiKey: 'disposable', model: 'configured' });
+    let release!: (models: string[]) => void;
+    const discover = vi.spyOn(provider, 'getAvailableModels').mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    proxy.setCustomProvider('cache-test', provider);
+    const catalog = new ModelCatalogService(proxy);
+    const pending = catalog.getCatalog();
+    catalog.invalidateProvider('cache-test');
+    release(['retired-live']);
+    expect((await pending).find(row => row.provider === 'cache-test')?.models.map(model => model.id)).not.toContain('retired-live');
+    discover.mockResolvedValue(['current-live']);
+    expect((await catalog.getCatalog()).find(row => row.provider === 'cache-test')?.models.map(model => model.id)).toContain('current-live');
+    expect(discover).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops old discovery on replacement even when the replacement is unreachable', async () => {
+    const proxy = new AiProxyServer();
+    const old = new OpenAiProvider({ type: 'cache-test', apiKey: 'old-disposable', model: 'old-configured' });
+    vi.spyOn(old, 'getAvailableModels').mockResolvedValue(['old-live']);
+    proxy.setCustomProvider('cache-test', old);
+    const catalog = new ModelCatalogService(proxy);
+    await catalog.getCatalog();
+    const replacement = new OpenAiProvider({ type: 'cache-test', apiKey: 'new-disposable', model: 'new-configured' });
+    vi.spyOn(replacement, 'getAvailableModels').mockRejectedValue(new Error('unreachable'));
+    proxy.setCustomProvider('cache-test', replacement);
+    const ids = (await catalog.getCatalog()).find(row => row.provider === 'cache-test')!.models.map(model => model.id);
+    expect(ids).toContain('new-configured');
+    expect(ids).not.toContain('old-live');
+    expect(ids).not.toContain('old-configured');
+  });
+
+  it('uses current adapter-owned R metadata for catalogue and runtime lookups while preserving custom overrides', async () => {
+    const fetch = vi.fn().mockRejectedValue(new Error('Unexpected network request')); vi.stubGlobal('fetch', fetch);
+    const proxy = new AiProxyServer();
+    proxy.setCustomProvider('mistral', new OpenAiMixedProvider({ type: 'mistral', apiKey: 'private-profile-token', model: 'gpt-6-luna' }));
+    const overrides: CustomModelDefinition[] = [];
+    const catalog = new ModelCatalogService(proxy, () => overrides);
+    const models = (await catalog.getCatalog()).find(provider => provider.provider === 'mistral')!.models;
+    expect(models).toHaveLength(44); expect(models.every(model => model.api === 'openai-responses')).toBe(true);
+    expect(models.find(model => model.id === 'gpt-6-luna')).toMatchObject({ name: 'GPT-6 Luna', contextWindow: 272000, maxOutputTokens: 128000 });
+    expect(catalog.getCapabilities('mistral', 'gpt-6-luna')).toEqual({ reasoning: true, imageInput: true, toolCalls: true });
+    expect(catalog.getPricing('mistral', 'gpt-6-luna')).toEqual({ inputPerMillion: 0.1, outputPerMillion: 0.5, cacheReadPerMillion: 0.01, cacheWritePerMillion: 0.125 });
+    overrides.push({ key: 'mistral:gpt-6-luna', provider: 'mistral', id: 'gpt-6-luna', name: 'Operator Luna', contextWindow: 777,
+      capabilities: { reasoning: false, imageInput: false, toolCalls: false }, pricing: { inputPerMillion: 999 }, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() });
+    expect((await catalog.getCatalog()).find(provider => provider.provider === 'mistral')?.models.find(model => model.id === 'gpt-6-luna')).toMatchObject({ name: 'Operator Luna', contextWindow: 777, pricing: { inputPerMillion: 999 } });
+    expect(catalog.getCapabilities('mistral', 'gpt-6-luna')).toEqual(overrides[0]!.capabilities); expect(catalog.getPricing('mistral', 'gpt-6-luna')).toEqual({ inputPerMillion: 999 });
+    overrides.length = 0;
+    proxy.setCustomProvider('mistral', new OpenAiProvider({ type: 'mistral', apiKey: 'private-profile-token', model: 'gpt-6-luna' }));
+    expect(catalog.getCapabilities('mistral', 'gpt-6-luna')).toEqual({ reasoning: false, imageInput: false, toolCalls: true });
+    expect(catalog.getPricing('mistral', 'gpt-6-luna')).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalled(); expect(JSON.stringify(models)).not.toContain('private-profile-token');
+  });
+
+  it.each([
+    { kind: 'OpenRouter', create: () => new OpenRouterProvider({ type: 'mistral', apiKey: 'private-profile-token' }), count: 393,
+      id: 'anthropic/claude-sonnet-4.6', name: 'Anthropic: Claude Sonnet 4.6', api: 'anthropic-messages', contextWindow: 1000000, maxOutputTokens: 128000,
+      pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 } },
+    { kind: 'Cloudflare', create: () => new CloudflareWorkersAiMixedProvider({ type: 'mistral', apiKey: 'private-profile-token', accountId: 'explicit' }), count: 18,
+      id: '@cf/google/gemma-4-26b-a4b-it', name: 'Gemma 4 26B A4B IT', api: 'openai-completions', contextWindow: 256000, maxOutputTokens: 16384,
+      pricing: { inputPerMillion: 0.1, outputPerMillion: 0.3, cacheReadPerMillion: 0.05, cacheWritePerMillion: 0 } },
+  ])('uses current $kind profile fields for static catalogue/runtime lookups with operator overrides first', async scenario => {
+    const fetch = vi.fn().mockRejectedValue(new Error('Unexpected network request')); vi.stubGlobal('fetch', fetch);
+    const proxy = new AiProxyServer(); proxy.setCustomProvider('mistral', scenario.create());
+    const overrides: CustomModelDefinition[] = [], catalog = new ModelCatalogService(proxy, () => overrides);
+    const models = (await catalog.getCatalog()).find(provider => provider.provider === 'mistral')!.models;
+    expect(models).toHaveLength(scenario.count); expect(models.find(model => model.id === scenario.id)).toMatchObject({ name: scenario.name, api: scenario.api,
+      contextWindow: scenario.contextWindow, maxOutputTokens: scenario.maxOutputTokens });
+    expect(catalog.getCapabilities('mistral', scenario.id)).toEqual({ reasoning: true, imageInput: true, toolCalls: true }); expect(catalog.getPricing('mistral', scenario.id)).toEqual(scenario.pricing);
+    if (scenario.kind === 'OpenRouter') expect(catalog.getPricing('mistral', 'openrouter/auto')).toBeUndefined();
+    overrides.push({ key: `mistral:${scenario.id}`, provider: 'mistral', id: scenario.id, name: 'Operator profile', contextWindow: 777,
+      capabilities: { reasoning: false, imageInput: false, toolCalls: false }, pricing: { inputPerMillion: 999 }, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() });
+    expect((await catalog.getCatalog()).find(provider => provider.provider === 'mistral')?.models.find(model => model.id === scenario.id)).toMatchObject({ name: 'Operator profile', contextWindow: 777 });
+    expect(catalog.getCapabilities('mistral', scenario.id)).toEqual(overrides[0]!.capabilities); expect(catalog.getPricing('mistral', scenario.id)).toEqual({ inputPerMillion: 999 });
+    expect(fetch).not.toHaveBeenCalled(); expect(JSON.stringify(models)).not.toContain('private-profile-token');
+  });
+
+  it('keeps OpenRouter refresh explicit and operator metadata independent from current personalized availability', async () => {
+    const id = 'openai/gpt-4o', headers = { 'x-tenant': 'synthetic-original' };
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ data: [{ id, top_provider: { context_length: 64000, max_completion_tokens: 9000 }, pricing: { prompt: '0.000003', completion: '0.000015' } }] }))
+      .mockResolvedValueOnce(Response.json({ data: [] })); vi.stubGlobal('fetch', fetch);
+    const proxy = new AiProxyServer(), provider = new OpenRouterProvider({ type: 'router-review', apiKey: 'synthetic-catalogue-key', customHeaders: headers });
+    proxy.setCustomProvider('router-review', provider);
+    const custom: CustomModelDefinition[] = [], catalog = new ModelCatalogService(proxy, () => custom);
+    const models = async (refresh = false) => (await catalog.getCatalog(refresh)).find(row => row.provider === 'router-review')!.models;
+    expect(await models(true)).toHaveLength(393); expect(fetch).not.toHaveBeenCalled();
+    await provider.refreshUserModels();
+    expect(await models()).toMatchObject([{ id, available: true, contextWindow: 64000, maxOutputTokens: 9000, pricing: { inputPerMillion: 3, outputPerMillion: 15 } }]);
+    custom.push({ key: `router-review:${id}`, provider: 'router-review', id, name: 'Operator metadata', contextWindow: 777,
+      capabilities: { reasoning: false, imageInput: false, toolCalls: false }, pricing: { inputPerMillion: 999 }, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() });
+    expect(await models()).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: true, contextWindow: 777, pricing: { inputPerMillion: 999 } }]);
+    headers['x-tenant'] = 'synthetic-other';
+    expect(await models()).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: false }]);
+    headers['x-tenant'] = 'synthetic-original'; await provider.refreshUserModels();
+    expect(await models(true)).toMatchObject([{ id, source: 'custom', name: 'Operator metadata', available: false }]);
+    expect(catalog.getCapabilities('router-review', id)).toEqual(custom[0]!.capabilities); expect(catalog.getPricing('router-review', id)).toEqual(custom[0]!.pricing);
+    expect(fetch).toHaveBeenCalledTimes(2); expect(fetch.mock.calls.every(([url]) => String(url) === 'https://openrouter.ai/api/v1/models/user')).toBe(true);
+    expect(JSON.stringify(await models())).not.toContain('synthetic-catalogue-key');
+    proxy.setCustomProvider('router-review', new OpenRouterProvider({ type: 'router-review', apiKey: 'synthetic-replacement' }));
+    expect(await models()).toHaveLength(393); expect(fetch).toHaveBeenCalledTimes(2);
+    expect((await models()).find(row => row.id === id)).toMatchObject({ source: 'custom', name: 'Operator metadata', available: true, contextWindow: 777 });
   });
 
   it('marks published models unavailable when their provider is not configured', async () => {

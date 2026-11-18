@@ -1,0 +1,4935 @@
+{
+  "schemaVersion": 1,
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "8d0b14426afcce841415ad2489e8f17ffc8240865bb855310ada55b3f57cfa10",
+  "catalogueSha256": {
+    "openai": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+    "azure": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727"
+  },
+  "modelProjections": 89,
+  "tieredModelProjections": 12,
+  "requests": 214,
+  "limits": "Actual pinned factories/SDK with owned in-memory successful SSE and networking disabled. Zero/base and strict input-tier threshold/above/output-only counter vectors; synthetic counts do not attest tokenization, cap/context feasibility, service acceptance, availability, invoices or free calls. This is new reference research, not qualification of an earlier source/gate or malformed-counter equivalence.",
+  "rows": [
+    {
+      "provider": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00033
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00013000000000000002
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000063
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001575
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00006500000000000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000024749999999999996
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000005825
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001165
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00034500000000000004
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000483
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00004825
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.6800207500000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 1.3600315000000003
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 4.0800332500000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000014475000000000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00000396
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 8.16024
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 16.32036
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 48.960390000000004
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000965
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 1.3600415000000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 2.7200630000000006
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 8.160066500000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 8.16024
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 16.32036
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 48.960390000000004
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000041100000000000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.054401910000000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 0.10880302000000003
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 0.32640291
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 1.0880302
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 2.1760484
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 5.4400542000000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000411
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.5440191
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 1.0880302
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 3.2640291
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0001855
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 2.7200755000000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 5.440121
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 13.6001355
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001855
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.027200755000000004
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 0.05440121000000001
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 0.136001355
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000371
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.5440151
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 1.0880242
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 2.7200271000000003
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000368
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 0.5440147999999999
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 1.0880235999999999
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 2.7200268000000003
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "case": "threshold-272000",
+      "observed": {
+        "input_tokens": 272000,
+        "output_tokens": 2,
+        "total_tokens": 272002,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271996,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272002,
+        "costUsd": 1.0880302
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "case": "above-threshold-272000",
+      "observed": {
+        "input_tokens": 272001,
+        "output_tokens": 2,
+        "total_tokens": 272003,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 271997,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272003,
+        "costUsd": 2.1760484
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "case": "output-only-272000",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 272001,
+        "total_tokens": 272012,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 272001,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 272012,
+        "costUsd": 5.4400542000000005
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000256875
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000772
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0002475
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00225
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00001815
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00030000000000000003
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000017325
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00033
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00013000000000000002
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000063
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001575
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00006500000000000001
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000041250000000000007
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000024749999999999996
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000005825
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001165
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00034500000000000004
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000029125
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000483
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000040775
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00004825
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000014475000000000001
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00000396
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000965
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00057
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000041100000000000005
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000411
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0001855
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000001855
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000371
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000368
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000742
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000256875
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000772
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0002475
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00225
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.0000315
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00001815
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.00030000000000000003
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "case": "zero",
+      "observed": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "input_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "case": "base",
+      "observed": {
+        "input_tokens": 11,
+        "output_tokens": 2,
+        "total_tokens": 13,
+        "input_tokens_details": {
+          "cached_tokens": 3,
+          "cache_write_tokens": 1
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 1,
+        "totalTokens": 13,
+        "costUsd": 0.000017325
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "deepseek-v4-pro",
+      "api": "openai-completions",
+      "case": "zero",
+      "observed": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "expected": {
+        "promptTokens": 0,
+        "completionTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    },
+    {
+      "provider": "azure",
+      "model": "deepseek-v4-pro",
+      "api": "openai-completions",
+      "case": "base",
+      "observed": {
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "total_tokens": 12,
+        "prompt_tokens_details": {
+          "cached_tokens": 3
+        }
+      },
+      "expected": {
+        "promptTokens": 7,
+        "completionTokens": 2,
+        "cacheReadTokens": 3,
+        "cacheWriteTokens": 0,
+        "totalTokens": 12,
+        "costUsd": 0.000021626000000000003
+      }
+    }
+  ]
+}

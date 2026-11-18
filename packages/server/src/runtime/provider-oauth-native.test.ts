@@ -1,0 +1,142 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it, vi } from 'vitest';
+import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
+import { ProviderRegistryService } from './provider-registry.js';
+import { ProviderOAuthService, customProviderOAuthContext } from './provider-oauth.js';
+import { AiProxyServer } from '../api/proxy.js';
+const roots: string[] = [], oauth: ProviderOAuthService[] = [], gateway = 'https://synthetic-server-issuer.test', id = 'custom-native', master = 'synthetic-native-service-master';
+const tokens = () => Response.json({ access_token: 'private-native-access', refresh_token: 'private-native-refresh', expires_in: 3600 });
+function deferred<T>() { let resolve!: (value: T) => void; return { promise: new Promise<T>(done => { resolve = done; }), resolve }; }
+afterEach(async () => { for (const service of oauth.splice(0)) service.close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+async function fixture(hold = false, closeOnPublish = false, persistent = true, issuer: 'kimi-coding' | 'openrouter' | 'anthropic' | 'meta' | 'xai' = 'kimi-coding') {
+  vi.stubEnv('KIMI_CODE_OAUTH_HOST', gateway);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'aih-native-oauth-service-')); roots.push(root); const proxy = new AiProxyServer();
+  const registry = new ProviderRegistryService(path.join(root, 'providers.json'), proxy, path.join(root, 'secrets.enc'), persistent ? master : ''); await registry.load();
+  await registry.upsertProvider({ id, name: 'Native provider', baseUrl: 'https://inference.kimi.test/coding', dialect: issuer });
+  const held = deferred<Response>(), reached = deferred<void>(), invalidate = vi.fn();
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
+    if (issuer === 'xai') {
+      if (String(url) === 'https://auth.x.ai/oauth2/device/code') return Response.json({ device_code: 'private-xai-device', user_code: 'VISIBLE-XAI', verification_uri: 'https://auth.x.ai/verify', expires_in: 600, interval: 1 });
+      expect(String(url)).toBe('https://auth.x.ai/oauth2/token'); reached.resolve(undefined); return hold ? held.promise : Response.json({ access_token: 'private-xai-access', refresh_token: 'private-xai-refresh' });
+    }
+    if (issuer === 'meta') {
+      if (String(url) === 'https://auth.meta.com/oidc/device/authorization/') return Response.json({ device_code: 'private-meta-device', user_code: 'VISIBLE-META', verification_uri: 'https://auth.meta.com/verify', expires_in: 600, interval: 1 });
+      if (String(url) === 'https://auth.meta.com/oidc/device/token/') return Response.json({ access_token: 'private-meta-identity', token_type: 'Bearer', expires_in: 3600 });
+      expect(String(url)).toBe('https://api.meta.ai/muse-code/key'); reached.resolve(undefined); return hold ? held.promise : Response.json({ api_key: 'private-meta-minted-key' });
+    }
+    if (issuer === 'anthropic') { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); reached.resolve(undefined); return hold ? held.promise : tokens(); }
+    if (issuer === 'openrouter') { expect(String(url)).toBe('https://openrouter.ai/api/v1/auth/keys'); reached.resolve(undefined); return hold ? held.promise : Response.json({ key: 'synthetic-openrouter-permanent-key' }); }
+    if (String(url).endsWith('/device_authorization')) return Response.json({ device_code: 'private-kimi-device', user_code: 'VISIBLE-CODE', verification_uri: gateway + '/verify', verification_uri_complete: gateway + '/verify?code=VISIBLE-CODE', expires_in: 600, interval: 0.001 });
+    expect(String(url)).toBe(gateway + '/api/oauth/token'); reached.resolve(undefined); return hold ? held.promise : tokens();
+  });
+  const prepare = customProviderOAuthContext(Promise.resolve({ providerRegistry: registry, modelCatalog: { invalidateProvider: invalidate } }));
+  const service = new ProviderOAuthService(proxy, () => undefined, fetcher, undefined, async (provider, signal) => {
+    const context = await prepare(provider, signal); return { ...context, publish: async credential => { const admit = await context.publish(credential); if (closeOnPublish) service.close(); return admit; } };
+  }); oauth.push(service);
+  const reader = () => new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'secrets.enc'), master) });
+  return { root, proxy, registry, service, held, reached, fetcher, reader, invalidate };
+}
+it('owns Grok Device access/refresh in the custom encrypted slot without key flattening', async () => {
+  const f = await fixture(false, false, true, 'xai'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', userCode: 'VISIBLE-XAI', verificationUri: 'https://auth.x.ai/verify' }); await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected'), { timeout: 5000 }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(4); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-xai-access', refreshToken: 'private-xai-refresh', subscription: { provider: 'xai' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-xai'); expect(f.fetcher).toHaveBeenCalledTimes(2);
+});
+it('refuses Grok browser/copy-code before issuer work and releases its pending custom owner', async () => {
+  const f = await fixture(false, false, true, 'xai'); for (const method of ['browser', 'copy-code'] as const) { await expect(f.service.start(id, undefined, method)).rejects.toMatchObject({ status: 400 }); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false); } expect(f.fetcher).not.toHaveBeenCalled();
+});
+it('retires a held Grok token on disconnect with no late secret/admission', async () => {
+  const f = await fixture(true, false, true, 'xai'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
+it('does not mount or erase a committed Grok credential returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'xai'), flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toBeUndefined(), { timeout: 5000 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-xai-access', subscription: { provider: 'xai' } });
+});
+it('owns Meta Device identity/mint in the custom encrypted slot without key flattening', async () => {
+  const f = await fixture(false, false, true, 'meta'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', userCode: 'VISIBLE-META', verificationUri: 'https://auth.meta.com/verify' }); await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected'), { timeout: 5000 }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(6); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-meta-minted-key', refreshToken: 'private-meta-identity', subscription: { provider: 'meta' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-meta'); expect(f.fetcher).toHaveBeenCalledTimes(3);
+});
+it('keeps only the SDK-validated Meta setup action public without publishing an absent minted key', async () => {
+  const f = await fixture(false, false, true, 'meta'), fetch = f.fetcher.getMockImplementation()!; f.fetcher.mockImplementation((url, init) => String(url) === 'https://api.meta.ai/muse-code/key' ? Promise.resolve(Response.json({ action_url: 'https://api.meta.ai/setup' })) : fetch(url, init)); const flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toMatchObject({ state: 'failed', error: 'Meta did not issue an API key. Complete setup at https://api.meta.ai/setup' }), { timeout: 5000 }); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined(); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-meta');
+});
+it('refuses Meta browser/copy-code before issuer work and releases the pending owner', async () => {
+  const f = await fixture(false, false, true, 'meta'); for (const method of ['browser', 'copy-code'] as const) { await expect(f.service.start(id, undefined, method)).rejects.toMatchObject({ status: 400 }); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false); } expect(f.fetcher).not.toHaveBeenCalled();
+});
+it('retires a held Meta mint on disconnect with no late secret/admission', async () => {
+  const f = await fixture(true, false, true, 'meta'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
+it('does not mount or erase a committed Meta credential returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'meta'), flow = await f.service.start(id); await vi.waitFor(() => expect(f.service.get(flow.id)).toBeUndefined(), { timeout: 5000 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ accessToken: 'private-meta-minted-key', subscription: { provider: 'meta' } });
+});
+it.each(['browser', 'copy-code'] as const)('owns native Anthropic %s PKCE in the custom encrypted slot with retryable invalid input', async method => {
+  const f = await fixture(false, false, true, 'anthropic'), flow = await f.service.start(id, undefined, method), authorization = new URL(flow.authorizationUrl!); expect(authorization.origin + authorization.pathname).toBe('https://claude.ai/oauth/authorize'); expect(f.fetcher).not.toHaveBeenCalled(); const callback = authorization.searchParams.get('redirect_uri')!, state = authorization.searchParams.get('state'); expect(callback).toBe(method === 'browser' ? 'http://localhost:53692/callback' : 'https://platform.claude.com/oauth/code/callback');
+  await expect(f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=wrong' : 'synthetic-code#wrong')).rejects.toMatchObject({ status: 400 }); expect(f.service.get(flow.id)?.state).toBe('pending'); expect(f.fetcher).not.toHaveBeenCalled(); expect(await f.service.redirect(flow.id, method === 'browser' ? callback + '?code=synthetic-code&state=' + state : 'synthetic-code#' + state)).toMatchObject({ state: 'connected' }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(17); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toMatchObject({ subscription: { provider: 'anthropic' } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined(); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('private-native-access');
+});
+it('refuses Anthropic device mode before issuer work and releases its pending custom owner', async () => {
+  const f = await fixture(false, false, true, 'anthropic'); await expect(f.service.start(id)).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('retires a held native Anthropic token exchange on disconnect with no late publication or admission', async () => {
+  const f = await fixture(true, false, true, 'anthropic'), flow = await f.service.start(id, undefined, 'copy-code'), state = new URL(flow.authorizationUrl!).searchParams.get('state'), pending = f.service.redirect(flow.id, 'synthetic-code#' + state).catch(error => error); await f.reached.promise; await f.registry.disconnect(id); expect(await pending).toMatchObject({ status: 409 }); const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled(); const reader = f.reader(); await reader.load(); expect(reader.readStoredCredential(id)).toBeUndefined();
+});
+it('owns native OpenRouter full-paste PKCE without state and stores a permanent API key in the custom slot', async () => {
+  const f = await fixture(false, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), authorization = new URL(flow.authorizationUrl!);
+  expect(authorization.origin + authorization.pathname).toBe('https://openrouter.ai/auth'); expect(authorization.searchParams.has('state')).toBe(false); expect(f.fetcher).not.toHaveBeenCalled();
+  const callback = authorization.searchParams.get('callback_url')!; await expect(f.service.redirect(flow.id, callback + '-wrong?code=synthetic-code')).rejects.toMatchObject({ status: 400 }); expect(f.service.get(flow.id)?.state).toBe('pending');
+  expect(await f.service.redirect(flow.id, callback + '?code=synthetic-code')).toMatchObject({ provider: id, state: 'connected' }); expect(f.invalidate).toHaveBeenCalledOnce(); expect(f.fetcher).toHaveBeenCalledOnce();
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {} }))?.credential).toEqual({ version: 1, type: 'api-key', apiKey: 'synthetic-openrouter-permanent-key' }); expect(reader.list()).toMatchObject([{ refreshable: false }]);
+  expect(JSON.stringify(f.service.get(flow.id))).not.toContain('synthetic-code'); expect(JSON.stringify(f.service.get(flow.id))).not.toContain('synthetic-openrouter-permanent-key'); expect(f.proxy.isConfigured(id)).toBe(true);
+});
+it('refuses OpenRouter device method before issuer traffic and releases its pending owner', async () => {
+  const f = await fixture(false, false, true, 'openrouter'); await expect(f.service.start(id)).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('retires a held OpenRouter key response on disconnect without late publication or admission', async () => {
+  const f = await fixture(true, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), callback = new URL(flow.authorizationUrl!).searchParams.get('callback_url')!;
+  const pending = f.service.redirect(flow.id, callback + '?code=synthetic-code').catch(error => error); await f.reached.promise; await f.registry.disconnect(id); expect(await pending).toMatchObject({ status: 409 });
+  const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled();
+  const reader = f.reader(); await reader.load(); expect(await reader.resolve(id, { env: {} })).toBeUndefined();
+});
+it('does not mount or erase a committed OpenRouter key returned to a retired service owner', async () => {
+  const f = await fixture(false, true, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), callback = new URL(flow.authorizationUrl!).searchParams.get('callback_url')!;
+  await expect(f.service.redirect(flow.id, callback + '?code=synthetic-code')).rejects.toMatchObject({ status: 409 }); expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled();
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {} }))?.credential).toMatchObject({ type: 'api-key', apiKey: 'synthetic-openrouter-permanent-key' });
+});
+it('uses native Kimi device login in the same custom slot without borrowing the inference endpoint as issuer', async () => {
+  const f = await fixture(false, false, true, 'kimi-coding'), flow = await f.service.start(id); expect(flow).toMatchObject({ state: 'pending', provider: id, userCode: 'VISIBLE-CODE' });
+  await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('connected')); expect(f.proxy.getAgentProvider(id)!.getPublishedModels?.()).toHaveLength(4); expect(f.invalidate).toHaveBeenCalledWith(id);
+  expect(f.fetcher.mock.calls.map(call => call[0])).toEqual([gateway + '/api/oauth/device_authorization', gateway + '/api/oauth/token']);
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' }))?.credential).toMatchObject({ subscription: { provider: 'kimi-coding', oauthHost: gateway } }); expect(await reader.resolve(id, { env: {} })).toBeUndefined();
+});
+it('refuses native Kimi browser mode before issuer requests and releases the pending owner', async () => {
+  const f = await fixture(false, false, true, 'kimi-coding'); await expect(f.service.start(id, undefined, 'browser')).rejects.toMatchObject({ status: 400 }); expect(f.fetcher).not.toHaveBeenCalled(); expect(f.registry.hasPendingNativeOAuth(id)).toBe(false);
+});
+it('releases a held Kimi device-token response on disconnect without a late secret or native mount', async () => {
+  const f = await fixture(true, false, true, 'kimi-coding'), flow = await f.service.start(id); await f.reached.promise; await f.registry.disconnect(id);
+  const cancel = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.service.get(flow.id)?.state).toBe('cancelled'); expect(f.proxy.isConfigured(id)).toBe(false);
+  const reader = f.reader(); await reader.load(); expect(await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' })).toBeUndefined(); expect(f.invalidate).not.toHaveBeenCalled();
+});
+it('requires the custom encrypted store before native issuer work', async () => {
+  const f = await fixture(false, false, false); await expect(f.service.start(id)).rejects.toMatchObject({ status: 409 }); expect(f.fetcher).not.toHaveBeenCalled();
+});
+it('does not retire an existing browser flow for a pre-aborted replacement request', async () => {
+  const f = await fixture(false, false, true, 'openrouter'), flow = await f.service.start(id, undefined, 'browser'), caller = new AbortController(); caller.abort();
+  await expect(f.service.start(id, caller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(f.service.get(flow.id)?.state).toBe('pending'); expect(f.fetcher).not.toHaveBeenCalled();
+});
+it.each(['replace', 'disconnect', 'shutdown'] as const)('retires a held native token response on %s without a late encrypted grant or mount', async action => {
+  const f = await fixture(true), flow = await f.service.start(id); await f.reached.promise;
+  if (action === 'replace') await f.registry.upsertProvider({ apiKey: 'private-replacement' }, id);
+  else if (action === 'disconnect') await f.registry.disconnect(id); else f.service.close();
+  if (action !== 'shutdown') await vi.waitFor(() => expect(f.service.get(flow.id)?.state).toBe('cancelled'));
+  const cancelled = vi.fn(); f.held.resolve(new Response(new ReadableStream({ cancel: cancelled }))); await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  const reader = f.reader(); await reader.load(); expect(await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' })).toBeUndefined(); expect(f.registry.hasNativeOAuth(id)).toBe(false);
+  expect(f.proxy.isConfigured(id)).toBe(action === 'replace'); expect(f.invalidate).not.toHaveBeenCalled();
+});
+it('cancels the initial native device request and abandons its late body without publishing a flow', async () => {
+  const f = await fixture(), caller = new AbortController(), held = deferred<Response>(), reached = deferred<void>(), cancel = vi.fn();
+  f.fetcher.mockImplementationOnce(() => { reached.resolve(undefined); return held.promise; });
+  const pending = f.service.start(id, caller.signal).catch(error => error); await reached.promise; caller.abort(); expect(await pending).toBeInstanceOf(Error);
+  held.resolve(new Response(new ReadableStream({ cancel }))); await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce()); expect(f.registry.hasNativeOAuth(id)).toBe(false);
+});
+it('does not mount after an already committed native grant returns to a retired OAuth owner', async () => {
+  const f = await fixture(false, true); await f.service.start(id);
+  await vi.waitFor(() => expect(f.registry.hasNativeOAuth(id)).toBe(true), { timeout: 5000 });
+  expect(f.proxy.isConfigured(id)).toBe(false); expect(f.invalidate).not.toHaveBeenCalled();
+  const reader = f.reader(); await reader.load(); expect((await reader.resolve(id, { env: {}, subscriptionProvider: 'kimi-coding' }))?.credential).toMatchObject({ accessToken: 'private-native-access' });
+});

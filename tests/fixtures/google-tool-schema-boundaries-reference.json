@@ -1,0 +1,5964 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "53b5cc7a8c669fd79d832d21c4ebbb29daf4f34044a9839c46a6886045c7dfa2",
+  "catalogueSha256": {
+    "google": "64bdd2563cee0e3598aec4d93a6735c189b6d7d14b9c03f061cc2824f3730528",
+    "google-vertex": "96ecc19bf20a706f99ae658b021a0ee5438146119e1e99de5fd824a01fcfd81b"
+  },
+  "modelProjections": 2,
+  "schemaCases": 34,
+  "vectors": 136,
+  "requests": 76,
+  "pretransportErrors": 60,
+  "rows": [
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/nested-optional-object-array/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                }
+              },
+              "list": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "n": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "x"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "list": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "n": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "n"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "nested",
+                    "list"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/nested-optional-object-array/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                }
+              },
+              "list": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "n": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "x"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "list": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "n": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "n"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "nested",
+                    "list"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/nullable-scalars/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "b": {
+                "enum": [
+                  "a",
+                  null
+                ]
+              },
+              "c": {
+                "const": null
+              },
+              "d": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "b": {
+                      "enum": [
+                        "a",
+                        null
+                      ]
+                    },
+                    "c": {
+                      "const": null
+                    },
+                    "d": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/nullable-scalars/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "b": {
+                "enum": [
+                  "a",
+                  null
+                ]
+              },
+              "c": {
+                "const": null
+              },
+              "d": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "b": {
+                      "enum": [
+                        "a",
+                        null
+                      ]
+                    },
+                    "c": {
+                      "const": null
+                    },
+                    "d": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/empty-object/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "required": [],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/empty-object/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "required": [],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/scalar-union-and-constraints/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "anyOf": [
+                  {
+                    "const": "a"
+                  },
+                  {
+                    "const": "b"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "anyOf": [
+                        {
+                          "const": "a"
+                        },
+                        {
+                          "const": "b"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/scalar-union-and-constraints/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "anyOf": [
+                  {
+                    "const": "a"
+                  },
+                  {
+                    "const": "b"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "anyOf": [
+                        {
+                          "const": "a"
+                        },
+                        {
+                          "const": "b"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unknown-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "missing"
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "missing"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unknown-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "missing"
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-array-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": "x"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": "x"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-array-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": "x"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-string-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              1
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    1
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-string-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              1
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-object-properties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": []
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": []
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-object-properties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": []
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/properties-without-object-type/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/properties-without-object-type/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/additional-properties-true/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/additional-properties-true/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/additional-properties-schema/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/additional-properties-schema/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/tuple-items/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": [
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/tuple-items/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/boolean-schema-child/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": false
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": false
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/boolean-schema-child/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": false
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/empty-anyof/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": []
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": []
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/empty-anyof/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": []
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-array-anyof/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": {}
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": {}
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-array-anyof/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": {}
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/structured-anyof-array/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/structured-anyof-array/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/structured-anyof-object/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/structured-anyof-object/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-object-root/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "string"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/non-object-root/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "string"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-$ref/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$ref": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "$ref": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-$ref/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$ref": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-$defs/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$defs": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "$defs": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-$defs/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$defs": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-definitions/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "definitions": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "definitions": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-definitions/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "definitions": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-allOf/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "allOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "allOf": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-allOf/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "allOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-oneOf/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "oneOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "oneOf": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-oneOf/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "oneOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-patternProperties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "patternProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "patternProperties": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-patternProperties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "patternProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-dependentSchemas/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependentSchemas": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "dependentSchemas": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-dependentSchemas/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependentSchemas": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-dependencies/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependencies": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "dependencies": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-dependencies/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependencies": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-unevaluatedProperties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "unevaluatedProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "unevaluatedProperties": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-unevaluatedProperties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "unevaluatedProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-propertyNames/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "propertyNames": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "propertyNames": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-propertyNames/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "propertyNames": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-contains/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "contains": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "contains": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-contains/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "contains": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-prefixItems/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "prefixItems": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "prefixItems": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-prefixItems/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "prefixItems": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-not/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "not": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "not": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-not/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "not": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-if/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "if": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "if": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-if/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "if": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-then/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "then": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "then": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-then/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "then": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-else/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "else": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "else": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "boundary/unsupported-else/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "else": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/nested-optional-object-array/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                }
+              },
+              "list": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "n": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "x"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "list": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "n": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "n"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "nested",
+                    "list"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/nested-optional-object-array/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "nested": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string"
+                  }
+                }
+              },
+              "list": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "n": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "nested": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "x"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "list": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "n": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "n"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "nested",
+                    "list"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/nullable-scalars/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "b": {
+                "enum": [
+                  "a",
+                  null
+                ]
+              },
+              "c": {
+                "const": null
+              },
+              "d": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "b": {
+                      "enum": [
+                        "a",
+                        null
+                      ]
+                    },
+                    "c": {
+                      "const": null
+                    },
+                    "d": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/nullable-scalars/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "b": {
+                "enum": [
+                  "a",
+                  null
+                ]
+              },
+              "c": {
+                "const": null
+              },
+              "d": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "b": {
+                      "enum": [
+                        "a",
+                        null
+                      ]
+                    },
+                    "c": {
+                      "const": null
+                    },
+                    "d": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "a",
+                    "b",
+                    "c",
+                    "d"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/empty-object/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "required": [],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/empty-object/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "required": [],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/scalar-union-and-constraints/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "anyOf": [
+                  {
+                    "const": "a"
+                  },
+                  {
+                    "const": "b"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "anyOf": [
+                        {
+                          "const": "a"
+                        },
+                        {
+                          "const": "b"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/scalar-union-and-constraints/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "tag": {
+                "anyOf": [
+                  {
+                    "const": "a"
+                  },
+                  {
+                    "const": "b"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              }
+            },
+            "required": [
+              "tag"
+            ],
+            "additionalProperties": false
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "anyOf": [
+                        {
+                          "const": "a"
+                        },
+                        {
+                          "const": "b"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tag",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "VALIDATED"
+          }
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unknown-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "missing"
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "missing"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unknown-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "missing"
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-array-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": "x"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": "x"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-array-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": "x"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-string-required/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              1
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    1
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-string-required/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "required": [
+              1
+            ]
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-object-properties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": []
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": []
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-object-properties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": []
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/properties-without-object-type/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/properties-without-object-type/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/additional-properties-true/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/additional-properties-true/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": true
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/additional-properties-schema/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/additional-properties-schema/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/tuple-items/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "list": {
+                      "type": "array",
+                      "items": [
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/tuple-items/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "list": {
+                "type": "array",
+                "items": [
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/boolean-schema-child/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": false
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": false
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/boolean-schema-child/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": false
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/empty-anyof/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": []
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": []
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/empty-anyof/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": []
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-array-anyof/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": {}
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": {}
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-array-anyof/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": {}
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/structured-anyof-array/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/structured-anyof-array/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/structured-anyof-object/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/structured-anyof-object/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-object-root/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "string"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/non-object-root/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "string"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-$ref/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$ref": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "$ref": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-$ref/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$ref": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-$defs/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$defs": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "$defs": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-$defs/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "$defs": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-definitions/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "definitions": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "definitions": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-definitions/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "definitions": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-allOf/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "allOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "allOf": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-allOf/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "allOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-oneOf/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "oneOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "oneOf": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-oneOf/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "oneOf": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-patternProperties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "patternProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "patternProperties": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-patternProperties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "patternProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-dependentSchemas/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependentSchemas": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "dependentSchemas": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-dependentSchemas/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependentSchemas": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-dependencies/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependencies": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "dependencies": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-dependencies/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "dependencies": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-unevaluatedProperties/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "unevaluatedProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "unevaluatedProperties": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-unevaluatedProperties/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "unevaluatedProperties": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-propertyNames/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "propertyNames": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "propertyNames": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-propertyNames/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "propertyNames": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-contains/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "contains": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "contains": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-contains/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "contains": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-prefixItems/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "prefixItems": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "prefixItems": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-prefixItems/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "prefixItems": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-not/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "not": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "not": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-not/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "not": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-if/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "if": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "if": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-if/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "if": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-then/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "then": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "then": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-then/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "then": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-else/prefer",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "else": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "prefer"
+          }
+        }
+      ],
+      "refused": false,
+      "wire": {
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "echo",
+                "description": "Echo",
+                "parametersJsonSchema": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "else": "owned-runtime-control"
+                }
+              }
+            ]
+          }
+        ],
+        "toolConfig": null
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "boundary/unsupported-else/require",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "string"
+              }
+            },
+            "else": "owned-runtime-control"
+          },
+          "constrainedSampling": {
+            "type": "json_schema",
+            "strict": "require"
+          }
+        }
+      ],
+      "refused": true,
+      "wire": null
+    }
+  ],
+  "limits": "Actual SDK runtime JSON-schema/control probes, not a TypeBox TSchema typed-input certificate. Two strict-capable owned scope/model projections; independent 420-vector/35-profile activation/choice capture remains separate. Covers optional nested objects/arrays, null variants, root/required/properties/additionalProperties/tuple/union shapes and sixteen unsupported keywords. No strict-service/schema acceptance, grammar/tools lifecycle/context/media/replay, SDK API-key/Core Bearer/ADC, live account/invoice/TLS or token/cap feasibility certificate."
+}

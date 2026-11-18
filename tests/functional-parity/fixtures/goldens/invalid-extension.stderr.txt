@@ -1,0 +1,1 @@
+Extension <FIXTURES>/extensions/invalid-extension.mjs: Extension module must export a default factory function

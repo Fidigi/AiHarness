@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
+import { useSidebarOrganisation } from '../hooks/useSidebarOrganisation';
+import { organisedSessions, organisationMessages, sidebarFamilyId } from './sidebar-organisation';
+import SidebarProjects from './SidebarProjects';
+import '../sidebar.css';
 import type { SessionSearchResult } from '../services/api';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   autoNameSession,
   browseWorkspace,
+  createWorkspaceDirectory,
   createWorktree,
   deleteSession,
+  getFileManagerAvailability,
   listWorktrees,
+  openWorkspaceInFileManager,
   removeWorktree,
   searchSessions,
   setWorkspaceTrust,
@@ -16,14 +23,24 @@ import {
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import { useSessionStore } from '../store/session-store';
 import LanguageSelector from './LanguageSelector';
+import { linkedDirectoryMessages } from './linked-directory-messages';
+import { workspaceFeedback } from './workspace-feedback';
+import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
+import { isPlainLinkActivation, projectLinkTo, SessionLink, sessionLinkTo, type SessionContextMenuHook } from './session-links';
+import { sessionLinkMessages } from './session-link-messages';
+
+const SessionRowCopyMenu = lazy(() => import('./SessionRowCopyMenu'));
 
 interface SidebarProps {
   isOpen: boolean;
   modal?: boolean;
   inactive?: boolean;
   onRequestClose?: () => void;
+  /** Host presentation hook only; default native context menus remain intact. */
+  onSessionContextMenu?: SessionContextMenuHook;
 }
 
 function relativeDate(value: Date, locale: string): string {
@@ -55,11 +72,17 @@ function sessionIdFromPathname(pathname: string): string | undefined {
   }
 }
 
-function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: SidebarProps) {
+function operationTrusted(workspace: WorkspaceDescriptor): boolean {
+  return workspace.operationTrusted ?? workspace.trusted;
+}
+
+function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSessionContextMenu }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
   const sessions = useSessionStore(state => state.sessions);
   const workspace = useSessionStore(state => state.workspace);
+  const workspaceUnavailable = useSessionStore(state => state.workspaceUnavailable);
   const recentWorkspaces = useSessionStore(state => state.recentWorkspaces);
   const runs = useSessionStore(state => state.runs);
   const providers = useSessionStore(state => state.providers);
@@ -70,10 +93,23 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const renameLocal = useSessionStore(state => state.renameSession);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const { t, locale } = useI18n();
+  const feedback = workspaceFeedback(locale);
+  const linkMessages = sessionLinkMessages(locale);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string }>();
+  const linkedDirectoryOpen = Boolean(linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
+    && linkedDirectoryNavigation === linkedDirectoryRequest.navigation && (isOpen || !modal) && !inactive);
+  useEffect(() => { setLinkedDirectoryRequest(undefined); }, [workspace?.cwd, linkedDirectoryNavigation, isOpen, inactive]);
   const [pathInput, setPathInput] = useState('');
   const [directories, setDirectories] = useState<Array<{ name: string; path: string }>>([]);
   const [parent, setParent] = useState<string>();
+  const [browseTruncated, setBrowseTruncated] = useState(false);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [folderName, setFolderName] = useState('');
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [folderError, setFolderError] = useState('');
+  const [fileManagerAvailable, setFileManagerAvailable] = useState(false);
+  const [fileManagerOpening, setFileManagerOpening] = useState(false);
   const [error, setError] = useState('');
   const [renaming, setRenaming] = useState<string>();
   const [renameValue, setRenameValue] = useState('');
@@ -88,14 +124,30 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   const sidebarRef = useRef<HTMLElement>(null);
   const trustDialogRef = useRef<HTMLElement>(null);
   const pickerDialogRef = useRef<HTMLElement>(null);
+  const createFolderDialogRef = useRef<HTMLElement>(null);
   const browseSequence = useRef(0);
   const autoNameAbortRef = useRef<AbortController | undefined>(undefined);
 
   const query = useMemo(() => workspace ? `?cwd=${encodeURIComponent(workspace.cwd)}` : '', [workspace]);
   const selectedSessionId = sessionIdFromPathname(location.pathname) ?? activeSessionId;
-  useFocusTrap(modal && !pendingWorkspace && !pickerOpen, sidebarRef, () => onRequestClose?.());
+  const organisation = useSidebarOrganisation(!inactive && (!modal || isOpen));
+  const organisationCopy = organisationMessages(locale);
+  const [manageFamilies, setManageFamilies] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedFamilies, setSelectedFamilies] = useState<string[]>([]);
+  useEffect(() => { setSelectedFamilies([]); }, [workspace?.cwd, organisation.state?.revision]);
+  const visibleSessions = organisedSessions(sessions, runs, organisation.state, includeArchived, selectedSessionId ?? undefined);
+  const familyState = new Map(organisation.state?.families.map(item => [item.id, item]));
+  const projects = [...new Set([
+    ...(organisation.state?.projects.map(item => item.cwd) ?? []),
+    ...(workspace ? [workspace.cwd] : []), ...recentWorkspaces.map(item => item.cwd),
+  ])].slice(0, 256).map(cwd => ({ cwd, name: organisation.state?.projects.find(item => item.cwd === cwd)?.name
+    ?? [workspace, ...recentWorkspaces].find(item => item?.cwd === cwd)?.name ?? cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd }));
+  useEscapeLayer(Boolean(renaming), 'menu', () => { setRenaming(undefined); }, sidebarRef);
+  useFocusTrap(modal && !pendingWorkspace && !pickerOpen && !linkedDirectoryOpen, sidebarRef, () => onRequestClose?.());
   useFocusTrap(Boolean(pendingWorkspace), trustDialogRef, () => setPendingWorkspace(undefined));
-  useFocusTrap(pickerOpen, pickerDialogRef, () => setPickerOpen(false));
+  useFocusTrap(pickerOpen && !createFolderOpen && !linkedDirectoryOpen, pickerDialogRef, () => setPickerOpen(false));
+  useFocusTrap(createFolderOpen, createFolderDialogRef, () => setCreateFolderOpen(false));
 
   useEffect(() => {
     autoNameAbortRef.current?.abort();
@@ -103,6 +155,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     setAutoNaming(undefined);
     return () => autoNameAbortRef.current?.abort();
   }, [workspace?.id]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getFileManagerAvailability(controller.signal).then(result => {
+      if (!controller.signal.aborted) setFileManagerAvailable(Boolean(result.success && result.data?.available));
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (search.trim().length < 2) {
@@ -127,7 +187,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
   }, [search, workspace?.cwd]);
 
   useEffect(() => {
-    if (!workspace?.git) {
+    if (!workspace?.git || !operationTrusted(workspace)) {
       setWorktrees([]);
       return;
     }
@@ -145,7 +205,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     if (id) navigate(`/chat/${encodeURIComponent(id)}${query}`);
   };
 
-  const openSession = (id: string) => navigate(`/chat/${encodeURIComponent(id)}${query}`);
+  const closeOnPlainLink = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isPlainLinkActivation(event)) onRequestClose?.();
+  };
 
   const browse = async (target?: string) => {
     const sequence = ++browseSequence.current;
@@ -158,6 +220,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     }
     setPathInput(result.data.cwd);
     setParent(result.data.parent);
+    setBrowseTruncated(Boolean(result.data.truncated));
     setDirectories(result.data.entries.filter(entry => entry.isDirectory).map(entry => ({
       name: entry.name,
       path: entry.path,
@@ -178,7 +241,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       setError(result.error || t('workspace.invalid'));
       return;
     }
-    if (!result.data.trusted) {
+    if (!operationTrusted(result.data)) {
       setPickerOpen(false);
       setPendingWorkspace(result.data);
       return;
@@ -190,17 +253,28 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     if (!pendingWorkspace) return;
     setError('');
     const trust = await setWorkspaceTrust(pendingWorkspace.cwd, true);
-    if (!trust.success) {
+    if (!trust.success || !(trust.data?.operationTrusted ?? trust.data?.trusted)) {
       setError(trust.error || t('workspace.trustFailed'));
       return;
     }
-    await activateWorkspace({ ...pendingWorkspace, trusted: true });
+    // The pre-trust descriptor deliberately omits Git metadata. Reread it
+    // instead of inventing a trusted descriptor that loses worktree navigation.
+    const refreshed = await validateWorkspace(pendingWorkspace.cwd);
+    if (!refreshed.success || !refreshed.data || !operationTrusted(refreshed.data)) {
+      setError(refreshed.error || t('workspace.trustFailed'));
+      return;
+    }
+    await activateWorkspace(refreshed.data);
   };
 
   const switchWorktree = async (cwd: string) => {
     const result = await validateWorkspace(cwd);
     if (!result.success || !result.data) {
       setError(result.error || t('workspace.invalid'));
+      return;
+    }
+    if (!operationTrusted(result.data)) {
+      setPendingWorkspace(result.data);
       return;
     }
     await setWorkspace(result.data);
@@ -216,7 +290,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
     }
     const created = result.data;
     setWorktreeOpen(false);
-    if (!created.trusted) {
+    if (!operationTrusted(created)) {
       setPendingWorkspace(created);
       return;
     }
@@ -225,9 +299,38 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
   const removeTree = async (tree: GitWorktree) => {
     if (!workspace || !window.confirm(t('workspace.worktreeDeleteConfirmation', { path: tree.path }))) return;
-    const result = await removeWorktree(workspace.cwd, tree.path);
+    let result = await removeWorktree(workspace.cwd, tree.path);
+    if (!result.success && result.code === 'force-required') {
+      if (!window.confirm(t('workspace.worktreeForceConfirmation', { path: tree.path }))) return;
+      result = await removeWorktree(workspace.cwd, tree.path, true);
+    }
     if (!result.success) setError(result.error || t('workspace.worktreeDeleteFailed'));
     else setWorktrees(items => items.filter(item => item.path !== tree.path));
+  };
+
+  const createFolder = async () => {
+    const name = folderName.trim();
+    if (!name || folderCreating) return;
+    setFolderCreating(true);
+    setFolderError('');
+    const result = await createWorkspaceDirectory(pathInput, name);
+    setFolderCreating(false);
+    if (!result.success || !result.data) {
+      setFolderError(t('workspace.folderCreateFailed'));
+      return;
+    }
+    setCreateFolderOpen(false);
+    setFolderName('');
+    await browse(result.data.path);
+  };
+
+  const openFileManager = async () => {
+    if (!workspace || fileManagerOpening) return;
+    setFileManagerOpening(true);
+    setError('');
+    const result = await openWorkspaceInFileManager(workspace.cwd);
+    setFileManagerOpening(false);
+    if (!result.success) setError(t('workspace.fileManagerFailed'));
   };
 
   const commitRename = async (id: string) => {
@@ -301,15 +404,31 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
 
       <section className="workspace-selector">
         <span className="workspace-label">{t('workspace.label')}</span>
-        <button className="workspace-button" onClick={() => {
-          setPathInput(workspace?.cwd ?? '');
-          setPickerOpen(true);
-          void browse(workspace?.cwd);
-        }} title={workspace?.cwd}>
-          <span>{workspace?.name ?? t('workspace.loading')}</span>
-          <small>{workspace?.git?.branch ?? workspace?.cwd ?? ''}</small>
-        </button>
-        {workspace && !workspace.trusted && (
+        <div className="workspace-control">
+          <button className="workspace-button" onClick={() => {
+            setPathInput(workspace?.cwd ?? '');
+            setPickerOpen(true);
+            void browse(workspace?.cwd);
+          }} title={workspace?.cwd}>
+            <span>{projects.find(item => item.cwd === workspace?.cwd)?.name ?? workspace?.name ?? t(workspaceUnavailable ? 'workspace.choose' : 'workspace.loading')}</span>
+            <small>{workspace?.git?.branch ?? workspace?.displayPath ?? workspace?.cwd ?? ''}</small>
+          </button>
+          {workspace && <Link className="workspace-new-tab" to={projectLinkTo(workspace.cwd)}
+            target="_blank" rel="noopener noreferrer" title={linkMessages.projectTab}
+            aria-label={linkMessages.projectTab}>↗</Link>}
+          {workspace && fileManagerAvailable && (
+            <button className="workspace-file-manager" disabled={fileManagerOpening}
+              onClick={() => void openFileManager()} title={t('workspace.fileManager')}
+              aria-label={t('workspace.fileManager')}>
+              {fileManagerOpening ? '…' : '↗'}
+            </button>
+          )}
+        </div>
+        {workspaceUnavailable && <p role="alert">{feedback.unavailable}</p>}
+        {workspace && <button className="workspace-linked-directories" onClick={() => setLinkedDirectoryRequest({ cwd: workspace.cwd, navigation: linkedDirectoryNavigation })}>
+          {linkedDirectoryMessages(locale).title}
+        </button>}
+        {workspace && !operationTrusted(workspace) && (
           <button className="trust-warning" onClick={() => {
             setError('');
             setPendingWorkspace(workspace);
@@ -317,7 +436,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
             ⚠ {t('workspace.untrusted')}
           </button>
         )}
-        {workspace?.git && (
+        {workspace?.git && operationTrusted(workspace) && (
           <div className="worktree-switcher">
             <select value={workspace.cwd} aria-label={t('workspace.worktree')}
               onChange={event => void switchWorktree(event.target.value)}>
@@ -357,7 +476,8 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
           <ul>
             {searchResults.map((result, index) => (
               <li key={`${result.sessionId}:${result.messageId ?? 'title'}:${index}`}>
-                <button onClick={() => navigate(`/chat/${encodeURIComponent(result.sessionId)}${query}${result.messageId ? `#${encodeURIComponent(result.messageId)}` : ''}`)}>
+                <SessionLink className="session-search-link" sessionId={result.sessionId} cwd={result.cwd || workspace?.cwd}
+                  messageId={result.messageId} onClick={closeOnPlainLink} onSessionContextMenu={onSessionContextMenu}>
                   <strong>{result.title || t('sidebar.untitled')}</strong>
                   <span>{highlightExcerpt(result, search.trim())}</span>
                   <small>
@@ -365,18 +485,48 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                     <span aria-hidden="true"> · </span>
                     <time dateTime={result.updatedAt}>{relativeDate(new Date(result.updatedAt), locale)}</time>
                   </small>
-                </button>
+                </SessionLink>
               </li>
             ))}
           </ul>
         </div>
       )}
 
+      <details className="sidebar-organisation">
+        <summary>{organisationCopy.title}</summary>
+        <label><input type="checkbox" checked={manageFamilies} onChange={event => { setManageFamilies(event.target.checked); setSelectedFamilies([]); }} />{organisationCopy.manage}</label>
+        <label><input type="checkbox" checked={includeArchived} onChange={event => setIncludeArchived(event.target.checked)} />{organisationCopy.show}</label>
+        <div className="organisation-actions">
+          {(['pin', 'unpin', 'archive', 'restore'] as const).map(action => <button key={action}
+            disabled={!organisation.state || organisation.busy || !selectedFamilies.length || !!organisation.error}
+            onClick={() => void organisation.mutate({ kind: 'families', ids: selectedFamilies,
+              ...(['pin', 'unpin'].includes(action) ? { pinned: action === 'pin' } : { archived: action === 'archive' }) })}>
+            {organisationCopy[action]}</button>)}
+        </div>
+        <small aria-live="polite">{selectedFamilies.length} {organisationCopy.selected}</small>
+        <button disabled={organisation.busy} onClick={() => void organisation.refresh()}>{organisationCopy.reload}</button>
+        {organisation.undoToken && <button disabled={organisation.busy} onClick={() => void organisation.mutate()}>{organisationCopy.undo}</button>}
+        {organisation.error && <p role="alert">{organisationCopy[organisation.error]}</p>}
+        <SidebarProjects projects={projects} locale={locale} disabled={!organisation.state || organisation.busy || !!organisation.error}
+          onChange={change => void organisation.mutate(change)} onRequestClose={onRequestClose} />
+      </details>
+
       <nav className="sidebar-nav" aria-label={t('sidebar.sessions')}>
         <ul>
-          {sessions.map(session => {
+          {visibleSessions.map(session => {
             const run = runs[session.id];
             const active = session.id === selectedSessionId;
+            const contents = <>
+              <span className="session-title">
+                {familyState.get(sidebarFamilyId(session))?.pinned && <span aria-label={organisationCopy.pinned}>★</span>}
+                {familyState.get(sidebarFamilyId(session))?.archived && <span aria-label={organisationCopy.archived}>▤</span>}
+                {run && !['completed', 'failed', 'stopped'].includes(run.phase) && <span aria-label={t('session.running')}>●</span>}
+                {session.attention && <span aria-label={t('session.attention')}>!</span>}
+                {session.unread && <span className="session-unread" aria-label={t('session.unread')}>●</span>}
+                {session.title || t('sidebar.untitled')}
+              </span>
+              <small>{session.messagePage?.total ?? session.messages.length} · {relativeDate(session.updatedAt, locale)}</small>
+            </>;
             return (
               <li key={session.id} className={active ? 'active' : ''}>
                 {renaming === session.id ? (
@@ -389,22 +539,29 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                       value={renameValue}
                       aria-label={t('session.rename')}
                       onChange={event => setRenameValue(event.target.value)}
-                      onKeyDown={event => { if (event.key === 'Escape') setRenaming(undefined); }}
                     />
                     <button type="submit" aria-label={t('common.save')}>✓</button>
                   </form>
                 ) : (
                   <div className="session-row">
-                    <button className="session-main" onClick={() => openSession(session.id)}>
-                      <span className="session-title">
-                        {run && !['completed', 'failed', 'stopped'].includes(run.phase) && <span aria-label={t('session.running')}>●</span>}
-                        {session.attention && <span aria-label={t('session.attention')}>!</span>}
-                        {session.unread && <span className="session-unread" aria-label={t('session.unread')}>●</span>}
-                        {session.title || t('sidebar.untitled')}
-                      </span>
-                      <small>{session.messagePage?.total ?? session.messages.length} · {relativeDate(session.updatedAt, locale)}</small>
-                    </button>
+                    {manageFamilies && !session.draft && <input type="checkbox" className="family-selector"
+                      aria-label={`${organisationCopy.select}: ${session.title || t('sidebar.untitled')}`}
+                      checked={selectedFamilies.includes(sidebarFamilyId(session))}
+                      disabled={organisation.busy || (!selectedFamilies.includes(sidebarFamilyId(session)) && selectedFamilies.length >= 100)}
+                      onChange={event => {
+                        const id = sidebarFamilyId(session);
+                        setSelectedFamilies(current => event.target.checked ? [...current, id] : current.filter(item => item !== id));
+                      }} />}
+                    {session.draft ? <button className="session-main" onClick={() => {
+                      onRequestClose?.(); navigate(sessionLinkTo(session.id, session.cwd || workspace?.cwd));
+                    }}>{contents}</button> : <SessionLink className="session-main" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
+                      aria-current={active ? 'page' : undefined} onClick={closeOnPlainLink} onSessionContextMenu={onSessionContextMenu}>
+                      {contents}
+                    </SessionLink>}
                     <div className="session-actions">
+                      {!session.draft && <SessionLink className="session-new-tab" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
+                        target="_blank" rel="noopener noreferrer" aria-label={linkMessages.sessionTab}
+                        title={linkMessages.sessionTab}>↗</SessionLink>}
                       <button onClick={() => {
                         setRenaming(session.id);
                         setRenameValue(session.title || '');
@@ -413,6 +570,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                         aria-label={t('session.autoName')}>{autoNaming === session.id ? '…' : 'AI'}</button>}
                       <button onClick={() => void remove(session.id, session.title || t('sidebar.untitled'))}
                         aria-label={t('session.delete')}>×</button>
+                      <Suspense fallback={null}><SessionRowCopyMenu session={session} inactive={inactive} onRequestClose={onRequestClose} /></Suspense>
                     </div>
                   </div>
                 )}
@@ -425,6 +583,9 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       <div className="sidebar-footer">
         <button onClick={() => navigate(`/settings${query}`)}>⚙ {t('common.settings')}</button>
       </div>
+
+      {linkedDirectoryOpen && workspace && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation])} cwd={workspace.cwd}
+        onClose={() => setLinkedDirectoryRequest(undefined)} />}
 
       {pendingWorkspace && (
         <div className="modal-backdrop" role="presentation">
@@ -447,9 +608,10 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
       )}
 
       {pickerOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={event => {
-          if (event.target === event.currentTarget) setPickerOpen(false);
-        }}>
+        <div className="modal-backdrop" role="presentation" aria-hidden={createFolderOpen || undefined}
+          inert={createFolderOpen || undefined} onMouseDown={event => {
+            if (event.target === event.currentTarget) setPickerOpen(false);
+          }}>
           <section ref={pickerDialogRef} className="directory-picker" role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="workspace-picker-title">
             <header>
               <h2 id="workspace-picker-title">{t('workspace.choose')}</h2>
@@ -459,14 +621,14 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
               <input data-autofocus value={pathInput} onChange={event => setPathInput(event.target.value)}
                 aria-label={t('workspace.path')} placeholder="~/project" list="recent-workspaces" />
               <datalist id="recent-workspaces">
-                {recentWorkspaces.map(item => <option key={item.id} value={item.cwd}>{item.name}</option>)}
+                {projects.map(item => <option key={item.cwd} value={item.cwd}>{item.name}</option>)}
               </datalist>
               <button type="submit">{t('workspace.browse')}</button>
             </form>
-            {recentWorkspaces.length > 0 && (
+            {projects.length > 0 && (
               <div className="recent-workspaces" aria-label={t('workspace.recent')}>
-                {recentWorkspaces.map(item => (
-                  <button key={item.id} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.cwd}</small></button>
+                {projects.map(item => (
+                  <button key={item.cwd} onClick={() => void browse(item.cwd)}>{item.name}<small>{item.cwd}</small></button>
                 ))}
               </div>
             )}
@@ -478,11 +640,49 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose }: Si
                 </li>
               ))}
             </ul>
+            {browseTruncated && <p className="directory-truncated" role="status">{t('workspace.browseTruncated')}</p>}
             {error && <p role="alert">{error}</p>}
             <footer>
+              <button onClick={() => {
+                setFolderName('');
+                setFolderError('');
+                setCreateFolderOpen(true);
+              }}>{t('workspace.folderCreate')}</button>
+              <span className="directory-footer-spacer" />
               <button onClick={() => setPickerOpen(false)}>{t('common.cancel')}</button>
               <button className="primary" onClick={() => void chooseWorkspace()}>{t('workspace.use')}</button>
             </footer>
+          </section>
+        </div>
+      )}
+
+      {createFolderOpen && (
+        <div className="modal-backdrop directory-create-backdrop" role="presentation" onMouseDown={event => {
+          if (event.target === event.currentTarget && !folderCreating) setCreateFolderOpen(false);
+        }}>
+          <section ref={createFolderDialogRef} className="trust-dialog directory-create-dialog" role="dialog"
+            aria-modal="true" tabIndex={-1} aria-labelledby="workspace-folder-create-title">
+            <h2 id="workspace-folder-create-title">{t('workspace.folderCreateTitle')}</h2>
+            <p>{t('workspace.folderCreateHelp')}</p>
+            <code>{pathInput}</code>
+            <form onSubmit={event => {
+              event.preventDefault();
+              void createFolder();
+            }}>
+              <label>{t('workspace.folderName')}
+                <input data-autofocus value={folderName} maxLength={255} disabled={folderCreating}
+                  onChange={event => setFolderName(event.target.value)} />
+              </label>
+              {folderError && <p role="alert">{folderError}</p>}
+              <footer>
+                <button type="button" disabled={folderCreating} onClick={() => setCreateFolderOpen(false)}>
+                  {t('common.cancel')}
+                </button>
+                <button className="primary" type="submit" disabled={folderCreating || !folderName.trim()}>
+                  {folderCreating ? t('workspace.folderCreating') : t('workspace.folderCreateAction')}
+                </button>
+              </footer>
+            </form>
           </section>
         </div>
       )}

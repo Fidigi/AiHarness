@@ -2,23 +2,26 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '../settings.css';
+import { useLocation } from 'react-router-dom';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
+import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
 import type { ProviderType } from '@ai-harness/core';
 import type { TranslationFunction } from '../i18n/types';
 import {
   getAppUpdateStatus,
-  getChatTransport,
   logoutWeb,
   setAuthToken,
-  setChatTransport,
   setProviderApiKey,
   type AppUpdateStatus,
 } from '../services/api';
 import { SubagentSettings } from './SubagentSettings';
-import { usePreferences } from '../store/preferences';
+import { McpSettings } from './McpSettings';
+import { readPreferences, usePreferences } from '../store/preferences';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { bindSettingsNavigation } from './settings-navigation';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
 import {
@@ -29,6 +32,9 @@ import {
   ToolSettingsPanel,
 } from './EcosystemSettings';
 
+import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
+import { SkillContentPane } from './SkillContentPane';
+
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
 }));
@@ -37,27 +43,33 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView() {
+function SettingsView({ entryRelease, entryEpoch }: {
+  entryRelease: { readonly current: (() => void) | null };
+  entryEpoch: string;
+}) {
   const providers = useSessionStore(state => state.providers);
   const setProvider = useSessionStore(state => state.setProvider);
   const updateApiKey = useSessionStore(state => state.updateApiKey);
   const setModel = useSessionStore(state => state.setModel);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
-  const setModelEnabled = useSessionStore(state => state.setModelEnabled);
-  const setAllModelsEnabled = useSessionStore(state => state.setAllModelsEnabled);
+  const batches = useResourceBatches();
   const skills = useSessionStore(state => state.skills);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const setSkillModelInvocable = useSessionStore(state => state.setSkillModelInvocable);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
+  const activeSessionId = useSessionStore(state => state.activeSessionId);
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({});
+  const [providerReload, setProviderReload] = useState(0);
+  const [providerInvalidation, setProviderInvalidation] = useState(0);
   const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
-  const [transport, updateTransport] = useState<'sse' | 'websocket'>(() => getChatTransport());
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
+  const [selectedSkill, setSelectedSkill] = useState<string>();
+  const skillInvoker = useRef<HTMLButtonElement | null>(null);
   const [pushStatus, setPushStatus] = useState('');
   const [preferences, setPreferences] = usePreferences();
 
@@ -78,15 +90,18 @@ function SettingsView() {
       || model.name.toLocaleLowerCase().includes(normalizedModelFilter)),
   })).filter(group => group.models.length > 0) ?? [];
   const normalizedSkillFilter = skillFilter.trim().toLocaleLowerCase();
-  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).map(scope => ({
-    scope,
-    skills: (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
+  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).flatMap(scope => {
+    const candidates = (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
       !normalizedSkillFilter
       || skill.name.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.description.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.source.toLocaleLowerCase().includes(normalizedSkillFilter)
-    )),
-  })).filter(group => group.skills.length > 0);
+    ));
+    const sources = scope === 'package' || scope === 'path' ? [...new Set(candidates.map(skill => skill.source))] : [''];
+    return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
+  }).filter(group => group.skills.length > 0);
+
+  const skillDetail = visibleSkillGroups.flatMap(group => group.skills).find(skill => skill.key === selectedSkill);
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -100,9 +115,12 @@ function SettingsView() {
   };
 
   useEffect(() => {
-    const target = window.location.hash.slice(1) || preferences.lastSettingsSection;
-    window.setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }), 0);
-  }, []); // Restore only on entry; interacting with controls must not move the page.
+    // Preserve the accepted startup task order in this business lifetime: entry
+    // alignment first, then deferred checking UI. The layout owner stays outside.
+    const release = entryRelease.current;
+    const timer = window.setTimeout(() => release?.(), 0);
+    return () => window.clearTimeout(timer);
+  }, [entryRelease, entryEpoch]);
 
   useEffect(() => {
     // Defer the remote release check so settings and the rest of the application render first.
@@ -144,10 +162,11 @@ function SettingsView() {
       : t('settings.push.inactive'));
   };
 
+  const [vertexCredentialMode, setVertexCredentialMode] = useState<'api-key' | 'bearer'>('bearer');
   const saveApiKey = async (type: string) => {
     const key = apiKeyInputs[type];
     if (key && !key.includes('•')) {
-      const result = await setProviderApiKey(type, key);
+      const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
       if (result.success) {
         updateApiKey(type as ProviderType, 'configured');
         setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
@@ -164,10 +183,7 @@ function SettingsView() {
   };
 
   return (
-    <div className="settings-view" onFocusCapture={event => {
-      const section = (event.target as Element).closest<HTMLElement>('.settings-section[id]');
-      if (section?.id && section.id !== preferences.lastSettingsSection) setPreferences({ lastSettingsSection: section.id });
-    }}>
+    <>
       <h2>{t('settings.title')}</h2>
 
       <section className="settings-section" id="authentication">
@@ -209,7 +225,7 @@ function SettingsView() {
         >
           {Object.keys(providers.available).map(type => (
             <option key={type} value={type}>
-              {getProviderOptionLabel(type as ProviderType, t)}
+              {providerNames[type] ? `${providerNames[type]} (${type})` : getProviderOptionLabel(type as ProviderType, t)}
             </option>
           ))}
         </select>
@@ -221,10 +237,15 @@ function SettingsView() {
           ].includes(type)).map(type => {
             const providerType = type as ProviderType;
             const providerLabel = getTypeLabel(providerType, t);
-            const environmentVariable = getTypeEnvVar(providerType);
+            const environmentVariable = type === 'vertex' && vertexCredentialMode === 'api-key' ? 'GOOGLE_CLOUD_API_KEY' : getTypeEnvVar(providerType);
             return (
               <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
                 <label>{providerLabel}</label>
+                {type === 'vertex' && <select aria-label={t('settings.vertexCredentialMode')} value={vertexCredentialMode}
+                  onChange={event => setVertexCredentialMode(event.target.value === 'api-key' ? 'api-key' : 'bearer')}>
+                  <option value="bearer">{t('settings.vertexBearerCredential')}</option>
+                  <option value="api-key">{t('settings.vertexCloudCredential')}</option>
+                </select>}
                 <div className="api-key-input-group">
                   <input
                     type="password"
@@ -260,23 +281,10 @@ function SettingsView() {
         </div>
       </section>
 
-      <ProviderLifecycleSettings />
-
-      <section className="settings-section" id="transport">
-        <h3>{t('settings.realtimeTransport')}</h3>
-        <select
-          value={transport}
-          aria-label={t('settings.selectTransport')}
-          onChange={event => {
-            const value = event.target.value as 'sse' | 'websocket';
-            updateTransport(value);
-            setChatTransport(value);
-          }}
-        >
-          <option value="sse">Server-Sent Events (SSE)</option>
-          <option value="websocket">WebSocket</option>
-        </select>
-      </section>
+      <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+        onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
+        onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
+        onCanonicalReload={() => setProviderReload(value => value + 1)} />
 
       {/* Model Selection and server catalogue */}
       <section className="settings-section" id="model">
@@ -302,15 +310,13 @@ function SettingsView() {
                 onChange={event => setModelFilter(event.target.value)} />
             </label>
             <div>
-              <button type="button" disabled={providers.catalogLoading} onClick={() => void hydrateModelCatalog(true)}>
+              <button type="button" disabled={providers.catalogLoading || batches.busy} onClick={() => void hydrateModelCatalog(true)}>
                 {t('settings.modelCatalog.refresh')}
               </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(true)}>
-                {t('settings.modelCatalog.enableAll')}
-              </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(false)}>
-                {t('settings.modelCatalog.disableAll')}
-              </button>
+              <ResourceGroupButtons group={t('settings.modelCatalog.manage')}
+                rows={visibleModelGroups.flatMap(group => group.models.map(model => ({ key: model.key, enabled: model.enabled })))}
+                disabled={!!providers.catalogLoading || batches.busy}
+                save={changes => batches.save('models', changes)} />
             </div>
           </div>
           {providers.catalog && <p className="model-catalog-meta">
@@ -322,20 +328,26 @@ function SettingsView() {
           {!providers.catalogLoading && providers.catalog && visibleModelGroups.length === 0 && (
             <p>{t('settings.modelCatalog.empty')}</p>
           )}
+          <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.models} error={batches.errors.models}
+            names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
           <div className="model-catalog-groups">
             {visibleModelGroups.map(group => (
-              <fieldset key={group.provider} data-provider={group.provider}>
+              <fieldset key={group.provider} data-provider={group.provider} data-settings-group={group.provider}>
                 <legend>
                   {getTypeLabel(group.provider as ProviderType, t)}
                   <span className={group.configured ? 'status-success' : 'status-warning'}>
                     {group.configured ? t('settings.modelCatalog.configured') : t('settings.modelCatalog.unavailable')}
                   </span>
                 </legend>
+                <ResourceGroupButtons group={getTypeLabel(group.provider as ProviderType, t)}
+                  rows={group.models.map(model => ({ key: model.key, enabled: model.enabled }))}
+                  disabled={!!providers.catalogLoading || batches.busy}
+                  save={changes => batches.save('models', changes)} />
                 {group.models.map(model => (
-                  <label key={model.key} className="model-catalog-row">
-                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading}
+                  <label key={model.key} className="model-catalog-row" data-settings-selection={model.key}>
+                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
-                      onChange={event => void setModelEnabled(model.key, event.target.checked)} />
+                      onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
                     <span className="model-catalog-identity">
                       <strong>{model.name}</strong>
                       <code>{model.id}</code>
@@ -357,8 +369,8 @@ function SettingsView() {
         </details>
       </section>
 
-      <DefaultModelSettings />
-      <CustomModelSettings />
+      <DefaultModelSettings key={`provider-defaults:${providerReload}`} />
+      <CustomModelSettings key={`provider-models:${providerReload}`} />
 
       <section className="settings-section" id="skills">
         <h3>{t('settings.skills.title')}</h3>
@@ -370,7 +382,7 @@ function SettingsView() {
               onChange={event => setSkillFilter(event.target.value)} />
           </label>
           <div>
-            <button type="button" disabled={skills.loading} onClick={() => void hydrateSkillCatalog(true)}>
+            <button type="button" disabled={skills.loading || batches.busy} onClick={() => void hydrateSkillCatalog(true)}>
               {t('settings.skills.refresh')}
             </button>
           </div>
@@ -392,32 +404,48 @@ function SettingsView() {
         {skills.error && <p role="alert" className="status-warning">{skills.error}</p>}
         {!skills.loading && skills.catalog && visibleSkillGroups.length === 0 && <p>{t('settings.skills.empty')}</p>}
         <SkillRegistryPanel />
+        <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
+          names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
         <div className="skill-catalog-groups">
           {visibleSkillGroups.map(group => (
-            <fieldset key={group.scope} data-scope={group.scope}>
-              <legend>{t(`settings.skills.scope.${group.scope}`)}</legend>
+            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}
+              data-settings-group={JSON.stringify([group.scope, group.source])}>
+              <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
+              <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
+                rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
+                disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
               {group.skills.map(skill => (
-                <label key={skill.key} className="skill-catalog-row">
-                  <input type="checkbox" checked={skill.modelInvocable}
-                    disabled={skills.loading || !skill.trusted}
-                    title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
-                    aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                    onChange={event => void setSkillModelInvocable(skill.key, event.target.checked)} />
-                  <span className="skill-catalog-identity">
-                    <strong>{skill.name}</strong>
-                    <span>{skill.description}</span>
-                    <code>{skill.filePath}</code>
-                  </span>
-                  <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
-                    {skill.version && <small>v{skill.version}</small>}
-                    <small>{skill.source}</small>
-                    {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
-                  </span>
-                </label>
+                <div key={skill.key} className="skill-catalog-row" data-settings-selection={skill.key}>
+                  <label>
+                    <input type="checkbox" checked={skill.modelInvocable}
+                      disabled={skills.loading || batches.busy || !skill.trusted}
+                      title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
+                      aria-label={t('settings.skills.toggle', { skill: skill.name })}
+                      onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
+                    <span className="skill-catalog-identity">
+                      <span>{skill.description}</span>
+                      <code>{skill.filePath}</code>
+                    </span>
+                    <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
+                      {skill.version && <small>v{skill.version}</small>}
+                      <small>{skill.source}</small>
+                      {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
+                    </span>
+                  </label>
+                  <button type="button" className="skill-instructions-trigger" disabled={skills.loading || batches.busy || !skill.trusted}
+                    title={t('settings.skills.openInstructions', { skill: skill.name })}
+                    aria-label={t('settings.skills.openInstructions', { skill: skill.name })} aria-expanded={selectedSkill === skill.key}
+                    aria-controls={selectedSkill === skill.key ? 'skill-content-detail' : undefined}
+                    onClick={event => { skillInvoker.current = event.currentTarget; setSelectedSkill(skill.key); }}>{skill.name}</button>
+                </div>
               ))}
             </fieldset>
           ))}
         </div>
+        {skillDetail && skills.catalog && <SkillContentPane
+          key={JSON.stringify([skillDetail.key, skills.catalog.cwd, skills.catalog.projectId, skills.catalog.projectTrusted])}
+          skillKey={skillDetail.key} name={skillDetail.name} cwd={skills.catalog.cwd} projectId={skills.catalog.projectId}
+          onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
       </section>
 
       <ToolSettingsPanel />
@@ -442,6 +470,13 @@ function SettingsView() {
               {['system', 'light', 'dark', 'mist', 'rose', 'pine'].map(theme => (
                 <option key={theme} value={theme}>{t(`settings.theme.${theme}`)}</option>
               ))}
+            </select>
+          </label>
+          <label>{t('settings.sendMode')}
+            <select value={preferences.sendMode}
+              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
+              <option value="enter">{t('settings.sendMode.enter')}</option>
+              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
             </select>
           </label>
           <label>{t('settings.contentWidth', { width: preferences.contentWidth })}
@@ -544,6 +579,8 @@ function SettingsView() {
         <small>{t('settings.sessionsLocation')}</small>
       </section>
 
+      <McpSettings />
+
       {/* About */}
       <section className="settings-section about" id="about">
         <h3>{t('settings.about')}</h3>
@@ -588,13 +625,13 @@ function SettingsView() {
           </a>
         </div>
       </section>
-    </div>
+    </>
   );
 }
 
 /** Get the translated short label for a provider type. */
 function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.label.openai',
     anthropic: 'provider.label.anthropic',
     google: 'provider.label.google',
@@ -604,13 +641,14 @@ function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
     local: 'provider.label.local',
     mock: 'provider.label.mock',
     custom: 'provider.label.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get the translated provider selector label. */
 function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.option.openai',
     anthropic: 'provider.option.anthropic',
     google: 'provider.option.google',
@@ -620,13 +658,14 @@ function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): str
     local: 'provider.option.local',
     mock: 'provider.option.mock',
     custom: 'provider.option.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get environment variable name for provider */
 function getTypeEnvVar(type: ProviderType): string {
-  return {
+  const variables: Partial<Record<ProviderType, string>> = {
     openai: 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
     google: 'GEMINI_API_KEY',
@@ -636,7 +675,8 @@ function getTypeEnvVar(type: ProviderType): string {
     local: '',
     mock: '',
     custom: 'CUSTOM_API_KEY',
-  }[type] || '';
+  };
+  return variables[type] || '';
 }
 
 /** Get model options for a provider. */
@@ -674,4 +714,37 @@ function getModelOptions(
   }
 }
 
-export default SettingsView;
+function SettingsNavigationBoundary() {
+  const workspace = useSessionStore(state => state.workspace);
+  const root = useRef<HTMLDivElement>(null);
+  const entryRelease = useRef<(() => void) | null>(null);
+  const cwd = workspace?.cwd;
+  const { hash } = useLocation();
+  // Keep navigation/focus ownership across a trust refresh; retire all forms,
+  // pending local results and mounted sections before the replacement commits.
+  const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
+  useLayoutEffect(() => {
+    if (!root.current) return;
+    const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
+    let local = readSettingsNavigation(cwd, readPreferences().lastSettingsSection);
+    const dispose = bindSettingsNavigation(root.current, local, {
+      hash, entryReady,
+      save: (section, position) => {
+        const fresh = readSettingsNavigation(cwd);
+        local = { ...local, section, scopes: fresh.scopes,
+          positions: { ...local.positions, ...fresh.positions,
+            ...(position.group || position.selection ? { [section]: position } : {}) } };
+        writeSettingsNavigation(cwd, local);
+      },
+    });
+    return () => { entryRelease.current = null; dispose(); };
+  }, [cwd, hash]);
+  return <div className="settings-view" ref={root}><SettingsView key={context}
+    entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>;
+}
+
+function LocalizedSettingsView() {
+  return <SettingsLocaleBoundary><SettingsNavigationBoundary /></SettingsLocaleBoundary>;
+}
+
+export default LocalizedSettingsView;

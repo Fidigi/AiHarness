@@ -1,0 +1,5 @@
+/* Code keeps its dark surface in both themes; do not inherit Light's dark text. */
+html[data-theme="light"] .markdown-content .code-block,
+html[data-theme="light"] .markdown-content .inline-code {
+  color: #e8eefb;
+}

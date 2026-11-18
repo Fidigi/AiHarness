@@ -1,5 +1,47 @@
-import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+
+for (const scenario of [
+  { name: 'desktop-dark', width: 1440, theme: 'dark' },
+  { name: 'desktop-light', width: 1440, theme: 'light' },
+  { name: 'mobile-dark', width: 390, theme: 'dark' },
+  { name: 'mobile-light', width: 390, theme: 'light' },
+] as const) {
+  test(`${scenario.name} stages history edits without side effects and restores composer focus on cancel`, async ({ page }) => {
+    await page.setViewportSize({ width: scenario.width, height: 1000 });
+    await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme })), scenario.theme);
+    const api = await installMockApi(page, { holdAgentRun: true, sessions: [mockSession('history-edit', 'Historical edit', [
+      { role: 'user', content: 'Original saved question' }, { role: 'assistant', content: 'Original saved answer' },
+    ])] });
+    await page.goto('/chat/history-edit');
+    const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+    await composer.fill('My unsent draft');
+    await page.getByRole('button', { name: 'Edit from here', exact: true }).click();
+    await expect(composer).toHaveValue('Original saved question');
+    await expect(composer).toBeFocused();
+    await expect(page.locator('.staged-history-edit')).toBeVisible();
+    expect(api.requests.some(request => request.path.endsWith('/fork'))).toBe(false);
+    const axe = await new AxeBuilder({ page }).include('.staged-history-edit')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    expect(axe.violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+    await page.evaluate(() => document.fonts.ready);
+    await expect(page.locator('.input-container')).toHaveScreenshot(`history-edit-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+    });
+    await page.getByRole('button', { name: 'Cancel history edit' }).click();
+    await expect(composer).toHaveValue('My unsent draft');
+    await expect(composer).toBeFocused();
+    expect(api.sessions).toHaveLength(1);
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await page.getByLabel('Thinking level').selectOption('high');
+    await expect.poll(() => api.sessions[0]?.thinking).toBe('high');
+    expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/agent/runs')).toHaveLength(1);
+    expect(api.requests.some(request => /\/(stop|queue)$/.test(request.path))).toBe(false);
+  });
+}
 
 test.describe('Sessions', () => {
   test('hydrate la liste et ouvre une conversation existante', async ({ page }) => {
@@ -14,9 +56,12 @@ test.describe('Sessions', () => {
     });
     await page.goto('/');
 
-    await expect(page.getByRole('button', { name: 'Première conversation' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Deuxième conversation' })).toBeVisible();
-    await page.getByRole('button', { name: 'Première conversation' }).click();
+    const first = page.getByRole('link', { name: 'Première conversation' });
+    const second = page.getByRole('link', { name: 'Deuxième conversation' });
+    await expect(first).toBeVisible(); await expect(second).toBeVisible();
+    await expect(first).toHaveAttribute('href', '/chat/session-one?cwd=%2Fworkspace');
+    await expect(second).toHaveAttribute('href', '/chat/session-two?cwd=%2Fworkspace');
+    await first.click();
     await expect(page).toHaveURL(/\/chat\/session-one/);
     await expect(page.locator('.message.user')).toContainText('Question déjà enregistrée');
     await expect(page.locator('.message.assistant')).toContainText('Réponse déjà enregistrée');
@@ -69,10 +114,11 @@ test.describe('Sessions', () => {
     await page.goto('/');
 
     await expect(page.locator('.session-row')).toHaveCount(140);
-    await expect(page.getByRole('button', { name: 'Other workspace' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Other workspace' })).toHaveCount(0);
     const navigation = page.getByRole('navigation', { name: 'Conversations' });
     await expect.poll(() => navigation.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-    const last = page.getByRole('button', { name: 'Conversation 140' });
+    const last = page.getByRole('link', { name: 'Conversation 140' });
+    await expect(last).toHaveAttribute('href', '/chat/listed-139?cwd=%2Fworkspace');
     await last.scrollIntoViewIfNeeded();
     await last.click();
     const activeSession = page.locator('.sidebar-nav li.active');
@@ -95,7 +141,9 @@ test.describe('Sessions', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     await expect.poll(() => api.requests.some(request => request.method === 'POST' && request.path === '/api/agent/runs')).toBe(true);
 
-    await page.getByRole('button', { name: 'Foreground chat' }).click();
+    const foreground = page.getByRole('link', { name: 'Foreground chat' });
+    await expect(foreground).toHaveAttribute('href', '/chat/foreground?cwd=%2Fworkspace');
+    await foreground.click();
     const backgroundRow = page.locator('.session-row').filter({ hasText: 'Background run' });
     await expect(backgroundRow.getByLabel('Agent running')).toBeVisible();
     api.setRunPhase('background', 'failed');
@@ -114,7 +162,8 @@ test.describe('Sessions', () => {
     let row = page.locator('.session-row').filter({ hasText: 'Ancien titre' });
     await row.hover();
     await row.getByRole('button', { name: 'Generate title' }).click();
-    await expect(page.getByRole('button', { name: 'Generated conversation title' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Generated conversation title' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Generated conversation title' })).toHaveAttribute('href', '/chat/managed?cwd=%2Fworkspace');
     expect(api.requests.some(request => request.method === 'POST' && request.path === '/api/sessions/managed/auto-name')).toBe(true);
 
     row = page.locator('.session-row').filter({ hasText: 'Generated conversation title' });
@@ -122,14 +171,15 @@ test.describe('Sessions', () => {
     await row.getByRole('button', { name: 'Rename conversation' }).click();
     await page.getByRole('textbox', { name: 'Rename conversation' }).fill('Nouveau titre');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Nouveau titre' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toHaveAttribute('href', '/chat/managed?cwd=%2Fworkspace');
     expect(api.requests.some(request => request.method === 'PATCH' && request.path === '/api/sessions/managed')).toBe(true);
 
     page.once('dialog', dialog => dialog.accept());
     const renamedRow = page.locator('.session-row').filter({ hasText: 'Nouveau titre' });
     await renamedRow.hover();
     await renamedRow.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('button', { name: 'Nouveau titre' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Nouveau titre' })).toHaveCount(0);
     expect(api.requests.some(request => request.method === 'DELETE' && request.path === '/api/sessions/managed')).toBe(true);
   });
 
@@ -152,9 +202,9 @@ test.describe('Sessions', () => {
     const row = page.locator('.session-row').filter({ hasText: 'Parent conversation' });
     await row.hover();
     await row.getByRole('button', { name: 'Delete conversation' }).click();
-    await expect(page.getByRole('button', { name: 'Parent conversation' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Child branch' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Nested branch' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Parent conversation' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Child branch' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Nested branch' })).toHaveCount(0);
     expect(confirmations).toHaveLength(2);
     expect(confirmations[1]).toContain('2 branch(es)');
     expect(api.requests.filter(request => request.method === 'DELETE' && request.path === '/api/sessions/branch-parent')).toHaveLength(2);
@@ -172,7 +222,9 @@ test.describe('Sessions', () => {
     await expect(results).toContainText('Une aiguille très précise');
     await expect(results).toContainText('/workspace');
     await expect(results.locator('time')).toHaveAttribute('datetime', '2025-01-01T12:00:00.000Z');
-    await results.locator('button').click();
+    const result = results.getByRole('link', { name: /Journal de travail/ });
+    await expect(result).toHaveAttribute('href', '/chat/searchable?cwd=%2Fworkspace#searchable-message-1');
+    await result.click();
     await expect(page).toHaveURL(/\/chat\/searchable.*#searchable-message-1$/);
     expect(api.requests.some(request => request.path === '/api/sessions/search')).toBe(true);
   });
@@ -203,6 +255,8 @@ test.describe('Sessions', () => {
     const anchorBefore = await page.locator('#long-history-message-321').evaluate(element => element.getBoundingClientRect().top);
     await gapButton.click();
     await expect(minimap).toContainText('240 of 400 loaded');
+    // Filling an older window is not live unread output.
+    await expect(page.getByRole('button', { name: /Back to bottom \(\d+\)/ })).toHaveCount(0);
     expect(await page.locator('.message').count()).toBeLessThan(45);
     await expect.poll(async () => Math.abs(
       await page.locator('#long-history-message-321').evaluate(element => element.getBoundingClientRect().top) - anchorBefore,
@@ -326,6 +380,27 @@ test.describe('Sessions', () => {
     await expect(info.getByRole('link', { name: 'Download full history' })).toHaveAttribute('href', '/api/sessions/diagnostics/export?format=json');
   });
 
+  test('copies a persisted user entry while its source run continues', async ({ page }) => {
+    const api = await installMockApi(page, { sessions: [mockSession('running-source', 'Running source', [
+      { role: 'user', content: 'Persisted question' }, { role: 'assistant', content: 'Persisted answer' },
+    ])], holdAgentRun: true });
+    await page.goto('/chat/running-source');
+    await page.getByPlaceholder(/Type your message/).fill('Continue in the source');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Edit from here' })).toHaveCount(0);
+    await page.locator('.message.user').first().getByRole('button', { name: 'New chat from here' }).click();
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toHaveCount(1);
+    await expect(page.locator('.message.user')).toContainText('Persisted question');
+    expect(api.requests.some(request => /\/stop$/.test(request.path))).toBe(false);
+    expect(api.requests.find(request => request.path === '/api/sessions/running-source/clone')?.body)
+      .toMatchObject({ messageId: 'running-source-message-1' });
+    await page.goto('/chat/running-source');
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    await expect(page.locator('.message.user').last()).toContainText('Continue in the source');
+  });
+
   test('crée une branche et une copie indépendante depuis un message utilisateur', async ({ page }) => {
     const api = await installMockApi(page, {
       sessions: [mockSession('source', 'Conversation source', [
@@ -336,10 +411,25 @@ test.describe('Sessions', () => {
     await page.goto('/chat/source');
     const userMessage = page.locator('.message.user');
     await userMessage.getByRole('button', { name: 'Edit from here' }).click();
-    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page).toHaveURL(/\/chat\/source/);
     await expect(page.getByPlaceholder(/Type your message/)).toHaveValue('Point de branchement');
+    expect(api.requests.some(request => request.path === '/api/sessions/source/fork')).toBe(false);
+    await page.getByRole('button', { name: 'Cancel history edit' }).click();
+    await expect(page.getByPlaceholder(/Type your message/)).toHaveValue('');
+    await userMessage.getByRole('button', { name: 'Edit from here' }).click();
+    await page.reload();
+    expect(api.requests.some(request => request.path === '/api/sessions/source/fork')).toBe(false);
+    await expect(page.getByRole('button', { name: 'Cancel history edit' })).toHaveCount(0);
+    await userMessage.getByRole('button', { name: 'Edit from here' }).click();
+    await page.getByPlaceholder(/Type your message/).fill('Edited question');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toHaveCount(1);
+    await expect(page.locator('.message.user')).toContainText('Edited question');
+    expect(api.sessions.find(session => session.id === 'source')?.messages.map(message => message.content))
+      .toEqual(['Point de branchement', 'Réponse']);
     expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/sessions/source/fork')?.body)
-      .toMatchObject({ messageId: 'source-message-1' });
+      .toMatchObject({ messageId: 'source-message-1', before: true });
 
     await page.locator('.session-main').filter({
       has: page.locator('.session-title').filter({ hasText: /^Conversation source$/ }),

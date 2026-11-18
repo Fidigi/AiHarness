@@ -1,0 +1,96 @@
+{
+  "modules": 458,
+  "edges": 1783,
+  "forbidden": [],
+  "cycles": [
+    [
+      "packages/core/src/providers/classification-questions.ts -> packages/core/src/providers/specialized-models.ts (eager)",
+      "packages/core/src/providers/specialized-models.ts -> packages/core/src/providers/classification-questions.ts (eager)"
+    ],
+    [
+      "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/anthropic-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+      "packages/core/src/providers/credentials.ts -> packages/core/src/providers/xai-oauth.ts (eager)",
+      "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+      "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+      "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+      "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+      "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)"
+    ],
+    [
+      "packages/core/src/tools/codemode.ts -> packages/core/src/tools/tool-search.ts (eager)",
+      "packages/core/src/tools/tool-search.ts -> packages/core/src/tools/codemode.ts (eager)"
+    ],
+    [
+      "packages/core/src/extensions/index.ts -> packages/core/src/extensions/module-loader.ts (eager)",
+      "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/native-module-alias.ts (eager)",
+      "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/typescript-module.ts (eager)",
+      "packages/core/src/extensions/native-module-alias.ts -> packages/core/src/index.ts (deferred)",
+      "packages/core/src/extensions/typescript-module.ts -> packages/core/src/index.ts (deferred)",
+      "packages/core/src/index.ts -> packages/core/src/extensions/index.ts (eager)"
+    ],
+    [
+      "packages/web/src/store/session-store.ts -> packages/web/src/store/workspace-refresh.ts (deferred)",
+      "packages/web/src/store/workspace-refresh.ts -> packages/web/src/store/session-store.ts (eager)"
+    ]
+  ],
+  "unused": [
+    "packages/cli/src/providers/provider-runtime.ts:oauthRefreshConfigFromEnv",
+    "packages/cli/src/tui/terminal-escape.ts:TERMINAL_ESCAPE_GRACE_MS",
+    "packages/cli/src/tui/terminal-settings.ts:UNSUPPORTED_CLI_SETTINGS",
+    "packages/core/src/agent/interaction-handle.ts:MAX_INTERACTION_BYTES",
+    "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTIONS",
+    "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTION_BYTES",
+    "packages/core/src/extensions/execution-hooks.ts:EXECUTION_HOOK_NAMES",
+    "packages/core/src/extensions/startup-options.ts:RESERVED_STARTUP_OPTIONS",
+    "packages/core/src/providers/ai-gateways.ts:gatewayOutput",
+    "packages/core/src/providers/anthropic-response.ts:anthropicResponseToolInput",
+    "packages/core/src/providers/azure-config.ts:azureIdentifier",
+    "packages/core/src/providers/fireworks.ts:fireworksThinking",
+    "packages/core/src/providers/kimi-coding.ts:kimiCodingThinking",
+    "packages/core/src/providers/meta-oauth.ts:META_OAUTH_CLIENT_ID",
+    "packages/core/src/providers/opencode-go.ts:opencodeGoThinking",
+    "packages/core/src/providers/opencode.ts:opencodeThinking",
+    "packages/server/src/api/session-pagination.ts:DEFAULT_MESSAGE_PAGE_SIZE",
+    "packages/server/src/api/session-pagination.ts:boundedMessageLimit",
+    "packages/server/src/config/effective-configuration.ts:DEFAULT_SCOPED_CONFIGURATION",
+    "packages/server/src/runtime/app-update.ts:installedVersions",
+    "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_MAX_RECORDS",
+    "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_TTL_MS",
+    "packages/web/src/components/ExtensionInteractionBoundary.tsx:interactionLoadingMessages",
+    "packages/web/src/components/markdown-semantics.ts:remarkCjkAutolinks",
+    "packages/web/src/components/markdown-semantics.ts:remarkCurrencyMath",
+    "packages/web/src/components/settings-navigation.ts:settingsPositionTarget",
+    "packages/web/src/hooks/useI18n.tsx:LOCALE_STORAGE_KEY",
+    "packages/web/src/services/mcp-api.ts:MCP_ACTION_TIMEOUT_MS",
+    "packages/web/src/services/mcp-api.ts:MCP_OAUTH_CLIENT_TIMEOUT_MS",
+    "packages/web/src/services/mcp-api.ts:MCP_TEST_CLIENT_TIMEOUT_MS",
+    "packages/web/src/store/terminal-theme.ts:TERMINAL_THEME_KEY",
+    "packages/web/src/store/terminal-theme.ts:parseTerminalTheme"
+  ],
+  "exclusions": {
+    "publicEntries": [
+      "packages/core/src/index.ts",
+      "packages/core/src/tools/shell-input.ts",
+      "packages/cli/src/index.ts",
+      "packages/server/src/index.ts",
+      "packages/server/src/web-cli.ts"
+    ],
+    "dynamicEntries": [
+      "packages/core/src/media/image-worker.ts",
+      "packages/web/src/components/provider-settings.fixture.tsx",
+      "packages/web/src/test-support/native-frontend-relay.ts"
+    ],
+    "browserNodeHostEntries": [
+      "packages/web/src/test-support/native-frontend-relay.ts"
+    ]
+  },
+  "scope": "Literal src TS/TSX dependencies; types excluded from SCCs. Named value exports only; public entry points, reviewed dynamic entries and namespace/computed consumers excluded. Tests/E2E/fixtures are consumers, not layer/cycle subjects. No claim about arbitrary computed imports, external SDK consumers or class members.",
+  "errors": []
+}

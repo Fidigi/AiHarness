@@ -1,0 +1,20 @@
+{
+  "code": 0,
+  "stdout": {
+    "classifier": {
+      "id": "contract-chat:classifier",
+      "type": "classifier",
+      "provider": "mock",
+      "model": "contract-chat",
+      "virtual": true
+    },
+    "label": "safe",
+    "images": [{
+      "mediaType": "image/png",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j1ioAAAAASUVORK5CYII="
+    }],
+    "negatives": ["Invalid classification request.", "Specialized model is not available."],
+    "conversationalModel": "contract-chat"
+  },
+  "stderr": ""
+}

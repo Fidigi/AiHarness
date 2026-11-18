@@ -1,0 +1,5 @@
+{
+  "Id": "sha256:c0d4637cf1d3a854bc305d26a08e96ba53f2b609612ec265138e14d16cb51698",
+  "Created": "2026-11-17T19:30:01.901475264+01:00",
+  "scope": "Successful make build-prod only; no live app restart/deployment. Previously failed npm-ci runtime dependency stage executes successfully in this build, not cached."
+}

@@ -9,8 +9,7 @@ docs/audit/
 ├── README.md
 ├── AUDIT-template.md
 └── <subject>/
-    ├── AUDIT-1.md
-    └── AUDIT-2.md
+    └── AUDIT-N.md
 ```
 
 Use the next sequential `AUDIT-N.md` inside a subject directory. Local-only evidence may live in an ignored subject tree, but versioned documentation must not actively link to ignored content.
@@ -52,9 +51,10 @@ Closure is `(DONE + GAP ACCEPTED) / total`; `PARTIAL` is not closed.
 
 | Audit | Scope | Status |
 |---|---|---|
-| `docs/audit/documentation/AUDIT-1` | Documentation structure, accuracy, screenshots, bilingual coverage and validation | DONE |
+| [Documentation audit 1](./documentation/AUDIT-1.md) | Documentation structure, accuracy, screenshots, bilingual coverage and validation at the pinned 2026-10-02 state | DONE for that snapshot |
+| [Application architecture audit 1](./architecture/AUDIT-1.md) | Package/module coupling, dead-code classification, measured performance opportunities and compatibility decisions at commit `120b4d46` | IN PROGRESS — legacy RPC/Web and public utility removals plus RPC input limits approved; implementation/validation remain open |
 
-Paths are plain code text and intentionally omit `.md`, matching navigation conventions.
+Historical results and inventories describe their pinned source/date, not the current checkout. Later documentation changes require fresh source checks. Use relative links for versioned reports; reserve plain paths for local-only evidence.
 
 ## Common Prefixes
 
