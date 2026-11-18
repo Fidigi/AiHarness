@@ -46,6 +46,7 @@ export class FullscreenUI extends TerminalUI {
   private promptLabel = '> ';
   private inputValue = '';
   private inputCursor = 0;
+  private inputBusy = false;
   private status = 'Prêt';
   private streamingContent = '';
   private scrollOffset = 0;
@@ -96,6 +97,17 @@ export class FullscreenUI extends TerminalUI {
   protected override onStatusChanged(): void { this.render(); }
 
   override displayStatus(): void { this.render(); }
+
+  /** Command output can repaint before the host releases foreground input ownership. */
+  setInputBusy(busy: boolean): void {
+    if (this.inputBusy === busy) return;
+    this.inputBusy = busy;
+    this.render();
+  }
+
+  protected override editorStatus(): string {
+    return this.inputBusy && !this.isStreaming ? 'busy' : super.editorStatus();
+  }
 
   setPanelProvider(provider: () => string[]): void {
     this.panelProvider = provider;

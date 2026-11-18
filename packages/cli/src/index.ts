@@ -2048,10 +2048,12 @@ async function main(): Promise<void> {
     }
 
     foregroundInputRunning = true;
+    fullscreenTerminal?.setInputBusy(true);
     try {
       await handleLine(input, submission);
     } finally {
       foregroundInputRunning = false;
+      fullscreenTerminal?.setInputBusy(false);
     }
   }
 

@@ -93,6 +93,7 @@ Each configured unsupported top-level field produces a fixed value-free warning 
 2. Regular readline uses `historySize:0` and application history: Node 24 otherwise normalizes/reverses LF entries. Publish owned `line`/`cursor` using their writable runtime properties (Node types mark them readonly), then call public `prompt(true)`; do not call private readline methods. Fullscreen uses the same editor model with host-owned rendering.
 3. Suspend draft/undo before passive view → use separate modal input/history → restore exact suspended state; retirement cannot publish late editor replacement.
 4. Enable bracketed paste only after interactive driver admission; disable during external editor handoff and before owned cleanup. Fullscreen resize listener is released by the input owner. No terminal sequences enter print/JSON/RPC.
+5. Fullscreen command-output redraws show `editor busy` until the host releases foreground input ownership; output alone is not settlement. Active provider streaming retains steering/follow-up hints, and interrupt/concurrent-input admission stays unchanged.
 
 ## Associated tests
 

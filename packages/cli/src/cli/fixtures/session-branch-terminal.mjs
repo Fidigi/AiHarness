@@ -26,10 +26,11 @@ const mode = scenario.startsWith('regular') ? 'regular' : 'fullscreen', durable 
 const root = await mkdtemp(path.join(os.tmpdir(), 'branch-lifetime-terminal-'));
 console.log(JSON.stringify({ root, scenario, phase, node: process.versions.node }));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions'), trace = path.join(root, 'trace.jsonl');
+const readinessRelease = path.join(root, 'readiness-release');
 await mkdir(cwd); await mkdir(agent); await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ quietStartup: true }));
 const sourceId = 'branch-terminal-source', sourceFile = path.join(sessions, `${sourceId}.jsonl`);
 await writeFile(path.join(agent, 'branch.mjs'), `import assert from 'node:assert/strict';
-import {appendFile} from 'node:fs/promises';
+import {appendFile,readFile} from 'node:fs/promises';
 import {MockProvider,SessionManager} from '@ai-harness/core';
 const record=async value=>appendFile(${JSON.stringify(trace)},JSON.stringify(value)+'\\n');
 let policy=process.env.AIH_BRANCH_STARTUP_VETO==='1'?'startup-veto':'allow';
@@ -39,6 +40,11 @@ export default api=>{
   api.registerCommand('branch-probe',{description:'Observe a freshly settled branch generation',handler:async(args,context)=>{
     const [operation,tag]=args.split(/\\s+/u),manager=context.sessionManager,id=context.currentSessionId;
     assert.ok(manager instanceof SessionManager);assert.equal(id,${JSON.stringify(sourceId)});
+    if(operation==='readiness'){
+      context.notify('BRANCH_COMMAND_OUTPUT_PENDING');
+      while(!await readFile(${JSON.stringify(readinessRelease)},'utf8').catch(()=>''))await new Promise(resolve=>setTimeout(resolve,10));
+      return 'BRANCH_COMMAND_OUTPUT_SETTLED';
+    }
     if(operation==='setup'){
       await manager.addMessage(id,{role:'user',content:'Shared user'});
       await manager.appendCustomEntry(id,'fixture:branch-state',{revision:1,private:'NEVER_TERMINAL_STATE'});
@@ -135,7 +141,17 @@ async function cancelOperation(kind, hold) {
 async function close() { terminal.write('\u0004'); await waitFor(() => exited !== undefined, 'direct Ctrl-D settlement'); assert.equal(exited.exitCode, 0); terminal = undefined; }
 let rootEntry;
 try {
-  await open(); const initial = await observe('setup'), original = source(initial), selected = original.active.find(entry => entry.type === 'message' && entry.content === 'Selected user').id;
+  await open();
+  if (mode === 'fullscreen') {
+    output = ''; terminal.write('/branch-probe readiness\r');
+    const marker = 'BRANCH_COMMAND_OUTPUT_PENDING';
+    await waitFor(() => { const text = visible(), start = text.lastIndexOf(marker);
+      return start >= 0 && text.indexOf('editor ', start) >= 0; }, 'held foreground output');
+    assert.ok(visible().slice(visible().lastIndexOf(marker)).includes('editor busy'), 'foreground output must not advertise settled input');
+    await writeFile(readinessRelease, 'release');
+    await readyAfter('BRANCH_COMMAND_OUTPUT_SETTLED');
+  }
+  const initial = await observe('setup'), original = source(initial), selected = original.active.find(entry => entry.type === 'message' && entry.content === 'Selected user').id;
   rootEntry = original.active.find(entry => entry.type === 'message' && entry.content === 'Shared user').id;
   if (phase !== 'copies') {
     for (const kind of ['fork', 'clone', 'summary']) for (const hold of [false, true]) await cancelOperation(kind, hold);

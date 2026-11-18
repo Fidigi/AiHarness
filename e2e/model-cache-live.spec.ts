@@ -169,7 +169,11 @@ for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]
       } } })).status()).toBe(200);
       await page.reload(); await expect(page.locator('.cache-notice')).toHaveCount(1);
       await expect(page.locator('.cache-notice')).toContainText(locale === 'fr' ? 'Cache réchauffé' : 'Cache warmed');
-      await page.locator('.cache-notice').scrollIntoViewIfNeeded();
+      // Native reader intent retires scroll restoration; a programmatic target scroll can race it.
+      const history = page.locator('.messages-container');
+      await history.hover();
+      await page.mouse.wheel(0, await history.evaluate(element => element.scrollHeight));
+      await expect.poll(() => history.evaluate(element => Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight))).toBeLessThan(1);
       await expect(page.locator('.cache-notice')).toBeInViewport();
       await page.screenshot({ path: test.info().outputPath(`cache-live-${locale}-${theme}.png`), fullPage: true });
       expect(cacheCalls).toHaveLength(2); expect(calls).toBe(2);

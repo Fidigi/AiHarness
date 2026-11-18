@@ -45,7 +45,7 @@ async function queueFixture(page: Page, initial = initialRun()) {
         run = { ...run!, lastSequence: sequence, extensionRequests: requests, extensionRequest: requests[0] };
         await json(route, run);
       }
-    } else if (url.pathname === '/api/agent/runs' && route.request().method() === 'GET') {
+    } else if (url.pathname === '/api/agent/running' && route.request().method() === 'GET') {
       await json(route, run ? [run] : []);
     } else if (url.pathname === '/api/agent/runs/queue-run/stop') {
       sequence++;
@@ -214,6 +214,12 @@ test('late successful HTTP response cannot overwrite a replacement run in the sa
 test('HTTP completion after view epoch switch is ignored', async ({ page }) => {
   await preferences(page);
   const api = await queueFixture(page, initialRun([interaction('a')]));
+  // State reads predate the run; running-list discovery must recover the head
+  // while the fixture holds SSE readiness, before testing the late reply.
+  api.setNextState(async function staleState(route) {
+    api.setNextState(staleState);
+    await api.json(route, { sessionId, lastSequence: 0 });
+  });
   await page.goto(`/chat/${sessionId}?cwd=%2Fworkspace`);
   let held: Route | undefined;
   api.setReply(async route => { held = route; });

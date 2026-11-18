@@ -120,6 +120,16 @@ describe('FullscreenUI', () => {
     expect(standard).toContain('active path');
     expect(standard).toContain('full history (all branches)');
     expect(standard).toContain('editor ready');
+    ui.setInputBusy(true);
+    ui.writeOutput('Foreground command output before settlement');
+    expect(chunks.at(-1)).toContain('editor busy');
+    expect(chunks.at(-1)).not.toContain('editor ready · Enter send');
+    const stream = ui.startStreaming();
+    expect(chunks.at(-1)).toContain('editor ready · Enter steer · Alt+Enter follow-up');
+    stream.finish();
+    expect(chunks.at(-1)).toContain('editor busy');
+    ui.setInputBusy(false);
+    expect(chunks.at(-1)).toContain('editor ready · Enter send');
     screen.columns = 180;
     screen.rows = 30;
     ui.setPanelProvider(() => ['extension panel']);
