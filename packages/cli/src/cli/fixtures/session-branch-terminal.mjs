@@ -19,11 +19,12 @@ if (process.argv[2] === '--trace-records') {
 
 // The driver uses test-image PTY tooling; the child still executes the installed PATH-bin.
 const pty = createRequire(import.meta.url)(process.env.AIH_TEST_PTY_MODULE ?? 'node-pty');
-const scenario = process.argv[2];
+const scenario = process.argv[2], phase = process.argv[3] ?? 'all';
+assert.ok(['all', 'cancellation', 'copies'].includes(phase));
 assert.ok(['regular-memory', 'regular-durable', 'fullscreen-memory', 'fullscreen-durable'].includes(scenario));
 const mode = scenario.startsWith('regular') ? 'regular' : 'fullscreen', durable = scenario.endsWith('durable');
 const root = await mkdtemp(path.join(os.tmpdir(), 'branch-lifetime-terminal-'));
-console.log(JSON.stringify({ root, scenario, node: process.versions.node }));
+console.log(JSON.stringify({ root, scenario, phase, node: process.versions.node }));
 const cwd = path.join(root, 'work'), agent = path.join(root, 'agent'), sessions = path.join(root, 'sessions'), trace = path.join(root, 'trace.jsonl');
 await mkdir(cwd); await mkdir(agent); await writeFile(path.join(agent, 'settings.json'), JSON.stringify({ quietStartup: true }));
 const sourceId = 'branch-terminal-source', sourceFile = path.join(sessions, `${sourceId}.jsonl`);
@@ -136,52 +137,57 @@ let rootEntry;
 try {
   await open(); const initial = await observe('setup'), original = source(initial), selected = original.active.find(entry => entry.type === 'message' && entry.content === 'Selected user').id;
   rootEntry = original.active.find(entry => entry.type === 'message' && entry.content === 'Shared user').id;
-  for (const kind of ['fork', 'clone', 'summary']) for (const hold of [false, true]) await cancelOperation(kind, hold);
-  await observe('policy', 'summary-override'); output = ''; terminal.write(`/navigate ${rootEntry} --summarize\r`); await readyAfter('Branch summary saved.');
-  const summarized = await observe(), summary = source(summarized).active.at(-1);
-  assert.equal(summary.type, 'branch_summary'); assert.equal(summary.summary, 'TERMINAL_GLOBAL_OVERRIDE'); assert.equal(summary.parentEntryId, rootEntry); assert.equal(summary.fromEntryId, original.leaf);
-  assert.deepEqual(summary.usage, { totalTokens: 3 }); assert.deepEqual(source(summarized).raw.slice(0, original.raw.length), original.raw);
-  assert.ok(summarized.model.includes('TERMINAL_GLOBAL_OVERRIDE')); assert.equal((await records()).filter(record => record.kind === 'fallback').length, 0);
-  await observe('policy', 'no-summary'); output = ''; terminal.write(`/navigate ${original.leaf} --no-summary\r`); await readyAfter(`Navigated to ${original.leaf}.`);
-  const reset = await observe(); assert.equal(source(reset).leaf, original.leaf);
-  assert.equal((await records()).filter(record => record.kind === 'summary-hook' && record.tag === 'no-summary').length, 0);
-  await observe('policy', 'allow');
-  for (const kind of ['fork', 'clone']) {
-    const before = await observe(), bytes = durable ? await readFile(sourceFile) : undefined;
-    output = ''; terminal.write(`/${kind} ${sourceId}${kind === 'fork' ? ' 1' : ''}\r`); await readyAfter(kind === 'fork' ? 'Forked session' : 'Cloned session');
-    const after = await observe(), child = after.inventory.find(session => !before.inventory.some(prior => prior.id === session.id));
-    assert.ok(child); assert.equal(after.id, sourceId); assert.deepEqual(source(after), source(before)); if (durable) assert.deepEqual(await readFile(sourceFile), bytes);
-    const revisions = child.active.filter(entry => entry.type === 'custom' && entry.customType === 'fixture:branch-state').map(entry => entry.data.revision);
-    assert.deepEqual(revisions, kind === 'fork' ? [1] : [1, 2]);
-    if (kind === 'fork') assert.equal(child.leaf, selected);
-    else { assert.notEqual(child.leaf, original.leaf); assert.equal(child.active.at(-1).type, 'custom'); const ids = new Set(original.active.map(entry => entry.id)); assert.ok(child.active.every(entry => !ids.has(entry.id))); }
-    assert.equal(child.active.some(entry => entry.type === 'branch_summary'), false);
+  if (phase !== 'copies') {
+    for (const kind of ['fork', 'clone', 'summary']) for (const hold of [false, true]) await cancelOperation(kind, hold);
   }
-  const final = await observe(); assert.equal(final.inventory.length, 3); await close(); await open(); const restarted = await observe();
-  if (durable) { assert.deepEqual(restarted.inventory, final.inventory); assert.equal(source(restarted).leaf, original.leaf); }
-  else { assert.equal(restarted.inventory.length, 1); assert.deepEqual(source(restarted).raw, []); }
-  await close(); const startupBytes = durable ? await readFile(sourceFile) : undefined;
-  await open(true);
-  const startupHooks = (await records()).filter(record => record.kind === 'branch-hook' && record.tag === 'startup-veto');
-  if (durable) {
-    assert.equal(startupHooks.length, 1); assert.deepEqual(await readFile(sourceFile), startupBytes);
-    await open(); const afterVeto = await observe(); assert.deepEqual(afterVeto.inventory, final.inventory); await close();
-  } else {
-    assert.equal(startupHooks.length, 0);
-    await open(); const blank = await observe(); assert.deepEqual(source(blank).raw, []); await close();
-  }
+  if (phase !== 'cancellation') {
+    await observe('policy', 'summary-override'); output = ''; terminal.write(`/navigate ${rootEntry} --summarize\r`); await readyAfter('Branch summary saved.');
+    const summarized = await observe(), summary = source(summarized).active.at(-1);
+    assert.equal(summary.type, 'branch_summary'); assert.equal(summary.summary, 'TERMINAL_GLOBAL_OVERRIDE'); assert.equal(summary.parentEntryId, rootEntry); assert.equal(summary.fromEntryId, original.leaf);
+    assert.deepEqual(summary.usage, { totalTokens: 3 }); assert.deepEqual(source(summarized).raw.slice(0, original.raw.length), original.raw);
+    assert.ok(summarized.model.includes('TERMINAL_GLOBAL_OVERRIDE')); assert.equal((await records()).filter(record => record.kind === 'fallback').length, 0);
+    await observe('policy', 'no-summary'); output = ''; terminal.write(`/navigate ${original.leaf} --no-summary\r`); await readyAfter(`Navigated to ${original.leaf}.`);
+    const reset = await observe(); assert.equal(source(reset).leaf, original.leaf);
+    assert.equal((await records()).filter(record => record.kind === 'summary-hook' && record.tag === 'no-summary').length, 0);
+    await observe('policy', 'allow');
+    for (const kind of ['fork', 'clone']) {
+      const before = await observe(), bytes = durable ? await readFile(sourceFile) : undefined;
+      output = ''; terminal.write(`/${kind} ${sourceId}${kind === 'fork' ? ' 1' : ''}\r`); await readyAfter(kind === 'fork' ? 'Forked session' : 'Cloned session');
+      const after = await observe(), child = after.inventory.find(session => !before.inventory.some(prior => prior.id === session.id));
+      assert.ok(child); assert.equal(after.id, sourceId); assert.deepEqual(source(after), source(before)); if (durable) assert.deepEqual(await readFile(sourceFile), bytes);
+      const revisions = child.active.filter(entry => entry.type === 'custom' && entry.customType === 'fixture:branch-state').map(entry => entry.data.revision);
+      assert.deepEqual(revisions, kind === 'fork' ? [1] : [1, 2]);
+      if (kind === 'fork') assert.equal(child.leaf, selected);
+      else { assert.notEqual(child.leaf, original.leaf); assert.equal(child.active.at(-1).type, 'custom'); const ids = new Set(original.active.map(entry => entry.id)); assert.ok(child.active.every(entry => !ids.has(entry.id))); }
+      assert.equal(child.active.some(entry => entry.type === 'branch_summary'), false);
+    }
+    const final = await observe(); assert.equal(final.inventory.length, 3); await close(); await open(); const restarted = await observe();
+    if (durable) { assert.deepEqual(restarted.inventory, final.inventory); assert.equal(source(restarted).leaf, original.leaf); }
+    else { assert.equal(restarted.inventory.length, 1); assert.deepEqual(source(restarted).raw, []); }
+    await close(); const startupBytes = durable ? await readFile(sourceFile) : undefined;
+    await open(true);
+    const startupHooks = (await records()).filter(record => record.kind === 'branch-hook' && record.tag === 'startup-veto');
+    if (durable) {
+      assert.equal(startupHooks.length, 1); assert.deepEqual(await readFile(sourceFile), startupBytes);
+      await open(); const afterVeto = await observe(); assert.deepEqual(afterVeto.inventory, final.inventory); await close();
+    } else {
+      assert.equal(startupHooks.length, 0);
+      await open(); const blank = await observe(); assert.deepEqual(source(blank).raw, []); await close();
+    }
+  } else await close();
   passed = true;
 } finally {
   try {
     if (process.env.AIH_INSTALLED_EVIDENCE_DIR) {
       await mkdir(process.env.AIH_INSTALLED_EVIDENCE_DIR, { recursive: true });
-      await writeFile(path.join(process.env.AIH_INSTALLED_EVIDENCE_DIR, `branch-terminal-${scenario}.json`), JSON.stringify({
-        scenario, passed, probePid: process.pid, elapsedMs: Math.round(performance.now() - startedAt), stages, trace: await records(), output,
+      await writeFile(path.join(process.env.AIH_INSTALLED_EVIDENCE_DIR, `branch-terminal-${scenario}${phase === 'all' ? '' : '-' + phase}.json`), JSON.stringify({
+        scenario, phase, passed, probePid: process.pid, elapsedMs: Math.round(performance.now() - startedAt), stages, trace: await records(), output,
       }, null, 2));
     }
     if (passed) await rm(root, { recursive: true, force: true });
     else await writeFile(path.join(root, 'terminal-output.txt'), output);
   } finally { if (terminal && !exited) terminal.kill(); }
 }
-console.log(JSON.stringify({ result: 'TERMINAL_BRANCH_LIFETIME_OK', scenario, cancellationPhases: 6, summaryOverride: true,
-  actualCopies: 2, restart: true, startupVeto: durable, noSessionParserRefusal: !durable }));
+console.log(JSON.stringify({ result: 'TERMINAL_BRANCH_LIFETIME_OK', scenario, phase, cancellationPhases: phase === 'copies' ? 0 : 6,
+  summaryOverride: phase !== 'cancellation', actualCopies: phase === 'cancellation' ? 0 : 2, restart: phase !== 'cancellation',
+  startupVeto: phase !== 'cancellation' && durable, noSessionParserRefusal: phase !== 'cancellation' && !durable }));

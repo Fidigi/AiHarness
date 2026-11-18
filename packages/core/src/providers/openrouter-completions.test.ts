@@ -21,7 +21,13 @@ const first = '~anthropic/claude-fable-latest', second = 'openrouter/auto';
 const message: Message = { id: 'input', role: 'user', content: 'Hello', timestamp: new Date(0) };
 const model = '~anthropic/claude-fable-latest';
 const servers: Server[] = [];
-afterEach(async () => { vi.unstubAllGlobals(); for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } });
+const roots: string[] = [];
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  // Filesystem teardown must not consume the request/persistence assertion deadline.
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
 async function fixture(reply?: ((body: Record<string, unknown>, response: import('node:http').ServerResponse) => void) | { C?: unknown[] }, replies?: Record<string, unknown>) {
   const calls: Array<{ url?: string; headers: import('node:http').IncomingHttpHeaders; body: Record<string, any> }> = [];
   const server = createServer(async (incoming, response) => {
@@ -67,6 +73,7 @@ describe('native OpenRouter Chat Completions', () => {
       await invoke(withSystem, { ...options, systemPrompt: undefined }); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: instructionRole, content: 'Leading system' }, { role: 'user', content: 'probe' }] });
       await invoke(withSystem); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: instructionRole, content: 'owned OpenRouter C reference system\n\nLeading system' }, { role: 'user', content: 'probe' }] }); expect(withSystem).toEqual(systemBefore);
       const root = await mkdtemp(path.join(os.tmpdir(), 'aih-openrouter-c-replay-')), credential = 'sensitive', redactor = new CredentialRedactor([credential, 'disposable-openrouter-c']);
+      roots.push(root);
       const redactText = (value: string) => redactor.redact(value), redactJson = <T>(value: T): T => redactor.redactJson(value);
       const manager = new SessionManager({ store: new JsonlSessionStore(root), redactText, redactJson }), session = await manager.create({ title: 'OpenRouter C private replay' }), registry = new ExtensionRegistry(), same = reference.cases[0].expectedBody.messages;
       const finalBlocks = [{ type: 'text', text: 'ok' }], finalItem = { role: 'assistant', content: 'ok', ...(reference.published.compat.requiresReasoningContentOnAssistantMessages ? { reasoning_content: '' } : {}) }, native = () => calls.at(-1)!.body.messages; let effects = 0;
@@ -90,7 +97,7 @@ describe('native OpenRouter Chat Completions', () => {
         const compactedFile = path.join(root, clone.id + '.jsonl'), compactedBytes = await readFile(compactedFile, 'utf8'); expect((await stat(compactedFile)).mode & 0o777).toBe(0o600); const entries = (await compactedManager.getRawEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(entries).toHaveLength(2); expect(entries.map(entry => entry.blocks)).toEqual(expect.arrayContaining(history.map(item => item.blocks)));
         const ancestry = (await compactedManager.getActiveBranchEntries(clone.id)).filter(entry => entry.type === 'message').filter(entry => entry.role === 'assistant'); expect(ancestry.map(entry => entry.blocks)).toEqual(history.map(item => item.blocks));
         await invoke(compacted); expect(calls.at(-1)!.body).toEqual({ ...expected(reference.expectedInitialBody), messages: [{ role: instructionRole, content: 'owned OpenRouter C reference system\n\n[Context Summary] PUBLIC_OPENROUTER_C_PREFIX' }, finalItem] }); expect(await readFile(compactedFile, 'utf8')).toBe(compactedBytes); expect(await readFile(file, 'utf8')).toBe(sourceBytes); expect(effects).toBe(1);
-      } finally { await registry.shutdown(); await rm(root, { recursive: true, force: true }); }
+      } finally { await registry.shutdown(); }
     }
     expect(calls).toHaveLength(108); for (const call of calls) { expect(call.url).toBe('/proxy%2Fprefix/api/v1/chat/completions'); expect(call.headers.authorization).toBe('Bearer disposable-openrouter-c'); expect(call.headers['x-api-key']).toBeUndefined(); expect(call.headers['session_id']).toBeUndefined(); expect(call.headers['x-session-affinity']).toBeUndefined(); }
   });

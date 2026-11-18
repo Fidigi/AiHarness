@@ -960,12 +960,16 @@ describe('CLI-RUN-01 genuine locally packed installed executable', () => {
     expect(result.stdout).toContain('RPC_CURRENT_PRIVATE_POSITION_CLONE_OK');
   });
 
-  it.each(['regular-memory', 'regular-durable', 'fullscreen-memory', 'fullscreen-durable'])('owns installed terminal branch lifetimes and exact copies (%s)', async scenario => {
-    const worker = path.join(consumer, `branch-terminal-${scenario}.mjs`);
+  it.each(['regular-memory', 'regular-durable', 'fullscreen-memory', 'fullscreen-durable'].flatMap(scenario =>
+    ['cancellation', 'copies'].map(phase => ({ scenario, phase }))))('owns installed terminal branch lifetimes and exact copies ($scenario/$phase)', async ({ scenario, phase }) => {
+    const worker = path.join(consumer, `branch-terminal-${scenario}-${phase}.mjs`);
     await cp(path.join(checkout, 'packages', 'cli', 'src', 'cli', 'fixtures', 'session-branch-terminal.mjs'), worker);
-    const result = await run(process.execPath, [worker, scenario], consumer, { ...environment,
+    const result = await run(process.execPath, [worker, scenario, phase], consumer, { ...environment,
       AIH_STATE_COMMAND: 'ai-harness', AIH_TEST_PTY_MODULE: require.resolve('node-pty'), AIH_INSTALLED_EVIDENCE_DIR: process.env.AIH_INSTALLED_EVIDENCE_DIR });
-    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe(''); expect(result.stdout).toContain('TERMINAL_BRANCH_LIFETIME_OK');
+    expect(result.code, result.stderr).toBe(0); expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout.trim().split('\n').at(-1)!)).toMatchObject({ result: 'TERMINAL_BRANCH_LIFETIME_OK', scenario, phase,
+      cancellationPhases: phase === 'cancellation' ? 6 : 0, summaryOverride: phase === 'copies', actualCopies: phase === 'copies' ? 2 : 0,
+      restart: phase === 'copies', startupVeto: phase === 'copies' && scenario.endsWith('durable'), noSessionParserRefusal: phase === 'copies' && scenario.endsWith('memory') });
   });
 
   it('publishes installed active-branch state and related-copy declarations without adding a facade method', async () => {

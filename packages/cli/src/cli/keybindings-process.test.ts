@@ -44,20 +44,31 @@ async function users(test: Awaited<ReturnType<typeof fixture>>): Promise<string[
   expect(session).not.toBeNull(); return session!.messages.filter(message => message.role === 'user').map(message => message.content);
 }
 async function interactive(test: Awaited<ReturnType<typeof fixture>>, mode: Mode, run: (io: {
-  write(value: string): void; clear(): void; visible(): string; wait(value: string): Promise<void>; exit(): Promise<void>; resize(columns: number, rows: number): void;
+  write(value: string): void; clear(): void; visible(): string; wait(value: string): Promise<void>; reload(): Promise<void>; exit(): Promise<void>; resize(columns: number, rows: number): void;
 }) => Promise<void>, approve = true) {
   const terminal = spawnPty(process.execPath, [cli, approve ? '--approve' : '--no-approve', '--no-extensions', '-e', test.probe, '--model', 'mock/mock-model', '--tui-mode', mode, '--name', 'keybinding-probe'], { cwd: test.cwd, env: test.env, cols: 140, rows: 35 });
   let output = '', original = ''; let exited: { exitCode: number; signal?: number } | undefined;
   terminal.onData(value => { output += value; original += value; }); terminal.onExit(value => { exited = value; });
   const visible = () => stripVTControlCharacters(output);
   const wait = async (value: string) => { await vi.waitFor(() => expect(visible()).toContain(value), { timeout: 10_000 }); };
+  let reloads = 0;
+  const reload = async () => {
+    output = ''; terminal.write('/reload\r'); reloads++;
+    await vi.waitFor(() => {
+      // Fullscreen redraws retain earlier results. Count rows in only the latest
+      // frame so an old result cannot acknowledge this reload's completion.
+      const frame = stripVTControlCharacters(mode === 'fullscreen' ? output.slice(output.lastIndexOf('\x1b[2J\x1b[H')) : output);
+      expect(frame.match(/Reloaded \d+ extension\(s\)\./g) ?? []).toHaveLength(mode === 'fullscreen' ? reloads : 1);
+      expect(frame.slice(frame.lastIndexOf('Reloaded '))).toContain('keybinding-probe: ');
+    }, { timeout: 10_000 });
+  };
   const exit = async () => {
     if (original.includes('[Mock AI Response]')) await vi.waitFor(async () => expect(await readFile(test.turnMarker, 'utf8')).toBe('observed'), { timeout: 10_000 });
     terminal.write('/quit\r'); await vi.waitFor(() => expect(exited).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
     expect(original).toContain('\x1b[?2004h'); expect(original).toContain('\x1b[?2004l');
     if (mode === 'fullscreen') expect(original).toContain('\x1b[?1049l');
   };
-  try { await wait('keybinding-probe: '); await run({ write: value => terminal.write(value), clear: () => { output = ''; }, visible, wait, exit, resize: (columns, rows) => terminal.resize(columns, rows) }); }
+  try { await wait('keybinding-probe: '); await run({ write: value => terminal.write(value), clear: () => { output = ''; }, visible, wait, reload, exit, resize: (columns, rows) => terminal.resize(columns, rows) }); }
   finally {
     if (!exited) terminal.kill();
     if (process.env.AIH_KEYBINDING_EVIDENCE_DIR) {
@@ -106,7 +117,8 @@ describe('actual emitted CLI keybinding hosts', () => {
           io.resize(25, 10); io.resize(140, 35); io.write('\x1b[F\x1bj\x1a');
           io.write('\r'); await io.wait('[Mock AI Response]');
           await vi.waitFor(async () => expect(await readFile(test.turnMarker, 'utf8')).toBe('observed'), { timeout: 10_000 });
-          io.write('draft\x1b[A\x1b[B'); await io.wait('draft'); io.write('\x15'); await io.exit();
+          io.write('draft\x1b[A\x1b[B'); await io.wait('draft');
+          io.clear(); io.write('\x15'); await io.wait(mode === 'regular' ? 'Available Commands' : 'Commandes principales'); await io.exit();
         });
         expect(await users(test)).toEqual([content]);
       } finally { await rm(test.root, { recursive: true, force: true }); }
@@ -134,7 +146,7 @@ describe('actual emitted CLI keybinding hosts', () => {
           io.clear(); io.write('/settings\r'); await io.wait('fullscreenCopyOnSelect: unsupported by CLI (stored only) [global]');
           await io.wait('Active theme: dark'); await io.wait(`Active terminal: ${mode}`);
           await test.file(path.join(test.agent, 'settings.json'), JSON.stringify({ quietStartup: true, theme: 'auto', fullscreenCopyOnSelect: false }));
-          io.clear(); io.write('/reload\r'); await io.wait('Reloaded ');
+          await io.reload();
           io.clear(); io.write('/settings\r'); await io.wait('theme (saved): auto [global]');
           const latestSettingsTail = io.visible().slice(io.visible().lastIndexOf('fullscreenCopyOnSelect: unsupported'));
           expect(latestSettingsTail).not.toContain('terminal: unsupported'); await io.wait('Active theme: dark'); await io.exit();
@@ -162,10 +174,10 @@ describe('actual emitted CLI keybinding hosts', () => {
       const test = await fixture();
       try {
         await interactive(test, mode, async io => {
-          await test.file(test.target, '{PRIVATE_SENTINEL'); io.clear(); io.write('/reload\r'); await io.wait('Reloaded ');
+          await test.file(test.target, '{PRIVATE_SENTINEL'); await io.reload();
           expect(io.visible()).toContain('Failed to load custom bindings (json)'); expect(io.visible()).not.toContain('PRIVATE_SENTINEL');
           io.clear(); io.write(sequences.f2); await io.wait('Hotkeys'); io.write('app.hotkeys\r'); await io.wait('KEY_MENU_V1'); io.write(sequences.f1); await io.wait('keybinding-probe: ');
-          await test.configure('f3', 'KEY_MENU_V2'); io.clear(); io.write('/reload\r'); await io.wait('Reloaded ');
+          await test.configure('f3', 'KEY_MENU_V2'); await io.reload();
           io.clear(); io.write(sequences.f3); await io.wait('Hotkeys'); io.write('app.hotkeys\r'); await io.wait('KEY_MENU_V2'); expect(io.visible()).not.toContain('F2');
           io.write(sequences.f1); await io.wait('keybinding-probe: ');
           io.clear(); io.write(sequences.f2 + 'hello\r'); await io.wait('[Mock AI Response]'); await io.wait('keybinding-probe: '); await io.exit();
