@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-18)
 >
-> Six implementation decisions approved. Reader semantic colors and keyboard/touch repairs are being implemented and qualified; shared-shell migration, explorer redesign, category Settings and final cross-surface qualification remain open.
+> Six implementation decisions approved. Semantic colors and decorative icons have bounded qualification; FILE-01–04 are verified. Explorer placement/chrome, category Settings, remaining input polish and final cross-surface qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–14 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -29,18 +29,18 @@
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Remediation has started; no complete criterion is qualified and no gap is accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Four functional explorer criteria are verified; twelve criteria remain open and no gap is accepted.
 
 | Status | Count | Details |
 |---|---:|---|
-| `DONE` | 0 | No redesigned surface qualified |
-| `PARTIAL` | 10 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
+| `DONE` | 4 | FILE-01–04: selection/path, native disclosures, nested refresh and search feedback |
+| `PARTIAL` | 6 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
 | `ABSENT` | 1 | Category-tab Settings presentation |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
 | `IN PROGRESS` | 5 | VIS-01–03, ACT-02 and QA-01: reader palette/input implementation and focused qualification underway |
 | `GAP ACCEPTED` | 0 | No waiver requested or granted |
-| **Total** | **16** | **0.0% closed: (0 + 0) / 16 × 100** |
+| **Total** | **16** | **25.0% closed: (4 + 0) / 16 × 100** |
 
 ### Summary by Surface
 
@@ -48,10 +48,10 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Visual system | 0 | 1 | 0 | 0 | 0 | 3 | 0 | 4 |
 | Actions and input | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
-| File explorer | 0 | 5 | 0 | 0 | 0 | 0 | 0 | 5 |
+| File explorer | 4 | 1 | 0 | 0 | 0 | 0 | 0 | 5 |
 | Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
 | Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **0** | **10** | **1** | **0** | **0** | **5** | **0** | **16** |
+| **Total** | **4** | **6** | **1** | **0** | **0** | **5** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -75,12 +75,14 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 ### File explorer
 
+FILE-01–04 are verified by §14. The findings below retain the pinned baseline and its acceptance contract.
+
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| FILE-01 | PARTIAL | P1 | `activePath` drives file tabs, but is never passed into recursive `FileNode`; tree rows have no active-file indication (S5). Keep file selection visible independently from hover/focus and expose its semantics; show the current full path without depending only on a tooltip. DONE requires opening from tree, search and message link to locate the same file, reveal ancestors where necessary and distinguish duplicate basenames without changing workspace authority. |
-| FILE-02 | PARTIAL | P1 | Directory expansion is a button inside nested lists, without `aria-expanded`, explicit chevron or pending state; only directory emoji changes. Each row/action joins the normal Tab order (S5). Add an accessible disclosure or a complete tree pattern, not incomplete ARIA roles. DONE requires announced expanded/collapsed/loading state and predictable keyboard traversal on a three-level fixture. If using tree semantics, implement roving focus, arrows, Home/End and typeahead; preserve distinct open-file and mention actions. |
-| FILE-03 | PARTIAL | P1 | Each `FileNode` caches `children`; Refresh fetches only the root and Git status. Same-key nodes retain the old child cache, so a nested addition/removal can remain invisible after Refresh (S5). Refresh expanded directories or invalidate their caches while keeping useful expansion/selection. DONE requires an actual nested add/remove followed by Refresh and canonical rows, including safe handling of a delayed older expansion response. |
-| FILE-04 | PARTIAL | P1 | Search renders a bare list for any truthy `query`, while requests require trimmed nonempty input. Loading, no-match and request failure all look like an empty region; JSX supplies no explicit labeled reset control, leaving native search-clearing affordances browser-dependent (S5). Distinguish those states, normalize whitespace consistently and provide reliable reset. DONE requires delayed/failed/zero-result/superseded searches and a whitespace query to give explicit, localized feedback without opening or mentioning a stale result. |
+| FILE-01 | DONE | P1 | `activePath` drives file tabs, but is never passed into recursive `FileNode`; tree rows have no active-file indication (S5). Keep file selection visible independently from hover/focus and expose its semantics; show the current full path without depending only on a tooltip. DONE requires opening from tree, search and message link to locate the same file, reveal ancestors where necessary and distinguish duplicate basenames without changing workspace authority. |
+| FILE-02 | DONE | P1 | Directory expansion is a button inside nested lists, without `aria-expanded`, explicit chevron or pending state; only directory emoji changes. Each row/action joins the normal Tab order (S5). Add an accessible disclosure or a complete tree pattern, not incomplete ARIA roles. DONE requires announced expanded/collapsed/loading state and predictable keyboard traversal on a three-level fixture. If using tree semantics, implement roving focus, arrows, Home/End and typeahead; preserve distinct open-file and mention actions. |
+| FILE-03 | DONE | P1 | Each `FileNode` caches `children`; Refresh fetches only the root and Git status. Same-key nodes retain the old child cache, so a nested addition/removal can remain invisible after Refresh (S5). Refresh expanded directories or invalidate their caches while keeping useful expansion/selection. DONE requires an actual nested add/remove followed by Refresh and canonical rows, including safe handling of a delayed older expansion response. |
+| FILE-04 | DONE | P1 | Search renders a bare list for any truthy `query`, while requests require trimmed nonempty input. Loading, no-match and request failure all look like an empty region; JSX supplies no explicit labeled reset control, leaving native search-clearing affordances browser-dependent (S5). Distinguish those states, normalize whitespace consistently and provide reliable reset. DONE requires delayed/failed/zero-result/superseded searches and a whitespace query to give explicit, localized feedback without opening or mentioning a stale result. |
 | FILE-05 | PARTIAL | P2 | Linked-directory, search, upload collision and hidden-file controls occupy permanent rows; viewer and explorer share a vertical stack whose tree shrinks to a 140px flex basis when a viewer opens (S3, V1, V3). Put uncommon options in an accessible menu/upload flow, retain Files/Changes discovery and prioritize the file list. DONE requires a many-file/long-path fixture at 1440×900 and 390×844 plus short-mobile checks; source/preview/diff, upload collision policy, trust and maximize/restore must remain reachable. Existing maximize already hides tree/chrome; do not report it as missing. |
 
 ### Settings
@@ -149,6 +151,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-18 | VIS-01–03, ACT-02, QA-01 | PARTIAL → IN PROGRESS | Reader foundation in §11; sixteen new source/frontmatter/short-mobile images; rendered contrast and native input journeys in `e2e/files.spec.ts` | Docker `make typecheck` PASS on the subsequent isolated invocation (initial native SIGSEGV retained below); `make test TEST_ARGS='packages/web/src'` PASS (71 files / 617 tests); `make test-e2e E2E_ARGS='e2e/files.spec.ts e2e/file-tabs.spec.ts e2e/accessibility.spec.ts --retries=0'` PASS (26 tests, 49.5s, no snapshot updates); production build/budgets PASS (entry 147 KiB gzip, eager 159 KiB gzip); `make lint-docs` PASS (110 files / 1,621 links); `git diff --check` PASS | Reviewed reader palette/focus/selected states for all five themes and both System resolutions, and Light/Dark touch-emulated captures. No threshold was weakened. Remaining shell/icon/Settings work and broader qualification prevent closure of any whole criterion. |
 | 2026-11-18 | VIS-01–03, ACT-02, QA-01 | IN PROGRESS → IN PROGRESS | Shared semantic palette, native control boundaries, selection markers and reviewed captures in §12 | Frozen palette: workspace/parity typechecks PASS; Web units 71/617 PASS; focused no-update/no-retry browser gate **39/39 PASS** (1.2m), with canonical 1 GiB shared memory; build budgets PASS (147/158 KiB gzip entry/eager). Earlier full workspace units: 653/11,590 PASS before final CSS/test refinements | Bounded color progress only. Full browser campaign 218/221 and diagnostic shard set 220/221 retain native failures; baseline comparison and its limits are documented below. Icons/layout/category work and final QA remain open. |
 | 2026-11-18 | ACT-01–02, FILE-02, QA-01 | States unchanged | Decorative SVG family, preserved translated names, disclosure semantics and reviewed captures in §13 | Canonical typechecks and Web 71/617 PASS; 108 distinct no-update/no-retry owning browser cases PASS (40 focused, 43 linked, 17 workspace assets, 8 locale assets); source/image SHA-256 equality for all 29 staged source files; bundle budgets PASS (148/159 KiB gzip entry/eager) | Initial locale-source assertion and tactile CSS regression corrected; native global/diagnostic failures remain recorded. Icon consistency does not close action-density, mobile-header overlap, explorer or Settings work. |
+| 2026-11-18 | FILE-01–04; VIS-01–03, ACT-02, QA-01 | FILE-01–04: PARTIAL → DONE; other states unchanged | Functional explorer, hierarchical flow repair, contrast/path captures and criterion mapping in §14 | Canonical typechecks PASS; Web 71/617 PASS; frozen no-update/no-retry owning browser gates **104/104 PASS** (35 standard, 17 workspace assets, 44 linked/real files, 8 locale assets); all ten changed source files SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Mock and actual filesystem/API/browser regressions reproduced before repair. Native build failures and the initial locale-inventory assertion remain recorded. FILE-05 layout/chrome, Settings and final global qualification remain open. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -374,7 +377,7 @@ A final **bounded palette gate**, on the exact frozen image with Make's 1 GiB sh
 
 ## 13. Decorative Icons — Bounded Implementation
 
-`components/Icon.tsx` provides one local, typed, `currentColor` SVG family (24-unit view box, 1.75-unit stroke, 18px display). Decorative paths are hidden from accessible names and keyboard focus. Shell, navigation, chat, explorer, terminal chrome and local notices/dialogs replace their heterogeneous action glyphs without changing their callbacks. Owning translated control names remain; worktree deletion gains an explicit Delete name. Meaningful text such as terminal keys, mention signs, Git letters and destructive/consent confirmation copy remains text. No dependency or public API is added.
+The increment committed as `b205ad48` adds `components/Icon.tsx`: one local, typed, `currentColor` SVG family (24-unit view box, 1.75-unit stroke, 18px display). Decorative paths are hidden from accessible names and keyboard focus. Shell, navigation, chat, explorer, terminal chrome and local notices/dialogs replace their heterogeneous action glyphs without changing their callbacks. Owning translated control names remain; worktree deletion gains an explicit Delete name. Meaningful text such as terminal keys, mention signs, Git letters and destructive/consent confirmation copy remains text. No dependency or public API is added.
 
 The existing accessibility helper now checks decorative attributes, accessible control names and 24px minimum targets. Defaults are 28px desktop / 36px coarse pointer, with existing larger component targets retained. The first focused run exposed a real CSS-specificity regression: two reader touch targets became 36px instead of their established 44px. Lower-specificity defaults corrected it; the unchanged touch assertions then passed in **33/33** focused scenarios (1.2m, explicit capture generation). A historical Settings locale-consumer assertion initially failed on the replaced star glyph; its narrow source projection preserves the historical inventory, copy and locale ownership. Canonical typechecks and **71 Web files / 617 tests** subsequently passed. Build budgets remain unchanged: **148 KiB gzip entry / 159 KiB eager**.
 
@@ -383,3 +386,31 @@ The frozen icon image is separate from subsequent explorer work. Its expanded st
 Dedicated production-host checks retain their own outcomes: workspace asset ownership **17/17 PASS** (15.4s); locale asset ownership first failed before browser execution with compiler `SIGSEGV`, then passed **8/8** (12.8s). Linked-directory ownership first ended **33 passed / 1 native worker SIGSEGV / 9 not run**; its subsequent capture-generation run passed **43/43** (3.3m). Fresh linked consent/browse captures include both the palette and decorative-icon changes. No runtime flags, comparison thresholds, case timeouts or automatic retries were weakened.
 
 Light/Dark shell, mobile Dark explorer and Light linked-directory consent captures were reviewed. The mobile explorer still shows global floating controls overlapping its legacy header; that structural issue remains explicit work for the file-layout increment, not accepted accessibility. Final no-update/no-retry checks on the frozen icon source passed **40/40** focused browser cases (1.3m) and **43/43** linked-directory cases (3.4m). Together with the separate 17-case workspace and 8-case locale gates, this supplies **108 distinct passing owning cases**, not a retroactive pass for the failed 262-case run. All 29 staged product/test source files were SHA-256-equal to that frozen image; later explorer edits and captures remain a separate worktree increment. Whole-criterion/cross-surface acceptance stays open.
+
+## 14. Explorer Interaction Foundation
+
+The functional explorer increment keeps its existing placement for now. `WorkspacePanel` owns expansion and current-file identity. Recursive native disclosures expose expanded/busy state, localized live loading feedback and chevrons; their abortable loads retire on collapse, replacement or a newer explicit Refresh. Explicit Refresh invalidates every open directory, while watch ticks retain bounded root-only refresh. Canonical file reads reveal ancestors, but a delayed read cannot undo a newer manual disclosure action. Message/file-written intents reopen a collapsed pane and select Files/reset search at admission, rather than clearing a later user query when the read finishes.
+
+Tree, search and Git rows expose `aria-current`; a marker/tint survives unrelated hover/focus. The reader exposes a focusable, wrapping full path, and existing bounded file tabs still distinguish duplicate basenames. Normalized, debounced searches now separate loading, empty, failure and whitespace feedback in EN/FR, with an explicitly named reset and scoped/abortable result retirement. Opening and mentioning remain separate. No API, authority or persistence-format change is introduced.
+
+Visual inspection also found that the old shared flex selector treated recursive root list items like flat search rows. Children could appear beside/above their parent and the selected row did not span its available width. Excluding recursive nodes from that flat-row selector restores vertical hierarchy. The three-level fixture now measures each child's indentation and position below its parent, in addition to native keyboard/disclosure behavior.
+
+### Evidence and retained failures
+
+- The initial four behavior reproductions failed on the frozen icon implementation; the initial repair passed **4/4** (13.1s).
+- Strengthened existing scenarios reproduced two additional failures against the earlier file implementation: external opening left Changes active, and a delayed read reopened a manually collapsed directory. Both assertions are preserved.
+- Geometry reproduction first stopped in TypeScript compilation with native `SIGSEGV`, before executing a browser case. A separate direct Playwright diagnostic using that already-built pre-fix image then reproduced the geometry defect: the child began at **194.27px**, above the required parent bottom of **274.27px**. This is not a successful compiler rerun.
+- The added real-server scenario uses the existing private linked-directory workspace, ordinary in-root files and no HTTP interception. Actual disk removal/addition and API readback succeeded on the frozen icon source, but its UI still could not show `added.ts` after Refresh. This independently reproduces the cache defect through the filesystem/API/browser boundary, rather than only through the mutable mock fixture.
+- The first expanded capture attempt stopped in Vite with native `SIGSEGV`. Later 35-case capture/verification runs passed before the final hierarchy correction; the final hierarchy capture generation also passed **35/35** (1.2m). Generation alone is not final qualification.
+- One Web-unit run finished **616/617** because the historical locale-allocation guard did not yet project the six new eager EN/FR feedback literals. Explicit post-inventory additions fixed the expectation without regenerating its historical inventory or allowing unrelated key/value changes. Canonical typechecks passed, and the final Web-unit run passed **71 files / 617 tests** (7.36s). Production budgets remain **148/159 KiB gzip entry/eager**, with unchanged limits.
+
+Final frozen-source checks, with 1 GiB shared memory and no snapshot updates or retries, passed **104 distinct owning cases**: standard host **35/35** (1.1m), workspace asset boundary **17/17** (15.2s), linked-directory real host **44/44** (4.1m, including the actual filesystem/API/browser refresh) and locale asset boundary **8/8** (13.3s). All ten changed product/test source files match the frozen workspace by SHA-256. Light/Dark selection/path captures were reviewed, and the existing seven-theme checks now also measure the selected-row marker, full path and selected Git badge.
+
+| Criterion | Completion evidence |
+|---|---|
+| FILE-01 | `file-tabs.spec.ts` checks duplicate basenames, full paths and current rows. `files.spec.ts` opens the same nested file from tree, message and search, reveals ancestors, reopens a collapsed pane and protects newer manual disclosure intent. Real workspace/linked ownership gates retain authority behavior. |
+| FILE-02 | The three-level fixture checks Tab/Enter traversal, expanded/collapsed/busy semantics, live loading text, vertical/indented geometry and a distinct keyboard mention without a content reread. Native disclosures are used, not partial ARIA tree roles. |
+| FILE-03 | Mutable canonical HTTP fixtures exercise a delayed older expansion response and preserved selection without rereading content. The real-host scenario additionally performs actual filesystem add/remove, checks canonical API readback, then verifies refreshed rows, selected path and unchanged reader content. |
+| FILE-04 | Both EN/FR scenarios cover pending, failure, zero results, normalized/whitespace queries, reset, supersession and separate fresh-result mention/open. Old results cannot be acted on after a newer query. |
+
+These four contracts are closed on this increment, not the whole redesign. The left explorer/right reader layout, compact options/upload flow, mobile header overlap, category Settings and final global qualification are not delivered by this functional increment.

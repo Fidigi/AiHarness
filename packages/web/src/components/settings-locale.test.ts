@@ -38,6 +38,26 @@ const vertexCredentials = {
   ],
 };
 
+// AUDIT-1 explorer feedback is an explicit eager addition, not a Settings relocation.
+const explorerFeedback = {
+  en: [
+    "    'files.clearSearch': 'Clear search',\n",
+    "    'files.searchLoading': 'Searching files…',\n",
+    "    'files.searchEmpty': 'No matching files.',\n",
+    "    'files.searchFailed': 'File search failed.',\n",
+    "    'files.searchWhitespace': 'Enter a file name to search.',\n",
+    "    'files.loadingDirectory': 'Loading {name}…',\n",
+  ],
+  fr: [
+    "    'files.clearSearch': 'Effacer la recherche',\n",
+    "    'files.searchLoading': 'Recherche de fichiers…',\n",
+    "    'files.searchEmpty': 'Aucun fichier correspondant.',\n",
+    "    'files.searchFailed': 'La recherche de fichiers a échoué.',\n",
+    "    'files.searchWhitespace': 'Indiquez un nom de fichier à rechercher.',\n",
+    "    'files.loadingDirectory': 'Chargement de {name}…',\n",
+  ],
+};
+
 describe('Settings locale allocation', () => {
   it('relocates all projected inventoried EN/FR literals byte-for-byte and changes no retained key/value', () => {
     expect(inventory.moved).toHaveLength(228);
@@ -52,7 +72,8 @@ describe('Settings locale allocation', () => {
       const moved = retainedMoved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
       expect(lazy).toEqual(moved);
       const projected = inventory.original[locale].lines.filter(line => !retired.includes(line)).flatMap(line =>
-        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]).flatMap(withVertexCredentials);
+        line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]).flatMap(withVertexCredentials)
+        .flatMap(line => line.startsWith("    'files.search':") ? [line, ...explorerFeedback[locale]] : [line]);
       expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
       expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
     }

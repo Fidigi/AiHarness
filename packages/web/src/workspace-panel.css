@@ -35,7 +35,7 @@
 .upload-progress button { padding: .15rem .35rem; border: 1px solid var(--border-control); border-radius: 3px; color: inherit; background: transparent; cursor: pointer; }
 .file-tree { flex: 1; overflow: auto; padding: .25rem; }
 .file-tree ul { list-style: none; }
-.file-node > div, .file-tree > ul > li { display: flex; min-width: 0; align-items: center; }
+.file-node > div, .file-tree > ul > li:not(.file-node) { display: flex; min-width: 0; align-items: center; }
 .file-name, .file-tree > ul > li > button:first-child { min-width: 0; min-height: 32px; flex: 1; overflow: hidden; padding: .35rem; border: 0; border-radius: 3px; color: var(--text-primary); background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .git-badge { float: right; min-width: 1.1rem; margin-left: .3rem; color: var(--status-warning); font: 600 .68rem ui-monospace, monospace; text-align: center; }
 .git-badge.added, .git-badge.untracked { color: var(--status-success); }
@@ -45,6 +45,8 @@
 .file-node > div:hover .file-mention, .file-node > div:focus-within .file-mention,
 .file-tree > ul > li:hover > button:last-child, .file-tree > ul > li:focus-within > button:last-child { opacity: 1; }
 .file-node > small { display: block; padding-left: 1rem; color: var(--status-danger); }
+.file-node > .file-node-status { color: var(--text-secondary); }
+.file-tree button[aria-current="true"] { color: var(--text-primary); background: var(--surface-selected); box-shadow: inset 3px 0 var(--text-link); }
 .panel-empty, .panel-error { padding: 1rem; color: var(--text-secondary); }
 .panel-error { color: var(--status-danger); }
 .git-summary { display: flex; gap: .8rem; padding: .4rem .6rem; color: var(--text-secondary); }
@@ -84,6 +86,8 @@
   .file-mention, .file-tree > ul > li > button:last-child { opacity: 1; }
 }
 .file-viewer > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-path { display: block; flex-shrink: 0; max-height: 4.5rem; overflow: auto; padding: .35rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+.viewer-path:focus-visible { outline-offset: -2px; }
 .viewer-meta { padding: .35rem .6rem; color: var(--text-secondary); font-size: .72rem; }
 .file-viewer nav { display: flex; padding: 0 .4rem .35rem; border-bottom: 1px solid var(--border-subtle); }
 .viewer-content { flex: 1; overflow: auto; }

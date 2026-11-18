@@ -25,7 +25,6 @@ const paths = {
   terminal: 'M3 4h18v16H3zM7 8l4 4-4 4M13 16h4',
   tool: 'M14 3a6 6 0 0 0-7 8l-4 4a3 3 0 0 0 4 4l4-4a6 6 0 0 0 8-7l-4 4-3-3z',
   folder: 'M3 7V4h6l3 3h9v13H3z',
-  'folder-open': 'M3 20V4h6l3 3h8v4M3 20l4-9h15l-4 9z',
   file: 'M14 3H5v18h14V8zM14 3v5h5',
   globe: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3a4 9 0 0 1 0 18 4 9 0 0 1 0-18',
   settings: 'M9 3h6v2l2 1 2-1 3 5-2 1v2l2 1-3 5-2-1-2 1v2H9v-2l-2-1-2 1-3-5 2-1v-2l-2-1 3-5 2 1 2-1zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',

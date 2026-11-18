@@ -29,7 +29,7 @@ function quoteMention(path: string): string {
   return path.includes(' ') ? `@"${path}"` : `@${path}`;
 }
 
-function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden }: {
+function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden, activePath, expandedPaths, onToggle, refreshVersion }: {
   entry: WorkspaceFileEntry;
   cwd: string;
   depth: number;
@@ -37,42 +37,52 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
   onMention: (path: string) => void;
   onLinkedDirectory: (path: string) => void;
   showHidden: boolean;
+  activePath: string;
+  expandedPaths: ReadonlySet<string>;
+  onToggle: (path: string) => void;
+  refreshVersion: number;
 }) {
-  const { locale } = useI18n();
-  const [open, setOpen] = useState(false);
+  const { t, locale } = useI18n();
+  const open = expandedPaths.has(entry.path);
+  const visible = !entry.hidden || showHidden;
   const [children, setChildren] = useState<WorkspaceFileEntry[]>();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  if (entry.hidden && !showHidden) return null;
-  const activate = async (event: { currentTarget: HTMLButtonElement }) => {
-    if (!entry.isDirectory) {
-      onOpen(entry.path, entry.isSymbolicLink ? event.currentTarget : undefined);
-      return;
-    }
-    const next = !open;
-    setOpen(next);
-    if (next && !children) {
-      const result = await listFiles(cwd, entry.path);
+  useEffect(() => {
+    if (!entry.isDirectory || !open || !visible) { setLoading(false); return; }
+    const controller = new AbortController();
+    setLoading(true); setError('');
+    void listFiles(cwd, entry.path, controller.signal).then(result => {
+      if (controller.signal.aborted) return;
+      setLoading(false);
       if (result.success && result.data) setChildren(result.data.entries);
-      else setError(result.error || 'Error');
-    }
-  };
+      else { setChildren(undefined); setError(result.error || t('files.loadFailed')); }
+    });
+    return () => controller.abort();
+  }, [cwd, entry.path, entry.isDirectory, open, visible, refreshVersion]);
+
+  if (!visible) return null;
   return (
     <li className="file-node">
       <div style={{ paddingLeft: `${depth * .8}rem` }}>
-        <button className="file-name" onClick={event => void activate(event)} title={entry.path}
-          aria-expanded={entry.isDirectory ? open : undefined}>
-          <Icon name={entry.isDirectory ? open ? 'folder-open' : 'folder' : 'file'} /> {entry.name}
+        <button className="file-name" onClick={event => entry.isDirectory ? onToggle(entry.path)
+          : onOpen(entry.path, entry.isSymbolicLink ? event.currentTarget : undefined)} title={entry.path}
+          aria-expanded={entry.isDirectory ? open : undefined} aria-busy={entry.isDirectory ? loading : undefined}
+          aria-current={!entry.isDirectory && activePath === entry.path ? 'true' : undefined}>
+          <Icon name={entry.isDirectory ? open ? 'chevron-down' : 'chevron-right' : 'file'} /> {entry.name}
           {entry.gitStatus && <span className={`git-badge ${entry.gitStatus}`} title={entry.gitStatus}>{gitBadge(entry.gitStatus)}</span>}
         </button>
-        {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`Mention ${entry.path}`}>@</button>}
+        {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`${t('files.mention')} ${entry.path}`}>@</button>}
       </div>
       {entry.isSymbolicLink && <small className="file-link-reason"><button type="button"
         onClick={() => onLinkedDirectory(entry.path)}>{linkedDirectoryMessages(locale).review}</button></small>}
-      {error && <small role="alert">{error}</small>}
-      {open && children && <ul>{children.map(child => (
+      {entry.isDirectory && open && loading && <small className="file-node-status" role="status">{t('files.loadingDirectory', { name: entry.name })}</small>}
+      {entry.isDirectory && error && <small role="alert">{error}</small>}
+      {entry.isDirectory && open && children && <ul>{children.map(child => (
         <FileNode key={child.path} entry={child} cwd={cwd} depth={depth + 1}
-          onOpen={onOpen} onMention={onMention} onLinkedDirectory={onLinkedDirectory} showHidden={showHidden} />
+          onOpen={onOpen} onMention={onMention} onLinkedDirectory={onLinkedDirectory} showHidden={showHidden}
+          activePath={activePath} expandedPaths={expandedPaths} onToggle={onToggle} refreshVersion={refreshVersion} />
       ))}</ul>}
     </li>
   );
@@ -96,6 +106,24 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState<Tab>('files');
   const [entries, setEntries] = useState<WorkspaceFileEntry[]>([]);
+  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(new Set());
+  // Watch ticks retain their bounded root refresh; only explicit Refresh fans out.
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const directoryIntent = useRef(0);
+  const toggleDirectory = (path: string) => {
+    directoryIntent.current++;
+    setExpandedPaths(current => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  };
+  const revealFile = (path: string) => setExpandedPaths(current => {
+    const next = new Set(current);
+    const parts = path.split('/');
+    for (let length = 1; length < parts.length; length++) next.add(parts.slice(0, length).join('/'));
+    return next;
+  });
   const [changes, setChanges] = useState<GitStatusFile[]>([]);
   const [gitSummary, setGitSummary] = useState({ repository: true, additions: 0, deletions: 0 });
   const [showHidden, setShowHidden] = useState(false);
@@ -114,7 +142,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const [diff, setDiff] = useState('');
   const [diffBinary, setDiffBinary] = useState(false);
   const [query, setQuery] = useState('');
-  const [searchResult, setSearchResult] = useState<string[]>([]);
+  const [searchResult, setSearchResult] = useState<{ scope: string; query: string; files: string[]; failed: boolean }>();
   const [viewerWidth, setViewerWidth] = useState(520);
   const [viewerMaxWidth, setViewerMaxWidth] = useState(() => Math.max(360, Math.min(1200, window.innerWidth * .65)));
   const visibleViewerWidth = Math.min(viewerWidth, viewerMaxWidth);
@@ -129,6 +157,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const resizeCleanupRef = useRef<(() => void) | undefined>(undefined);
   const workspaceOperationTrusted = Boolean(workspace
     && (workspace.operationTrusted ?? workspace.trusted));
+
+  const workspaceScope = JSON.stringify([workspace?.id, workspace?.cwd, workspaceOperationTrusted]);
+  const normalizedQuery = query.trim();
+  const currentSearch = searchResult?.scope === workspaceScope && searchResult.query === normalizedQuery ? searchResult : undefined;
 
   const refresh = async () => {
     if (!workspaceOperationTrusted || !workspace) return;
@@ -151,6 +183,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   };
 
   useEffect(() => {
+    setExpandedPaths(new Set());
     uploadAbortRef.current?.abort();
     openFileAbortRef.current?.abort();
     refreshAbortRef.current?.abort();
@@ -164,7 +197,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     setGitSummary({ repository: false, additions: 0, deletions: 0 });
     setDiff('');
     setDiffBinary(false);
-    setSearchResult([]);
+    setSearchResult(undefined);
     setError('');
     void refresh();
     return () => {
@@ -174,22 +207,21 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       openFileAbortRef.current?.abort();
       refreshAbortRef.current?.abort();
     };
-  }, [workspace?.cwd, workspaceOperationTrusted]);
+  }, [workspaceScope]);
 
   useEffect(() => {
-    if (!workspace || !workspaceOperationTrusted || query.trim().length < 1) {
-      setSearchResult([]);
-      return;
-    }
-    setSearchResult([]);
+    setSearchResult(undefined);
+    if (!workspace || !workspaceOperationTrusted || !normalizedQuery) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchFiles(workspace.cwd, query.trim(), controller.signal).then(result => {
-        if (!controller.signal.aborted && result.success && result.data) setSearchResult(result.data.files.slice(0, 100));
+      void searchFiles(workspace.cwd, normalizedQuery, controller.signal).then(result => {
+        if (controller.signal.aborted) return;
+        setSearchResult({ scope: workspaceScope, query: normalizedQuery,
+          files: result.success && result.data ? result.data.files.slice(0, 100) : [], failed: !result.success || !result.data });
       });
     }, 180);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace?.cwd, workspaceOperationTrusted]);
+  }, [normalizedQuery, workspaceScope]);
 
   const uploadSelectedFiles = async (files: File[]) => {
     if (!workspace || !workspaceOperationTrusted || !files.length) return;
@@ -212,8 +244,9 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     }, 1_200);
   };
 
-  const openFile = async (rawPath: string, requestedTab?: ViewerTab, requestedLine?: number, linkOrigin?: HTMLButtonElement) => {
+  const openFile = async (rawPath: string, requestedTab?: ViewerTab, requestedLine?: number, linkOrigin?: HTMLButtonElement, revealInExplorer = false) => {
     if (!workspace || !workspaceOperationTrusted || rawPath.length > 4096) return;
+    if (revealInExplorer) setCollapsed(false);
     // New explicit read admission retires old metadata before any response/import await.
     if (linkOrigin) setLinkedDirectoryRequest(undefined);
     setError('');
@@ -222,10 +255,13 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     const line = requestedLine ?? (match?.[2] ? Number(match[2]) : undefined);
     const previous = tabsRef.current.find(file => file.path === filePath);
     if (!previous && tabsRef.current.length >= 8) { setError(copy.limit); return; }
+    if (revealInExplorer) { setTab('files'); setQuery(''); }
     const targetTab = requestedTab ?? previous?.mode ?? 'source';
     publishTabs(previous ? tabsRef.current.map(file => file.path === filePath ? { ...file, mode: targetTab } : file)
       : [...tabsRef.current, { path: filePath, mode: targetTab }]);
     const generation = ++readEpoch.current;
+    // A delayed read must not undo a newer explicit disclosure action.
+    const directoryGeneration = directoryIntent.current;
     setActivePath(filePath); setSelected(undefined); setDiff(''); setDiffBinary(false); setReading(true);
     openFileAbortRef.current?.abort();
     const controller = new AbortController();
@@ -246,10 +282,12 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     if (content.data && (content.success || content.data.tooLarge)) {
       setSelected(content.data);
       setActivePath(content.data.path);
+      if (directoryGeneration === directoryIntent.current) revealFile(content.data.path);
       publishTabs(tabsRef.current.map(file => file.path === filePath ? { ...file, path: content.data!.path } : file)
         .filter((file, index, files) => files.findIndex(other => other.path === file.path) === index));
     } else if (targetTab === 'diff' && diffResult?.success) {
       // Deleted and oversized files can still have a useful Git diff even when source content is unavailable.
+      if (directoryGeneration === directoryIntent.current) revealFile(filePath);
       setSelected({
         path: filePath,
         name: filePath.split('/').pop() || filePath,
@@ -295,9 +333,9 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   useEffect(() => {
     const openLinkedFile = (event: Event) => {
       const detail = (event as CustomEvent).detail as unknown;
-      if (typeof detail === 'string') void openFile(detail.replace(/^\/+/, ''));
+      if (typeof detail === 'string') void openFile(detail.replace(/^\/+/, ''), undefined, undefined, undefined, true);
       else if (detail && typeof detail === 'object' && 'path' in detail && typeof detail.path === 'string') {
-        void openFile(detail.path.replace(/^\/+/, ''), 'source', 'line' in detail && typeof detail.line === 'number' ? detail.line : undefined);
+        void openFile(detail.path.replace(/^\/+/, ''), 'source', 'line' in detail && typeof detail.line === 'number' ? detail.line : undefined, undefined, true);
       }
     };
     window.addEventListener('aih-open-file', openLinkedFile);
@@ -428,8 +466,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       {!workspaceOperationTrusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
         <>
           <div className="file-toolbar">
-            <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('files.search')} />
-            <button onClick={() => void refresh()} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
+            <input type="search" value={query} onChange={event => setQuery(event.target.value)}
+              placeholder={t('files.search')} aria-label={t('files.search')} />
+            {query && <button onClick={() => setQuery('')} aria-label={t('files.clearSearch')}><Icon name="close" /></button>}
+            <button onClick={() => { setRefreshVersion(value => value + 1); void refresh(); }} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
             <button type="button" title={t('files.upload')} aria-label={t('files.upload')}
               disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
               onClick={() => uploadInput.current?.click()}><Icon name="upload" /></button>
@@ -462,11 +502,18 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           <label className="hidden-toggle"><input type="checkbox" checked={showHidden} onChange={event => setShowHidden(event.target.checked)} /> {t('files.hidden')}</label>
           {error && <p className="panel-error" role="alert">{error}</p>}
           <div className="file-tree">
-            {query ? (
-              <ul>{searchResult.map(file => <li key={file}><button onClick={() => void openFile(file)}><Icon name="file" /> {file}</button><button onClick={() => mention(file)}>@</button></li>)}</ul>
+            {query && !normalizedQuery && <p className="panel-empty" role="status">{t('files.searchWhitespace')}</p>}
+            {normalizedQuery ? !currentSearch ? <p className="panel-empty" role="status">{t('files.searchLoading')}</p>
+              : currentSearch.failed ? <p className="panel-error" role="alert">{t('files.searchFailed')}</p>
+                : !currentSearch.files.length ? <p className="panel-empty" role="status">{t('files.searchEmpty')}</p> : (
+              <ul>{currentSearch.files.map(file => <li key={file}>
+                <button onClick={() => void openFile(file)} aria-current={activePath === file ? 'true' : undefined}><Icon name="file" /> {file}</button>
+                <button onClick={() => mention(file)} aria-label={`${t('files.mention')} ${file}`}>@</button>
+              </li>)}</ul>
             ) : tab === 'files' ? (
               entries.length ? <ul>{entries.map(entry => <FileNode key={entry.path} entry={entry} cwd={workspace.cwd}
                 depth={0} onOpen={(path, origin) => void openFile(path, 'source', undefined, origin)} onMention={mention} showHidden={showHidden}
+                activePath={activePath} expandedPaths={expandedPaths} onToggle={toggleDirectory} refreshVersion={refreshVersion}
                 onLinkedDirectory={path => openLinkedDirectory(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.')} />)}</ul>
                 : <p className="panel-empty">{t('files.empty')}</p>
             ) : gitSummary.repository ? (
@@ -475,7 +522,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
                 {changedGroups.map(([group, files]) => <section className="change-group" key={group}>
                   <h3>{group}</h3>
                   <ul>{files.map(change => <li key={change.path} className="change-row">
-                    <button onClick={() => void openFile(change.path, 'diff')}>
+                    <button onClick={() => void openFile(change.path, 'diff')} aria-current={activePath === change.path ? 'true' : undefined}>
                       <b>{gitBadge(change.status)}</b>
                       <span>{change.path.slice(group === '.' ? 0 : group.length + 1)}</span>
                       {(change.additions !== undefined || change.deletions !== undefined) && (
@@ -522,6 +569,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
               <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}><Icon name="close" /></button>
             </div>
           </header>
+          <code className="viewer-path" tabIndex={0}>{selected.path}</code>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>
           <nav>
             <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => selectMode('source')}>{t('files.source')}</button>

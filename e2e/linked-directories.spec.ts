@@ -286,3 +286,36 @@ test('real in-root file links retain ordinary file opening without consent reque
   await expect(page.locator('.linked-directory-dialog')).toHaveCount(0);
   expect(consentRequests).toEqual([]);
 });
+
+test('real nested directory refresh follows filesystem additions and removals', async ({ page }) => {
+  const relative = 'nested-files/deep/leaf';
+  const directory = path.join(source, relative);
+  await mkdir(directory, { recursive: true });
+  try {
+    await writeFile(path.join(directory, 'keep.ts'), 'KEEP_NESTED_CONTENT');
+    await writeFile(path.join(directory, 'removed.ts'), 'REMOVED_NESTED_CONTENT');
+    await page.request.post('/api/workspaces/trust', { data: { cwd: source, confirm: true } })
+      .then(response => expect(response.ok()).toBe(true));
+    await page.goto(`/?cwd=${encodeURIComponent(source)}`);
+    await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
+    await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
+    const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
+    for (const name of ['nested-files', 'deep', 'leaf']) {
+      const disclosure = panel.getByRole('button', { name, exact: true });
+      await disclosure.click(); await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    }
+    const keep = panel.getByRole('button', { name: 'keep.ts', exact: true });
+    await keep.click(); await expect(panel.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
+    await rm(path.join(directory, 'removed.ts'));
+    await writeFile(path.join(directory, 'added.ts'), 'ADDED_NESTED_CONTENT');
+    const listed = await page.request.get('/api/files', { params: { cwd: source, path: relative } });
+    expect(listed.ok()).toBe(true);
+    expect((await listed.json()).entries.map((entry: { name: string }) => entry.name).sort()).toEqual(['added.ts', 'keep.ts']);
+    await panel.getByRole('button', { name: 'Refresh files', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'added.ts', exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'removed.ts', exact: true })).toHaveCount(0);
+    await expect(keep).toHaveAttribute('aria-current', 'true');
+    await expect(panel.locator('.viewer-path')).toHaveText(`${relative}/keep.ts`);
+    await expect(panel.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
+  } finally { await rm(path.join(source, 'nested-files'), { recursive: true, force: true }); }
+});

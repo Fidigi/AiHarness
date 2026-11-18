@@ -157,6 +157,7 @@ export interface MockApiOptions {
 }
 export interface MockApiController {
   requests: RecordedApiRequest[];
+  workspaceFiles: NonNullable<MockApiOptions['workspaceFiles']>;
   sessions: MockSession[];
   worktrees: MockWorktree[];
   subagentRuns: SubagentRunSnapshot[];
@@ -615,6 +616,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
   };
   const controller: MockApiController = {
     requests: [],
+    workspaceFiles,
     sessions: structuredClone(options.sessions ?? []),
     worktrees,
     subagentRuns,

@@ -40,6 +40,12 @@ test('file tabs are bounded, keyboard navigable and distinguish identical basena
   }
   await expect(panel.getByRole('tab', { name: 'left/same.csv', exact: true })).toBeVisible();
   await expect(panel.getByRole('tab', { name: 'right/same.csv', exact: true })).toBeVisible();
+  await expect(panel.locator('button.file-name[title="right/same.csv"]')).toHaveAttribute('aria-current', 'true');
+  await expect(panel.locator('.viewer-path')).toHaveText('right/same.csv');
+  await panel.getByRole('tab', { name: 'left/same.csv', exact: true }).click();
+  await expect(panel.locator('button.file-name[title="left/same.csv"]')).toHaveAttribute('aria-current', 'true');
+  await expect(panel.locator('button.file-name[title="right/same.csv"]')).not.toHaveAttribute('aria-current', 'true');
+  await expect(panel.locator('.viewer-path')).toHaveText('left/same.csv');
 });
 
 for (const scene of [
