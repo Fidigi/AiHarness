@@ -8,7 +8,11 @@ export const action = /^(Copy through displayed entry|Copier jusqu’à l’entr
 export const menuName = /^(Conversation actions|Actions de conversation)$/;
 export async function openNavigation(page: Page) {
   const toggle = page.getByRole('button', { name: /^(Toggle navigation|Afficher ou masquer la navigation)$/ });
-  if (page.viewportSize()!.width < 960 && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+  if (page.viewportSize()!.width < 960) {
+    if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+    // The native popover captures its invoker's viewport position on opening.
+    await expect(page.locator('.sidebar')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  }
   await expect(page.locator('.workspace-button')).toBeVisible();
 }
 async function nativeStore(probe: { id: string; cwd: string }) {

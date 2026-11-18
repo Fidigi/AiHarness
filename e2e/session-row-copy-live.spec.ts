@@ -20,6 +20,9 @@ for (const scenario of [
     await expect(menu).toHaveScreenshot(`row-copy-menu-${scenario.locale}-${scenario.theme}-${scenario.width}.png`);
     const afterCapture = await page.evaluate(() => ({ now: Date.now(), perf: performance.now() }));
     expect(afterCapture.now).toBe(f.presentationTime); expect(afterCapture.perf).toBeGreaterThan(beforeCapture.perf);
+    // Screenshot animation finishing must not conceal an origin captured mid-slide.
+    expect(await menu.evaluate(element => element.getBoundingClientRect().right))
+      .toBeCloseTo(await invoker.evaluate(element => element.getBoundingClientRect().right), 0);
     const accessibility = await new AxeBuilder({ page }).include('.sidebar').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     expect(accessibility.violations).toEqual([]);
     await page.keyboard.press('Escape'); await expect(item).not.toBeVisible(); await expect(invoker).toBeFocused();
