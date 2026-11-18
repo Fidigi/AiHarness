@@ -114,10 +114,13 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const [query, setQuery] = useState('');
   const [searchResult, setSearchResult] = useState<string[]>([]);
   const [viewerWidth, setViewerWidth] = useState(520);
+  const [viewerMaxWidth, setViewerMaxWidth] = useState(() => Math.max(360, Math.min(1200, window.innerWidth * .65)));
+  const visibleViewerWidth = Math.min(viewerWidth, viewerMaxWidth);
   const [viewerExpanded, setViewerExpanded] = useState(false);
   const [targetLine, setTargetLine] = useState<number>();
   const [uploadProgress, setUploadProgress] = useState<FileUploadProgress>();
   const [collision, setCollision] = useState<'reject' | 'rename' | 'overwrite'>('reject');
+  const uploadInput = useRef<HTMLInputElement>(null);
   const uploadAbortRef = useRef<AbortController | undefined>(undefined);
   const openFileAbortRef = useRef<AbortController | undefined>(undefined);
   const refreshAbortRef = useRef<AbortController | undefined>(undefined);
@@ -358,10 +361,17 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
   }, [changes]);
 
+  useEffect(() => {
+    const resize = () => setViewerMaxWidth(Math.max(360, Math.min(1200, window.innerWidth * .65)));
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  const resizeViewer = (width: number) => setViewerWidth(Math.max(360, Math.min(viewerMaxWidth, width)));
   const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     resizeCleanupRef.current?.();
-    const move = (pointer: PointerEvent) => setViewerWidth(Math.max(300, Math.min(1200, window.innerWidth - pointer.clientX)));
+    const move = (pointer: PointerEvent) => resizeViewer(window.innerWidth - pointer.clientX);
     const finish = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
@@ -383,10 +393,17 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
 
   return (
     <aside ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
-      style={selected ? { flexBasis: `${viewerWidth}px`, width: `${viewerWidth}px` } : undefined}
+      style={selected ? { flexBasis: `${visibleViewerWidth}px`, width: `${visibleViewerWidth}px` } : undefined}
       aria-label={t('files.explorer')}>
-      {selected && <div className="panel-resizer" role="separator" aria-orientation="vertical"
-        aria-label={t('files.resize')} onPointerDown={beginResize} />}
+      {selected && !viewerExpanded && <div className="panel-resizer" role="separator" aria-orientation="vertical"
+        tabIndex={0} aria-valuemin={360} aria-valuemax={viewerMaxWidth} aria-valuenow={visibleViewerWidth}
+        aria-label={t('files.resize')} onPointerDown={beginResize} onKeyDown={event => {
+          const width = event.key === 'ArrowLeft' ? visibleViewerWidth + 20
+            : event.key === 'ArrowRight' ? visibleViewerWidth - 20
+              : event.key === 'Home' ? 360 : event.key === 'End' ? viewerMaxWidth : undefined;
+          if (width === undefined) return;
+          event.preventDefault(); resizeViewer(width);
+        }} />}
       <header>
         <div className="panel-tabs">
           <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>{t('files.files')}</button>
@@ -411,12 +428,14 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           <div className="file-toolbar">
             <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('files.search')} />
             <button onClick={() => void refresh()} aria-label={t('files.refresh')}>↻</button>
-            <label title={t('files.upload')} aria-disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}>↑<input
-              type="file" multiple disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
-                const files = [...(event.target.files ?? [])];
-                if (files.length) void uploadSelectedFiles(files);
-                event.target.value = '';
-              }} /></label>
+            <button type="button" title={t('files.upload')} aria-label={t('files.upload')}
+              disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
+              onClick={() => uploadInput.current?.click()}>↑</button>
+            <input ref={uploadInput} hidden type="file" multiple disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
+              const files = [...(event.target.files ?? [])];
+              if (files.length) void uploadSelectedFiles(files);
+              event.target.value = '';
+            }} />
           </div>
           <div className="upload-options">
             <label>{t('files.collision')}

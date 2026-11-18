@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-18)
 >
-> Assessment delivered and six implementation decisions approved; first-render refinement, remediation and fresh browser qualification remain open for VIS-01–04, ACT-01–02, FILE-01–05, PREF-01–04 and QA-01.
+> Six implementation decisions approved. Reader semantic colors and keyboard/touch repairs are being implemented and qualified; shared-shell migration, explorer redesign, category Settings and final cross-surface qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,11 +13,11 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in this audit |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
-### Known limitations
+### Initial assessment limitations
 
 - Existing images are historical artifacts present at the pinned commit, not fresh screenshots of that commit running. They illustrate density and styling, but cannot prove current runtime geometry. In particular, the inspected dark file-pane image was last changed in `39d300bb` (2026-10-03), versus `2373895b` (2026-11-02) for its light counterpart (`git log -1 --format='%h %cs %s' -- <capture>`); do not infer a theme-dependent functional difference from those images.
 - Color ratios use opaque CSS declarations and their source-resolved background, not browser-computed styles, pixel sampling or a full WCAG conformance evaluation. Interaction, opacity, focus, platform rendering and actual visibility still need browser verification.
@@ -25,20 +25,20 @@
 - No fresh Mist/Rose/Pine, forced-colors, zoom or physical-device captures were produced. Browser test definitions are evidence of intended coverage, not passing results from this session.
 - U2 was inspected only at 1440×1000 in a fresh browser context, without changing themes, submitting prompts or saving settings. HTTP mutation requests were blocked during the detailed reference review; some background agent requests therefore failed. This is layout/navigation observation, not account, feature-parity, accessibility or backend qualification. Neither reference changes the pinned AiHarness target.
 - CLI themes, the independent `demo/`, backend/API correctness, security certification and a complete chat/terminal redesign are outside scope. Preserve their existing contracts.
-- This change adds only this report and its two navigation entries. Any target evolution requires a new audit or an explicitly journaled re-audit.
+- The initial assessment added only this report and its two navigation entries (committed as `8f1dde38`). Subsequent product changes are explicitly journaled below, without rewriting the pinned historical evidence.
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. No remediation was implemented and no gap was accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Remediation has started; no complete criterion is qualified and no gap is accepted.
 
 | Status | Count | Details |
 |---|---:|---|
 | `DONE` | 0 | No redesigned surface qualified |
-| `PARTIAL` | 15 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
+| `PARTIAL` | 10 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
 | `ABSENT` | 1 | Category-tab Settings presentation |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
-| `IN PROGRESS` | 0 | No product implementation started |
+| `IN PROGRESS` | 5 | VIS-01–03, ACT-02 and QA-01: reader palette/input implementation and focused qualification underway |
 | `GAP ACCEPTED` | 0 | No waiver requested or granted |
 | **Total** | **16** | **0.0% closed: (0 + 0) / 16 × 100** |
 
@@ -46,12 +46,12 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 
 | Surface | Done | Partial | Absent | To define | Blocked | In progress | Gap accepted | Total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Visual system | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 4 |
-| Actions and input | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 2 |
+| Visual system | 0 | 1 | 0 | 0 | 0 | 3 | 0 | 4 |
+| Actions and input | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
 | File explorer | 0 | 5 | 0 | 0 | 0 | 0 | 0 | 5 |
 | Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
-| Qualification | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 |
-| **Total** | **0** | **15** | **1** | **0** | **0** | **0** | **0** | **16** |
+| Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
+| **Total** | **0** | **10** | **1** | **0** | **0** | **5** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -61,9 +61,9 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| VIS-01 | PARTIAL | P1 | Colors are mostly literal values across several stylesheets; variables cover focus/layout but not a semantic palette (S1–S4). Introduce shared surface/text/border/action/status tokens, used by audited chrome and states. DONE requires a reviewed token inventory and browser-computed checks showing those surfaces consume theme-owned values rather than unrelated overrides. |
-| VIS-02 | PARTIAL | P1 | Light file syntax, Git badges and frontmatter retain pale dark-theme colors; specific ratios are 1.58–2.04:1 (§8.1). Fix each identified pair; qualify normal text at ≥4.5:1, large text at ≥3:1 and essential non-text controls/state indicators at ≥3:1 against adjacent colors. Decorative separators need not all reach 3:1. DONE requires computed-color and visible-state evidence, including hover/focus/selected states. |
-| VIS-03 | PARTIAL | P2 | Mist/Rose/Pine recolor only body/main/sidebar/chat-toolbar/input-container backgrounds (S2), leaving Settings, file viewer and most controls on the default navy palette. Give every selectable theme complete audited-surface coverage. DONE requires chat, Settings and explorer captures plus contrast checks for all five explicit themes and both System resolutions, without silently deleting saved theme choices. |
+| VIS-01 | IN PROGRESS | P1 | Colors are mostly literal values across several stylesheets; variables cover focus/layout but not a semantic palette (S1–S4). Introduce shared surface/text/border/action/status tokens, used by audited chrome and states. DONE requires a reviewed token inventory and browser-computed checks showing those surfaces consume theme-owned values rather than unrelated overrides. |
+| VIS-02 | IN PROGRESS | P1 | Light file syntax, Git badges and frontmatter retain pale dark-theme colors; specific ratios are 1.58–2.04:1 (§8.1). Fix each identified pair; qualify normal text at ≥4.5:1, large text at ≥3:1 and essential non-text controls/state indicators at ≥3:1 against adjacent colors. Decorative separators need not all reach 3:1. DONE requires computed-color and visible-state evidence, including hover/focus/selected states. |
+| VIS-03 | IN PROGRESS | P2 | Mist/Rose/Pine recolor only body/main/sidebar/chat-toolbar/input-container backgrounds (S2), leaving Settings, file viewer and most controls on the default navy palette. Give every selectable theme complete audited-surface coverage. DONE requires chat, Settings and explorer captures plus contrast checks for all five explicit themes and both System resolutions, without silently deleting saved theme choices. |
 | VIS-04 | PARTIAL | P2 | The user approved the six starting decisions in §5 on 2026-11-18, using U1/U2 as the preferred reference: neutral surfaces/blue accent, thin icons, horizontal category tabs, desktop modal/mobile full-screen Settings, left explorer/right reader and retained alternate themes. No starting design arbitration remains. Exact colors, spacing and responsive details may be refined after the first render. DONE still requires reviewed desktop/mobile Light/Dark visuals covering surface separation, typography and icon weight; approval of direction alone is not visual qualification. |
 
 ### Actions and input
@@ -71,7 +71,7 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
 | ACT-01 | PARTIAL | P2 | Textual toolbar buttons coexist with emoji and Unicode glyphs (`📁`, `📄`, `⌘`, arrows) of inconsistent appearance (S5, V1–V8). Use one consistent SVG icon style for frequent utilities and an overflow menu for secondary actions; retain text for ambiguous/destructive/consent actions. DONE requires translated accessible names, decorative icon hiding, keyboard-visible tooltips and clear hover/pressed/disabled states, with no removed capability or larger eager bundle beyond its existing budget. |
-| ACT-02 | PARTIAL | P1 | Upload relies on a non-focusable label whose file input is `display: none`; the resizer has a separator role but no keyboard focus/handler/value model. File mention buttons have opacity zero unless a row is hovered (S3, S5). Make upload keyboard-operable, resizing keyboard-operable or provide an equivalent accessible width control, and show row actions on focus as well as touch. DONE requires real Tab/Enter/Space/arrow and coarse-pointer journeys. Small visual icons must not imply tiny targets: use ≥24×24 CSS-pixel targets as a baseline, with a preferred 44×44 touch target, visible focus and no overlap. |
+| ACT-02 | IN PROGRESS | P1 | Upload relies on a non-focusable label whose file input is `display: none`; the resizer has a separator role but no keyboard focus/handler/value model. File mention buttons have opacity zero unless a row is hovered (S3, S5). Make upload keyboard-operable, resizing keyboard-operable or provide an equivalent accessible width control, and show row actions on focus as well as touch. DONE requires real Tab/Enter/Space/arrow and coarse-pointer journeys. Small visual icons must not imply tiny targets: use ≥24×24 CSS-pixel targets as a baseline, with a preferred 44×44 touch target, visible focus and no overlap. |
 
 ### File explorer
 
@@ -96,7 +96,7 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| QA-01 | PARTIAL | P1 | Existing coverage protects Light/Dark, file tabs, preview, Settings restoration and some focus/axe behavior (T1–T6); it does not establish all-theme design quality or the new tree/category contracts. Extend only the owning scenarios for the gaps in §10. DONE requires Docker validation, fresh reviewed artifacts and reconciled criterion evidence. Neither historical baseline presence nor an axe pass alone proves usable navigation or a successful redesign. |
+| QA-01 | IN PROGRESS | P1 | Existing coverage protects Light/Dark, file tabs, preview, Settings restoration and some focus/axe behavior (T1–T6); it does not establish all-theme design quality or the new tree/category contracts. Extend only the owning scenarios for the gaps in §10. DONE requires Docker validation, fresh reviewed artifacts and reconciled criterion evidence. Neither historical baseline presence nor an axe pass alone proves usable navigation or a successful redesign. |
 
 ## 4. Convention for Future Audits
 
@@ -146,6 +146,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-18 | VIS-04, ACT-01, FILE-02, PREF-01, PREF-03 | States unchanged; design direction clarified | User-supplied Pi Web Settings screenshot U1 (§9.1); updated §3, §5 and §7.3 in this report | Visual inspection of the supplied image; `make lint-docs` PASS (110 files, 1,621 links); `git diff --check` PASS; placeholder scan empty | Horizontal top-level tabs replace the earlier vertical-tab recommendation. Reference is not product qualification or approval to copy features/save semantics. |
 | 2026-11-18 | VIS-04, ACT-01–02, FILE-02, FILE-05, PREF-01–03, QA-01 | States unchanged; preferred UX reference inspected | U2 (§9.2), updated recommendations and the two audit navigation entries | `curl` returned HTTP 200; Docker-hosted Chromium reference browsing inspected Settings/categories and Escape dismissal; `make lint-docs` PASS (110 files, 1,621 links); `git diff --check` PASS; Node consistency check PASS (16 criteria, unchanged counts, 27 paths, no placeholders) | Initial default Playwright launch failed because its managed browser was absent; explicit `/usr/bin/chromium` succeeded. HTTP mutations blocked during detailed browsing; no account actions or AiHarness test pass. |
 | 2026-11-18 | VIS-04; FILE-05, PREF-01–03 | VIS-04: TO BE DEFINED → PARTIAL; other states unchanged | User acceptance of all six arbitrations; §5 approved decisions and aligned §7 | `make lint-docs` PASS (110 files, 1,621 links); `git diff --check` PASS; Node consistency check PASS (16 criteria: 15 PARTIAL, 1 ABSENT; no placeholders) | Starting decisions resolved; first-render visual review and all implementation/qualification remain open. |
+| 2026-11-18 | VIS-01–03, ACT-02, QA-01 | PARTIAL → IN PROGRESS | Reader foundation in §11; sixteen new source/frontmatter/short-mobile images; rendered contrast and native input journeys in `e2e/files.spec.ts` | Docker `make typecheck` PASS on the subsequent isolated invocation (initial native SIGSEGV retained below); `make test TEST_ARGS='packages/web/src'` PASS (71 files / 617 tests); `make test-e2e E2E_ARGS='e2e/files.spec.ts e2e/file-tabs.spec.ts e2e/accessibility.spec.ts --retries=0'` PASS (26 tests, 49.5s, no snapshot updates); production build/budgets PASS (entry 147 KiB gzip, eager 159 KiB gzip); `make lint-docs` PASS (110 files / 1,621 links); `git diff --check` PASS | Reviewed reader palette/focus/selected states for all five themes and both System resolutions, and Light/Dark touch-emulated captures. No threshold was weakened. Remaining shell/icon/Settings work and broader qualification prevent closure of any whole criterion. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -201,7 +202,7 @@ Keep the workspace/scope visible where relevant; browser-only preferences are no
 | 3 | PREF-01–04 category architecture | Direct links, history, per-cwd memory, dirty drafts, trust retirement, scopes and save/readback |
 | 4 | QA-01 final cross-surface review | All criteria mapped to fresh evidence; no silent theme removal or relaxed baselines |
 
-These are sequencing recommendations, not executed work or time estimates.
+These are sequencing recommendations, not time estimates. Consult §6 and §11 for actual execution and remaining work.
 
 ## 8. Source Evidence
 
@@ -300,7 +301,7 @@ The detailed browsing scripts blocked HTTP methods other than GET/HEAD/OPTIONS. 
 
 ## 10. Existing Coverage and Precise Missing Evidence
 
-No new tests were added: this is documentation-only assessment. Reuse and extend these owning scenarios during remediation rather than creating another UI test framework. Use synthetic fixtures/loopback transports only; no real accounts, credentials or opt-in live-service mode.
+The initial assessment added no tests. The following inventory records pre-remediation coverage; subsequent focused additions are recorded in §11. Reuse and extend the owning scenarios rather than creating another UI test framework. Use synthetic fixtures/loopback transports only; no real accounts, credentials or opt-in live-service mode.
 
 | Key | Existing tests inspected | Already represented in definitions | Specific gap to cover |
 |---|---|---|---|
@@ -313,4 +314,31 @@ No new tests were added: this is documentation-only assessment. Reuse and extend
 
 After product changes, run the required Docker `make typecheck`, `make test` and `make test-e2e`; focused iterations may filter the owning files through the documented Make arguments. Preserve separate real-server file/scoped-save evidence where frontend interception cannot prove a disk change or durable save. Check lazy JS/CSS budgets in the normal Web build. Add manual screen-reader and 200% zoom review for navigation, plus desktop/mobile Light/Dark EN/FR checks; physical-device coverage must be labeled separately.
 
-For this report only, the required validation is `make lint-docs` and `git diff --check`, plus count/placeholder/path consistency checks. Their actual results belong in §6, not an assumed product green gate.
+For documentation-only changes, required validation is `make lint-docs` and `git diff --check`, plus count/placeholder/path consistency checks. Their actual results belong in §6, not an assumed product green gate.
+
+## 11. Remediation Evidence — Reader Foundation
+
+Scope: `packages/web/src/themes.css`, its entry import in `index.tsx`, `workspace-panel.css`, the shared focus token in `index.css`, accessible controls in `components/WorkspacePanel.tsx`, and focused extensions of `e2e/files.spec.ts`. This increment does **not** qualify the whole shell, Settings, icons, file-tree behavior or final layout.
+
+### Token inventory
+
+| Roles | Ownership and current use |
+|---|---|
+| `--surface-{canvas,panel,raised,input,hover,selected}` | Light/Dark palette and Mist/Rose/Pine surface overrides; explorer/reader chrome consumes panel, raised, input, hover and selected roles. Canvas adoption outside the reader remains pending. |
+| `--text-{primary,secondary,link}`, `--border-{subtle,control}` | Reader text, metadata, frontmatter, control boundaries and nonessential separators; subtle borders deliberately have no universal 3:1 claim. |
+| `--accent`, `--on-accent`, `--focus-ring` | Shared action/focus roles; focus is already shared globally, while filled-action migration remains pending. |
+| `--status-{success,warning,danger}`, `--surface-{success,danger}` | Git status and diff text/backgrounds. Letters/signs preserve non-color status information. |
+| `--syntax-{comment,string,number,keyword}` | Aliases to semantic text/status roles, including Light overrides instead of retaining pale Dark colors. |
+
+All five explicit themes are retained; System still resolves through the existing preference store. No preference schema or API change is introduced. Browser defaults use the appropriate native `color-scheme`.
+
+### Focused behavioral evidence
+
+- The existing file scenario now reaches Upload through Tab, opens the native chooser through Enter and Space, performs a synthetic upload, reaches Mention through Tab without hover, and adjusts the focusable separator with arrows. Width exposes minimum/maximum/current values and supports Home/End as well as pointer dragging.
+- Two short-mobile (390×600) Light/Dark cases use Chromium coarse-pointer/touch emulation, verify visible mentions and 44px targets, then exercise mention, independent panel reopening and maximize/restore. This is **not** physical-device evidence.
+- Seven theme cases measure rendered source syntax, line numbers, Git letters, metadata, selected source, hover text, diff and frontmatter at ≥4.5:1, plus the search control boundary/focus at ≥3:1. They also check the actual reader background against its semantic token. These focused measurements do not certify every application state.
+- New images live under `e2e/files.spec.ts-snapshots/`: `reader-source-{theme}-chromium-linux.png`, `reader-colors-{theme}-chromium-linux.png` and `reader-touch-{light,dark}-chromium-linux.png`. They supplement rather than reinterpret V1–V8. Whole-shell desktop/mobile, EN/FR, zoom, forced-colors and assistive-technology review remain pending.
+
+The first reproduction run failed all eight added/extended desktop scenarios on the old implementation (including Light syntax ≈1.60:1 and Dark line numbers ≈2.90:1). After the initial repair, ten existing functional cases passed, and the seven palette cases reached screenshot creation but failed because their baselines did not yet exist in CI. An explicit snapshot-generation run then passed 19/19 cases. A preview-loading assertion was added to wait for the actual Markdown heading rather than capture its temporary raw-text fallback. The final baseline-generation run passed 19/19, followed by 26/26 passing reader/file-tab/accessibility cases **without** snapshot updates or retries.
+
+The focused Web unit run passed 71 files / 617 tests. The first canonical `make typecheck` attempt failed with a native TypeScript `SIGSEGV`, not a type diagnostic; this failed attempt is retained rather than reported as green. A subsequent isolated canonical invocation passed all workspace and parity typechecks, without compiler configuration changes or automatic retries. Both outcomes are retained. Final batch validation and outstanding scope are recorded in the delivery journal.

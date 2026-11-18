@@ -8,6 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { I18nProvider } from './hooks/useI18n';
 import { navigationBasename } from './services/navigation-base';
+import './themes.css';
 import './index.css';
 import './agent.css';
 import './terminal.css';
