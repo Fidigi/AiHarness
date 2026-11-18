@@ -29,14 +29,20 @@ jobs:
         run: make test-architecture
 
   test:
-    name: Unit tests
+    name: Unit tests (partition ${{ matrix.partition }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      # Report every partition's result even if a sibling fails.
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        partition: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Run Vitest suite (Docker)
-        run: make test
+      - name: Run isolated Vitest partition (Docker)
+        run: make test TEST_ARGS='--shard=${{ matrix.partition }}/4'
 
   test-e2e:
     name: E2E tests (partition ${{ matrix.partition }}/4)

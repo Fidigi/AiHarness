@@ -145,7 +145,7 @@ test: ## Lancer tous les tests unitaires dans Docker (rebuild inclus)
 		--name $(CONTAINER_PREFIX)-unit-$(RUN_ID) \
 		-e CI=true \
 		$(IMAGE_TEST_RUN) \
-		npm test
+		npm test -- $(TEST_ARGS)
 
 test-watch: ## Lancer les tests en mode watch dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Mode watch...$(NC)\n"

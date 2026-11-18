@@ -27,7 +27,7 @@ async function product(page: Page, heads: string[] = []) {
     } else if (path === '/api/agent/runs/asset-run/stop') {
       run = { ...run, lastSequence: run.lastSequence + 1, phase: 'stopped', extensionRequests: [] };
       await json(route, run);
-    } else if (path === '/api/agent/runs') await json(route, [run]);
+    } else if (path === '/api/agent/running') await json(route, ['completed', 'failed', 'stopped'].includes(run.phase) ? [] : [run]);
     else if (path === '/api/agent/runs/asset-run') await json(route, run);
     else await route.fallback();
   });
@@ -50,6 +50,9 @@ test('production JS/CSS stay absent without a head, load once on demand and keep
   page.on('request', req => { if (js.test(req.url()) || css.test(req.url())) assets.push(req.url()); });
   await page.goto(url);
   await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
+  expect(await page.evaluate(async () => (await fetch('/api/agent/running')).json())).toEqual([
+    expect.objectContaining({ id: 'asset-run', sessionId, phase: 'tool', extensionRequests: [] }),
+  ]);
   expect(assets).toEqual([]);
   await api.update(['a', 'b']);
   const dialog = page.getByRole('dialog');
@@ -111,7 +114,10 @@ for (const end of ['stop', 'terminal', 'navigation'] as const) {
     await expect(page.getByRole('region', { name: 'Request a', exact: true })).toBeVisible();
     await expect.poll(() => Boolean(held)).toBe(true);
     if (end === 'stop') await page.locator('.stop-button').click();
-    else if (end === 'terminal') await api.update([], 'completed');
+    else if (end === 'terminal') {
+      await api.update([], 'completed');
+      expect(await page.evaluate(async () => (await fetch('/api/agent/running')).json())).toEqual([]);
+    }
     else await page.evaluate(() => { history.pushState(null, '', '/chat/other?cwd=%2Fworkspace'); window.dispatchEvent(new PopStateEvent('popstate')); });
     await expect(page.getByRole('region', { name: 'Request a', exact: true })).toHaveCount(0);
     const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
