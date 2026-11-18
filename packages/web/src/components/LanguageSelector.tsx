@@ -1,5 +1,6 @@
 import { useI18n } from '../hooks/useI18n.js';
 import type { Locale } from '../i18n/types.js';
+import { Icon } from './Icon';
 
 /** Application-wide language control backed by the registered locale packages. */
 function LanguageSelector() {
@@ -8,7 +9,7 @@ function LanguageSelector() {
 
   return (
     <label className="language-selector" title={label}>
-      <span aria-hidden="true">🌐</span>
+      <Icon name="globe" />
       <span className="visually-hidden">{label}</span>
       <select
         aria-label={label}

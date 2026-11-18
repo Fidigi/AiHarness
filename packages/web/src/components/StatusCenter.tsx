@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useI18n } from '../hooks/useI18n';
+import { Icon } from './Icon';
 import {
   dismissNotice,
   getNoticesSnapshot,
@@ -35,7 +36,7 @@ function StatusNotice({ notice }: { notice: AppNotice }) {
       }}
     >
       <span>{notice.message}</span>
-      <button type="button" onClick={() => dismissNotice(notice.id)} aria-label={t('common.close')}>×</button>
+      <button type="button" onClick={() => dismissNotice(notice.id)} aria-label={t('common.close')}><Icon name="close" /></button>
       {notice.progress !== undefined && (
         <progress value={notice.progress} max={1} aria-label={t('status.progress')} />
       )}

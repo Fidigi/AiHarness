@@ -97,7 +97,7 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
     // this case also works on a fresh server, without an earlier case warming it.
     await explorer.getByRole('button', { name: 'Refresh files', exact: true }).click();
     // Exercise the mounted file row, not a window event racing lazy hydration.
-    await explorer.getByRole('button', { name: /^📄 aih-live-upload\.txt(?:\s|$)/ }).click();
+    await explorer.getByRole('button', { name: /^aih-live-upload\.txt(?:\s|$)/ }).click();
     await expect(page.locator('.file-viewer')).toContainText('LIVE_FILE_OK');
 
     await page.getByRole('button', { name: 'Open workspace terminal' }).click();

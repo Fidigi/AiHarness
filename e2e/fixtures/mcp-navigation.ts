@@ -15,6 +15,6 @@ export async function switchMcpWorkspace(page: Page, cwd: string): Promise<void>
   await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click();
   expect((await validated).postDataJSON()).toEqual({ cwd });
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', cwd);
-  await page.getByRole('button', { name: '⚙ Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.locator('#mcp')).toBeVisible();
 }

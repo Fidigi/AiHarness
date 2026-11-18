@@ -101,7 +101,7 @@ for (const change of ['session', 'workspace'] as const) test(`real admitted late
       await mkdir(path.join(f.cwd, 'row-picker-ready'));
       await page.locator('.workspace-button').click();
       const picker = page.locator('.directory-picker'); await expect(picker).toBeVisible();
-      await expect(picker.getByRole('button', { name: '📁 row-picker-ready', exact: true })).toBeVisible();
+      await expect(picker.getByRole('button', { name: 'row-picker-ready', exact: true })).toBeVisible();
       await picker.getByRole('combobox', { name: 'Workspace path', exact: true }).fill(otherCwd); await picker.locator('footer button.primary').click();
       await expect(page.locator('.workspace-button small')).toContainText(otherCwd); await openNavigation(page);
     }

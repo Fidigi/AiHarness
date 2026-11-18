@@ -34,6 +34,7 @@ import {
 
 import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
 import { SkillContentPane } from './SkillContentPane';
+import { Icon } from './Icon';
 
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
@@ -621,7 +622,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
           </a>
           <span>•</span>
           <a href="https://github.com/Fidigi/AiHarness" target="_blank" rel="noopener noreferrer">
-            ⭐ {t('settings.starOnGitHub')}
+            <Icon name="star" /> {t('settings.starOnGitHub')}
           </a>
         </div>
       </section>

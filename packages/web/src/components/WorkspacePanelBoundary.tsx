@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from
 import { useI18n } from '../hooks/useI18n';
 import { workspacePanelMessages } from './workspace-panel-messages';
 import './workspace-panel-boundary.css';
+import { Icon } from './Icon';
 
 type PanelProps = { isOpen?: boolean; onRequestClose?: () => void };
 let load: Promise<ComponentType<PanelProps>> | undefined;
@@ -77,7 +78,7 @@ export default function WorkspacePanelBoundary({ onRequestClose }: { onRequestCl
   // state mutation or prompt/Stop/palette replacement during a network wait.
   return <aside className="workspace-panel-loading" aria-label={t('files.explorer')} aria-busy={!failed}>
     <header><strong>{t('files.explorer')}</strong>
-      <button type="button" onClick={onRequestClose} aria-label={t('common.close')}>×</button>
+      <button type="button" onClick={onRequestClose} aria-label={t('common.close')}><Icon name="close" /></button>
     </header>
     <p role={failed ? 'alert' : 'status'}>{failed ? copy.failed : copy.loading}</p>
     {failed && <>

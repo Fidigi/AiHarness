@@ -281,7 +281,7 @@ test('real in-root file links retain ordinary file opening without consent reque
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
   const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
   await expect(panel).toBeVisible();
-  await panel.getByRole('button', { name: '📄 ordinary-link.txt', exact: true }).click();
+  await panel.getByRole('button', { name: 'ordinary-link.txt', exact: true }).click();
   await expect(panel.locator('.file-viewer')).toContainText('ORDINARY_IN_ROOT_LINK_BODY');
   await expect(page.locator('.linked-directory-dialog')).toHaveCount(0);
   expect(consentRequests).toEqual([]);

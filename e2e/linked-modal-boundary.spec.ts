@@ -112,7 +112,7 @@ for (const owner of ['sidebar', 'panel'] as const) {
       } else if (end === 'workspace') {
         await page.locator('.workspace-button').click();
         const picker = page.locator('.directory-picker');
-        await picker.getByRole('button', { name: '📁 project', exact: true }).click();
+        await picker.getByRole('button', { name: 'project', exact: true }).click();
         await picker.getByRole('button', { name: 'Use this workspace' }).click();
         await expect(page).toHaveURL(/cwd=%2Fworkspace%2Fproject/);
       } else {

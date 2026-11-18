@@ -22,6 +22,7 @@ import { applyToolProgress } from './tool-progress-state';
 import ToolProgressBoundary from './ToolProgressBoundary';
 import ProcessBlock from './ProcessBlockBoundary';
 import AnsiOutput from './AnsiOutput';
+import { Icon } from './Icon';
 import { processTurns, type ProcessTurn } from './process-turns';
 import { composerKeySubmits } from './composer-submit';
 import { clipboardTextToMarkdown } from './markdown-paste';
@@ -1835,10 +1836,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     data-process-turn={process?.id}
     aria-label={`${message.role}: ${message.content.slice(0, 80)}`}>
     <div className="message-role">
-      {message.role === 'user' ? `👤 ${t('chat.role.user')}`
-        : message.role === 'tool' ? `🔧 ${message.name || t('chat.role.tool')}`
+      {message.role === 'user' ? <><Icon name="user" /> {t('chat.role.user')}</>
+        : message.role === 'tool' ? <><Icon name="tool" /> {message.name || t('chat.role.tool')}</>
           : message.role === 'system' ? t('chat.role.system')
-            : `🤖 ${t('chat.role.assistant')}`}
+            : <><Icon name="bot" /> {t('chat.role.assistant')}</>}
     </div>
     <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
       message.toolCallId ? toolInputs.get(message.toolCallId) : undefined, process, currentSession?.id)}</div>
@@ -1889,9 +1890,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         <div className="chat-toolbar-actions">
           {!currentSession.draft && sessions.length > 1 && <div className="session-navigation" role="group" aria-label={t('session.navigation')}>
             <button className="toolbar-button" disabled={!previousSession}
-              onClick={() => previousSession && navigateToSession(previousSession.id)} aria-label={t('session.previous')}>←</button>
+              onClick={() => previousSession && navigateToSession(previousSession.id)} aria-label={t('session.previous')}><Icon name="arrow-left" /></button>
             <button className="toolbar-button" disabled={!nextSession}
-              onClick={() => nextSession && navigateToSession(nextSession.id)} aria-label={t('session.next')}>→</button>
+              onClick={() => nextSession && navigateToSession(nextSession.id)} aria-label={t('session.next')}><Icon name="arrow-right" /></button>
           </div>}
           <span className={`agent-phase ${active ? 'active' : ''}`} role="status">{status}</span>
           {!currentSession.draft && <Suspense fallback={null}><SubagentPanel
@@ -2003,7 +2004,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
       {infoOpen && info && (
         <aside className="session-info" aria-label={t('session.info')}>
-          <button className="info-close" onClick={() => setInfoOpen(false)} aria-label={t('common.close')}>×</button>
+          <button className="info-close" onClick={() => setInfoOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button>
           <dl>
             <dt>ID</dt><dd>{info.id} <button onClick={() => void navigator.clipboard?.writeText(info.id)}>{t('chat.copy')}</button></dd>
             <dt>{t('session.file')}</dt><dd>{info.file} <button onClick={() => void navigator.clipboard?.writeText(info.file)}>{t('chat.copy')}</button></dd>
@@ -2030,7 +2031,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               loaded: currentSession.messages.length,
               total: historyPage?.total ?? currentSession.messages.length,
             })}</span>
-            <button onClick={() => setMinimapOpen(false)} aria-label={t('common.close')}>×</button>
+            <button onClick={() => setMinimapOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button>
           </header>
           <nav>
             {currentSession.messages.map(message => {
@@ -2110,7 +2111,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         ))}
         {currentSession.commands?.map(command => (
           <article key={command.id} className="message command">
-            <div className="message-role">⌘ {command.command}</div>
+            <div className="message-role"><Icon name="terminal" /> {command.command}</div>
             <div className="message-content">
               <pre>{command.output || `[${command.status}]`}</pre>
             </div>
@@ -2175,7 +2176,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         }}>
         {!nearBottom && (
           <button type="button" className="scroll-bottom" onClick={scrollToBottom} aria-label={t('chat.backToBottom')}>
-            ↓ {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
+            <Icon name="arrow-down" /> {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
           </button>
         )}
         {paletteResults.length > 0 && (
@@ -2197,7 +2198,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
                 aria-selected={index === paletteIndex} className={index === paletteIndex ? 'active' : ''}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => insertFileSuggestion(item)}>
-                <strong>{item.isDirectory ? '📁' : '📄'} {item.path}</strong>
+                <strong><Icon name={item.isDirectory ? 'folder' : 'file'} /> {item.path}</strong>
                 <small>{item.isDirectory ? t('files.directory') : t('files.file')}</small>
               </button>
             ))}
@@ -2209,7 +2210,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               <figure key={attachment.id}>
                 <img src={attachment.url} alt={attachment.name} />
                 <figcaption>{attachment.name}</figcaption>
-                <button type="button" onClick={() => removeAttachment(currentSession.id, attachment.id)} aria-label={t('chat.removeAttachment', { name: attachment.name })}>×</button>
+                <button type="button" onClick={() => removeAttachment(currentSession.id, attachment.id)} aria-label={t('chat.removeAttachment', { name: attachment.name })}><Icon name="close" /></button>
               </figure>
             ))}
           </div>
@@ -2272,7 +2273,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               if (files.length) void attachImages(files);
               event.target.value = '';
             }} />
-          <button type="button" className="attach-button" onClick={() => imageInputRef.current?.click()} aria-label={t('chat.addImage')}>＋📷</button>
+          <button type="button" className="attach-button" onClick={() => imageInputRef.current?.click()} aria-label={t('chat.addImage')}><Icon name="image" /></button>
           <label>
             <span className="visually-hidden">{t('settings.model')}</span>
             <input

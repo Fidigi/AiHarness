@@ -11,6 +11,7 @@ import {
   type TerminalSnapshot,
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
+import { Icon } from './Icon';
 import { TerminalStreamError } from '../services/terminal-replay';
 import { terminalLifecycleMessages } from './terminal-lifecycle-messages';
 import { useSessionStore } from '../store/session-store';
@@ -403,7 +404,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
     return <button className="terminal-launcher" disabled={loading || creating} onClick={() => {
       if (terminals.length) setOpen(true);
       else void add();
-    }} aria-label={t('terminal.open')}>⌘</button>;
+    }} aria-label={t('terminal.open')}><Icon name="terminal" /></button>;
   }
 
   return (
@@ -416,10 +417,10 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
                 <span className={`terminal-status ${terminal.status}`} aria-hidden="true" />
                 {terminal.name}
               </button>
-              <button onClick={() => void close(terminal)} aria-label={t('terminal.close', { name: terminal.name })}>×</button>
+              <button onClick={() => void close(terminal)} aria-label={t('terminal.close', { name: terminal.name })}><Icon name="close" /></button>
             </div>
           ))}
-          <button className="terminal-add" disabled={loading || creating} onClick={() => void add()} aria-label={t('terminal.new')}>+</button>
+          <button className="terminal-add" disabled={loading || creating} onClick={() => void add()} aria-label={t('terminal.new')}><Icon name="plus" /></button>
         </nav>
         <div>
           {active && <small>{active.shell} · {active.cols}×{active.rows}{active.exitCode === undefined ? '' : ` · exit ${active.exitCode}`}</small>}
@@ -427,7 +428,7 @@ export default function TerminalPanel({ initialOpen = false }: { initialOpen?: b
             onChange={event => setTerminalTheme(event.target.value === 'light' ? 'light' : 'dark')}>
             <option value="dark">{controlMessages.dark}</option><option value="light">{controlMessages.light}</option>
           </select>
-          <button onClick={() => setOpen(false)} aria-label={t('terminal.hide')}>⌄</button>
+          <button onClick={() => setOpen(false)} aria-label={t('terminal.hide')}><Icon name="chevron-down" /></button>
         </div>
       </header>
       {error && <p className="terminal-error" role="alert">{error}</p>}

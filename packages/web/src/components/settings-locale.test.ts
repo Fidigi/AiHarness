@@ -67,7 +67,10 @@ describe('Settings locale allocation', () => {
       for (const consumer of entry.consumers) {
         const name = consumer.path.split('/').at(-1)!;
         expect(allowed.has(name)).toBe(true);
-        expect(source(`./${name}`)).toContain(consumer.source);
+        // AUDIT-1 changes only the decorative glyph, not locale ownership/copy.
+        const projectedSource = entry.key === 'settings.starOnGitHub'
+          ? consumer.source.replace('⭐', '<Icon name="star" />') : consumer.source;
+        expect(source(`./${name}`)).toContain(projectedSource);
         expect(consumer.source).toContain(`t('${entry.key}'`);
       }
     }

@@ -11,6 +11,18 @@ async function expectAccessible(page: Page, context?: string): Promise<void> {
     impact: violation.impact,
     targets: violation.nodes.map(node => node.target.join(' ')),
   })), context).toEqual([]);
+  for (const icon of await page.locator('svg.ui-icon:visible').all()) {
+    await expect(icon).toHaveAttribute('aria-hidden', 'true');
+    await expect(icon).toHaveAttribute('focusable', 'false');
+  }
+  const controls = page.locator('button:visible:has(> svg.ui-icon), a:visible:has(> svg.ui-icon)');
+  for (const control of await controls.all()) {
+    if (await control.evaluate(element => Boolean(element.closest('[inert], [aria-hidden="true"]')))) continue;
+    await expect(control).toHaveAccessibleName(/\S/);
+    const bounds = await control.boundingBox();
+    expect(bounds?.width).toBeGreaterThanOrEqual(24);
+    expect(bounds?.height).toBeGreaterThanOrEqual(24);
+  }
 }
 
 test.describe('Accessibilité des parcours majeurs', () => {
@@ -83,6 +95,7 @@ test.describe('Accessibilité des parcours majeurs', () => {
     await installMockApi(page, { sessions: [mockSession('focus', 'Focus session')] });
     await page.goto('/chat/focus');
     const opener = page.getByRole('button', { name: 'New chat' });
+    await expect(opener.locator('svg.ui-icon')).toBeVisible();
     await opener.focus();
     await page.keyboard.press('Control+K');
     const dialog = page.getByRole('dialog', { name: 'Command palette' });

@@ -8,6 +8,7 @@ import { copyDisplayedSession } from '../services/session-row-copy';
 import { captureDisplayedSessionCopyTarget } from './session-row-copy-target';
 import { sessionLinkTo } from './session-links';
 import './session-row-copy.css';
+import { Icon } from './Icon';
 
 /** Lazy presentation only. Native popover keeps its DOM inside the Sidebar's
  * focus boundary while painting outside the scrolling list. No source runtime. */
@@ -102,7 +103,7 @@ export default function SessionRowCopyMenu({ session, inactive, onRequestClose }
   };
   return <div className="session-row-copy" ref={wrapper}>
     <button type="button" ref={invoker} disabled={!owner || inactive} aria-label={copy.menu} title={copy.menu}
-      aria-haspopup="menu" aria-expanded={open} aria-controls={id} popoverTarget={id} onClick={toggle}>⋮</button>
+      aria-haspopup="menu" aria-expanded={open} aria-controls={id} popoverTarget={id} onClick={toggle}><Icon name="more" /></button>
     {owner && createPortal(<div id={id} ref={popover} popover="auto" tabIndex={-1} className="session-row-copy-menu" role="menu" aria-label={copy.menu}>
       <button type="button" role="menuitem" disabled={!eligible || pending} onClick={() => void performCopy()}>
         {pending ? copy.pending : copy.action}

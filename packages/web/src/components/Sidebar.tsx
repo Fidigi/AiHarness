@@ -26,6 +26,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useEscapeLayer } from '../hooks/useEscapeLayer';
 import { useSessionStore } from '../store/session-store';
 import LanguageSelector from './LanguageSelector';
+import { Icon } from './Icon';
 import { linkedDirectoryMessages } from './linked-directory-messages';
 import { workspaceFeedback } from './workspace-feedback';
 import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
@@ -398,7 +399,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
         <h1>AiHarness</h1>
         <div className="sidebar-actions">
           <LanguageSelector />
-          <button onClick={handleCreate} title={t('sidebar.newChat')} aria-label={t('sidebar.newChat')}>+</button>
+          <button onClick={handleCreate} title={t('sidebar.newChat')} aria-label={t('sidebar.newChat')}><Icon name="plus" /></button>
         </div>
       </div>
 
@@ -415,12 +416,12 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
           </button>
           {workspace && <Link className="workspace-new-tab" to={projectLinkTo(workspace.cwd)}
             target="_blank" rel="noopener noreferrer" title={linkMessages.projectTab}
-            aria-label={linkMessages.projectTab}>↗</Link>}
+            aria-label={linkMessages.projectTab}><Icon name="external-link" /></Link>}
           {workspace && fileManagerAvailable && (
             <button className="workspace-file-manager" disabled={fileManagerOpening}
               onClick={() => void openFileManager()} title={t('workspace.fileManager')}
               aria-label={t('workspace.fileManager')}>
-              {fileManagerOpening ? '…' : '↗'}
+              {fileManagerOpening ? '…' : <Icon name="external-link" />}
             </button>
           )}
         </div>
@@ -443,7 +444,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
               {worktrees.length === 0 && <option value={workspace.cwd}>{workspace.git.branch || t('workspace.detached')}</option>}
               {worktrees.map(tree => <option key={tree.path} value={tree.path}>{tree.branch || t('workspace.detached')}</option>)}
             </select>
-            <button onClick={() => setWorktreeOpen(value => !value)} aria-label={t('workspace.worktreeAdd')}>+</button>
+            <button onClick={() => setWorktreeOpen(value => !value)} aria-label={t('workspace.worktreeAdd')}><Icon name="plus" /></button>
           </div>
         )}
         {worktreeOpen && workspace?.git && (
@@ -456,7 +457,8 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
               onChange={event => setWorktreeForm(form => ({ ...form, createBranch: event.target.checked }))} /> {t('workspace.worktreeNewBranch')}</label>
             <button onClick={() => void addWorktree()}>{t('workspace.worktreeCreate')}</button>
             {worktrees.filter(tree => tree.path !== workspace.cwd).map(tree => (
-              <button className="danger" key={tree.path} onClick={() => void removeTree(tree)}>× {tree.branch || tree.path}</button>
+              <button className="danger" key={tree.path} onClick={() => void removeTree(tree)}
+                aria-label={`${t('common.delete')}: ${tree.branch || tree.path}`}><Icon name="trash" /> {tree.branch || tree.path}</button>
             ))}
           </div>
         )}
@@ -468,7 +470,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
         <input type="search" value={search} onChange={event => setSearch(event.target.value)}
           placeholder={t('session.search')} aria-label={t('session.search')} />
         {searching && <span aria-label={t('common.loading')}>…</span>}
-        <button onClick={() => void hydrateSessions()} aria-label={t('files.refresh')}>↻</button>
+        <button onClick={() => void hydrateSessions()} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
       </div>
       {search.trim().length >= 2 && (
         <div className="search-results" aria-live="polite">
@@ -540,7 +542,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
                       aria-label={t('session.rename')}
                       onChange={event => setRenameValue(event.target.value)}
                     />
-                    <button type="submit" aria-label={t('common.save')}>✓</button>
+                    <button type="submit" aria-label={t('common.save')}><Icon name="check" /></button>
                   </form>
                 ) : (
                   <div className="session-row">
@@ -561,15 +563,15 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
                     <div className="session-actions">
                       {!session.draft && <SessionLink className="session-new-tab" sessionId={session.id} cwd={session.cwd || workspace?.cwd}
                         target="_blank" rel="noopener noreferrer" aria-label={linkMessages.sessionTab}
-                        title={linkMessages.sessionTab}>↗</SessionLink>}
+                        title={linkMessages.sessionTab}><Icon name="external-link" /></SessionLink>}
                       <button onClick={() => {
                         setRenaming(session.id);
                         setRenameValue(session.title || '');
-                      }} aria-label={t('session.rename')}>✎</button>
+                      }} aria-label={t('session.rename')}><Icon name="edit" /></button>
                       {!session.draft && <button disabled={Boolean(autoNaming)} onClick={() => void generateTitle(session.id)}
                         aria-label={t('session.autoName')}>{autoNaming === session.id ? '…' : 'AI'}</button>}
                       <button onClick={() => void remove(session.id, session.title || t('sidebar.untitled'))}
-                        aria-label={t('session.delete')}>×</button>
+                        aria-label={t('session.delete')}><Icon name="trash" /></button>
                       <Suspense fallback={null}><SessionRowCopyMenu session={session} inactive={inactive} onRequestClose={onRequestClose} /></Suspense>
                     </div>
                   </div>
@@ -581,7 +583,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
       </nav>
 
       <div className="sidebar-footer">
-        <button onClick={() => navigate(`/settings${query}`)}>⚙ {t('common.settings')}</button>
+        <button onClick={() => navigate(`/settings${query}`)}><Icon name="settings" /> {t('common.settings')}</button>
       </div>
 
       {linkedDirectoryOpen && workspace && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation])} cwd={workspace.cwd}
@@ -615,7 +617,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
           <section ref={pickerDialogRef} className="directory-picker" role="dialog" aria-modal="true" tabIndex={-1} aria-labelledby="workspace-picker-title">
             <header>
               <h2 id="workspace-picker-title">{t('workspace.choose')}</h2>
-              <button onClick={() => setPickerOpen(false)} aria-label={t('common.close')}>×</button>
+              <button onClick={() => setPickerOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button>
             </header>
             <form onSubmit={event => { event.preventDefault(); void browse(); }}>
               <input data-autofocus value={pathInput} onChange={event => setPathInput(event.target.value)}
@@ -632,11 +634,11 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
                 ))}
               </div>
             )}
-            {parent && <button className="directory-parent" onClick={() => void browse(parent)}>↑ {t('workspace.parent')}</button>}
+            {parent && <button className="directory-parent" onClick={() => void browse(parent)}><Icon name="arrow-up" /> {t('workspace.parent')}</button>}
             <ul className="directory-list">
               {directories.map(directory => (
                 <li key={directory.path}>
-                  <button onClick={() => void browse(directory.path)}>📁 {directory.name}</button>
+                  <button onClick={() => void browse(directory.path)}><Icon name="folder" /> {directory.name}</button>
                 </li>
               ))}
             </ul>

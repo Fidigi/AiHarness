@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
+import { Icon } from './Icon';
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -78,7 +79,7 @@ export default function PwaStatus() {
       {update && <>
         <span>{t('pwa.updateAvailable')}</span>
         <button onClick={applyUpdate}>{t('pwa.update')}</button>
-        <button aria-label={t('common.close')} onClick={() => setUpdate(undefined)}>×</button>
+        <button aria-label={t('common.close')} onClick={() => setUpdate(undefined)}><Icon name="close" /></button>
       </>}
     </aside>
   );

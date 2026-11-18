@@ -19,6 +19,7 @@ import { useLocation } from 'react-router-dom';
 import DocumentPreview from './DocumentPreview';
 import { parseDelimited, DelimitedPreviewError } from './delimited-preview';
 import { filePreviewMessages } from './file-preview-messages';
+import { Icon } from './Icon';
 
 type Tab = 'files' | 'changes';
 type ViewerTab = 'source' | 'preview' | 'diff';
@@ -59,8 +60,9 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
   return (
     <li className="file-node">
       <div style={{ paddingLeft: `${depth * .8}rem` }}>
-        <button className="file-name" onClick={event => void activate(event)} title={entry.path}>
-          {entry.isDirectory ? open ? '📂' : '📁' : '📄'} {entry.name}
+        <button className="file-name" onClick={event => void activate(event)} title={entry.path}
+          aria-expanded={entry.isDirectory ? open : undefined}>
+          <Icon name={entry.isDirectory ? open ? 'folder-open' : 'folder' : 'file'} /> {entry.name}
           {entry.gitStatus && <span className={`git-badge ${entry.gitStatus}`} title={entry.gitStatus}>{gitBadge(entry.gitStatus)}</span>}
         </button>
         {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`Mention ${entry.path}`}>@</button>}
@@ -389,7 +391,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     : '', [selected, workspace]);
 
   if (!workspace) return null;
-  if (collapsed) return <aside className="workspace-panel collapsed"><button onClick={() => setCollapsed(false)} aria-label={t('files.expand')}>‹</button></aside>;
+  if (collapsed) return <aside className="workspace-panel collapsed"><button onClick={() => setCollapsed(false)} aria-label={t('files.expand')}><Icon name="chevron-left" /></button></aside>;
 
   return (
     <aside ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
@@ -412,9 +414,9 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           </button>
         </div>
         <div className="panel-header-actions">
-          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose} aria-label={t('common.close')}>×</button>}
-          <button onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))} aria-label={t('terminal.openFromFiles')}>⌘</button>
-          <button onClick={() => { setLinkedDirectoryRequest(undefined); setCollapsed(true); }} aria-label={t('files.collapse')}>›</button>
+          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose} aria-label={t('common.close')}><Icon name="close" /></button>}
+          <button onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))} aria-label={t('terminal.openFromFiles')}><Icon name="terminal" /></button>
+          <button onClick={() => { setLinkedDirectoryRequest(undefined); setCollapsed(true); }} aria-label={t('files.collapse')}><Icon name="chevron-right" /></button>
         </div>
       </header>
 
@@ -427,10 +429,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         <>
           <div className="file-toolbar">
             <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('files.search')} />
-            <button onClick={() => void refresh()} aria-label={t('files.refresh')}>↻</button>
+            <button onClick={() => void refresh()} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
             <button type="button" title={t('files.upload')} aria-label={t('files.upload')}
               disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
-              onClick={() => uploadInput.current?.click()}>↑</button>
+              onClick={() => uploadInput.current?.click()}><Icon name="upload" /></button>
             <input ref={uploadInput} hidden type="file" multiple disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
               const files = [...(event.target.files ?? [])];
               if (files.length) void uploadSelectedFiles(files);
@@ -461,7 +463,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           {error && <p className="panel-error" role="alert">{error}</p>}
           <div className="file-tree">
             {query ? (
-              <ul>{searchResult.map(file => <li key={file}><button onClick={() => void openFile(file)}>📄 {file}</button><button onClick={() => mention(file)}>@</button></li>)}</ul>
+              <ul>{searchResult.map(file => <li key={file}><button onClick={() => void openFile(file)}><Icon name="file" /> {file}</button><button onClick={() => mention(file)}>@</button></li>)}</ul>
             ) : tab === 'files' ? (
               entries.length ? <ul>{entries.map(entry => <FileNode key={entry.path} entry={entry} cwd={workspace.cwd}
                 depth={0} onOpen={(path, origin) => void openFile(path, 'source', undefined, origin)} onMention={mention} showHidden={showHidden}
@@ -503,7 +505,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
               void openFile(openedFiles[next].path);
             }}>{file.path}</button>)}
         </div>
-        <button aria-label={`${copy.close} ${activePath}`} onClick={() => closeFile(activePath)}>×</button>
+        <button aria-label={`${copy.close} ${activePath}`} onClick={() => closeFile(activePath)}><Icon name="close" /></button>
       </div>}
       {!selected && activePath && <section role="tabpanel" id={`${tabId}-panel`}
         aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
@@ -516,8 +518,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
             <strong title={selected.path}>{selected.name}</strong>
             <div>
               <button onClick={() => setViewerExpanded(value => !value)} aria-pressed={viewerExpanded}
-                aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}>{viewerExpanded ? '↙' : '↗'}</button>
-              <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}>×</button>
+                aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}><Icon name={viewerExpanded ? 'minimize' : 'maximize'} /></button>
+              <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}><Icon name="close" /></button>
             </div>
           </header>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>

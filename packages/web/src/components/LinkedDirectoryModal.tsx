@@ -6,6 +6,7 @@ import { useI18n } from '../hooks/useI18n';
 import { browseLinkedDirectory, LinkedDirectoriesApiError, listLinkedDirectories, readLinkedDirectoryFile, setLinkedDirectoryConsent } from '../services/linked-directories';
 import { linkedDirectoryFailure, linkedDirectoryLiteral, linkedDirectoryMessages } from './linked-directory-messages';
 import './linked-directory-modal.css';
+import { Icon } from './Icon';
 
 export default function LinkedDirectoryModal({ cwd, initialDirectory = '.', onClose }: { cwd: string; initialDirectory?: string; onClose: () => void }) {
   const { locale } = useI18n(); const m = linkedDirectoryMessages(locale);
@@ -99,7 +100,7 @@ export default function LinkedDirectoryModal({ cwd, initialDirectory = '.', onCl
   return createPortal(<div className="modal-backdrop linked-directory-backdrop">
     <section ref={dialog} className="linked-directory-dialog" role="dialog" aria-modal="true" tabIndex={-1}
       aria-labelledby="linked-directory-title" aria-describedby="linked-directory-risk">
-      <header><h2 id="linked-directory-title">{m.title}</h2><button data-autofocus onClick={onClose} aria-label={m.close}>×</button></header>
+      <header><h2 id="linked-directory-title">{m.title}</h2><button data-autofocus onClick={onClose} aria-label={m.close}><Icon name="close" /></button></header>
       <p id="linked-directory-risk">{m.risk}</p>
       <p className="linked-directory-restriction">{m.restriction}</p>
       <code className="linked-directory-source" dir="ltr">{linkedDirectoryLiteral(cwd)}</code>
@@ -144,7 +145,7 @@ export default function LinkedDirectoryModal({ cwd, initialDirectory = '.', onCl
         </div>
         <h3>{listing.path === '.' ? m.root : linkedDirectoryLiteral(listing.path)}</h3>
         <ul>{listing.entries.map(entry => <li key={entry.path}>
-          <button disabled={entry.blocked || busy} onClick={() => void browse(browsing, entry.path, !entry.isDirectory)}>{entry.isDirectory ? '📁' : '📄'} {linkedDirectoryLiteral(entry.name)}</button>
+          <button disabled={entry.blocked || busy} onClick={() => void browse(browsing, entry.path, !entry.isDirectory)}><Icon name={entry.isDirectory ? 'folder' : 'file'} /> {linkedDirectoryLiteral(entry.name)}</button>
           {entry.blocked && <p>{m.nested}</p>}
         </li>)}</ul>
         {!listing.entries.length && <p>{locale.startsWith('fr') ? 'Répertoire vide.' : 'Empty directory.'}</p>}

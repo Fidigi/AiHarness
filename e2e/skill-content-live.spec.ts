@@ -99,9 +99,9 @@ for (const retirement of ['close', 'source', 'workspace'] as const) {
         await page.locator('.workspace-button').click(); const picker = page.locator('.directory-picker');
         // Wait for the actual opening browse, then use its owned child action;
         // never race a typed path against that still-pending initial response.
-        await expect(picker.getByRole('button', { name: '📁 next', exact: true })).toBeVisible();
-        await picker.getByRole('button', { name: '📁 next', exact: true }).click();
-        await expect(picker.getByRole('button', { name: '📁 workspace-marker', exact: true })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'next', exact: true })).toBeVisible();
+        await picker.getByRole('button', { name: 'next', exact: true }).click();
+        await expect(picker.getByRole('button', { name: 'workspace-marker', exact: true })).toBeVisible();
         await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click(); await expect(f.pane).toHaveCount(0);
       }
       release(); await finished;

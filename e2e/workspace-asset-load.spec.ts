@@ -143,8 +143,8 @@ for (const end of ['settings', 'session', 'workspace'] as const) {
     if (end === 'workspace') {
       await page.locator('.workspace-button').click();
       const picker = page.locator('.directory-picker');
-      await picker.getByRole('button', { name: '📁 project', exact: true }).click();
-      await expect(picker.getByRole('button', { name: '📁 project-marker' })).toBeVisible();
+      await picker.getByRole('button', { name: 'project', exact: true }).click();
+      await expect(picker.getByRole('button', { name: 'project-marker', exact: true })).toBeVisible();
       await picker.getByRole('button', { name: 'Use this workspace' }).click();
       await expect(page).toHaveURL(/cwd=%2Fworkspace%2Fproject/);
     } else {

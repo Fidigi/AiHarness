@@ -93,7 +93,7 @@ for (const scene of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 390 }
           // Retire a genuine admitted response while the same React app changes workspace.
           await page.locator('.workspace-button').click();
           const targetPicker = page.locator('.directory-picker');
-          await expect(targetPicker.getByRole('button', { name: '📁 first-picker-ready', exact: true })).toBeVisible();
+          await expect(targetPicker.getByRole('button', { name: 'first-picker-ready', exact: true })).toBeVisible();
           await targetPicker.getByLabel('Workspace path', { exact: true }).fill(other);
           await expect(targetPicker.getByLabel('Workspace path', { exact: true })).toHaveValue(other);
           await targetPicker.getByRole('button', { name: 'Use this workspace', exact: true }).click();
@@ -107,7 +107,7 @@ for (const scene of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 390 }
           expect(secondList).toHaveLength(1); expect(secondList[0].cwd).toBe(other);
           await page.locator('.workspace-button').click();
           const picker = page.locator('.directory-picker');
-          await expect(picker.getByRole('button', { name: '📁 second-picker-ready', exact: true })).toBeVisible();
+          await expect(picker.getByRole('button', { name: 'second-picker-ready', exact: true })).toBeVisible();
           await picker.getByLabel('Workspace path', { exact: true }).fill(cwd);
           await expect(picker.getByLabel('Workspace path', { exact: true })).toHaveValue(cwd);
           await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click();

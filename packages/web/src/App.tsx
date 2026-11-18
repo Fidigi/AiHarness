@@ -5,6 +5,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ChatView from './components/ChatView';
+import { Icon } from './components/Icon';
 import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
@@ -254,12 +255,12 @@ function App() {
     <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
       <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
-        aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><span className="menu-icon" aria-hidden="true" /></button>
+        aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><Icon name="menu" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
         setFilesOpen(!filesOpen);
         setPreferences({ filesOpen: !filesOpen });
       }}
-        aria-expanded={filesOpen} aria-label={t('files.explorer')}>☷</button>}
+        aria-expanded={filesOpen} aria-label={t('files.explorer')}><Icon name="folder" /></button>}
       {sidebarOpen && <button className="mobile-backdrop" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
       {(isNarrow || sidebarVisible) && <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
         inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} />}
@@ -278,7 +279,7 @@ function App() {
       }} />}
       {!location.pathname.startsWith('/settings') && terminalWorkspaceId !== workspace?.id && workspace
         && <button className="terminal-launcher" onClick={() => setTerminalWorkspaceId(workspace.id)}
-          aria-label={t('terminal.open')}>⌘</button>}
+          aria-label={t('terminal.open')}><Icon name="terminal" /></button>}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
       {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} />}

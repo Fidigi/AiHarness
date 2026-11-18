@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { SubagentRunSnapshot } from '@ai-harness/core';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
+import { Icon } from './Icon';
 import { acknowledgeSubagentRun, listSubagentRuns, stopSubagentRun } from '../services/api';
 import { useSessionStore } from '../store/session-store';
 
@@ -84,7 +85,7 @@ function ScopedSubagentPanel(props: SubagentPanelProps) {
       </button>
       {open && (
         <aside className="subagent-panel" aria-label={t('subagents.panel')}>
-          <header><strong>{t('subagents.panel')}</strong><button onClick={() => setOpen(false)} aria-label={t('common.close')}>×</button></header>
+          <header><strong>{t('subagents.panel')}</strong><button onClick={() => setOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button></header>
           {error && <p role="alert" className="status-warning">{error}</p>}
           {!runs.length && <p>{t('subagents.none')}</p>}
           <div className="subagent-run-list">

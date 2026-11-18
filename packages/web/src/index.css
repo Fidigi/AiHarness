@@ -296,11 +296,13 @@ body {
 }
 
 .mobile-menu, .mobile-files, .mobile-backdrop { display: none; }
-.menu-icon, .menu-icon::before, .menu-icon::after { display: block; width: 16px; height: 2px; border-radius: 2px; background: currentColor; }
-.menu-icon { position: relative; }
-.menu-icon::before, .menu-icon::after { position: absolute; left: 0; content: ''; }
-.menu-icon::before { top: -5px; }
-.menu-icon::after { top: 5px; }
+.ui-icon { width: 18px; height: 18px; flex-shrink: 0; vertical-align: -.2em; }
+/* Existing larger component/touch targets must override these defaults. */
+:where(button, a):has(> .ui-icon) { min-width: 28px; min-height: 28px; }
+a:has(> .ui-icon) { display: inline-flex; align-items: center; gap: .35rem; }
+@media (pointer: coarse) {
+  :where(button, a):has(> .ui-icon) { min-width: 36px; min-height: 36px; }
+}
 
 .global-command-palette-backdrop { position: fixed; z-index: 80; inset: 0; display: flex; justify-content: center; padding-top: min(18vh, 150px); background: #050914a8; backdrop-filter: blur(3px); }
 .global-command-palette { width: min(680px, calc(100vw - 2rem)); max-height: min(620px, 72vh); overflow: hidden; border: 1px solid var(--border-control); border-radius: 12px; background: var(--surface-panel); box-shadow: 0 24px 80px #000c; }

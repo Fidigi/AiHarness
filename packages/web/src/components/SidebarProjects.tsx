@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { SidebarChange } from '@ai-harness/core';
 import { isPlainLinkActivation, projectLinkTo } from './session-links.js';
 import { organisationMessages } from './sidebar-organisation.js';
+import { Icon } from './Icon';
 
 export default function SidebarProjects({ projects, locale, disabled, onChange, onRequestClose }: {
   projects: Array<{ cwd: string; name: string }>; locale: string; disabled: boolean; onChange(change: SidebarChange): void; onRequestClose?(): void;
@@ -15,10 +16,10 @@ export default function SidebarProjects({ projects, locale, disabled, onChange, 
       <Link to={projectLinkTo(project.cwd)} title={project.cwd} onClick={event => { if (isPlainLinkActivation(event)) onRequestClose?.(); }}>{project.name}</Link>
       <div>
         <button disabled={disabled || index === 0} aria-label={`${copy.up}: ${project.name}`}
-          onClick={() => onChange({ kind: 'move-project', cwd: project.cwd, before: projects[index - 1]!.cwd })}>↑</button>
+          onClick={() => onChange({ kind: 'move-project', cwd: project.cwd, before: projects[index - 1]!.cwd })}><Icon name="arrow-up" /></button>
         <button disabled={disabled || index === projects.length - 1} aria-label={`${copy.down}: ${project.name}`}
-          onClick={() => onChange({ kind: 'move-project', cwd: projects[index + 1]!.cwd, before: project.cwd })}>↓</button>
-        <button disabled={disabled} aria-label={`${copy.name}: ${project.name}`} onClick={() => { setEditing(project.cwd); setName(project.name); }}>✎</button>
+          onClick={() => onChange({ kind: 'move-project', cwd: projects[index + 1]!.cwd, before: project.cwd })}><Icon name="arrow-down" /></button>
+        <button disabled={disabled} aria-label={`${copy.name}: ${project.name}`} onClick={() => { setEditing(project.cwd); setName(project.name); }}><Icon name="edit" /></button>
       </div>
       {editing === project.cwd && <form onSubmit={event => {
         event.preventDefault(); onChange({ kind: 'project', cwd: project.cwd, name }); setEditing(undefined);

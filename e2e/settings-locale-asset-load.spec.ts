@@ -117,8 +117,8 @@ for (const navigation of ['close', 'session', 'workspace'] as const) {
       // Actual workspace selection in the existing sidebar, not a test renderer.
       await page.locator('.workspace-button').click();
       const picker = page.locator('.directory-picker');
-      await picker.getByRole('button', { name: '📁 project', exact: true }).click();
-      await expect(picker.getByRole('button', { name: '📁 marker', exact: true })).toBeVisible();
+      await picker.getByRole('button', { name: 'project', exact: true }).click();
+      await expect(picker.getByRole('button', { name: 'marker', exact: true })).toBeVisible();
       await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click();
       await expect(page).toHaveURL(/cwd=%2Fworkspace%2Fproject/);
       await page.getByRole('button', { name: 'New chat', exact: true }).click();
