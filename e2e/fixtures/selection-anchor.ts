@@ -35,12 +35,15 @@ export async function selectionAnchorControl(page: Page, built = false): Promise
   });
   expect(before.rangeTop - before.barBottom).toBeGreaterThanOrEqual(7);
   expect(before.rangeTop - before.barBottom).toBeLessThanOrEqual(9);
-  const moved = await page.locator('.messages-container').evaluate(async element => {
+  const scrollStart = await page.locator('.messages-container').evaluate(async element => {
     const before = element.scrollTop; element.scrollTop = before + 40;
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return element.scrollTop - before;
+    return before;
   });
-  expect(moved).toBeGreaterThanOrEqual(39);
+  // Two frames are not a scroll-settlement guarantee. Observe the same single
+  // scroll until it meets the original movement requirement; never reapply it.
+  await expect.poll(() => page.locator('.messages-container').evaluate((element, before) =>
+    element.scrollTop - before, scrollStart)).toBeGreaterThanOrEqual(39);
   await expect.poll(async () => page.evaluate(() => {
     const range = window.getSelection()!.getRangeAt(0), bar = document.querySelector<HTMLElement>('.selection-actions')!;
     const gap = range.getBoundingClientRect().top - bar.getBoundingClientRect().bottom;
