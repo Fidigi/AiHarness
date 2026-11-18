@@ -16,9 +16,16 @@ export async function selectionAnchorControl(page: Page, built = false): Promise
   await page.goto('/chat/selection-anchor');
   const paragraph = page.locator('.message.assistant .message-content p').filter({ hasText: text });
   await expect(paragraph).toHaveCount(1);
-  await paragraph.scrollIntoViewIfNeeded();
   await page.evaluate(() => document.fonts.ready);
+  const history = page.locator('.messages-container');
+  // Establish reader ownership before centering/capturing; bootstrap auto-scroll
+  // must not move the selected paragraph during the later 40px measurement.
+  await expect.poll(() => history.evaluate(element => Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight))).toBeLessThan(1);
+  await history.hover();
+  await page.mouse.wheel(0, -(await history.evaluate(element => element.clientHeight)));
+  await expect(page.getByRole('button', { name: 'Back to bottom', exact: true })).toBeVisible();
   await paragraph.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  await expect(paragraph).toBeInViewport();
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await paragraph.evaluate(element => {
     const range = document.createRange(); range.selectNodeContents(element);
@@ -27,6 +34,7 @@ export async function selectionAnchorControl(page: Page, built = false): Promise
   });
   const toolbar = page.getByRole('toolbar', { name: 'Selected text actions' });
   await expect(toolbar).toBeVisible();
+  await expect(toolbar).toBeInViewport();
   const button = toolbar.getByRole('button', { name: 'Ask here', exact: true });
   await button.focus(); await expect(button).toBeFocused();
   const before = await page.evaluate(() => {
@@ -35,14 +43,12 @@ export async function selectionAnchorControl(page: Page, built = false): Promise
   });
   expect(before.rangeTop - before.barBottom).toBeGreaterThanOrEqual(7);
   expect(before.rangeTop - before.barBottom).toBeLessThanOrEqual(9);
-  const scrollStart = await page.locator('.messages-container').evaluate(async element => {
-    const before = element.scrollTop; element.scrollTop = before + 40;
-    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    return before;
-  });
-  // Two frames are not a scroll-settlement guarantee. Observe the same single
-  // scroll until it meets the original movement requirement; never reapply it.
-  await expect.poll(() => page.locator('.messages-container').evaluate((element, before) =>
+  await history.hover();
+  const scrollStart = await history.evaluate(element => element.scrollTop);
+  // Native reader intent retires restoration and interrupts pending smooth scrolling.
+  // Send one wheel gesture, then observe it without reapplying the scroll.
+  await page.mouse.wheel(0, 40);
+  await expect.poll(() => history.evaluate((element, before) =>
     element.scrollTop - before, scrollStart)).toBeGreaterThanOrEqual(39);
   await expect.poll(async () => page.evaluate(() => {
     const range = window.getSelection()!.getRangeAt(0), bar = document.querySelector<HTMLElement>('.selection-actions')!;
