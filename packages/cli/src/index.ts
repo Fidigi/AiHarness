@@ -1402,7 +1402,8 @@ async function main(): Promise<void> {
       () => {
         terminal.displayStatus();
         inputDriver.setPrompt(sessionPrompt());
-        inputDriver.prompt();
+        // Status I/O may finish after draft/history edits; never reset their caret.
+        inputDriver.prompt(true);
       },
       error => reportError(error instanceof Error ? error.message : String(error)));
   };

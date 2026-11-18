@@ -29,14 +29,26 @@ async function fixture(source: 'global' | 'explicit' | 'project' = 'global') {
   if (source === 'explicit') await file(path.join(agent, 'keybindings.json'), JSON.stringify([{ id: 'shadowed', keys: ['f2'], action: 'app.hotkeys', description: 'SHADOWED_GLOBAL_KEYS' }]));
   const marker = path.join(root, 'editor-marker');
   const turnMarker = path.join(root, 'turn-hook-next-tick'), startMarker = path.join(root, 'agent-start'), probe = path.join(root, 'probe.mjs');
-  await file(probe, `import{writeFileSync}from'node:fs';export default api=>{api.on('agent:start',()=>writeFileSync(${JSON.stringify(startMarker)},'observed'));api.on('agent:end',()=>{setImmediate(()=>writeFileSync(${JSON.stringify(turnMarker)},'observed'));});};`);
+  const holdRefresh = path.join(root, 'hold-refresh'), refreshPending = path.join(root, 'refresh-pending'), releaseRefresh = path.join(root, 'release-refresh');
+  await file(probe, `import{existsSync,writeFileSync}from'node:fs';import{readFile}from'node:fs/promises';import{SessionManager}from'@ai-harness/core';
+export default api=>{
+  let ended=false;const original=SessionManager.prototype.getRawEntries,hold=existsSync(${JSON.stringify(holdRefresh)});
+  if(hold)SessionManager.prototype.getRawEntries=async function(...args){
+    if(ended){ended=false;writeFileSync(${JSON.stringify(refreshPending)},'waiting');
+      while(!await readFile(${JSON.stringify(releaseRefresh)},'utf8').catch(()=>''))await new Promise(resolve=>setTimeout(resolve,10));}
+    return original.apply(this,args);
+  };
+  api.on('agent:start',()=>writeFileSync(${JSON.stringify(startMarker)},'observed'));
+  api.on('agent:end',()=>{ended=true;setImmediate(()=>writeFileSync(${JSON.stringify(turnMarker)},'observed'));});
+  return()=>{if(hold)SessionManager.prototype.getRawEntries=original;};
+};`);
   const editor = path.join(root, 'editor.mjs');
   await file(editor, `import{readFileSync,writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(marker)},'executed');const f=process.argv[2];writeFileSync(f,readFileSync(f,'utf8')+'-edited');`);
   const env = { ...process.env, HOME: path.join(root, 'home'), AI_HARNESS_AGENT_DIR: agent,
     AI_HARNESS_SESSIONS_DIR: sessions, AI_HARNESS_KEYBINDINGS: source === 'global' ? '' : path.relative(cwd, target),
     AI_HARNESS_OFFLINE: '1', AI_HARNESS_THEME: 'dark', AI_HARNESS_EXTENSIONS: '', NO_COLOR: '1', TERM: 'xterm-256color',
     EDITOR: `${process.execPath} ${JSON.stringify(editor)}`, VISUAL: '' };
-  return { root, cwd, agent, sessions, target, marker, turnMarker, startMarker, probe, configure, file, env };
+  return { root, cwd, agent, sessions, target, marker, turnMarker, startMarker, probe, holdRefresh, refreshPending, releaseRefresh, configure, file, env };
 }
 async function users(test: Awaited<ReturnType<typeof fixture>>): Promise<string[]> {
   const files = (await readdir(test.sessions)).filter(file => file.endsWith('.jsonl')); expect(files).toHaveLength(1);
@@ -64,7 +76,7 @@ async function interactive(test: Awaited<ReturnType<typeof fixture>>, mode: Mode
   };
   const exit = async () => {
     if (original.includes('[Mock AI Response]')) await vi.waitFor(async () => expect(await readFile(test.turnMarker, 'utf8')).toBe('observed'), { timeout: 10_000 });
-    terminal.write('/quit\r'); await vi.waitFor(() => expect(exited).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
+    terminal.write('/quit\r'); await vi.waitFor(() => expect(exited, visible()).toMatchObject({ exitCode: 0 }), { timeout: 10_000 });
     expect(original).toContain('\x1b[?2004h'); expect(original).toContain('\x1b[?2004l');
     if (mode === 'fullscreen') expect(original).toContain('\x1b[?1049l');
   };
@@ -108,6 +120,7 @@ describe('actual emitted CLI keybinding hosts', () => {
       const test = await fixture();
       const content = '界 e\u0301👩🏽‍💻\nsecond';
       try {
+        await test.file(test.holdRefresh, 'hold');
         await interactive(test, mode, async io => {
           io.write('\x1b[20'); io.write('0~' + content + '\x1b[201~'); await io.wait('second');
           await expect(readFile(test.startMarker)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -117,7 +130,10 @@ describe('actual emitted CLI keybinding hosts', () => {
           io.resize(25, 10); io.resize(140, 35); io.write('\x1b[F\x1bj\x1a');
           io.write('\r'); await io.wait('[Mock AI Response]');
           await vi.waitFor(async () => expect(await readFile(test.turnMarker, 'utf8')).toBe('observed'), { timeout: 10_000 });
+          // A pending status read must not reset the caret after draft/history editing.
+          await vi.waitFor(async () => expect(await readFile(test.refreshPending, 'utf8')).toBe('waiting'), { timeout: 10_000 });
           io.write('draft\x1b[A\x1b[B'); await io.wait('draft');
+          io.clear(); await test.file(test.releaseRefresh, 'release'); await io.wait('editor ready · Enter send');
           io.clear(); io.write('\x15'); await io.wait(mode === 'regular' ? 'Available Commands' : 'Commandes principales'); await io.exit();
         });
         expect(await users(test)).toEqual([content]);
