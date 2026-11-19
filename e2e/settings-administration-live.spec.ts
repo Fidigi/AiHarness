@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, showPluginPackages } from './fixtures/settings-navigation';
+import { selectInstalledSkill, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, showPluginPackages } from './fixtures/settings-navigation';
 
 // Emitted static Web and real authenticated HTTP/storage. The single dropped
 // response occurs AFTER route.fetch publishes to Express; no API data is mocked.
@@ -181,7 +181,7 @@ for (const scenario of [
     await globalPackages.locator('.plugin-card').filter({ hasText: 'visible-one' }).getByRole('checkbox').check();
     await expect(plugins.getByRole('alert')).toContainText(text.unconfirmed);
     await expect(globalPackages.locator('.plugin-card').filter({ hasText: 'visible-one' }).getByRole('checkbox')).toBeChecked();
-    await selectSettingsCategory(page, 'skills');
+    await selectInstalledSkill(page, 'visible-one');
     await expect(page.locator('#skills').getByRole('button', { name: locale === 'fr'
       ? 'Lire les instructions de visible-one' : 'Read instructions for visible-one', exact: true })).toBeVisible();
     await selectSettingsCategory(page, 'plugins');

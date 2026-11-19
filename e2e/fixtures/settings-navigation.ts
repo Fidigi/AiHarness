@@ -47,6 +47,15 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Metadata selection is separate from the explicit instruction-read action. */
+export async function selectInstalledSkill(page: Page, name: string): Promise<void> {
+  await selectSettingsCategory(page, 'skills');
+  const back = page.getByRole('button', { name: /^(Back to skills|Retour aux compétences)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.locator('#skills').getByRole('navigation', { name: /^(Skills|Compétences)$/u });
+  await navigation.getByRole('button', { name, exact: true }).click();
+}
+
 export async function selectSettingsTool(page: Page, name: string): Promise<void> {
   await selectSettingsCategory(page, 'tools');
   const back = page.getByRole('button', { name: /^(Back to tools|Retour aux outils)$/u });

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import type { ModelCatalog, ResourceEnableChange, SkillCatalog } from '@ai-harness/core';
 import { installMockApi } from './fixtures/mock-api';
-import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectInstalledSkill, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function resources(page: Page, options: { loseSkillResponse?: boolean; delayModelResponse?: (sequence: number) => Promise<void> } = {}) {
   let models: ModelCatalog = { updatedAt: '2025-01-01T12:00:00.000Z', enabledScope: 'global', enabledSource: 'global', providers:
@@ -81,17 +81,22 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       await selectSettingsCategory(page, 'skills');
       const skill = page.locator('#skills');
       await skill.getByRole('searchbox').fill('visible');
+      await selectInstalledSkill(page, 'visible-on');
       await skill.locator('fieldset[data-source="quality-kit"]').getByRole('button', { name: 'Enable displayed', exact: true }).click();
       await expect.poll(() => api.requests[3]).toEqual({ resource: 'skills', body: {
         changes: [{ key: 'package:visible-off', enabled: true }, { key: 'package:visible-bad', enabled: true }], cwd: '/workspace', projectId: 'workspace-e2e',
       } });
       await expect(skill.getByRole('list', { name: 'Batch outcomes' })).toContainText('visible-off: changed');
       await expect(skill.getByRole('list', { name: 'Batch outcomes' })).toContainText('visible-bad: failed — Invalid skill Markdown');
+      await selectInstalledSkill(page, 'visible-off');
       await expect(skill.locator('label').filter({ hasText: 'Review visible-off' }).getByRole('checkbox')).toBeChecked();
+      await selectInstalledSkill(page, 'visible-bad');
       await expect(skill.locator('label').filter({ hasText: 'Review visible-bad' }).getByRole('checkbox')).not.toBeChecked();
       await skill.getByRole('searchbox').fill('');
+      await selectInstalledSkill(page, 'hidden');
       await expect(skill.locator('label').filter({ hasText: 'Review hidden' }).getByRole('checkbox')).toBeChecked();
       await skill.getByRole('searchbox').fill('visible');
+      await selectInstalledSkill(page, 'visible-off');
       await expect(skill.locator('fieldset[data-source="quality-kit"]')).toHaveScreenshot(`skills-batches-${viewport.name}-${theme}.png`);
       await expect(skill.locator('.resource-batch-report')).toHaveScreenshot(`outcomes-batches-${viewport.name}-${theme}.png`);
       expect((await new AxeBuilder({ page }).include('#skills').analyze()).violations).toEqual([]);
@@ -142,8 +147,11 @@ test('reconciles uncertain batch failure without undoing a durable success', asy
   const skills = page.locator('#skills');
   await skills.locator('fieldset').getByRole('button', { name: 'Enable displayed', exact: true }).click();
   await expect(skills.getByRole('alert')).toContainText('Refresh before retrying');
+  await selectInstalledSkill(page, 'hidden');
   await expect(skills.locator('label').filter({ hasText: 'Review hidden' }).getByRole('checkbox')).toBeChecked();
+  await selectInstalledSkill(page, 'visible-off');
   await expect(skills.locator('label').filter({ hasText: 'Review visible-off' }).getByRole('checkbox')).toBeChecked();
+  await selectInstalledSkill(page, 'visible-bad');
   await expect(skills.locator('label').filter({ hasText: 'Review visible-bad' }).getByRole('checkbox')).not.toBeChecked();
   expect(api.requests).toEqual([{ resource: 'skills', body: { changes: [
     { key: 'package:visible-off', enabled: true }, { key: 'package:visible-bad', enabled: true },

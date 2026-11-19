@@ -437,8 +437,9 @@ test.describe('Régression visuelle du catalogue de skills', () => {
       await page.goto('/settings#skills');
       await page.addStyleTag({ content: '#plugins { display: none !important; }' });
       const section = page.getByRole('heading', { name: 'Skills', exact: true }).locator('..');
-      await expect(section.locator('fieldset[data-scope="project"]')).toContainText('review-project');
-      await expect(section.locator('fieldset[data-scope="global"]')).toContainText('release-notes');
+      const navigation = section.getByRole('navigation', { name: 'Skills', exact: true });
+      await expect(navigation.locator('[data-scope="project"]').getByRole('button', { name: 'review-project', exact: true })).toBeVisible();
+      await expect(navigation.locator('[data-scope="global"]').getByRole('button', { name: 'release-notes', exact: true })).toBeVisible();
       await section.getByText('Browse Agent Skills registry').click();
       await expect(section.getByText('security-review')).toBeVisible();
       await section.scrollIntoViewIfNeeded();

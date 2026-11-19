@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectGeneralSettings, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectInstalledSkill, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -28,6 +28,7 @@ test('built Settings assets restore project-specific group, row and scope intent
   const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
   await scope.selectOption('global');
   await selectSettingsTool(page, 'write');
+  await selectInstalledSkill(page, 'release-notes');
   await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
   await switchSettingsWorkspace(page, '/workspace/other');
@@ -36,6 +37,10 @@ test('built Settings assets restore project-specific group, row and scope intent
   const toolNavigation = page.locator('#tools').getByRole('navigation');
   await expect(toolNavigation.getByRole('button', { name: 'read', exact: true })).toHaveAttribute('aria-current', 'true');
   await selectSettingsTool(page, 'powershell');
+  await selectSettingsCategory(page, 'skills');
+  const skillNavigation = page.locator('#skills').getByRole('navigation');
+  await expect(skillNavigation.getByRole('button', { name: 'review-project', exact: true })).toHaveAttribute('aria-current', 'true');
+  await selectInstalledSkill(page, 'test-plan');
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
@@ -44,12 +49,16 @@ test('built Settings assets restore project-specific group, row and scope intent
   await expect(scope).toHaveValue('global');
   await expect(toolNavigation.getByRole('button', { name: 'write', exact: true })).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.tool-context-detail [data-settings-selection="write"]')).toBeVisible();
+  await selectSettingsCategory(page, 'skills');
+  await expect(skillNavigation.getByRole('button', { name: 'release-notes', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.skill-context-detail').getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
   await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();
   await page.reload();
   await expect(row).toBeInViewport();
   expect(await row.getAttribute('data-settings-selection')).toBe(identity);
+  expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
   expect(api.requests.filter(request => request.method !== 'GET'
     && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
   expect(await page.evaluate(() => performance.getEntriesByType('resource')

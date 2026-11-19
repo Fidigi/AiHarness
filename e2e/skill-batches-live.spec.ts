@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from './fixtures/test-budget';
-import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectInstalledSkill, selectSettingsCategory } from './fixtures/settings-navigation';
 
 // Actual Vite -> Express -> Core discovery/publication. No intercepted API.
 test('real filtered skill groups publish Markdown, preserve hidden files and continue after an invalid sibling', async ({ page }) => {
@@ -24,7 +24,8 @@ test('real filtered skill groups publish Markdown, preserve hidden files and con
     const group = skills.locator('fieldset[data-scope="project"]');
     const on = group.getByRole('checkbox', { name: 'Allow visible-on for autonomous model invocation' });
     const off = group.getByRole('checkbox', { name: 'Allow visible-off for autonomous model invocation' });
-    await expect(on).toBeChecked(); await expect(off).not.toBeChecked();
+    await selectInstalledSkill(page, 'visible-off'); await expect(off).not.toBeChecked();
+    await selectInstalledSkill(page, 'visible-on'); await expect(on).toBeChecked();
     const disableResponse = page.waitForResponse(response => response.url().includes('/api/skills/enabled/batch'));
     await group.getByRole('button', { name: 'Disable displayed', exact: true }).click();
     const disabled = await disableResponse;
@@ -46,7 +47,9 @@ test('real filtered skill groups publish Markdown, preserve hidden files and con
     expect(await readFile(file('visible-on'), 'utf8')).toBe(source('visible-on'));
     expect(await readFile(file('hidden'), 'utf8')).toBe(source('hidden'));
     await page.reload();
+    await selectInstalledSkill(page, 'visible-on');
     await expect(skills.getByRole('checkbox', { name: 'Allow visible-on for autonomous model invocation' })).toBeChecked();
+    await selectInstalledSkill(page, 'hidden');
     await expect(skills.getByRole('checkbox', { name: 'Allow hidden for autonomous model invocation' })).toBeChecked();
   } finally { await rm(cwd, { recursive: true, force: true }); }
 });

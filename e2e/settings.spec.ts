@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
+import type { SkillCatalog } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -189,16 +190,149 @@ test.describe('Settings and authentication', () => {
       .toMatchObject({ id: 'security-review', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' });
   });
 
+  for (const scenario of [
+    { width: 1280, locale: 'en', theme: 'light' },
+    { width: 1280, locale: 'fr', theme: 'dark' },
+    { width: 390, locale: 'en', theme: 'light' },
+    { width: 390, locale: 'fr', theme: 'dark' },
+  ] as const) test(`Installed skill metadata selection never reads instructions: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.addInitScript(({ locale, theme }) => {
+      localStorage.setItem('ai-harness-locale', locale);
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+    }, scenario);
+    const api = await installMockApi(page);
+    const loaded = page.waitForResponse(response => new URL(response.url()).pathname === '/api/skills');
+    await page.goto('/settings#skills');
+    const catalog = await (await loaded).json() as SkillCatalog;
+    const section = page.locator('#skills');
+    const navigation = section.getByRole('navigation', { name: /^(Skills|Compétences)$/u });
+    await expect(navigation).toBeVisible();
+    const choice = navigation.getByRole('button', { name: 'release-notes', exact: true });
+    await choice.focus(); await choice.press('Enter');
+    const detail = page.locator('.skill-context-detail');
+    await expect(detail.getByRole('checkbox')).toHaveCount(1);
+    await expect(detail.getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
+    await expect(detail.getByRole('button', { name: /^(Read instructions for|Lire les instructions de) release-notes$/u })).toBeVisible();
+    await expect(section.locator('#skill-content-detail')).toHaveCount(0);
+    const current = section.getByRole('button', { name: 'release-notes', exact: true, includeHidden: true });
+    await expect(current).toHaveAttribute('aria-current', 'true');
+    await expect(current).toHaveAttribute('aria-expanded', 'true');
+    await expect(current).toHaveCSS('border-left-width', '3px');
+    if (scenario.width < 960) {
+      const back = section.getByRole('button', { name: /^(Back to skills|Retour aux compétences)$/u });
+      await expect(back).toBeFocused(); await back.press('Enter');
+      for (const control of [choice, back]) {
+        await expect(control).toBeFocused();
+        await expect(control).toHaveCSS('outline-style', 'solid');
+        await expectContrast(control, 'outlineColor', 3);
+        expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        const clearance = await control.evaluate(element => {
+          const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+          const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+          return Math.min(...[element.closest('nav') ?? element.closest('.skill-context-detail')!, element.closest('.settings-view')!]
+            .flatMap(owner => {
+              const clip = owner.getBoundingClientRect();
+              return [bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom];
+            })) - extent;
+        });
+        expect(clearance).toBeGreaterThanOrEqual(-0.1);
+        if (control === choice) await choice.press('Enter');
+      }
+    } else {
+      const list = (await navigation.boundingBox())!, content = (await detail.boundingBox())!;
+      expect(list.x + list.width).toBeLessThanOrEqual(content.x);
+    }
+    await selectGeneralSettings(page, 'appearance');
+    await selectSettingsCategory(page, 'skills');
+    await expect(detail.getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
+    await page.reload();
+    await expect(detail.getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
+    await expect(section.locator('#skill-content-detail')).toHaveCount(0);
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
+    expect(stored.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.skills)
+      .toEqual({ group: JSON.stringify(['global', '']), selection: 'global:release-notes:e2e' });
+    expect((await new AxeBuilder({ page }).include('#skills').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const capture = testInfo.outputPath(`skills-context-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('skills-context', { path: capture, contentType: 'image/png' });
+    const filter = section.getByRole('searchbox');
+    await filter.fill('documentation');
+    await expect(section.getByRole('status').filter({ hasText: /selected skill is unavailable|compétence sélectionnée/u })).toBeVisible();
+    await expect(detail.getByRole('checkbox')).toHaveCount(0);
+    await expect(filter).toBeFocused();
+    await filter.fill('');
+    await expect(detail.getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
+    if (scenario.width > 959) {
+      await page.setViewportSize({ width: 390, height: 844 }); await expect(filter).toBeFocused();
+      await page.setViewportSize({ width: scenario.width, height: 844 }); await expect(filter).toBeFocused();
+    }
+    expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+    let releaseWrite!: () => void;
+    const heldWrite = new Promise<void>(resolve => { releaseWrite = resolve; });
+    await page.route('**/api/skills/enabled/batch', async route => { await heldWrite; await route.fallback(); });
+    try {
+      await detail.getByRole('checkbox').focus(); await page.keyboard.press('Space');
+      await expect(current).toBeDisabled();
+      if (scenario.width < 960) {
+        const pendingBack = section.getByRole('button', { name: /^(Back to skills|Retour aux compétences)$/u });
+        await pendingBack.focus(); await pendingBack.press('Enter');
+        await expect(navigation).toBeFocused();
+        await expect(navigation).toHaveCSS('outline-style', 'solid');
+        const pendingCapture = testInfo.outputPath(`skills-pending-${scenario.width}-${scenario.locale}.png`);
+        await page.screenshot({ path: pendingCapture, animations: 'disabled', caret: 'hide' });
+        await testInfo.attach('skills-pending-focus', { path: pendingCapture, contentType: 'image/png' });
+      }
+    } finally { releaseWrite(); }
+    await expect(current).toBeEnabled();
+    await selectInstalledSkill(page, 'release-notes');
+    await expect(detail.getByRole('checkbox')).not.toBeChecked();
+    expect(api.requests.filter(request => request.path === '/api/skills/enabled/batch').map(request => request.body))
+      .toEqual([{ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'global:release-notes:e2e', enabled: false }] }]);
+    const release = catalog.skills.find(skill => skill.key === 'global:release-notes:e2e')!;
+    const longName = 'fixture_review_workspace_metadata_with_an_explicit_long_skill_name_and_preserved_authorization';
+    await page.route('**/api/skills?*', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      ...catalog, skills: [
+        ...catalog.skills.filter(skill => skill.key !== release.key),
+        { ...release, key: 'project:release-notes:e2e', scope: 'project', source: '.agents/skills', filePath: '.agents/skills/release-notes/SKILL.md' },
+        { ...release, key: 'package:long-skill:e2e', name: longName, scope: 'package', source: 'fixture:package-skills',
+          filePath: `packages/fixture/skills/${longName}/SKILL.md` },
+      ],
+    }) }));
+    await page.reload();
+    await expect(navigation).toBeVisible();
+    await expect(section.getByRole('status').filter({ hasText: /selected skill is unavailable|compétence sélectionnée/u })).toBeVisible();
+    await expect(detail.getByRole('checkbox')).toHaveCount(0);
+    await expect(navigation.locator('[aria-current="true"]')).toHaveCount(0);
+    await navigation.locator('[data-scope="project"]').getByRole('button', { name: 'release-notes', exact: true }).click();
+    await expect(detail.locator('fieldset:visible')).toHaveAttribute('data-scope', 'project');
+    await selectInstalledSkill(page, longName);
+    await expect(detail.getByRole('heading', { name: longName, exact: true })).toBeVisible();
+    await expect(detail.getByRole('button', { name: new RegExp(longName, 'u') })).toBeVisible();
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const longCapture = testInfo.outputPath(`skills-long-name-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: longCapture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('skills-long-name', { path: longCapture, contentType: 'image/png' });
+    await expect(section.locator('#skill-content-detail')).toHaveCount(0);
+    expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status', '/api/skills/enabled/batch'].includes(request.path))).toEqual([]);
+  });
+
   test('liste les skills par portée et persiste l’invocation autonome par workspace', async ({ page }) => {
     const api = await installMockApi(page);
     await page.goto('/settings#skills');
     const section = settingsSection(page, 'Skills');
 
-    await expect(section.locator('fieldset[data-scope="project"]')).toContainText('review-project');
-    await expect(section.locator('fieldset[data-scope="global"]')).toContainText('release-notes');
-    await expect(section.locator('fieldset[data-scope="path"]')).toContainText('documentation');
-    await expect(section.locator('fieldset[data-scope="package"]')).toContainText('test-plan');
-    await expect(section).toContainText('~/.ai-harness/skills/release-notes/SKILL.md');
+    const navigation = section.getByRole('navigation', { name: 'Skills', exact: true });
+    for (const [scope, name] of [['project', 'review-project'], ['global', 'release-notes'], ['path', 'documentation'], ['package', 'test-plan']]) {
+      await expect(navigation.locator(`[data-scope="${scope}"]`).getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await selectInstalledSkill(page, 'release-notes');
+    await expect(section.locator('fieldset[data-scope="global"]')).toContainText('~/.ai-harness/skills/release-notes/SKILL.md');
 
     await section.getByLabel('Filter skills or sources').fill('release');
     await expect(section.locator('.skill-catalog-row')).toHaveCount(1);
@@ -210,14 +344,16 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
       .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'global:release-notes:e2e', enabled: false }] });
 
+    await selectInstalledSkill(page, 'documentation');
     const documentation = section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' });
     await documentation.click();
     await expect(documentation).toBeChecked();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/enabled/batch').at(-1)?.body)
       .toEqual({ cwd: '/workspace', projectId: 'workspace-e2e', changes: [{ key: 'path:documentation:e2e', enabled: true }] });
     await page.reload();
+    await expect(documentation).toBeChecked();
+    await selectInstalledSkill(page, 'release-notes');
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).not.toBeChecked();
-    await expect(section.getByRole('checkbox', { name: 'Allow documentation for autonomous model invocation' })).toBeChecked();
   });
 
   test('verrouille les skills projet tant que le workspace n’est pas approuvé', async ({ page }) => {
@@ -227,6 +363,7 @@ test.describe('Settings and authentication', () => {
     await expect(section.getByText('Project skills are locked until this workspace is trusted.')).toBeVisible();
     await expect(section.getByRole('checkbox', { name: 'Allow review-project for autonomous model invocation' })).toBeDisabled();
     await expect(section.locator('fieldset[data-scope="project"]')).toContainText('untrusted');
+    await selectInstalledSkill(page, 'release-notes');
     await expect(section.getByRole('checkbox', { name: 'Allow release-notes for autonomous model invocation' })).toBeEnabled();
   });
 

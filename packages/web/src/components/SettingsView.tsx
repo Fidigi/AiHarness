@@ -2,7 +2,7 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import '../settings.css';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -37,6 +37,7 @@ import {
 
 import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
 import { SkillContentPane } from './SkillContentPane';
+import { skillSettingsMessage } from './skill-settings-messages';
 import { Icon } from './Icon';
 
 const PluginSettings = lazy(async () => ({
@@ -64,11 +65,12 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
+  const workspaceCwd = useSessionStore(state => state.workspace?.cwd);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const [providerNames, setProviderNames] = useState<Record<string, string>>({});
   const [providerReload, setProviderReload] = useState(0);
   const [providerInvalidation, setProviderInvalidation] = useState(0);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const [authApplied, setAuthApplied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<Partial<Record<string, SaveStatus>>>({});
@@ -78,6 +80,17 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const [skillFilter, setSkillFilter] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string>();
   const skillInvoker = useRef<HTMLButtonElement | null>(null);
+  const [skillPosition, setSkillPosition] = useState(() => {
+    const position = readSettingsNavigation(workspaceCwd).positions.skills;
+    return position?.group === 'registry' ? undefined : position;
+  });
+  const [skillOverview, setSkillOverview] = useState(!skillPosition?.selection);
+  const [skillMobile, setSkillMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const skillNavigation = useRef<HTMLElement>(null);
+  const skillDetailPane = useRef<HTMLDivElement>(null);
+  const skillBack = useRef<HTMLButtonElement>(null);
+  const skillFocus = useRef<'navigation' | 'detail' | null>(null);
+  const skillDetailPrefix = useId();
   const [pushStatus, setPushStatus] = useState('');
   const [preferences, setPreferences] = usePreferences();
 
@@ -109,7 +122,44 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
     return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
   }).filter(group => group.skills.length > 0);
 
+  const skillChoices = visibleSkillGroups.flatMap(group => group.skills.map(skill => ({
+    skill, group: JSON.stringify([group.scope, group.source]),
+  })));
+  const skillMatches = skillChoices.filter(choice => choice.group === skillPosition?.group
+    && choice.skill.key === skillPosition?.selection);
+  const selectedSkillMetadata = skillPosition?.selection
+    ? skillMatches.length === 1 ? skillMatches[0] : undefined
+    : skillPosition?.group ? skillChoices.find(choice => choice.group === skillPosition.group) : skillChoices[0];
   const skillDetail = visibleSkillGroups.flatMap(group => group.skills).find(skill => skill.key === selectedSkill);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && skillDetailPane.current?.contains(document.activeElement)) setSkillOverview(false);
+      setSkillMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'skills' || !skillFocus.current) return;
+    const target = skillFocus.current; skillFocus.current = null;
+    if (target === 'navigation') {
+      const current = skillNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? skillNavigation.current)?.focus();
+    } else if (skillMobile && !skillOverview) skillBack.current?.focus();
+  }, [category, skillMobile, skillOverview, selectedSkillMetadata]);
+
+  const selectSkillMetadata = (group: string, selection: string) => {
+    const position = { group, selection };
+    setSkillPosition(position); setSkillOverview(false);
+    if (selectedSkill !== selection) setSelectedSkill(undefined);
+    skillFocus.current = skillMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, {
+      ...current, section: 'skills', positions: { ...current.positions, skills: position },
+    });
+  };
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -415,46 +465,81 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
         <SkillRegistryPanel />
         <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
           names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
-        <div className="skill-catalog-groups">
-          {visibleSkillGroups.map(group => (
-            <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}
-              data-settings-group={JSON.stringify([group.scope, group.source])}>
-              <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
-              <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
-                rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
-                disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
-              {group.skills.map(skill => (
-                <div key={skill.key} className="skill-catalog-row" data-settings-selection={skill.key}>
-                  <label>
-                    <input type="checkbox" checked={skill.modelInvocable}
-                      disabled={skills.loading || batches.busy || !skill.trusted}
-                      title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
-                      aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                      onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
-                    <span className="skill-catalog-identity">
-                      <span>{skill.description}</span>
-                      <code>{skill.filePath}</code>
-                    </span>
-                    <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
-                      {skill.version && <small>v{skill.version}</small>}
-                      <small>{skill.source}</small>
-                      {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
-                    </span>
-                  </label>
-                  <button type="button" className="skill-instructions-trigger" disabled={skills.loading || batches.busy || !skill.trusted}
-                    title={t('settings.skills.openInstructions', { skill: skill.name })}
-                    aria-label={t('settings.skills.openInstructions', { skill: skill.name })} aria-expanded={selectedSkill === skill.key}
-                    aria-controls={selectedSkill === skill.key ? 'skill-content-detail' : undefined}
-                    onClick={event => { skillInvoker.current = event.currentTarget; setSelectedSkill(skill.key); }}>{skill.name}</button>
-                </div>
+        {!skills.loading && skills.catalog && skillPosition && !selectedSkillMetadata
+          && <p role="status">{skillSettingsMessage(locale, 'unavailable')}</p>}
+        <div className="skill-context">
+          <nav ref={skillNavigation} aria-label={t('settings.skills.title')} tabIndex={-1} hidden={skillMobile && !skillOverview && !!selectedSkillMetadata}>
+            {visibleSkillGroups.map((group, groupIndex) => (
+              <div key={`${group.scope}:${group.source}`} role="group" data-scope={group.scope} data-source={group.source}
+                aria-label={`${t(`settings.skills.scope.${group.scope}`)}${group.source ? ` · ${group.source}` : ''}`}>
+                <h4>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</h4>
+                {group.skills.map((skill, index) => {
+                  const id = `${skillDetailPrefix}-${groupIndex}-${index}`;
+                  const current = selectedSkillMetadata?.skill === skill;
+                  return <button key={skill.key} type="button" disabled={skills.loading || batches.busy}
+                    aria-label={skill.name} aria-current={current ? 'true' : undefined}
+                    aria-expanded={current && (!skillMobile || !skillOverview)} aria-controls={id} aria-describedby={`${id}-summary`}
+                    onClick={() => selectSkillMetadata(JSON.stringify([group.scope, group.source]), skill.key)}>
+                    <strong>{skill.name}</strong>
+                    <small id={`${id}-summary`}>{skillSettingsMessage(locale, skill.modelInvocable ? 'enabled' : 'disabled')}
+                      {!skill.trusted && ` · ${t('settings.skills.untrusted')}`}</small>
+                  </button>;
+                })}
+              </div>
+            ))}
+          </nav>
+          <div ref={skillDetailPane} className="skill-context-detail" hidden={skillMobile && (skillOverview || !selectedSkillMetadata)}>
+            <button ref={skillBack} type="button" className="skill-context-back" hidden={!skillMobile}
+              onClick={() => { skillFocus.current = 'navigation'; setSkillOverview(true); }}>{skillSettingsMessage(locale, 'back')}</button>
+            <div className="skill-catalog-groups">
+              {visibleSkillGroups.map((group, groupIndex) => (
+                <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}
+                  hidden={JSON.stringify([group.scope, group.source]) !== selectedSkillMetadata?.group}
+                  data-settings-group={JSON.stringify([group.scope, group.source])}>
+                  <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
+                  <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
+                    rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
+                    disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
+                  {group.skills.map((skill, index) => (
+                    <div key={skill.key} id={`${skillDetailPrefix}-${groupIndex}-${index}`} className="skill-catalog-row"
+                      data-settings-selection={skill.key} hidden={selectedSkillMetadata?.skill !== skill}>
+                      <h4>{skill.name}</h4>
+                      <label>
+                        <input type="checkbox" checked={skill.modelInvocable}
+                          disabled={skills.loading || batches.busy || !skill.trusted}
+                          title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
+                          aria-label={t('settings.skills.toggle', { skill: skill.name })}
+                          onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
+                        <span className="skill-catalog-identity">
+                          <span>{skill.description}</span>
+                          <code>{skill.filePath}</code>
+                        </span>
+                        <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
+                          {skill.version && <small>v{skill.version}</small>}
+                          <small>{skill.source}</small>
+                          {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
+                        </span>
+                      </label>
+                      <button type="button" className="skill-instructions-trigger" disabled={skills.loading || batches.busy || !skill.trusted}
+                        title={t('settings.skills.openInstructions', { skill: skill.name })}
+                        aria-label={t('settings.skills.openInstructions', { skill: skill.name })} aria-expanded={selectedSkill === skill.key}
+                        aria-controls={selectedSkill === skill.key ? 'skill-content-detail' : undefined}
+                        onClick={event => {
+                          skillInvoker.current = event.currentTarget;
+                          setSkillPosition({ group: JSON.stringify([group.scope, group.source]), selection: skill.key });
+                          setSelectedSkill(skill.key);
+                        }}>{t('settings.skills.openInstructions', { skill: skill.name })}</button>
+                    </div>
+                  ))}
+                </fieldset>
               ))}
-            </fieldset>
-          ))}
+            </div>
+            {skillDetail && skillDetail === selectedSkillMetadata?.skill && skills.catalog && <SkillContentPane
+              key={JSON.stringify([skillDetail.key, skills.catalog.cwd, skills.catalog.projectId, skills.catalog.projectTrusted])}
+              skillKey={skillDetail.key} name={skillDetail.name} cwd={skills.catalog.cwd} projectId={skills.catalog.projectId}
+              onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
+          </div>
         </div>
-        {skillDetail && skills.catalog && <SkillContentPane
-          key={JSON.stringify([skillDetail.key, skills.catalog.cwd, skills.catalog.projectId, skills.catalog.projectTrusted])}
-          skillKey={skillDetail.key} name={skillDetail.name} cwd={skills.catalog.cwd} projectId={skills.catalog.projectId}
-          onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
       </section>
 
       <div hidden={category !== 'tools'}><ToolSettingsPanel presented={category === 'tools'} /></div>

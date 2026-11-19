@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test, type Page } from './fixtures/test-budget';
+import { closeSettings, selectInstalledSkill, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function fixture(page: Page, locale = 'en', theme = 'dark') {
   const cwd = await mkdtemp(path.join(process.cwd(), 'e2e', '.skill-content-live-'));
@@ -19,9 +20,14 @@ async function fixture(page: Page, locale = 'en', theme = 'dark') {
     localStorage.setItem('ai-harness-locale', locale);
     localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme, lastSettingsSection: 'skills' }));
   }, { locale, theme });
+  const metadataReads: string[] = [];
+  page.on('request', request => { if (request.url().includes('/api/skills/content?')) metadataReads.push(request.url()); });
   await page.goto(`/settings?cwd=${encodeURIComponent(cwd)}#skills`);
   const skills = page.locator('#skills');
   await expect(skills.locator('fieldset[data-scope="project"]')).toContainText('review-guide');
+  await selectInstalledSkill(page, 'review-guide');
+  await expect(page.locator('#skill-content-detail')).toHaveCount(0);
+  expect(metadataReads).toEqual([]);
   return { cwd, file, source, skills, trigger: skills.getByRole('button', { name: /^(Read instructions for|Lire les instructions de) review-guide$/ }), pane: page.locator('#skill-content-detail') };
 }
 
@@ -31,7 +37,7 @@ for (const locale of ['en', 'fr']) for (const scenario of [
   { name: 'mobile-light', width: 390, theme: 'light' },
   { name: 'mobile-dark', width: 390, theme: 'dark' },
 ]) {
-  test(`${locale} ${scenario.name}: actual skill instructions and confined references never navigate or activate resources`, async ({ page }) => {
+  test(`${locale} ${scenario.name}: actual skill instructions and confined references never navigate or activate resources`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: scenario.width, height: 1000 });
     const f = await fixture(page, locale, scenario.theme);
     try {
@@ -47,6 +53,10 @@ for (const locale of ['en', 'fr']) for (const scenario of [
       await expect(f.pane.getByRole('heading', { name: 'Main instructions', exact: true })).toBeVisible();
       await expect(f.pane).toContainText('FULL_INSTRUCTION_TAIL');
       await expect(f.trigger).toHaveAttribute('aria-expanded', 'true');
+      await f.pane.scrollIntoViewIfNeeded();
+      const capture = testInfo.outputPath(`skill-instructions-${locale}-${scenario.name}.png`);
+      await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+      await testInfo.attach('skill-instructions', { path: capture, contentType: 'image/png' });
       const count = reads.length;
       await f.pane.getByRole('button', { name: 'Local anchor', exact: true }).click();
       expect(reads.length).toBe(count); expect(page.url()).toBe(currentUrl);
@@ -91,18 +101,26 @@ for (const retirement of ['close', 'source', 'workspace'] as const) {
       await f.trigger.click(); await expect(f.pane).toContainText('FULL_INSTRUCTION_TAIL');
       await f.pane.getByRole('button', { name: 'Guide', exact: true }).click(); await reached;
       if (retirement === 'source') {
+        await selectInstalledSkill(page, 'alternate');
+        await expect(f.pane).toHaveCount(0);
         await f.skills.getByRole('button', { name: 'Read instructions for alternate', exact: true }).click(); await expect(f.pane).toContainText('ALTERNATE_SOURCE_ONLY');
       } else if (retirement === 'close') {
         await f.pane.getByRole('button', { name: 'Close', exact: true }).click(); await expect(f.pane).toHaveCount(0);
       } else {
         const next = path.join(f.cwd, 'next'); await mkdir(next); await mkdir(path.join(next, 'workspace-marker'));
+        // The current modal owns interaction; switch through the actual close/picker/reopen journey.
+        await closeSettings(page);
         await page.locator('.workspace-button').click(); const picker = page.locator('.directory-picker');
         // Wait for the actual opening browse, then use its owned child action;
         // never race a typed path against that still-pending initial response.
         await expect(picker.getByRole('button', { name: 'next', exact: true })).toBeVisible();
         await picker.getByRole('button', { name: 'next', exact: true }).click();
         await expect(picker.getByRole('button', { name: 'workspace-marker', exact: true })).toBeVisible();
-        await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click(); await expect(f.pane).toHaveCount(0);
+        await picker.getByRole('button', { name: 'Use this workspace', exact: true }).click();
+        await expect(page.locator('.workspace-button')).toHaveAttribute('title', next);
+        await page.getByRole('button', { name: 'Settings', exact: true }).click();
+        await selectSettingsCategory(page, 'skills');
+        await expect(f.pane).toHaveCount(0);
       }
       release(); await finished;
       if (retirement === 'source') { await expect(f.pane).toContainText('ALTERNATE_SOURCE_ONLY'); await expect(f.pane).not.toContainText('NESTED_MARKDOWN_BODY'); }
