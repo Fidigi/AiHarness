@@ -32,6 +32,15 @@ export async function selectGeneralSettings(page: Page, panel: keyof typeof gene
   await navigation.getByRole('link', { name: generalNames[panel] }).click();
 }
 
+/** Choose a profile through the visible contextual list, never its hidden actions. */
+export async function selectSubagentProfile(page: Page, name: string): Promise<void> {
+  await selectSettingsCategory(page, 'subagents');
+  const back = page.getByRole('button', { name: /^(Back to profiles|Retour aux profils)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.locator('#subagents').getByRole('navigation', { name: /^(Sub-agents|Sous-agents)$/u });
+  await navigation.getByRole('button').filter({ has: page.getByText(name, { exact: true }) }).click();
+}
+
 /** Exercise the presented desktop navigation or native mobile category picker. */
 export async function selectSettingsCategory(page: Page, category: keyof typeof names): Promise<void> {
   await expect(page.locator('.settings-dialog')).toBeVisible();

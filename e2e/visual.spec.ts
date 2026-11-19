@@ -533,19 +533,94 @@ test.describe('Régression visuelle du catalogue de plugins', () => {
 test.describe('Régression visuelle des profils de sous-agents', () => {
   for (const scenario of scenarios) {
     test(`${scenario.name} garde moteur, portées et permissions lisibles`, async ({ page }) => {
+      const locale = scenario.theme === 'dark' ? 'fr' : 'en';
       await page.setViewportSize({ width: scenario.width, height: scenario.height });
-      await page.addInitScript(({ theme }) => {
+      await page.addInitScript(({ theme, locale }) => {
+        localStorage.setItem('ai-harness-locale', locale);
         localStorage.setItem('ai-harness-preferences-v2', JSON.stringify({
           version: 2, theme, contentWidth: 1000, fontSize: 16,
           reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
           filesOpen: true, sidebarVisible: true, lastSettingsSection: 'subagents', keybindings: {},
         }));
-      }, { theme: scenario.theme });
-      await installMockApi(page);
+      }, { theme: scenario.theme, locale });
+      const api = await installMockApi(page);
 
       await page.goto('/settings#subagents');
-      const section = page.getByRole('heading', { name: 'Sub-agents', exact: true }).locator('..');
+      const section = page.locator('#subagents');
       await expect(section.locator('.subagent-profile-card')).toHaveCount(3);
+      const navigation = section.getByRole('navigation', { name: locale === 'fr' ? 'Sous-agents' : 'Sub-agents', exact: true, includeHidden: true });
+      await expect(navigation).toBeVisible();
+      const choice = navigation.getByRole('button', { name: 'Plan (plan)', exact: true, includeHidden: true });
+      expect((await choice.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await choice.focus();
+      await expect(choice).toHaveCSS('outline-style', 'solid');
+      await expectContrast(choice, 'outlineColor', 3);
+      await choice.press('Enter');
+      const detail = section.getByRole('article', { name: 'Plan', exact: true });
+      await expect(detail).toBeVisible();
+      await expect(detail).toHaveAttribute('id', (await choice.getAttribute('aria-controls'))!);
+      await expect(choice).toHaveAttribute('aria-current', 'true');
+      await expect(choice).toHaveAttribute('aria-expanded', 'true');
+      const back = section.getByRole('button', { name: locale === 'fr' ? 'Retour aux profils' : 'Back to profiles', exact: true });
+      if (scenario.width >= 960) {
+        await expect(choice).toBeFocused();
+        await expectThemeRoles(choice, '--surface-selected');
+        await expectContrast(choice, 'borderLeftColor', 3);
+        const listBounds = (await navigation.boundingBox())!, detailBounds = (await detail.boundingBox())!;
+        expect(detailBounds.x).toBeGreaterThanOrEqual(listBounds.x + listBounds.width);
+        expect(Math.min(listBounds.y + listBounds.height, detailBounds.y + detailBounds.height)
+          - Math.max(listBounds.y, detailBounds.y)).toBeGreaterThan(0);
+        await choice.press('Enter');
+        const filter = section.getByRole('searchbox');
+        await filter.click();
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(back).toBeVisible();
+        await expect(filter).toBeFocused();
+        await page.setViewportSize({ width: scenario.width, height: scenario.height });
+        await expect(navigation).toBeVisible();
+      } else {
+        await expect(back).toBeFocused();
+        expect((await back.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        await expect(navigation).toBeHidden();
+        for (const control of [detail.getByRole('checkbox'),
+          detail.getByRole('button', { name: locale === 'fr' ? 'Modifier' : 'Edit', exact: true }),
+          detail.getByRole('button', { name: locale === 'fr' ? 'Dupliquer' : 'Duplicate', exact: true })]) {
+          await page.keyboard.press('Tab');
+          await expect(control).toBeFocused();
+          await expect(control).toBeInViewport({ ratio: 1 });
+          const clearance = await control.evaluate(element => {
+            const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+            const view = element.closest('.settings-view')!.getBoundingClientRect();
+            const outline = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+            return Math.min(rect.top - outline - view.top, view.bottom - rect.bottom - outline,
+              rect.left - outline - view.left, view.right - rect.right - outline);
+          });
+          expect(clearance).toBeGreaterThanOrEqual(-0.1);
+        }
+        await test.info().attach(`profile-detail-${scenario.name}`, {
+          body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`profile-detail-${scenario.name}.png`),
+            animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+        });
+        await back.focus();
+        await back.press('Enter');
+        await expect(choice).toBeFocused();
+        await expect(choice).toHaveAttribute('aria-expanded', 'false');
+        await expect(choice).toHaveAttribute('aria-current', 'true');
+        await expect(detail).toBeHidden();
+        await expectThemeRoles(choice, '--surface-selected');
+        await expectContrast(choice, 'borderLeftColor', 3);
+        await choice.press('Enter');
+        await expect(back).toBeFocused();
+      }
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-settings-navigation-v1')!).entries
+        .find((entry: { cwd: string }) => entry.cwd === '/workspace')?.positions.subagents))
+        .toEqual({ group: 'project', selection: 'plan' });
+      expect(api.requests.filter(request => request.method !== 'GET' && (
+        request.path.startsWith('/api/subagents/') || request.path === '/api/agent/runs'))).toEqual([]);
+      await page.reload();
+      await expect(detail).toBeVisible();
+      await expect(choice).toHaveAttribute('aria-current', 'true');
+      if (scenario.width < 960) await back.click();
       await section.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });

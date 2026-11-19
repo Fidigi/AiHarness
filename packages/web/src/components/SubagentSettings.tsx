@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { SubagentConfiguration, SubagentProfile } from '@ai-harness/core';
 import { useI18n } from '../hooks/useI18n';
@@ -12,6 +12,8 @@ import {
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { subagentSettingsMessage } from './subagent-settings-messages';
 
 interface EditorValue {
   /** Existing profile id; present means update mode. */
@@ -64,8 +66,42 @@ export function SubagentSettings({ presented }: { presented: boolean }) {
 function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
   targetScope: 'global' | 'project'; setTargetScope(scope: 'global' | 'project'): void; presented: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
+  const [selectedId, setSelectedId] = useState(() => {
+    const position = readSettingsNavigation(workspace?.cwd).positions.subagents;
+    return position?.group === targetScope ? position.selection : undefined;
+  });
+  const [overview, setOverview] = useState(!selectedId);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const navigationFocus = useRef(false);
+  const detailPrefix = useId();
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!navigationFocus.current) return;
+    navigationFocus.current = false;
+    if (!presented) return;
+    if (overview) navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+    else if (mobile) backRef.current?.focus();
+  }, [mobile, overview, presented, selectedId]);
+  const selectProfile = (profile: SubagentProfile) => {
+    setSelectedId(profile.id);
+    setOverview(false);
+    const current = readSettingsNavigation(workspace?.cwd);
+    writeSettingsNavigation(workspace?.cwd, { ...current, section: 'subagents',
+      positions: { ...current.positions, subagents: { group: targetScope, selection: profile.id } } });
+  };
   const [configuration, setConfiguration] = useState<SubagentConfiguration>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -97,6 +133,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
       || profile.description.toLocaleLowerCase().includes(query)
       || profile.kind.includes(query));
   }, [configuration?.profiles, filter]);
+  const matches = selectedId ? visible.filter(profile => profile.id === selectedId) : [];
+  const selected = selectedId ? matches.length === 1 ? matches[0] : undefined : visible[0];
 
   const apply = async (operation: Promise<{ success: boolean; data?: SubagentConfiguration; error?: string }>) => {
     setLoading(true);
@@ -225,9 +263,26 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
         </form>
       )}
 
+      {selectedId && !selected && configuration && <p role="status" className="settings-help">
+        {subagentSettingsMessage(locale, 'unavailable')}
+      </p>}
+      <div className="subagent-context">
+        <nav ref={navigationRef} aria-label={t('subagents.title')} hidden={mobile && !overview && Boolean(selected)}>
+          {visible.map((profile, index) => <button key={profile.id} type="button" disabled={loading}
+            aria-label={`${profile.name} (${profile.id})`} aria-current={profile === selected ? 'true' : undefined}
+            aria-expanded={profile === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${index}`}
+            onClick={() => { navigationFocus.current = mobile; selectProfile(profile); }}>
+            <strong>{profile.name}</strong>
+            <small>{profile.id} · {t(`subagents.kind.${profile.kind}`)}</small>
+          </button>)}
+        </nav>
+        <div ref={detailRef} className="subagent-context-detail" hidden={mobile && (overview || !selected)}>
+          <button ref={backRef} type="button" className="subagent-context-back" hidden={!mobile}
+            onClick={() => { navigationFocus.current = true; setOverview(true); }}>{subagentSettingsMessage(locale, 'back')}</button>
       <div className="subagent-profile-list" data-settings-group={targetScope}>
-        {visible.map(profile => (
-          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind} data-settings-selection={profile.id}>
+        {visible.map((profile, index) => (
+          <article key={profile.id} className="subagent-profile-card" data-kind={profile.kind} data-settings-selection={profile.id}
+            aria-label={profile.name} id={`${detailPrefix}-${index}`} hidden={profile !== selected}>
             <header>
               <div><strong>{profile.name}</strong><small>{profile.id}</small></div>
               <span>{t(`subagents.kind.${profile.kind}`)}{profile.builtIn ? ` · ${t('subagents.builtIn')}` : ''}</span>
@@ -242,17 +297,23 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
             <footer>
               <label><input type="checkbox" checked={profile.enabled} disabled={loading}
                 aria-label={t('subagents.toggleProfile', { profile: profile.name })}
-                onChange={event => void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope))} />
+                onChange={event => { selectProfile(profile); void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope)); }} />
                 {t('subagents.profileEnabled')}</label>
-              <button type="button" disabled={loading} onClick={() => setEditor(editorValue(profile))}>{t('common.edit')}</button>
+              <button type="button" disabled={loading} onClick={() => { selectProfile(profile); setEditor(editorValue(profile)); }}>{t('common.edit')}</button>
               <button type="button" disabled={loading}
-                onClick={() => void apply(duplicateSubagentProfile(profile.id, ...scope))}>{t('subagents.duplicate')}</button>
+                onClick={() => { selectProfile(profile); void apply(duplicateSubagentProfile(profile.id, ...scope)); }}>{t('subagents.duplicate')}</button>
               {!profile.builtIn && <button type="button" disabled={loading}
-                onClick={() => window.confirm(t('subagents.deleteConfirm', { profile: profile.name }))
-                  && void apply(deleteSubagentProfile(profile.id, ...scope))}>{t('common.delete')}</button>}
+                onClick={() => {
+                  if (window.confirm(t('subagents.deleteConfirm', { profile: profile.name }))) {
+                    selectProfile(profile);
+                    void apply(deleteSubagentProfile(profile.id, ...scope));
+                  }
+                }}>{t('common.delete')}</button>}
             </footer>
           </article>
         ))}
+      </div>
+        </div>
       </div>
     </section>
   );

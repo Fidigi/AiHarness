@@ -1,6 +1,7 @@
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
 import AxeBuilder from '@axe-core/playwright';
 import { subagentServer } from '../tests/fixtures/web06-subagents';
+import { selectSubagentProfile } from './fixtures/settings-navigation';
 
 for (const scene of [
   { locale: 'en', theme: 'light', width: 1280 }, { locale: 'fr', theme: 'dark', width: 1280 },
@@ -96,8 +97,10 @@ for (const scene of [
           await page.goto(`${f.base()}/settings?cwd=${encodeURIComponent(f.cwd)}#subagents`);
           const settings = page.locator('#subagents');
           await expect(settings.locator('.subagent-profile-card')).toHaveCount(3);
-          await settings.locator('.subagent-profile-card').filter({ hasText: 'General purpose' }).getByRole('button', { name: 'Duplicate', exact: true }).click();
-          const copy = settings.locator('.subagent-profile-card').filter({ hasText: 'General purpose copy' });
+          await selectSubagentProfile(page, 'General purpose');
+          await settings.getByRole('article', { name: 'General purpose', exact: true }).getByRole('button', { name: 'Duplicate', exact: true }).click();
+          await selectSubagentProfile(page, 'General purpose copy');
+          const copy = settings.getByRole('article', { name: 'General purpose copy', exact: true });
           await copy.getByRole('button', { name: 'Edit', exact: true }).click();
           const editor = settings.getByRole('dialog');
           await editor.getByLabel('Model', { exact: true }).fill('mock-model');
@@ -117,6 +120,10 @@ for (const scene of [
           page.once('dialog', dialog => dialog.accept());
           await copy.getByRole('button', { name: 'Delete', exact: true }).click();
           await expect(settings.locator('.subagent-profile-card')).toHaveCount(3);
+          await expect(settings.getByRole('article')).toHaveCount(0);
+          await expect(settings.getByRole('status')).toHaveText('The selected profile is unavailable in this view.');
+          await selectSubagentProfile(page, 'General purpose');
+          await expect(settings.getByRole('article', { name: 'General purpose', exact: true })).toBeVisible();
         }
         // A cold Server keeps journals, not stale process-local run/attention records.
         await page.goto('about:blank'); await f.restart();

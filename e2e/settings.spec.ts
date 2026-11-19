@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectSettingsCategory, selectSubagentProfile } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -963,11 +963,24 @@ test.describe('Settings and authentication', () => {
     await section.getByLabel('Filter profiles').fill('Plan');
     await expect(section.locator('.subagent-profile-card')).toHaveCount(1);
     const planToggle = section.getByRole('checkbox', { name: 'Enable sub-agent profile Plan' });
-    await planToggle.click();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/subagents/profiles/plan', async route => { await held; await route.fallback(); });
+    try {
+      await planToggle.click();
+      const choice = section.getByRole('navigation').getByRole('button', { name: 'Plan (plan)', exact: true });
+      await expect(choice).toBeDisabled();
+      await expect(choice).toHaveCSS('opacity', '0.5');
+      await expect(choice).toHaveCSS('cursor', 'not-allowed');
+    } finally { release(); }
     await expect.poll(() => api.requests.filter(request => request.path === '/api/subagents/profiles/plan').at(-1)?.body)
       .toMatchObject({ profile: { enabled: false } });
     await expect(planToggle).not.toBeChecked();
+    await page.unroute('**/api/subagents/profiles/plan');
     await section.getByLabel('Filter profiles').fill('');
+    await expect(section.getByRole('article', { name: 'Plan', exact: true })).toBeVisible();
+    await expect(section.getByRole('navigation').getByRole('button', { name: 'Plan (plan)', exact: true }))
+      .toHaveAttribute('aria-current', 'true');
 
     await section.getByRole('button', { name: 'Create profile' }).click();
     const dialog = page.getByRole('dialog', { name: 'Create profile' });
@@ -985,11 +998,13 @@ test.describe('Settings and authentication', () => {
     await dialog.getByLabel('Skills').fill('review-project');
     await dialog.getByLabel('Maximum turns').fill('6');
     await dialog.getByRole('button', { name: 'Save' }).click();
-    await expect(section.getByText('Security review', { exact: true })).toBeVisible();
-    const custom = section.locator('.subagent-profile-card').filter({ hasText: 'Security review' });
+    await selectSubagentProfile(page, 'Security review');
+    const custom = section.getByRole('article', { name: 'Security review', exact: true });
+    await expect(custom).toBeVisible();
     await expect(custom).toContainText('read, grep');
     await custom.getByRole('button', { name: 'Duplicate' }).click();
-    await expect(section.getByText('Security review copy', { exact: true })).toBeVisible();
+    await selectSubagentProfile(page, 'Security review copy');
+    await expect(section.getByRole('article', { name: 'Security review copy', exact: true })).toBeVisible();
   });
 
   test('enregistre une clé fournisseur côté serveur puis masque sa valeur', async ({ page }) => {
