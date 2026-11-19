@@ -87,6 +87,22 @@ async function capture(page: Page, name: string, selector = '.chat-view'): Promi
   await page.locator(selector).screenshot({ path: test.info().outputPath(name), animations: 'disabled', caret: 'hide' });
 }
 
+async function captureMcp(page: Page, name: string): Promise<void> {
+  const preview = page.getByRole('button', { name: 'Preview', exact: true });
+  await preview.evaluate(element => {
+    element.scrollIntoView({ block: 'end' });
+    // Leave real scroll clearance for fractional layout rounding at the clip edge.
+    element.closest('.settings-view')!.scrollBy(0, 8);
+  });
+  await expect(preview).toBeInViewport({ ratio: 1 });
+  const paste = page.getByRole('textbox', { name: 'MCP server text', exact: true });
+  await expect(paste).toBeFocused();
+  await expect(paste).toBeInViewport({ ratio: 1 });
+  // A tall form cannot fit the reduced modal body. Capture its native viewport,
+  // not a locator crop containing occluded controls or pixels outside the scroller.
+  await capture(page, name, '.settings-dialog');
+}
+
 for (const scenario of [
   { name: 'desktop-light', width: 1440, mobile: false, theme: 'light' },
   { name: 'desktop-dark', width: 1440, mobile: false, theme: 'dark' },
@@ -190,7 +206,7 @@ for (const scenario of [
       await paste.fill('https://docs.example.test/mcp');
       await expect(paste).toBeFocused();
       await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeVisible();
-      await capture(page, `keyboard-mcp-${scenario.name}.png`, '.mcp-import-panel');
+      await captureMcp(page, `keyboard-mcp-${scenario.name}.png`);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.goto('/chat/mobile-keyboard?cwd=%2Fworkspace');
       await expect.poll(() => page.evaluate(() => window.__mobileKeyboard.listeners)).toBe(2);
@@ -333,28 +349,8 @@ test.describe('real product and disposable server', () => {
     await expect(paste).toBeVisible();
     await paste.fill('https://docs.example.test/mcp');
     await expect(paste).toBeFocused();
-    const preview = page.getByRole('button', { name: 'Preview', exact: true });
-    await preview.scrollIntoViewIfNeeded();
-    await expect(preview).toBeInViewport();
-    await expect(paste).toBeFocused();
+    await captureMcp(page, 'keyboard-live-mcp-mobile-light.png');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-    const panel = page.locator('.mcp-import-panel');
-    await panel.scrollIntoViewIfNeeded();
-    // Real server sections above this panel vary between isolated CI shards.
-    // Align the layout origin before glyph painting, not a composited translation
-    // of already-painted text. Dimensions, typography, controls, focus, the original
-    // golden and 2% tolerance stay unchanged; restore the temporary margin afterward.
-    const previousMargin = await panel.evaluate(element => {
-      const previous = element.style.marginTop;
-      const top = element.getBoundingClientRect().top;
-      element.style.marginTop = `${parseFloat(getComputedStyle(element).marginTop) + Math.round(top) - top}px`;
-      return previous;
-    });
-    try {
-      await capture(page, 'keyboard-live-mcp-mobile-light.png', '.mcp-import-panel');
-    } finally {
-      await panel.evaluate((element, previous) => { element.style.marginTop = previous; }, previousMargin);
-    }
   });
 });
 

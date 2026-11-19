@@ -5,6 +5,7 @@ import { getSessionCacheWarmingStatus, MockProvider } from '../packages/core/dis
 import { getProxy, start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
+import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 
 for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]] as const) {
   test(`${locale}/${theme}: historical notices survive reload/branches and global hiding does not dispatch; virtual selection dispatches physically`, async ({ page }) => {
@@ -73,7 +74,8 @@ for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]
       const chat = `${base}/chat/${session.id}?cwd=${encodeURIComponent(cwd)}`;
       await page.goto(chat);
       await expect(page.locator('.cache-notice')).toHaveCount(2);
-      await expect(page.locator('.cache-notice').first()).toHaveCSS('color', 'rgb(238, 242, 250)');
+      await expectThemeRoles(page.locator('.cache-notice'), '--surface-danger');
+      await expectContrast(page.locator('.cache-notice'));
       await expect(page.locator('.cache-notice').first()).toContainText(locale === 'fr' ? 'Cache réchauffé' : 'Cache warmed');
       const isSessionStream = (response: { url(): string; status(): number }) => response.url().includes(`/api/agent/sessions/${session.id}/events?`) && response.status() === 200;
       const connected = page.waitForResponse(isSessionStream);
@@ -99,7 +101,7 @@ for (const [locale, theme, width] of [['en', 'light', 1280], ['fr', 'dark', 390]
       await manager.navigateTree(session.id, last);
       await page.reload(); await expect(page.locator('.cache-notice')).toHaveCount(2);
       await page.screenshot({ path: test.info().outputPath(`cache-history-${locale}-${theme}.png`), fullPage: true });
-      await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+      await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#provider-lifecycle`);
       await page.locator('.cache-notice-settings summary').click();
       const checkbox = page.getByRole('checkbox', { name: locale === 'fr' ? 'Afficher les notices de cache (global)' : 'Show cache notices (global)' });
       await expect(checkbox).toBeChecked(); await checkbox.click(); await expect(checkbox).not.toBeChecked(); await expect(checkbox).toBeEnabled();

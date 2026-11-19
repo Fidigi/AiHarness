@@ -62,6 +62,12 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
 }): () => void {
   const doc = root.ownerDocument;
   const dialogs = 'dialog,[aria-modal="true"],[role="dialog"],[role="alertdialog"]';
+  const ownerDialog = root.closest(dialogs);
+  const hasOtherDialog = () => Array.from(doc.querySelectorAll(dialogs)).some(dialog => dialog !== ownerDialog);
+  const otherDialog = (element: Element) => {
+    const dialog = element.closest(dialogs);
+    return dialog === ownerDialog ? null : dialog;
+  };
   const hash = options.hash?.replace(/^#/, '');
   const section = isSettingsSection(hash) ? hash : initial.section;
   const position = initial.positions[section];
@@ -84,7 +90,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
     if (!target) return;
     openAncestors(target, root);
     target.scrollIntoView({ block: 'start' });
-    if (hash === 'mcp' && !doc.querySelector(dialogs)
+    if (hash === 'mcp' && !hasOtherDialog()
       && (doc.activeElement === doc.body || doc.activeElement === root)) focusRegion(target);
     // A lazy catalogue may not yet contain the saved identity. Refine only while
     // there has been no user intent. Never substitute another resource.
@@ -94,10 +100,14 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
   };
   const focus = (event: FocusEvent) => {
     if (restoringFallback || !(event.target instanceof HTMLElement)) return;
+    // The modal's initial non-editable focus is not newer navigation intent.
+    // Pointer/key intent still retires entry before a user focuses this control.
+    if (entryPending && (event.target === ownerDialog
+      || event.target.matches('[data-settings-entry-focus]') && ownerDialog?.contains(event.target))) return;
     entryPending = false; pending = undefined;
     // Preserve only the invoking section, never modal inputs. The dialog keeps
     // normal return ownership; navigation takes over only if its invoker retires.
-    const dialog = event.target.closest(dialogs);
+    const dialog = otherDialog(event.target);
     if (dialog && root.contains(dialog)) { dialogOrigin ??= last; last = undefined; return; }
     dialogOrigin = undefined;
     if (!root.contains(event.target) || dialog) { last = undefined; return; }
@@ -112,7 +122,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
   };
   const intent = (event: Event) => {
     entryPending = false;
-    if (dialogOrigin && (!(event.target instanceof Element) || !event.target.closest(dialogs))) dialogOrigin = undefined;
+    if (dialogOrigin && (!(event.target instanceof Element) || !otherDialog(event.target))) dialogOrigin = undefined;
     if (pending) { pending = undefined; last = undefined; }
     // A current focused control's own action may replace it. Any other intent
     // withdraws deferred return, including pointer intent that has no focus event.
@@ -122,7 +132,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
   const changed = (records: MutationRecord[]) => {
     restoreEntry();
     if (disposed) return;
-    if (dialogOrigin && !doc.querySelector(dialogs)) {
+    if (dialogOrigin && !hasOtherDialog()) {
       const origin = dialogOrigin;
       if (!origin.element.isConnected && doc.activeElement === doc.body) { dialogOrigin = undefined; last = origin; }
       else if (doc.activeElement !== doc.body) dialogOrigin = undefined;
@@ -144,7 +154,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
     if (doc.activeElement !== doc.body && doc.activeElement !== pending.fallback && !temporarilyOwned) {
       pending = undefined; last = undefined; return;
     }
-    if (doc.querySelector(dialogs)) return;
+    if (hasOtherDialog()) return;
     const intent = pending.intent;
     const target = settingsPositionTarget(root, intent.section, intent.position);
     if (!target) return;

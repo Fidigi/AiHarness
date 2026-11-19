@@ -56,13 +56,13 @@ function list(value: string): string[] {
   return [...new Set(value.split(',').map(item => item.trim()).filter(Boolean))];
 }
 
-export function SubagentSettings() {
+export function SubagentSettings({ presented }: { presented: boolean }) {
   const [targetScope, setTargetScope] = useSettingsScope('subagents', 'project');
-  return <ScopedSubagentSettings key={targetScope} targetScope={targetScope} setTargetScope={setTargetScope} />;
+  return <ScopedSubagentSettings key={targetScope} targetScope={targetScope} setTargetScope={setTargetScope} presented={presented} />;
 }
 
-function ScopedSubagentSettings({ targetScope, setTargetScope }: {
-  targetScope: 'global' | 'project'; setTargetScope(scope: 'global' | 'project'): void;
+function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
+  targetScope: 'global' | 'project'; setTargetScope(scope: 'global' | 'project'): void; presented: boolean;
 }) {
   const { t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
@@ -72,7 +72,7 @@ function ScopedSubagentSettings({ targetScope, setTargetScope }: {
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
   const editorRef = useRef<HTMLFormElement>(null);
-  useFocusTrap(Boolean(editor), editorRef, () => setEditor(undefined));
+  useFocusTrap(presented && Boolean(editor), editorRef, () => setEditor(undefined));
   const scope = [
     workspace?.cwd,
     targetScope === 'project' ? workspace?.id : undefined,

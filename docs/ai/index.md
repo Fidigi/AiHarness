@@ -26,7 +26,7 @@ Line counts are approximate context estimates, not completion or test-coverage c
 | Native editor schemas and installed assets | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS code mode and nested/model helpers | [`topics/codemode.md`](./topics/codemode.md) | ~160 lines |
 | REST, SSE, WebSocket and server lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~265 lines |
-| React application, stores and view lifetimes | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~235 lines |
+| React application, stores and view lifetimes | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~250 lines |
 | Detached stream reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~95 lines |
 | Separate static demonstration and publication | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-directory read consent | [`topics/linked-directories.md`](./topics/linked-directories.md) | ~65 lines |
@@ -50,7 +50,7 @@ Paths below are relative to the repository root. Pair the domain above with the 
 | Terminal editing/keybindings | `packages/cli/src/utils/{terminal-actions,keybinding-config,keybinding-source,keypress-gate,hotkey-view}.ts`, both input hosts and installed schema; keep passive browsing inert |
 | HTTP/streaming contracts | `packages/server/src/index.ts`, `packages/server/src/api/`; update the matching `packages/web/src/services/api.ts` client and actual boundary tests |
 | React view or optional asset lifetime | `packages/web/src/{App,index}.tsx`, `packages/web/src/components/`, `packages/web/src/store/`; preserve route/workspace/session identity and newer intent |
-| Settings navigation/trust | Web `store/{settings-navigation,use-settings-scope,workspace-refresh}.ts`, `components/{SettingsView,settings-navigation}`; preference memory grants no configuration authority |
+| Settings navigation/trust | Web `store/{settings-navigation,use-settings-scope,workspace-refresh}.ts`, `components/{SettingsView,settings-navigation,settings-categories}`; ready modal/category ownership and preference memory grant no configuration authority |
 | Localization | Web `src/i18n/`, `hooks/useI18n.tsx`, feature-local message modules; translate typed app codes, not arbitrary English API errors |
 | MCP configuration/OAuth/hosting | Core `src/mcp/{config-inventory,registered-servers,session-host,resource-content,oauth,oauth-flow}.ts`, Server `api/mcp-routes.ts`, Web `McpSettings.tsx`; keep passive reads, Test and login distinct |
 | Code mode/discovery | Core `src/tools/{codemode,codemode-worker,tool-search}.ts`, `src/config/codemode-limits.ts`, `src/providers/specialized-models.ts`; discovery never grants execution |

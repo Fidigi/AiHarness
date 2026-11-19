@@ -1,6 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { switchMcpWorkspace } from './fixtures/mcp-navigation';
+import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
+import { selectSettingsCategory } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -23,14 +24,22 @@ test('built Settings assets restore project-specific group, row and scope intent
   const row = catalog.locator('.model-catalog-row').first();
   const identity = await row.getAttribute('data-settings-selection');
   await row.getByRole('checkbox').focus();
+  await selectSettingsCategory(page, 'tools');
   const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
   await scope.selectOption('global');
+  await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
-  await switchMcpWorkspace(page, '/workspace/other');
+  await switchSettingsWorkspace(page, '/workspace/other');
+  await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
+  await selectSettingsCategory(page, 'general');
   await page.locator('#shortcuts input').first().focus();
-  await switchMcpWorkspace(page, '/workspace');
+  await switchSettingsWorkspace(page, '/workspace');
+  await expect(row).toBeInViewport();
+  await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('global');
+  await selectSettingsCategory(page, 'models');
+  await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();
   await page.reload();
   await expect(row).toBeInViewport();
@@ -45,8 +54,11 @@ test('built Settings assets refresh mounted sections and return focus after cano
   const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: false,
     mcpConfig: mcpFreshProjectInventory(), mcpImportPreview: mcpFreshProjectPreviewFixture() });
   await page.goto('/settings#mcp');
+  await selectSettingsCategory(page, 'plugins');
   await expect(page.locator('#plugins .plugin-card').first()).toBeVisible();
+  await selectSettingsCategory(page, 'subagents');
   await expect(page.locator('#subagents .subagent-profile-card').first()).toBeVisible();
+  await selectSettingsCategory(page, 'mcp');
   const paths = ['/api/plugins', '/api/subagents/settings', '/api/tools', '/api/skills', '/api/models'];
   const count = (path: string) => api.requests.filter(request => request.method === 'GET' && request.path === path).length;
   const before = paths.map(count);
@@ -232,10 +244,13 @@ for (const coarse of [false, true]) {
       })).toBe(false);
       await expect(page).toHaveURL(/\/settings/);
       await field.evaluate(element => element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
-      if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
-      await page.locator('.workspace-button').click(); await expect(page.locator('.directory-picker')).toBeVisible();
-      await page.keyboard.press('Escape'); await expect(page.locator('.directory-picker')).toHaveCount(0); await expect(page).toHaveURL(/\/settings/);
-      if (coarse) { await page.keyboard.press('Escape'); await expect(page.locator('.sidebar')).not.toHaveClass(/open/); }
+      // Settings is modal: its inert sidebar cannot open the workspace picker.
+      // The global palette remains an available nested modal; picker stacking is covered above.
+      await expect(page.locator('.app')).toHaveAttribute('inert', '');
+      await page.keyboard.press('Control+k'); await expect(page.locator('.global-command-palette')).toBeVisible();
+      await expect(page.locator('.settings-dialog')).toHaveAttribute('inert', '');
+      await page.keyboard.press('Escape'); await expect(page.locator('.global-command-palette')).toHaveCount(0); await expect(page).toHaveURL(/\/settings/);
+      await expect(page.locator('.settings-dialog')).not.toHaveAttribute('inert');
       await page.keyboard.press('Escape'); await expect(page).toHaveURL(/\/chat\/escape-stack\?cwd=%2Fworkspace$/);
       await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
       expect(await page.evaluate(() => !(matchMedia('(pointer: coarse)').matches && document.activeElement?.matches('input, textarea')))).toBe(true);
@@ -245,6 +260,7 @@ for (const coarse of [false, true]) {
       const api = await escapeProduct(page);
       if (coarse) await page.getByRole('button', { name: 'Toggle navigation' }).click();
       await page.locator('.sidebar-footer').getByRole('button', { name: /Settings/ }).click();
+      await selectSettingsCategory(page, 'subagents');
       const create = page.getByRole('button', { name: 'Create profile', exact: true }); await create.click();
       const editor = page.getByRole('dialog', { name: 'Create profile', exact: true }); await expect(editor).toBeVisible();
       if (coarse) await expect(editor).toBeFocused(); else await expect(editor.locator('input').first()).toBeFocused();

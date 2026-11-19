@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 
 test('Settings connects custom OpenRouter with full-paste PKCE, permanent key and native C inference', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-router-settings-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -29,7 +30,7 @@ test('Settings connects custom OpenRouter with full-paste PKCE, permanent key an
   try {
     const server = await start({ port: 0, host: '127.0.0.1', dataDir, defaultCwd: cwd, allowedRoots: [cwd], webRoot: path.resolve('packages/web/dist'), enableMockProvider: true }), base = `http://127.0.0.1:${server.port}`;
     expect((await page.request.post(`${base}/api/auth/login`, { data: { token: 'router-admin' } })).status()).toBe(200); expect((await page.request.post(`${base}/api/workspaces/trust`, { data: { cwd, confirm: true } })).status()).toBe(200);
-    await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en')); await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+    await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en')); await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#provider-lifecycle`);
     const section = page.locator('#provider-lifecycle'), editor = section.locator('details.custom-resource-editor'), open = async () => { if (await editor.getAttribute('open') === null) await section.getByText('Create or edit a compatible provider', { exact: true }).click(); };
     await open(); const form = editor.locator('form'); await form.getByLabel('ID', { exact: true }).fill(id); await form.getByLabel('Name', { exact: true }).fill('OpenRouter native key'); await form.getByLabel('Base URL', { exact: true }).fill(endpoint); await form.getByRole('combobox', { name: 'API dialect', exact: true }).selectOption('openrouter'); await form.getByRole('button', { name: 'Save', exact: true }).click();
     const card = section.locator(`[data-settings-selection="${id}"]`), status = card.locator(':scope > span'); await expect(status).toHaveText('disconnected · 0 models'); expect(calls).toEqual([]);
@@ -39,7 +40,7 @@ test('Settings connects custom OpenRouter with full-paste PKCE, permanent key an
     const [imported] = await Promise.all([page.waitForResponse(response => response.url().endsWith(`/api/provider-registry/custom/${id}/import-models`)), card.getByRole('button', { name: 'Import models', exact: true }).click()]); expect(imported.status()).toBe(200);
     const inventory = await page.request.get(`${base}/api/provider-registry/custom`).then(result => result.json()) as Array<{ id: string; modelCount: number }>, count = inventory.find(provider => provider.id === id)!.modelCount; expect(count).toBeGreaterThan(0);
     expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global', values: { provider: id, model, thinking: 'off', toolPreset: 'chat-only' } } })).status()).toBe(200);
-    await page.reload(); await page.getByRole('button', { name: 'New chat', exact: true }).click(); const composer = page.getByRole('textbox', { name: 'Message composer' }); await composer.fill('Native OpenRouter Web'); await composer.press('Enter'); await expect(page.locator('.message.assistant')).toContainText('OpenRouter native Web reply.'); expect(calls).toEqual(['/keys', '/v1/chat/completions']);
+    await page.reload(); await closeSettings(page); await page.getByRole('button', { name: 'New chat', exact: true }).click(); const composer = page.getByRole('textbox', { name: 'Message composer' }); await composer.fill('Native OpenRouter Web'); await composer.press('Enter'); await expect(page.locator('.message.assistant')).toContainText('OpenRouter native Web reply.'); expect(calls).toEqual(['/keys', '/v1/chat/completions']);
     await page.reload(); await expect(page.locator('.message.assistant')).toContainText('OpenRouter native Web reply.'); await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`); await expect(card).toHaveCount(1); await open(); await expect(status).toHaveText(`connected · ${count} models`); await card.getByRole('button', { name: 'Disconnect', exact: true }).click(); await expect(status).toHaveText(`disconnected · ${count} models`); expect(calls).toEqual(['/keys', '/v1/chat/completions']); expect(failure).toBeUndefined();
     const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } })); for (const secret of [key, code]) expect(storage + await readFile(path.join(dataDir, 'providers.json'), 'utf8') + await readFile(path.join(dataDir, 'provider-secrets.enc'), 'utf8')).not.toContain(secret);
   } finally {

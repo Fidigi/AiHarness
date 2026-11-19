@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-19)
 >
-> Six implementation decisions approved. VIS-01–03, FILE-01–05 and ACT-01–02 are verified: semantic palette/contrast, left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category Settings, final visual-direction review and global qualification remain open.
+> Six implementation decisions approved. VIS-01–03, FILE-01–05 and ACT-01–02 are verified: semantic palette/contrast, left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category-modal Settings foundations are implemented; contextual layouts, dirty-close confirmation, final visual-direction review and global qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–18 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–19 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -34,8 +34,8 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 | Status | Count | Details |
 |---|---:|---|
 | `DONE` | 10 | VIS-01–03, FILE-01–05 and ACT-01–02: semantic themes, explorer contracts and accessible controls/input |
-| `PARTIAL` | 4 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
-| `ABSENT` | 1 | Category-tab Settings presentation |
+| `PARTIAL` | 5 | Implementation foundations or approved design direction exist, including category-modal Settings, but completion evidence remains missing |
+| `ABSENT` | 0 | No criterion is entirely absent |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
 | `IN PROGRESS` | 1 | QA-01: final global qualification |
@@ -49,9 +49,9 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 | Visual system | 3 | 1 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Actions and input | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
 | File explorer | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
-| Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
+| Settings | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **10** | **4** | **1** | **0** | **0** | **1** | **0** | **16** |
+| **Total** | **10** | **5** | **0** | **0** | **0** | **1** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -89,7 +89,7 @@ FILE-01–05 are verified by §14–15. The findings below retain the pinned bas
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| PREF-01 | ABSENT | P1 | There is no visible category-tab navigation: `SettingsView` renders all sections sequentially and the boundary restores a scroll target (S6–S8). Introduce horizontal icon-and-label category tabs on desktop, with contextual left navigation where needed and only the selected category presented as active content, following U1 and the preferred live reference U2. DONE requires visible labels/current state, direct category addressing, Back/Forward/reload, keyboard navigation, accessible panel dismissal and mobile access; adding anchor buttons to the same long form alone does not meet this request. |
+| PREF-01 | PARTIAL | P1 | At the pinned baseline, `SettingsView` renders all sections sequentially and the boundary restores a scroll target (S6–S8). §19 adds seven categories and desktop-modal/mobile-full-screen presentation; contextual layouts and complete acceptance remain open. Introduce horizontal icon-and-label category tabs on desktop, with contextual left navigation where needed and only the selected category presented as active content, following U1 and the preferred live reference U2. DONE requires visible labels/current state, direct category addressing, Back/Forward/reload, keyboard navigation, accessible panel dismissal and mobile access; adding anchor buttons to the same long form alone does not meet this request. |
 | PREF-02 | PARTIAL | P1 | Existing per-cwd section/group/row/scope memory, hash entry and guarded focus return are valuable, but assume all sections are mounted (S7–S8, T3). Adapt them to category ownership, preserving `#mcp`, `#model`, other existing section links and per-workspace intent. DONE requires no-project, two-workspace, trust-change, delayed-content and unsaved-form retirement evidence without navigation writes triggering configuration mutations. |
 | PREF-03 | PARTIAL | P2 | Appearance saves browser preferences immediately; API-key/default forms require explicit saves; scoped tools/resources have their own writes (S6, S9). Those distinctions are real and should not be flattened into a misleading universal Save. Add consistent local/global/project/effective-source labeling and local save/pending/error/override feedback. DONE requires scoped readback and an explicit rule for dirty edits on category change, with no autosave of secrets or loss concealed as a successful save. |
 | PREF-04 | PARTIAL | P2 | Appearance also contains send behavior, reasoning visibility, sound, browser notifications and Push settings (S6, V4–V5). Separate visual appearance from behavior and notifications; align checkbox/switch labels horizontally rather than the current grid placing the input above the text. DONE requires EN/FR desktop/mobile review and unchanged browser permission/Push consent behavior. |
@@ -156,6 +156,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-19 | ACT-01; ACT-02, QA-01 | ACT-01: PARTIAL → DONE; other states unchanged | Translated keyboard hints, compact utility controls, explicit states and constrained chat fit in §16 | Final Docker build/types and Web 71/617 PASS; **320/320** distinct owning browser cases PASS without updates/retries; all 13 changed source files SHA-256-equal to the frozen workspace; budgets PASS (149/160 KiB gzip entry/eager); 38 reviewed baseline changes | Retained native generation failure and initial functional chat failure. Controlled response timing reproduced the 180px tail gap on current and retained layout sources; synchronous explicit jumps corrected it without weakening the 96px assertion. Mobile terminal overlap, Settings and final global qualification remain open. |
 | 2026-11-19 | ACT-02; VIS-01–03, QA-01 | ACT-02: IN PROGRESS → DONE; other states unchanged | Composer-flow terminal control, keyboard-viewport bounds and message-bounded minimap in §17 | Final Docker build/types and Web 71/617 PASS; **342/342** distinct owning browser cases PASS without updates/retries; eight changed source files SHA-256-equal to the frozen container; budgets PASS (149/160 KiB gzip); 101 reviewed baseline changes | Retained incorrect-name, rectangle, keyboard-bound and capture-framing failures. No timeout, threshold or runtime-flag change. Palette inventory still has a compact-action override to correct; Settings and final global qualification remain open. |
 | 2026-11-19 | VIS-01–03; QA-01 | VIS-01–03: IN PROGRESS → DONE; QA-01 unchanged | Token inventory, nine retained reds, repaired compact action/cache notice and explicit criterion mapping in §18 | Docker build/types and Web 71/617 PASS; **342/342** distinct owning browser cases PASS without updates/retries; four changed source files and all 304 tracked PNGs SHA-256-equal to the frozen container; budgets PASS (149/160 KiB gzip); ten reviewed baseline changes | The earlier inventory omitted both overrides; Light/System Light notice contrast was 1.015:1. Historical native/functional failures remain retained. This closes the bounded semantic-theme criteria, not Settings, VIS-04 or global QA-01. |
+| 2026-11-19 | PREF-01–04; QA-01 | PREF-01: ABSENT → PARTIAL; other states unchanged | Category-modal ownership, history/drafts, local feedback and accessible notice host in §19 | Final partial-foundation build/types and Web 71/617 PASS; **229/229** distinct bounded owning cases PASS with isolated containers, no updates/retries; 55 source files and all 306 E2E baselines match the frozen inputs, with 100 reviewed changes. First campaign retained 444 PASS/19 FAIL; the second launcher exited 139 before tests and five subsequent suites refused occupied ports. Detailed development/failure evidence remains in §19 | No Settings criterion closed. Contextual entity lists, General subpanels, dirty-close confirmation and global qualification remain open; generation and bounded corrections are not release qualification. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -575,3 +576,47 @@ Each dedicated suite used its owning configuration. After all runs, all four cha
 | VIS-03 — every selectable theme | The existing seven reader/source and seven shared chat/Settings scenarios pass again, with reviewed captures for Light/Dark/Mist/Rose/Pine and both System resolutions. The preference choices/resolver remain intact; no saved theme is deleted. |
 
 VIS-01–03 are **DONE** on that mapping, not on generation alone. VIS-04 remains PARTIAL pending the completed Settings presentation and final desktop/mobile review. Category Settings and QA-01/global qualification remain open; historical failures in earlier increments are not erased by this campaign.
+
+## 19. Category-Modal Settings Foundation — Partial Delivery
+
+This increment follows §5 without adding providers or changing service authority. `SettingsView.tsx`, `settings-categories.ts` and `settings.css` present seven labeled native category links with current-state underline, a centered desktop dialog and a full-screen mobile category picker. All fifteen section hashes remain valid. Hidden-but-mounted category bodies preserve volatile drafts and pending operations; workspace id/cwd/both-trust replacement still retires them. Navigation v1 adds only optional validated same-category section metadata, retaining existing bounds and rejecting inherited/mismatched values. Hashless restored entries gain a stable history target before category navigation; peer metadata updates never navigate the mounted category.
+
+### Ownership and feedback repairs
+
+- Ready modal publication, rather than chunk/locale loading, owns background inertness. The separately portaled command palette suspends Settings only after it mounts; Escape while its import is pending cancels that request before Settings dismissal.
+- Entry restoration ignores its own dialog's initialization focus but still yields to real pointer/key intent. Desktop category outlines are inset rather than clipped by the navigation overflow container. Hidden MCP/import/profile editors relinquish focus/Escape leases and reactivate their preserved drafts when presented again.
+- Provider-key success/error feedback stays in the corresponding row, not hidden General authentication. Authentication has independent status. Editing a key clears only that row's feedback; no secret is autosaved.
+- A stable `StatusCenter` portal host moves into/out of Settings without replacing notice DOM or restarting timers. Notices stay accessible and dismissible in bounded dialog flow rather than underneath an inert backdrop. Existing pause/dismiss behavior remains intact.
+
+### Retained development evidence
+
+The existing navigation, Settings, defaults, chat and boundary scenarios were extended before their repairs. Retained reds cover absent modal/initial restoration, delayed palette ownership, peer-navigation drift, hidden provider feedback, native-picker theme roles, inaccessible notices, clipped category focus and hidden editor traps. The first eager-copy build exceeded the unchanged 516,096-byte entry cap by 120 bytes; moving category copy into the existing lazy dictionaries repaired it. A missing scoped `presented` forwarding caused TS6133/TS2304 and was corrected before the subsequent build/types/Web 71-file/617-test pass. Budgets remain 149/160 KiB gzip entry/eager with 28 chunks.
+
+Navigation generation passes 12/12; the child-editor check passes 1/1. The dedicated pane suite initially retained six old nonmodal/cross-category journeys; real category selection and available palette nesting replace inaccessible sidebar actions, with all original visibility, focus, IME, route and no-mutation checks retained. Corrected owning suites pass pane 18/18, linked 44/44, workspace assets 17/17 and locale assets 8/8. Expanded Settings-related generation passes 115/115. These are overlapping bounded campaigns, not a summed global pass count.
+
+Visual generation retained 123 passes and six plugin-framing failures; assertions now measure actual modal scroll extent at the unchanged subpixel tolerance, and all six corrected cases pass. Initially, seventy-one task-owned captures were reviewed and reconciled: 53 visual Settings/modal captures, eight defaults crops (including four stale pre-palette/pre-terminal composer references), six navigation crops and four actual-service administration crops. Nineteen unrelated generated differences were not adopted. MCP's expanded inventory is explicitly a full-content artifact, not native mobile-viewport evidence. The visible long General form and resource cards remain unfinished presentation work, not accepted final design.
+
+The 45-case synthetic-credential/loopback campaign retained 42 passes and three failures: two cache-notice assertions still demanded the pre-semantic fixed foreground, and one native signed MiniMax case reported `Target crashed`. The cache cases now check actual theme roles and unchanged 4.5:1 contrast and pass 2/2. No runtime cause is inferred for the crash. Provider/replay/privacy assertions remain intact; UI journeys close Settings before using the inert sidebar.
+
+### Qualification boundary and remaining work
+
+A complete Docker-filtered context was exported before building the qualification image, including nested package documentation; its 2,610-file manifest is distinct from the subsequently regenerated build outputs. The first frozen campaign used canonical 1 GiB shared memory, owning configurations, no snapshot updates and zero retries. Its standard gate finished at 312/331: sixteen capture failures exposed omitted MCP/keyboard/model/resource baseline reconciliation; one accessibility journey still expected all categories visible simultaneously; a child-agent accessibility worker exited with SIGSEGV and Chromium terminated with `stack smashing detected` during MCP OAuth axe analysis. All nineteen failures remain recorded. The accessibility journey now visits every category for actual Light/Dark axe/control checks and passes in 18.9s without changing its timeout. Twenty-four additional OAuth/model/resource crops were then reviewed and reconciled. Reviewing the five short-keyboard MCP crops also exposed clipped content; their replacement uses the real modal viewport with explicit field/Preview visibility rather than an expanded or occluded locator crop. Initial end alignment exposed fractional clipping in three mobile cases (Preview ratio 0.997632622718811); eight pixels of real scroll clearance now preserve both the focused field and Preview at the unchanged 100% visibility threshold. All five corrected keyboard cases pass generation, and their native-view captures were reviewed, bringing reconciliation to 100 images. The first frozen live campaign passes 45/45, with pane/linked/workspace/locale 18/44/17/8 also passing: 444 passes and nineteen failures across 463 distinct cases, not a successful global campaign. The second complete-context image again passes build/types/Web 71/617, but its standard Playwright process exits 139 before any cases start. The five subsequent suites refuse the occupied 3080/3099 ports; these are setup failures, not executed tests. Process evidence was retained and only that task-owned container was stopped. New bounded checks use one isolated container per owning suite, preventing an orphaned listener from contaminating the next configuration; no server-reuse flag, retry or timeout increase is introduced. Their results remain separate from both failed campaigns; no successful global campaign is claimed. Local logs, captures, results and manifests use `/tmp/aih-web-design-settings-categories-*`.
+
+### Final bounded foundation checks
+
+The corrected frozen image passes production build/budgets (149/160 KiB gzip entry/eager; 28 chunks), workspace/parity types and Web units (71 files / 617 tests). Each browser group below owns a separate container with 1 GiB shared memory, zero retries and no snapshot updates:
+
+| Owning configuration | Result | Duration |
+|---|---:|---:|
+| Eleven standard Settings/defaults/batches/navigation/MCP/i18n/chat/accessibility/keyboard files | 142/142 | 4.6m |
+| Pane lifetime | 18/18 | 21.7s |
+| Linked directories/modal boundary | 44/44 | 4.2m |
+| Workspace asset loading | 17/17 | 16.6s |
+| Settings locale asset loading | 8/8 | 15.1s |
+| **Distinct bounded total** | **229/229** | — |
+
+The complete Docker-filtered export records 2,610 inputs, all equal to the host at freeze. All five final containers preserve the 1,958 immutable inputs byte-for-byte, including modes and symlink targets; 652 regenerated build-output inputs are separately classified, not misrepresented as immutable. All 55 changed product/test source files and all 306 E2E baseline PNGs match those inputs. The 100 reviewed changed images are uniquely recorded by SHA-256; no unreviewed changed baseline remains. These bounded results validate the partial modal/category foundation, not the nineteen first-campaign failures, the second campaign's startup failures, physical devices, complete Settings acceptance or global QA-01.
+
+### Still required
+
+PREF-01 is **PARTIAL**, not DONE. Contextual entity list/detail views, flat resource rows, General Appearance/Behavior/Notifications/Access/About subpanels, explicit dirty-close/context-navigation confirmation and complete retirement/acceptance evidence remain required. Current close still discards component drafts; category conservation is not universal dirty protection. PREF-02–04 and VIS-04 remain PARTIAL, QA-01 IN PROGRESS, and closure stays 10/16 (62.5%).

@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 const asset = /\/assets\/settings-locale-[^/]+\.js$/;
 const chat = '/chat/locale-first?cwd=%2Fworkspace';
@@ -36,16 +37,23 @@ test('closed Settings fetches no feature copy; opening and reopening register re
   await expect(composer(page)).toBeVisible();
   expect(requests).toEqual([]);
   await open(page);
+  await selectSettingsCategory(page, 'models');
   await expect(page.getByRole('heading', { name: 'Provider connections and custom providers', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
+  await closeSettings(page);
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
   await expect(composer(page)).toBeVisible();
   await open(page);
+  await selectSettingsCategory(page, 'general');
   await expect(page.getByRole('heading', { name: 'Server authentication', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
+  await closeSettings(page);
   await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('fr');
+  await open(page);
   await expect(page.getByRole('heading', { name: 'Authentification du serveur', exact: true })).toBeVisible();
+  await selectSettingsCategory(page, 'models');
   await expect(page.getByRole('heading', { name: 'Connexions fournisseur et fournisseurs personnalisés', exact: true })).toBeVisible();
+  expect(requests).toHaveLength(1);
 });
 
 for (const locale of ['en', 'fr'] as const) {
@@ -67,9 +75,15 @@ for (const locale of ['en', 'fr'] as const) {
     await selector.selectOption(locale);
     await page.keyboard.press('Control+k');
     await expect(page.getByRole('dialog', { name: locale === 'fr' ? 'Palette de commandes' : 'Command palette', exact: true })).toBeVisible();
-    await page.keyboard.press('Escape');
     await expect.poll(() => Boolean(held)).toBe(true);
     await held!.continue();
+    await expect(page.locator('#authentication')).toBeAttached();
+    await settle(page);
+    // Completing copy must not take keyboard ownership from the newer palette.
+    const palette = page.getByRole('dialog', { name: locale === 'fr' ? 'Palette de commandes' : 'Command palette', exact: true });
+    await expect(palette.locator('input')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(palette).toHaveCount(0);
     await expect(page.getByRole('heading', { name: locale === 'fr' ? 'Authentification du serveur' : 'Server authentication', exact: true })).toBeVisible();
     if (locale === 'fr') await expect(page.getByRole('heading', { name: 'Server authentication', exact: true })).toHaveCount(0);
     await expect(boundary(page)).toHaveCount(0);

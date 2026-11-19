@@ -7,6 +7,7 @@ import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { bedrockText } from '../tests/fixtures/bedrock-event-stream.js';
 import { expect, test } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 
 for (const auth of ['sigv4', 'bearer'] as const) {
 test(`configured built-in Bedrock ${auth} reaches binary HTTPS from the browser and survives transcript reload`, async ({ page }) => {
@@ -43,6 +44,7 @@ test(`configured built-in Bedrock ${auth} reaches binary HTTPS from the browser 
       values: { provider: 'bedrock', model, toolPreset: 'chat-only' } } })).status()).toBe(200);
     await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await page.getByRole('textbox', { name: 'Message composer' }).fill('Exercise native Bedrock');
     await page.getByRole('button', { name: 'Send', exact: true }).click();

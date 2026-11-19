@@ -33,6 +33,9 @@ body {
   height: 100vh;
 }
 
+/* Inert background chrome stays below the active modal portals. */
+.app[inert] { isolation: isolate; }
+
 /* Sidebar */
 .sidebar {
   width: 280px;
@@ -262,9 +265,8 @@ body {
 .settings-view {
   width: 100%;
   min-height: 0;
-  padding: 2rem;
-  max-width: 600px;
-  margin: 0 auto;
+  flex: 1;
+  padding: 1.25rem;
   overflow-y: auto;
 }
 

@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import type { ModelCatalog, ResourceEnableChange, SkillCatalog } from '@ai-harness/core';
 import { installMockApi } from './fixtures/mock-api';
+import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function resources(page: Page, options: { loseSkillResponse?: boolean; delayModelResponse?: (sequence: number) => Promise<void> } = {}) {
   let models: ModelCatalog = { updatedAt: '2025-01-01T12:00:00.000Z', enabledScope: 'global', enabledSource: 'global', providers:
@@ -48,7 +49,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
         localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
       }, theme);
       const api = await resources(page);
-      await page.goto('/settings');
+      await page.goto('/settings#model');
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       const model = page.locator('#model');
       await model.locator('summary').click();
@@ -77,6 +78,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       await expect(openai).toHaveScreenshot(`models-batches-${viewport.name}-${theme}.png`);
       expect((await new AxeBuilder({ page }).include('#model').analyze()).violations).toEqual([]);
 
+      await selectSettingsCategory(page, 'skills');
       const skill = page.locator('#skills');
       await skill.getByRole('searchbox').fill('visible');
       await skill.locator('fieldset[data-source="quality-kit"]').getByRole('button', { name: 'Enable displayed', exact: true }).click();
@@ -105,13 +107,14 @@ test('does not let a retired Settings save replace a newer same-workspace catalo
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const api = await resources(page, { delayModelResponse: sequence => sequence === 1 ? held : Promise.resolve() });
-  await page.goto('/settings');
+  await page.goto('/settings#model');
   const models = page.locator('#model');
   await models.locator('summary').click();
   const checkbox = models.locator('fieldset[data-provider="openai"] label').filter({ hasText: 'visible-on' }).getByRole('checkbox');
   try {
     await checkbox.click();
     await expect.poll(() => api.requests.length).toBe(1);
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(page.locator('.settings-view')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();
@@ -135,7 +138,7 @@ test('does not let a retired Settings save replace a newer same-workspace catalo
 
 test('reconciles uncertain batch failure without undoing a durable success', async ({ page }) => {
   const api = await resources(page, { loseSkillResponse: true });
-  await page.goto('/settings');
+  await page.goto('/settings#skills');
   const skills = page.locator('#skills');
   await skills.locator('fieldset').getByRole('button', { name: 'Enable displayed', exact: true }).click();
   await expect(skills.getByRole('alert')).toContainText('Refresh before retrying');

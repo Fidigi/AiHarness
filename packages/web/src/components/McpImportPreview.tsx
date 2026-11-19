@@ -241,6 +241,7 @@ function PreviewEntry({
 }
 
 export function McpImportPreview({
+  presented,
   cwd,
   disabled,
   inventory,
@@ -250,6 +251,7 @@ export function McpImportPreview({
   onWritingChange,
   replacement,
 }: {
+  presented: boolean;
   cwd?: string;
   disabled: boolean;
   inventory?: McpConfigInventory;
@@ -284,7 +286,7 @@ export function McpImportPreview({
   const closeDraft = (): void => {
     if (!writing) setDraft(undefined);
   };
-  useFocusTrap(Boolean(draft), dialogRef, closeDraft);
+  useFocusTrap(presented && Boolean(draft), dialogRef, closeDraft);
 
   useEffect(() => () => {
     request.current++;

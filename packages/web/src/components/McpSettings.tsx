@@ -400,15 +400,15 @@ function ServerCard({
 }
 
 /** Scope replacement retires presentation/drafts before the replacement view commits. */
-export function McpSettings() {
+export function McpSettings({ presented }: { presented: boolean }) {
   const workspace = useSessionStore(state => state.workspace);
   return <McpSettingsPanel key={JSON.stringify([
     workspace?.id, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted,
-  ])} />;
+  ])} presented={presented} />;
 }
 
 /** Local MCP administration plus an explicit, bounded one-shot connection test. */
-function McpSettingsPanel() {
+function McpSettingsPanel({ presented }: { presented: boolean }) {
   const { locale, t } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const refreshWorkspace = useSessionStore(state => state.refreshWorkspace);
@@ -565,7 +565,7 @@ function McpSettingsPanel() {
   }, [inventory, oauthFlows, refreshOAuthStatuses, t]);
 
   useFocusTrap(
-    Boolean(pendingRemoval),
+    presented && Boolean(pendingRemoval),
     removalDialogRef,
     () => { if (!busy) closeRemoval(true); },
     removalReturnFocus,
@@ -905,6 +905,7 @@ function McpSettingsPanel() {
       {inventory.project.trustError ? t('settings.mcp.trustUnavailable') : t('settings.mcp.untrustedProject')}
     </p>}
     <McpImportPreview
+      presented={presented}
       key={`${workspace?.cwd ?? 'global'}:${(workspace?.operationTrusted ?? workspace?.trusted) ? 'allowed' : 'blocked'}`}
       cwd={workspace?.cwd}
       disabled={Boolean(busy) || Boolean(testing) || Boolean(oauthBusy) || Boolean(pendingRemoval)}

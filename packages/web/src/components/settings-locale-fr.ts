@@ -1,5 +1,13 @@
 /** Exact HEAD Settings-only messages; registered before children mount. */
 export const settingsFrMessages: Readonly<Record<string, string>> = {
+    'settings.categories': 'Catégories des réglages',
+    'settings.category.general': 'Général',
+    'settings.category.models': 'Modèles',
+    'settings.category.skills': 'Compétences',
+    'settings.category.tools': 'Outils',
+    'settings.category.plugins': 'Plugins',
+    'settings.category.subagents': 'Agents enfants',
+    'settings.category.mcp': 'MCP',
     'settings.serverAuthentication': 'Authentification du serveur',
     'settings.logout': 'Se déconnecter de la session Web',
     'settings.bearerToken': 'Bearer token',

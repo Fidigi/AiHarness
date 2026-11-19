@@ -2,9 +2,12 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import '../settings.css';
-import { useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { settingsCategories, settingsSectionCategory, type SettingsCategory } from './settings-categories';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
 import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
@@ -20,7 +23,7 @@ import {
 import { SubagentSettings } from './SubagentSettings';
 import { McpSettings } from './McpSettings';
 import { readPreferences, usePreferences } from '../store/preferences';
-import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { isSettingsSection, readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { bindSettingsNavigation } from './settings-navigation';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
@@ -44,7 +47,8 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView({ entryRelease, entryEpoch }: {
+function SettingsView({ entryRelease, entryEpoch, category }: {
+  category: SettingsCategory;
   entryRelease: { readonly current: (() => void) | null };
   entryEpoch: string;
 }) {
@@ -64,7 +68,8 @@ function SettingsView({ entryRelease, entryEpoch }: {
   const [providerInvalidation, setProviderInvalidation] = useState(0);
   const { t } = useI18n();
   const [authToken, updateAuthToken] = useState('');
-  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
+  const [authApplied, setAuthApplied] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<Partial<Record<string, SaveStatus>>>({});
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
@@ -144,6 +149,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
 
   const handleApiKeyChange = (type: string, value: string) => {
     setApikeyInputs(prev => ({ ...prev, [type]: value }));
+    setSaveStatus(previous => { const next = { ...previous }; delete next[type]; return next; });
   };
 
   const notificationCategories = (events = preferences.pushEvents): NotificationEvent[] =>
@@ -171,23 +177,19 @@ function SettingsView({ entryRelease, entryEpoch }: {
       if (result.success) {
         updateApiKey(type as ProviderType, 'configured');
         setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
-        setSaveStatus({
-          key: 'settings.providerConfiguredOnServer',
-          provider: type as ProviderType,
-        });
+        setSaveStatus(previous => ({ ...previous, [type]: {
+          key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
+        } }));
       } else {
-        setSaveStatus(result.error
-          ? { detail: result.error }
-          : { key: 'settings.configurationFailed' });
+        setSaveStatus(previous => ({ ...previous, [type]: result.error
+          ? { detail: result.error } : { key: 'settings.configurationFailed' } }));
       }
     }
   };
 
   return (
     <>
-      <h2>{t('settings.title')}</h2>
-
-      <section className="settings-section" id="authentication">
+      <section className="settings-section" id="authentication" hidden={category !== 'general'}>
         <h3>{t('settings.serverAuthentication')}</h3>
         <div className="api-key-input-group">
           <input
@@ -195,11 +197,11 @@ function SettingsView({ entryRelease, entryEpoch }: {
             value={authToken}
             placeholder={t('settings.bearerToken')}
             aria-label={t('settings.bearerToken')}
-            onChange={event => updateAuthToken(event.target.value)}
+            onChange={event => { updateAuthToken(event.target.value); setAuthApplied(false); }}
           />
           <button onClick={() => {
             setAuthToken(authToken);
-            setSaveStatus({ key: 'settings.tokenApplied' });
+            setAuthApplied(true);
           }}>
             {t('settings.apply')}
           </button>
@@ -207,15 +209,10 @@ function SettingsView({ entryRelease, entryEpoch }: {
         <button className="logout-button" onClick={() => void logoutWeb().finally(() => {
           window.dispatchEvent(new Event('aih-auth-required'));
         })}>{t('settings.logout')}</button>
-        {saveStatus && (
-          <p>{'detail' in saveStatus
-            ? saveStatus.detail
-            : t(saveStatus.key, saveStatus.provider
-              ? { provider: getTypeLabel(saveStatus.provider, t) }
-              : undefined)}</p>
-        )}
+        {authApplied && <p role="status">{t('settings.tokenApplied')}</p>}
       </section>
 
+      <div hidden={category !== 'models'}>
       {/* AI Provider Configuration */}
       <section className="settings-section" id="providers">
         <h3>{t('settings.aiProvider')}</h3>
@@ -238,6 +235,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
           ].includes(type)).map(type => {
             const providerType = type as ProviderType;
             const providerLabel = getTypeLabel(providerType, t);
+            const status = saveStatus[type];
             const environmentVariable = type === 'vertex' && vertexCredentialMode === 'api-key' ? 'GOOGLE_CLOUD_API_KEY' : getTypeEnvVar(providerType);
             return (
               <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
@@ -259,6 +257,10 @@ function SettingsView({ entryRelease, entryEpoch }: {
                   />
                   <button onClick={() => void saveApiKey(type)}>{t('common.save')}</button>
                 </div>
+                {status && <p role={'detail' in status || !status.provider ? 'alert' : 'status'}>
+                  {'detail' in status ? status.detail : t(status.key, status.provider
+                    ? { provider: getTypeLabel(status.provider, t) } : undefined)}
+                </p>}
               </div>
             );
           })}
@@ -370,10 +372,11 @@ function SettingsView({ entryRelease, entryEpoch }: {
         </details>
       </section>
 
-      <DefaultModelSettings key={`provider-defaults:${providerReload}`} />
       <CustomModelSettings key={`provider-models:${providerReload}`} />
+      </div>
+      <div hidden={category !== 'general'}><DefaultModelSettings key={`provider-defaults:${providerReload}`} /></div>
 
-      <section className="settings-section" id="skills">
+      <section className="settings-section" id="skills" hidden={category !== 'skills'}>
         <h3>{t('settings.skills.title')}</h3>
         <p className="settings-help">{t('settings.skills.help')}</p>
         <div className="model-catalog-toolbar">
@@ -449,21 +452,21 @@ function SettingsView({ entryRelease, entryEpoch }: {
           onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
       </section>
 
-      <ToolSettingsPanel />
+      <div hidden={category !== 'tools'}><ToolSettingsPanel /></div>
 
-      <Suspense fallback={(
+      <div hidden={category !== 'plugins'}><Suspense fallback={(
         <section className="settings-section plugin-settings" id="plugins">
           <h3>{t('settings.plugins.title')}</h3>
           <p role="status">{t('common.loading')}…</p>
         </section>
       )}>
         <PluginSettings key={workspaceId ?? 'default-workspace'} />
-      </Suspense>
+      </Suspense></div>
 
-      <SubagentSettings />
+      <div hidden={category !== 'subagents'}><SubagentSettings presented={category === 'subagents'} /></div>
 
       {/* Appearance */}
-      <section className="settings-section" id="appearance">
+      <section className="settings-section" id="appearance" hidden={category !== 'general'}>
         <h3>{t('settings.appearance')}</h3>
         <div className="preference-grid">
           <label>{t('settings.theme')}
@@ -546,7 +549,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
         </div>
       </section>
 
-      <section className="settings-section" id="shortcuts">
+      <section className="settings-section" id="shortcuts" hidden={category !== 'general'}>
         <h3>{t('settings.shortcuts')}</h3>
         <p className="settings-help">{t('settings.shortcutsHelp')}</p>
         <div className="shortcut-grid">
@@ -574,16 +577,16 @@ function SettingsView({ entryRelease, entryEpoch }: {
       </section>
 
       {/* Session Management */}
-      <section className="settings-section" id="sessions">
+      <section className="settings-section" id="sessions" hidden={category !== 'general'}>
         <h3>{t('settings.sessions')}</h3>
         <p>{t('settings.totalSessions', { count: sessionCount })}</p>
         <small>{t('settings.sessionsLocation')}</small>
       </section>
 
-      <McpSettings />
+      <div hidden={category !== 'mcp'}><McpSettings presented={category === 'mcp'} /></div>
 
       {/* About */}
-      <section className="settings-section about" id="about">
+      <section className="settings-section about" id="about" hidden={category !== 'general'}>
         <h3>{t('settings.about')}</h3>
         <p>{t('settings.aboutDescription')}</p>
         <div className="version-status" aria-live="polite">
@@ -720,32 +723,82 @@ function SettingsNavigationBoundary() {
   const root = useRef<HTMLDivElement>(null);
   const entryRelease = useRef<(() => void) | null>(null);
   const cwd = workspace?.cwd;
-  const { hash } = useLocation();
+  const { hash, pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const section = hash.replace(/^#/, '');
+  // Peer storage writes may refresh metadata, never this mounted category choice.
+  const initial = useMemo(() => readSettingsNavigation(cwd, readPreferences().lastSettingsSection), [cwd, hash]);
+  const activeSection = isSettingsSection(section) ? section : initial.section;
+  const category = settingsSectionCategory[activeSection];
+  const address = (section: string) => `${pathname}${search}#${section}`;
+  const categorySection = (item: typeof settingsCategories[number]) => category === item.id ? activeSection
+    : initial.categories?.[item.id] ?? item.section;
+  const selectCategory = (item: typeof settingsCategories[number]) => {
+    if (item.id === category) return;
+    // Give a remembered /settings entry a stable Back target before leaving it.
+    if (!isSettingsSection(section)) navigate(address(activeSection), { replace: true });
+    navigate(address(categorySection(item)));
+  };
   // Keep navigation/focus ownership across a trust refresh; retire all forms,
   // pending local results and mounted sections before the replacement commits.
   const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
   useLayoutEffect(() => {
     if (!root.current) return;
     const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
-    let local = readSettingsNavigation(cwd, readPreferences().lastSettingsSection);
+    let local = initial;
     const dispose = bindSettingsNavigation(root.current, local, {
       hash, entryReady,
       save: (section, position) => {
         const fresh = readSettingsNavigation(cwd);
         local = { ...local, section, scopes: fresh.scopes,
+          categories: { ...local.categories, ...fresh.categories, [settingsSectionCategory[section]]: section },
           positions: { ...local.positions, ...fresh.positions,
             ...(position.group || position.selection ? { [section]: position } : {}) } };
         writeSettingsNavigation(cwd, local);
       },
     });
     return () => { entryRelease.current = null; dispose(); };
-  }, [cwd, hash]);
-  return <div className="settings-view" ref={root}><SettingsView key={context}
-    entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>;
+  }, [cwd, hash, initial]);
+  return <div className="settings-layout">
+    <nav className="settings-categories" aria-label={t('settings.categories')}>
+      {settingsCategories.map(item => <Link key={item.id} to={address(categorySection(item))} aria-current={category === item.id ? 'page' : undefined}
+        onClick={event => {
+          if (!event.defaultPrevented && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault(); selectCategory(item);
+          }
+        }}>
+        <Icon name={item.icon} />{t(`settings.category.${item.id}`)}
+      </Link>)}
+    </nav>
+    <label className="settings-category-picker">{t('settings.categories')}
+      <select value={category} onChange={event => selectCategory(settingsCategories.find(item => item.id === event.target.value)!)}>
+        {settingsCategories.map(item => <option key={item.id} value={item.id}>{t(`settings.category.${item.id}`)}</option>)}
+      </select>
+    </label>
+    <div className="settings-view" ref={root}><SettingsView key={context} category={category}
+      entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
+  </div>;
 }
 
-function LocalizedSettingsView() {
-  return <SettingsLocaleBoundary><SettingsNavigationBoundary /></SettingsLocaleBoundary>;
+type SettingsDialogProps = { onClose: () => void; onEscape: () => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean };
+function SettingsDialog({ onClose, onEscape, onModalChange, suspended }: SettingsDialogProps) {
+  const root = useRef<HTMLElement>(null);
+  const { t } = useI18n();
+  useFocusTrap(!suspended, root, onEscape);
+  useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
+  return createPortal(<div className="modal-backdrop settings-backdrop">
+    <section className="settings-dialog" ref={root} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} inert={suspended || undefined}>
+      <header className="settings-dialog-header"><h2 id="settings-title">{t('settings.title')}</h2>
+        <button type="button" data-settings-entry-focus onClick={onClose} aria-label={t('common.close')}><Icon name="close" /></button>
+      </header>
+      <SettingsNavigationBoundary />
+    </section>
+  </div>, document.body);
+}
+
+function LocalizedSettingsView(props: SettingsDialogProps) {
+  return <SettingsLocaleBoundary><SettingsDialog {...props} /></SettingsLocaleBoundary>;
 }
 
 export default LocalizedSettingsView;

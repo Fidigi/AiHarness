@@ -5,12 +5,21 @@ export const settingsSections = [
   'sessions', 'mcp', 'about',
 ] as const;
 export type SettingsSection = typeof settingsSections[number];
+export const settingsCategoryIds = ['general', 'models', 'skills', 'tools', 'plugins', 'subagents', 'mcp'] as const;
+export type SettingsCategory = typeof settingsCategoryIds[number];
+export const settingsSectionCategory: Record<SettingsSection, SettingsCategory> = {
+  authentication: 'general', appearance: 'general', shortcuts: 'general',
+  defaults: 'general', sessions: 'general', about: 'general',
+  providers: 'models', 'provider-lifecycle': 'models', model: 'models', 'custom-models': 'models',
+  skills: 'skills', tools: 'tools', plugins: 'plugins', subagents: 'subagents', mcp: 'mcp',
+};
 export type SettingsScope = 'global' | 'project';
 export const settingsScopeControls = ['tools', 'defaults', 'plugins', 'subagents', 'registry'] as const;
 export type SettingsScopeControl = typeof settingsScopeControls[number];
 export interface SettingsPosition { group?: string; selection?: string }
 export interface SettingsNavigation {
   section: SettingsSection;
+  categories?: Partial<Record<SettingsCategory, SettingsSection>>;
   positions: Partial<Record<SettingsSection, SettingsPosition>>;
   scopes: Partial<Record<SettingsScopeControl, SettingsScope>>;
 }
@@ -44,6 +53,13 @@ function navigation(value: unknown, fallback: SettingsSection): SettingsNavigati
   if (!object(value)) return result;
   const section = own(value, 'section');
   if (isSettingsSection(section)) result.section = section;
+  const categories = own(value, 'categories');
+  if (object(categories)) for (const category of settingsCategoryIds) {
+    const target = own(categories, category);
+    if (isSettingsSection(target) && settingsSectionCategory[target] === category) {
+      (result.categories ??= {})[category] = target;
+    }
+  }
   const positions = own(value, 'positions');
   if (object(positions)) for (const section of settingsSections) {
     const position = own(positions, section);

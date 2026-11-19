@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { closeSettings } from './fixtures/settings-navigation';
 
 function providerSection(page: Page) {
   return page.getByRole('heading', { name: 'AI Provider' }).locator('..');
@@ -76,8 +77,9 @@ test.describe('Conversation detached agent', () => {
         { type: 'message_end', content: 'Bonjour' },
       ],
     });
-    await page.goto('/settings');
+    await page.goto('/settings#providers');
     await providerSection(page).getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
+    await closeSettings(page);
     const conversation = page.getByRole('link', { name: 'Conversation SSE' });
     await expect(conversation).toHaveAttribute('href', '/chat/streamed-session?cwd=%2Fworkspace');
     await conversation.click();
@@ -749,8 +751,17 @@ test.describe('Conversation detached agent', () => {
         },
       ],
     });
-    await page.goto('/settings');
-    await expect(page.getByText('Explore child agent completed.')).toBeVisible();
+    await page.goto('/');
+    const notice = page.locator('.status-notice').filter({ hasText: 'Explore child agent completed.' });
+    await expect(notice).toBeVisible();
+    const originalNotice = await notice.elementHandle();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('status')
+      .filter({ hasText: 'Explore child agent completed.' })).toBeVisible();
+    expect(await originalNotice!.evaluate(node => node.isConnected && !!node.closest('.settings-dialog'))).toBe(true);
+    await closeSettings(page);
+    // The same notice DOM and component lifetime survive both host changes.
+    expect(await originalNotice!.evaluate(node => node.isConnected && !node.closest('.settings-dialog'))).toBe(true);
     await page.goto(`/chat/${parent.id}`);
 
     const toggle = page.getByRole('button', { name: 'Open child agents (2)' });

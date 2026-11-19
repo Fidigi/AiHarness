@@ -33,6 +33,8 @@ function App() {
   const [sidebarVisible, setSidebarVisible] = useState(() => readPreferences().sidebarVisible);
   const [filesOpen, setFilesOpen] = useState(() => !window.matchMedia?.('(max-width: 959px)').matches && readPreferences().filesOpen);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteModal, setPaletteModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState<HTMLElement | null>(null);
   const [terminalWorkspaceId, setTerminalWorkspaceId] = useState<string>();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const location = useLocation();
@@ -258,7 +260,7 @@ function App() {
 
   return (
     <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
-      <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
+      <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`} inert={!!settingsModal || undefined}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
         aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><Icon name="menu" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
@@ -275,7 +277,7 @@ function App() {
           <Route path="/chat/:id" element={<ChatView terminalControl={terminalControl} />} />
           <Route path="/settings" element={<Suspense fallback={
             <div className="app-loading" role="status">{t('common.loading')}…</div>
-          }><SettingsView /></Suspense>} />
+          }><SettingsView onClose={() => navigate(lastChatAddress.current)} onEscape={() => paletteOpen ? setPaletteOpen(false) : navigate(lastChatAddress.current)} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
         </Routes>
       </main>
       {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} explorerHost={isNarrow ? null : explorerHost} onRequestClose={() => {
@@ -284,9 +286,9 @@ function App() {
       }} />}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
-      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} />}
+      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} onModalChange={setPaletteModal} />}
       <SubagentMonitor />
-      <StatusCenter />
+      <StatusCenter container={settingsModal} />
       <PwaStatus />
       <IconControlHints />
       </div>

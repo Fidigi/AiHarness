@@ -1,5 +1,5 @@
-import { expect, test } from './fixtures/test-budget';
-import { expectContrast } from './fixtures/contrast';
+import { expect, test, type Locator } from './fixtures/test-budget';
+import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 
 // Relative conversation ages must not move every day in visual baselines.
 // Freeze Date only: browser timers, animations and network ordering stay real.
@@ -19,6 +19,18 @@ const scenarios = [
 ] as const;
 
 const mcpScenarios = scenarios.filter(scenario => scenario.name.startsWith('desktop') || scenario.name.startsWith('mobile'));
+
+async function alignSettingsSection(section: Locator): Promise<void> {
+  // Native section position inside the modal, clamped to its actual scroll extent.
+  const targetScroll = await section.evaluate(element => {
+    const root = element.closest('.settings-view')!;
+    const top = root.scrollTop + element.getBoundingClientRect().top - root.getBoundingClientRect().top;
+    const target = Math.min(top, root.scrollHeight - root.clientHeight);
+    element.scrollIntoView({ block: 'start', behavior: 'instant' });
+    return target;
+  });
+  await expect.poll(() => section.evaluate((element, top) => Math.abs(element.closest('.settings-view')!.scrollTop - top), targetScroll)).toBeLessThan(1);
+}
 
 for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 'system-dark']) {
   test(`shared semantic surfaces: ${theme}`, async ({ page }) => {
@@ -40,19 +52,8 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
           .map(code => `\u001b[${code}mColor ${code}\u001b[0m`).join(' ') },
     ];
     await installMockApi(page, { sessions: [session], workspaceFiles: [{ path: 'README.md', content: '# Workspace', language: 'markdown' }] });
-    const expectRoles = async (selector: string, surface: string | null, text = '--text-primary') => {
-      const elements = page.locator(selector);
-      expect(await elements.count()).toBeGreaterThan(0);
-      const values = await elements.evaluateAll((nodes, { surface, text }) => nodes.map(element => {
-        const style = getComputedStyle(element);
-        const probe = document.createElement('span'); document.body.append(probe);
-        probe.style.color = surface ? style.getPropertyValue(surface) : 'transparent'; const background = getComputedStyle(probe).color;
-        probe.style.color = style.getPropertyValue(text); const foreground = getComputedStyle(probe).color;
-        probe.remove();
-        return { selector: element.className || element.tagName, background: style.backgroundColor === background, foreground: style.color === foreground };
-      }), { surface, text });
-      for (const value of values) expect(value, selector).toMatchObject({ background: true, foreground: true });
-    };
+    const expectRoles = (selector: string, surface: string | null, text = '--text-primary') =>
+      expectThemeRoles(page.locator(selector), surface, text);
     await page.goto('/chat/theme-shell');
     await expect(page.locator('.message.assistant')).toContainText('Readable content');
     // Chat syntax must be themed before the lazy explorer has ever opened.
@@ -339,8 +340,7 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       await page.goto('/settings#model');
       await page.addStyleTag({ content: '#skills, #plugins { display: none !important; }' });
       const section = page.getByRole('heading', { name: 'Model', exact: true }).locator('..');
-      const defaults = page.getByRole('heading', { name: 'Provider and model defaults', exact: true }).locator('..');
-      await expect(defaults.getByLabel('Model', { exact: true })).toBeEnabled();
+      await expect(page.locator('#defaults')).toBeHidden();
       await section.getByText('Manage model catalogue').click();
       await section.getByLabel('Filter models or providers').fill('openai');
       await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('GPT-4o (Recommended)');
@@ -348,9 +348,7 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
-      // Pin the reviewed scroll position after lazy sections/fonts finish laying out.
-      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
-      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
+      await alignSettingsSection(section);
       await expect(page).toHaveScreenshot(`model-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
@@ -461,13 +459,15 @@ test.describe('Régression visuelle de l’inventaire MCP', () => {
       });
 
       await page.goto('/settings#mcp');
+      // Expanded inventory artifact, not native viewport geometry (owned by Settings navigation).
       await page.addStyleTag({ content: `
-        html, body, .app, .main-content, .settings-view {
+        html, body, .settings-backdrop, .settings-dialog, .settings-layout, .settings-view {
           height: auto !important;
           max-height: none !important;
           overflow: visible !important;
         }
-        .settings-section:not(#mcp), .mobile-menu { display: none !important; }
+        .settings-backdrop { position: static !important; }
+        .app { display: none !important; }
       ` });
       const section = page.locator('#mcp');
       await section.getByText('Paste and preview a server').click();
@@ -514,8 +514,7 @@ test.describe('Régression visuelle du catalogue de plugins', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
-      await section.evaluate(element => element.scrollIntoView({ block: 'start', behavior: 'instant' }));
-      await expect.poll(() => section.evaluate(element => Math.abs(element.getBoundingClientRect().top))).toBeLessThan(1);
+      await alignSettingsSection(section);
       await expect(page).toHaveScreenshot(`plugin-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

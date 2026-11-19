@@ -7,6 +7,7 @@ import { bedrockFrame as frame } from '../tests/fixtures/bedrock-event-stream.js
 import { start, stop } from '../packages/server/dist/index.js';
 import { createRuntimeServices } from '../packages/server/dist/runtime/services.js';
 import { expect, test } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 
 for (const dialect of ['anthropic', 'google', 'vertex', 'responses', 'azure-responses', 'bedrock', 'minimax', 'minimax-cn'] as const)
 for (const selectedModel of dialect === 'minimax' || dialect === 'minimax-cn' ? [undefined, 'MiniMax-M2.7-highspeed', 'MiniMax-M3'] : [undefined])
@@ -160,9 +161,10 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global',
       values: { provider: 'native-signed', model, thinking: 'low', toolPreset: 'chat-only' } } })).status()).toBe(200);
     await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
-    const settingsUrl = `${base}/settings?cwd=${encodeURIComponent(cwd)}`;
+    const settingsUrl = `${base}/settings?cwd=${encodeURIComponent(cwd)}#providers`;
     await page.goto(settingsUrl);
     await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     const send = async (text: string, expectedPhase: 'completed' | 'failed' | 'stopped' = 'completed', reset = false) => {
       await page.getByRole('textbox', { name: 'Message composer' }).fill(text);
@@ -208,6 +210,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     // Explicitly select the same physical provider before asking for native replay.
     await page.goto(settingsUrl);
     await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+    await closeSettings(page);
     await page.locator(`a.session-main[href*="${first.session.id}"]`).click();
     const second = await send('Continue from the saved native response');
     expect(second.session.id).toBe(first.session.id);
@@ -279,6 +282,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
     await page.goto('about:blank'); await stop(); await start({ ...options, port: server.port }); await login(); await page.goto(settingsUrl);
     expect(bodies).toHaveLength(5); expect(getCompactionModelMessages(runtime.sessionManager, id)).toEqual(canonical);
     await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+    await closeSettings(page);
     await page.locator(`a.session-main[href*="${id}"]`).click(); await send('Replay compacted native context after restart');
     expect(bodies).toHaveLength(6); expect(native(bodies[5])).toEqual(expectedNative([...retainedTurns, 5]));
     if (bedrock) expect(wires).toEqual(Array.from({ length: 6 }, (_, index) => ({
@@ -319,6 +323,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
         await page.goto('about:blank'); await stop(); await start({ ...options, port: server.port }); await login(); await page.goto(settingsUrl);
         expect(getCompactionModelMessages(runtime.sessionManager, sessionId)).toEqual(canonical);
         await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+        await closeSettings(page);
         await page.locator(`a.session-main[href*="${sessionId}"]`).click();
       };
       await restart(); expect(bodies).toHaveLength(7);
@@ -441,6 +446,7 @@ test(`native signed ${dialect}${selectedModel ? `/${selectedModel}` : ''} blocks
       expect(forkEntries.filter(entry => entry.type === 'compaction')).toEqual(copiedCompactions);
       for (const value of opaque) expect(await readFile(forkFile, 'utf8')).toContain(value);
       await page.goto(settingsUrl); await page.getByRole('combobox', { name: 'Select the AI Provider', exact: true }).selectOption('native-signed');
+      await closeSettings(page);
       await page.locator(`a.session-main[href*="${fork.id}"]`).click(); const forkRun = await send('Continue the private native fork');
       expect(forkRun.session.id).toBe(fork.id); expect(bodies).toHaveLength(17); expect(native(bodies[16])).toEqual(expectedNative([...keptTurns, 16]));
       const beforeForkRestart = await runtime.sessionManager.getRawEntries(fork.id);
@@ -613,6 +619,7 @@ for (const [locale, theme] of [['en', 'light'], ['fr', 'dark']] as const) test(`
     expect((await page.request.get(`${base}/api/configuration/scope?scope=global`).then(response => response.json())).values.thinkingBudgets).toEqual({ low: 2000 });
     await page.reload(); await expect(defaults.getByLabel(labels.budgets, { exact: true })).toHaveValue('{"low":2000}');
     expect(bodies).toEqual([]);
+    await closeSettings(page);
     await page.getByRole('button', { name: labels.newChat, exact: true }).click();
     await page.getByRole('textbox', { name: labels.composer }).fill('Exercise the numeric budget');
     const accepted = page.waitForResponse(response => response.url().endsWith('/api/agent/runs') && response.request().method() === 'POST');

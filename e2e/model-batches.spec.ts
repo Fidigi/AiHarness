@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import type { ModelCatalog, ResourceEnableChange } from '@ai-harness/core';
 import { installMockApi } from './fixtures/mock-api';
+import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function resources(page: Page, delayModelResponse?: (sequence: number) => Promise<void>) {
   let models: ModelCatalog = { updatedAt: '2025-01-01T12:00:00.000Z', enabledScope: 'global', enabledSource: 'global', providers:
@@ -36,7 +37,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
         localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
       }, theme);
       const api = await resources(page);
-      await page.goto('/settings');
+      await page.goto('/settings#model');
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       const model = page.locator('#model');
       await model.locator('summary').click();
@@ -75,13 +76,19 @@ test('does not let a retired Settings save replace a newer same-workspace catalo
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const api = await resources(page, sequence => sequence === 1 ? held : Promise.resolve());
-  await page.goto('/settings');
+  await page.goto('/settings#model');
   const models = page.locator('#model');
   await models.locator('summary').click();
   const checkbox = models.locator('fieldset[data-provider="openai"] label').filter({ hasText: 'visible-on' }).getByRole('checkbox');
   try {
     await checkbox.click();
     await expect.poll(() => api.requests.length).toBe(1);
+    // Category changes retain pending work; closing still retires the view below.
+    await selectSettingsCategory(page, 'general');
+    await selectSettingsCategory(page, 'models');
+    await expect(checkbox).toBeDisabled();
+    expect(api.requests).toHaveLength(1);
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(page.locator('.settings-view')).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();

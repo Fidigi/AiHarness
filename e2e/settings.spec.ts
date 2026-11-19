@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 import {
   MCP_FILE_PROBLEM_MESSAGES,
   MCP_FILE_PROBLEM_REASONS,
@@ -22,7 +23,7 @@ test.describe('Settings and authentication', () => {
       sessions: [mockSession('first-session', 'Première'), mockSession('second-session', 'Deuxième')],
       providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: true }],
     });
-    await page.goto('/settings');
+    await page.goto('/settings#providers');
 
     const provider = settingsSection(page, 'AI Provider');
     await expect(provider.getByLabel('Select the AI Provider', { exact: true })).toHaveValue('mock');
@@ -32,6 +33,7 @@ test.describe('Settings and authentication', () => {
     await expect(settingsSection(page, 'Model').locator('option')).toContainText([
       'GPT-4o (Recommended)', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
     ]);
+    await selectSettingsCategory(page, 'general');
     await expect(settingsSection(page, 'Sessions')).toContainText('Total sessions: 2');
     await expect(page.locator('#transport')).toHaveCount(0);
     await expect(page.getByLabel('Select the real-time transport', { exact: true })).toHaveCount(0);
@@ -84,6 +86,7 @@ test.describe('Settings and authentication', () => {
 
     await o3.click();
     await expect(o3).not.toBeChecked();
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat' }).click();
     const suggestions = page.locator('#model-suggestions option');
     await expect.poll(() => suggestions.evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
@@ -154,6 +157,7 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => api.requests.filter(request => request.path === '/api/provider-registry/models' && request.method === 'POST').at(-1)?.body)
       .toMatchObject({ provider: 'openai', id: 'gpt-e2e', contextWindow: 64000, maxOutputTokens: 4096 });
 
+    await selectSettingsCategory(page, 'general');
     const defaults = settingsSection(page, 'Provider and model defaults');
     await defaults.getByLabel('Provider').fill('openai');
     await defaults.getByLabel('Model').fill('gpt-e2e');
@@ -162,12 +166,14 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH').at(-1)?.body)
       .toMatchObject({ scope: 'project', scopeId: 'workspace-e2e', values: { provider: 'openai', model: 'gpt-e2e', toolPreset: 'read-only' } });
 
+    await selectSettingsCategory(page, 'tools');
     const tools = settingsSection(page, 'Tools and presets');
     await tools.getByLabel('Default tool preset').selectOption('read-only');
     await expect.poll(() => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').at(-1)?.body)
       .toMatchObject({ projectId: 'workspace-e2e', toolPreset: 'read-only' });
     await expect(tools.getByText('powershell', { exact: true }).locator('../..').locator('input')).toBeDisabled();
 
+    await selectSettingsCategory(page, 'skills');
     const skills = settingsSection(page, 'Skills');
     await skills.getByText('Browse Agent Skills registry').click();
     await expect(skills.getByText('security-review')).toBeVisible();
@@ -951,6 +957,12 @@ test.describe('Settings and authentication', () => {
     const dialog = page.getByRole('dialog', { name: 'Create profile' });
     await dialog.getByLabel('Profile ID').fill('security-review');
     await dialog.getByLabel('Name').fill('Security review');
+    await selectSettingsCategory(page, 'general');
+    await expect(dialog).toBeHidden();
+    await selectSettingsCategory(page, 'subagents');
+    await expect(dialog.getByLabel('Name')).toHaveValue('Security review');
+    await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    expect(api.requests.filter(request => request.path === '/api/subagents/profiles' && request.method === 'POST')).toEqual([]);
     await dialog.getByLabel('Description').fill('Review trust boundaries');
     await dialog.getByLabel('Instructions').fill('Inspect the selected trust boundaries.');
     await dialog.getByLabel('Tools').fill('read, grep');
@@ -966,12 +978,12 @@ test.describe('Settings and authentication', () => {
 
   test('enregistre une clé fournisseur côté serveur puis masque sa valeur', async ({ page }) => {
     const api = await installMockApi(page);
-    await page.goto('/settings');
+    await page.goto('/settings#providers');
     const openAiRow = page.locator('.api-key-row').filter({ has: page.getByText('OpenAI', { exact: true }) });
     const keyInput = openAiRow.locator('input');
     await keyInput.fill('sk-e2e-secret');
     await openAiRow.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('OpenAI configured on the server.')).toBeVisible();
+    await expect(openAiRow.getByRole('status')).toHaveText('OpenAI configured on the server.');
     await expect(keyInput).toHaveValue('••••••••');
     await expect.poll(() => api.requests.filter(request => request.method === 'POST' && request.path === '/api/config').map(request => request.body))
       .toEqual([{ type: 'openai', apiKey: 'sk-e2e-secret' }]);
@@ -979,11 +991,11 @@ test.describe('Settings and authentication', () => {
 
   test('signale un échec de configuration fournisseur', async ({ page }) => {
     await installMockApi(page, { configureProviderError: true });
-    await page.goto('/settings');
+    await page.goto('/settings#providers');
     const anthropicRow = page.locator('.api-key-row').filter({ has: page.getByText('Anthropic', { exact: true }) });
     await anthropicRow.locator('input').fill('invalid-key');
     await anthropicRow.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByText('HTTP 500')).toBeVisible();
+    await expect(anthropicRow.getByRole('alert')).toHaveText('HTTP 500');
     await expect(anthropicRow.locator('input')).toHaveValue('invalid-key');
   });
 
@@ -997,6 +1009,7 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => page.evaluate(() => sessionStorage.getItem('ai-harness-auth-token'))).toBe('e2e-token');
     expect(await page.evaluate(() => localStorage.getItem('ai-harness-auth-token'))).toBeNull();
 
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat' }).click();
     await page.getByPlaceholder(/Type your message/).fill('Authentifié');
     await page.getByRole('button', { name: 'Send' }).click();

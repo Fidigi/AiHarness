@@ -250,6 +250,26 @@ for (const close of ['Escape', 'Control+k'] as const) {
     await page.locator('.stop-button').click();
     await page.keyboard.press('Control+k');
     await expect(palette(page).getByRole('textbox')).toBeFocused();
+    if (close === 'Escape') {
+      await page.keyboard.press('Escape');
+      held = undefined;
+      await page.goto('/settings#appearance');
+      const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+      await expect(settings).toBeVisible();
+      const theme = settings.getByRole('combobox', { name: 'Theme', exact: true });
+      await theme.focus();
+      await page.keyboard.press('Control+k');
+      await expect.poll(() => Boolean(held)).toBe(true);
+      await expect(settings).toHaveJSProperty('inert', false);
+      await theme.selectOption('dark');
+      await theme.focus();
+      await page.keyboard.press('Escape');
+      await expect(settings).toBeVisible();
+      const loadedSettingsPalette = page.waitForResponse(response => paletteJs.test(response.url()));
+      await held!.continue(); await loadedSettingsPalette; await settle(page);
+      await expect(palette(page)).toHaveCount(0);
+      await expect(theme).toBeFocused();
+    }
   });
 }
 

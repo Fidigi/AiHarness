@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
 import { loadSettingsLocales } from './settings-locale-loader';
 import { settingsLocaleBoundaryMessage } from './settings-locale-boundary-messages';
@@ -7,11 +7,6 @@ import './settings-locale-boundary.css';
 
 /** A route-local wait, never a suspension of the application/navigation/Stop. */
 export function SettingsLocaleBoundary({ children }: { children: ReactNode }) {
-  const location = useLocation();
-  return <SettingsLocaleLoad key={location.key}>{children}</SettingsLocaleLoad>;
-}
-
-function SettingsLocaleLoad({ children }: { children: ReactNode }) {
   const { locale, t } = useI18n();
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
   useEffect(() => {

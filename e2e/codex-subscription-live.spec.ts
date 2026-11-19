@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 import { start, stop } from '../packages/server/dist/index.js';
 import { EncryptedCredentialStore, ProviderCredentialService, type Session } from '../packages/core/dist/index.js';
 
@@ -163,6 +164,7 @@ for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale
     await page.reload();
     await page.getByLabel(copy.select, { exact: true }).selectOption('openai-codex');
     await page.getByLabel(copy.model, { exact: true }).selectOption(f.model);
+    await closeSettings(page);
     await page.getByRole('button', { name: copy.newChat, exact: true }).click();
     const send = async (input: string) => {
       await page.getByRole('textbox', { name: copy.compose, exact: true }).fill(input);
@@ -195,6 +197,7 @@ for (const locale of ['en', 'fr'] as const) test(`native Codex Settings ${locale
     expect(loaded.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([f.blocks, f.blocks.filter(block => block.type !== 'tool_call')]);
     await page.goto(f.base + '/settings#provider-lifecycle');
     await page.getByLabel(copy.select, { exact: true }).selectOption('openai-codex'); await page.getByLabel(copy.model, { exact: true }).selectOption(f.model);
+    await closeSettings(page);
     await page.locator(`a.session-main[href*="${first.session.id}"]`).click();
     const resumed = await send('continue'); expect(resumed.session.id).toBe(first.session.id);
     await expect(page.locator('.message.assistant .message-output').last()).toHaveText('ok');

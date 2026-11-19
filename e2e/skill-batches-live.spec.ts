@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from './fixtures/test-budget';
+import { selectSettingsCategory } from './fixtures/settings-navigation';
 
 // Actual Vite -> Express -> Core discovery/publication. No intercepted API.
 test('real filtered skill groups publish Markdown, preserve hidden files and continue after an invalid sibling', async ({ page }) => {
@@ -17,6 +18,7 @@ test('real filtered skill groups publish Markdown, preserve hidden files and con
     await page.goto(`/?cwd=${encodeURIComponent(cwd)}`);
     await expect(page.locator('.workspace-button')).toHaveAttribute('title', cwd);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();
+    await selectSettingsCategory(page, 'skills');
     const skills = page.locator('#skills');
     await skills.getByRole('searchbox').fill('visible');
     const group = skills.locator('fieldset[data-scope="project"]');

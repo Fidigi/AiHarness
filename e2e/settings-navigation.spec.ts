@@ -1,7 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
-import { switchMcpWorkspace } from './fixtures/mcp-navigation.js';
+import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
+import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
 const key = 'ai-harness-settings-navigation-v1';
@@ -18,14 +20,22 @@ test('Settings restores separate section, group, row and scope intent through re
   await expect(row).toBeInViewport();
   await expect(catalog).toHaveAttribute('open', '');
   const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
+  await selectSettingsCategory(page, 'tools');
   await scope.selectOption('global');
+  await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
-  await switchMcpWorkspace(page, '/workspace/other');
+  await switchSettingsWorkspace(page, '/workspace/other');
+  await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
+  await selectSettingsCategory(page, 'general');
   await page.locator('#shortcuts input').first().focus();
-  await switchMcpWorkspace(page, '/workspace');
-  await expect(scope).toHaveValue('global');
+  await switchSettingsWorkspace(page, '/workspace');
   await expect(row).toBeInViewport();
+  await selectSettingsCategory(page, 'tools');
+  await expect(scope).toHaveValue('global');
+  await selectSettingsCategory(page, 'models');
+  await expect(row).toBeInViewport();
+  await row.getByRole('checkbox').focus();
   await page.reload();
   await expect(row).toBeInViewport();
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), key);
@@ -49,7 +59,10 @@ test('Settings focus conserves another tab’s fresh other-section position with
   await catalog.locator('summary').click();
   const model = catalog.locator('.model-catalog-row').first().getByRole('checkbox');
   await model.focus();
+  await selectSettingsCategory(page, 'tools');
   await page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true }).focus();
+  await page.goto('/settings');
+  await expect(page.locator('#tools')).toBeVisible();
   const peer = await page.context().newPage();
   try {
     const peerApi = await installMockApi(peer);
@@ -65,8 +78,16 @@ test('Settings focus conserves another tab’s fresh other-section position with
     await expect(peer.locator('#subagents select[data-settings-focus="scope"]')).toHaveValue('project');
     await expect.poll(position).toEqual({ group: 'project', selection: identity });
     const remembered = await position();
-    await expect(page).toHaveURL(/#model$/u);
+    await expect(page).toHaveURL(/\/settings$/u);
     await page.bringToFront();
+    // A parent rerender must not turn another tab's saved section into live navigation.
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog', { name: 'Command palette', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#tools')).toBeVisible();
+    await expect(page.locator('#subagents')).toBeHidden();
+    await selectSettingsCategory(page, 'models');
+    await expect(catalog.locator('.model-catalog-row').first()).toBeInViewport();
     await model.focus();
     await expect.poll(position).toEqual(remembered);
     for (const client of [api, peerApi]) expect(client.requests.filter(request => request.method !== 'GET'
@@ -81,12 +102,15 @@ test('No-project Settings retains global sections and falls back only unavailabl
     { cwd: null, section: 'tools', positions: {}, scopes: { tools: 'project', defaults: 'project', subagents: 'project', registry: 'project' } },
   ] })), key);
   await page.goto('/settings');
-  for (const section of ['tools', 'defaults', 'subagents']) {
+  for (const section of ['tools', 'defaults', 'subagents'] as const) {
+    await selectSettingsCategory(page, section === 'defaults' ? 'general' : section);
     const scope = page.locator(`#${section} select`).first();
     await expect(scope).toHaveValue('global');
     await expect(scope.locator('option[value="project"]')).toHaveJSProperty('disabled', true);
   }
+  await selectSettingsCategory(page, 'general');
   await page.locator('#authentication input').fill('NAVIGATION_SECRET_MUST_NOT_PERSIST');
+  await selectSettingsCategory(page, 'mcp');
   await page.locator('#mcp').getByRole('button', { name: 'Refresh', exact: true }).focus();
   const saved = await page.evaluate(key => localStorage.getItem(key), key);
   expect(saved).not.toContain('NAVIGATION_SECRET');
@@ -97,8 +121,10 @@ test('Trust granted through the real MCP import UI rereads all mounted resource 
   const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: false,
     mcpConfig: mcpFreshProjectInventory(), mcpImportPreview: mcpFreshProjectPreviewFixture() });
   await page.goto('/settings#mcp');
-  await expect(page.locator('#plugins .plugin-card').first()).toBeVisible();
-  await expect(page.locator('#subagents .subagent-profile-card').first()).toBeVisible();
+  await selectSettingsCategory(page, 'general');
+  await selectSettingsCategory(page, 'mcp');
+  await expect(page.locator('#plugins .plugin-card').first()).toBeAttached();
+  await expect(page.locator('#subagents .subagent-profile-card').first()).toBeAttached();
   const count = (path: string) => api.requests.filter(request => request.method === 'GET' && request.path === path).length;
   const paths = ['/api/plugins', '/api/subagents/settings', '/api/tools', '/api/skills', '/api/models'];
   const before = paths.map(count);
@@ -109,6 +135,11 @@ test('Trust granted through the real MCP import UI rereads all mounted resource 
   await section.getByRole('button', { name: 'Configure project import' }).click();
   const dialog = page.getByRole('dialog', { name: 'Configure MCP import' });
   await dialog.getByLabel(/I trust this fresh project folder/u).check();
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await page.goForward();
+  await expect(dialog.getByLabel(/I trust this fresh project folder/u)).toBeChecked();
+  await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
   await dialog.getByRole('button', { name: 'Save atomically' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(section.getByRole('article', { name: 'fresh-tools: Configured', exact: true })).toBeVisible();
@@ -124,28 +155,88 @@ for (const scenario of [
   { name: 'mobile-dark', width: 390, height: 844, theme: 'dark' },
 ]) test(`Restored model navigation remains keyboard accessible and responsive: ${scenario.name}`, async ({ page }) => {
   await page.setViewportSize({ width: scenario.width, height: scenario.height });
-  await installMockApi(page);
+  const api = await installMockApi(page);
   await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme, lastSettingsSection: 'model' })), scenario.theme);
   await page.goto('/settings#model');
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await expect(page.locator('.app')).toHaveJSProperty('inert', true);
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (scenario.width <= 959) {
+    expect(bounds!.x).toBe(0); expect(bounds!.y).toBe(0);
+    expect(bounds!.width).toBe(scenario.width); expect(bounds!.height).toBe(scenario.height);
+    const picker = dialog.getByRole('combobox', { name: 'Settings categories', exact: true });
+    await expect(picker).toHaveValue('models');
+    await expectThemeRoles(picker, '--surface-input');
+    await expectContrast(picker);
+    await expectContrast(picker, 'borderTopColor', 3);
+  } else {
+    expect(bounds!.x).toBeGreaterThanOrEqual(16); expect(bounds!.y).toBeGreaterThanOrEqual(16);
+    const categories = dialog.getByRole('navigation', { name: 'Settings categories', exact: true });
+    await expect(categories.getByRole('link')).toHaveText(['General', 'Models', 'Skills', 'Tools', 'Plugins', 'Child agents', 'MCP']);
+    await expect(categories.getByRole('link', { name: 'Models', exact: true })).toHaveAttribute('aria-current', 'page');
+    await page.locator('.settings-dialog-header button').focus();
+    for (const link of await categories.getByRole('link').all()) {
+      await page.keyboard.press('Tab');
+      await expect(link).toBeFocused();
+      await expect(link).toHaveCSS('outline-style', 'solid');
+      await expectContrast(link, 'outlineColor', 3);
+      const clearance = await link.evaluate(element => {
+        const style = getComputedStyle(element);
+        const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const bounds = element.getBoundingClientRect();
+        const clip = element.closest('nav')!.getBoundingClientRect();
+        return [bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom]
+          .map(distance => distance - extent);
+      });
+      for (const distance of clearance) expect(distance).toBeGreaterThanOrEqual(0);
+    }
+    await expect(categories).toHaveScreenshot(`settings-categories-keyboard-${scenario.name}.png`);
+  }
+  await expect(page.locator('#appearance')).toBeHidden();
   const catalog = page.locator('#model .model-catalog');
   await catalog.locator('summary').click();
   const row = catalog.locator('.model-catalog-row').first();
   await row.getByRole('checkbox').focus();
   await page.goto('/settings');
   await expect(row).toBeInViewport();
-  const nextScope = page.locator('#defaults').getByRole('combobox', { name: 'Scope', exact: true });
-  await expect(nextScope).toBeEnabled();
+  // Defaults now belongs to General; Tab stays in the presented Models category.
+  const nextForm = page.locator('#custom-models > details > summary');
+  await expect(nextForm).toBeVisible();
   await row.getByRole('checkbox').focus();
   await page.keyboard.press('Tab');
-  await expect(nextScope).toBeFocused();
+  await expect(nextForm).toBeFocused();
   await row.getByRole('checkbox').focus();
   expect((await new AxeBuilder({ page }).include('#model').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const draft = page.locator('#providers input[type="password"]').first();
+  await draft.fill('SYNTHETIC_CATEGORY_DRAFT');
+  if (scenario.width > 959) {
+    const general = page.locator('.settings-categories').getByRole('link', { name: 'General', exact: true });
+    await general.focus(); await general.press('Enter');
+  } else await selectSettingsCategory(page, 'general');
+  await expect(page.locator('#appearance')).toBeVisible();
+  await expect(page.locator('#model')).toBeHidden();
+  await page.goBack();
+  await expect(page).toHaveURL(/#model$/u);
+  await expect(page.locator('#model')).toBeVisible();
+  await expect(draft).toHaveValue('SYNTHETIC_CATEGORY_DRAFT');
+  await page.goForward();
+  await expect(page.locator('#appearance')).toBeVisible();
+  await expect(page.locator('#model')).toBeHidden();
+  await selectSettingsCategory(page, 'models');
+  await expect(draft).toHaveValue('SYNTHETIC_CATEGORY_DRAFT');
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('SYNTHETIC_CATEGORY_DRAFT');
+  expect(await page.evaluate(() => JSON.stringify(sessionStorage))).not.toContain('SYNTHETIC_CATEGORY_DRAFT');
+  expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/config')).toEqual([]);
+  await row.getByRole('checkbox').focus();
   await expect(page.locator('#model')).toHaveScreenshot(`restored-model-${scenario.name}.png`);
 });
 
 test('Focus return waits for the same fresh row after an asynchronous section reload', async ({ page }) => {
-  await installMockApi(page); await page.goto('/settings');
+  await installMockApi(page); await page.goto('/');
   const result = await page.evaluate(async modulePath => {
     const { bindSettingsNavigation } = await import(modulePath);
     const root = document.createElement('div');
@@ -164,7 +255,7 @@ test('Focus return waits for the same fresh row after an asynchronous section re
 });
 
 test('Deferred row return yields to newer pointer/focus, modal ownership and retired owners', async ({ page }) => {
-  await installMockApi(page); await page.goto('/settings');
+  await installMockApi(page); await page.goto('/');
   const result = await page.evaluate(async modulePath => {
     const { bindSettingsNavigation } = await import(modulePath);
     const results: Record<string, boolean> = {};
@@ -196,7 +287,7 @@ test('Deferred row return yields to newer pointer/focus, modal ownership and ret
 test.describe('Coarse Settings focus return', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
   test('returns to the owned row region without automatically focusing an editable replacement', async ({ page }) => {
-    await installMockApi(page); await page.goto('/settings');
+    await installMockApi(page); await page.goto('/');
     const result = await page.evaluate(async modulePath => {
       const { bindSettingsNavigation } = await import(modulePath);
       const root = document.createElement('div');
@@ -215,10 +306,11 @@ test.describe('Coarse Settings focus return', () => {
 });
 
 test('DOM navigation resolves only exact fresh unique identities and returns focus without stealing newer intent', async ({ page }) => {
-  await installMockApi(page); await page.goto('/settings');
+  await installMockApi(page); await page.goto('/');
   const result = await page.evaluate(async modulePath => {
     const { bindSettingsNavigation, settingsPositionTarget } = await import(modulePath);
     const host = document.createElement('div');
+    host.setAttribute('role', 'dialog'); // The Settings owner itself must not suppress row return.
     host.innerHTML = '<section id="model" class="settings-section"><fieldset data-settings-group="one"><label data-settings-selection="row"><input aria-label="Owned control"></label></fieldset><fieldset data-settings-group="two"><label data-settings-selection="row"><input aria-label="Other control"></label></fieldset></section>';
     host.style.cssText = 'position:fixed;top:0;left:0;z-index:10000;background:white'; document.body.append(host);
     const target = settingsPositionTarget(host, 'model', { group: 'one', selection: 'row' });

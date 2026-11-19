@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
+import { closeSettings } from './fixtures/settings-navigation';
 
 for (const locale of ['en', 'fr'] as const) test(`defaults ${locale} recover an unreadable initial scope without reflecting server details`, async ({ page }) => {
   await page.addInitScript(locale => localStorage.setItem('ai-harness-locale', locale), locale);
@@ -59,6 +60,7 @@ test('a retired default save cannot reread or announce into a newer Settings lif
     await expect(defaults.getByLabel('Model', { exact: true })).toHaveValue('project');
     await defaults.getByLabel('Model', { exact: true }).fill('retired-draft');
     await defaults.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(defaults).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();
@@ -94,6 +96,7 @@ test('a retired package action cannot reread or announce into a newer Settings l
     const plugins = page.locator('#plugins');
     const checkbox = plugins.locator('fieldset[data-scope="global"]').getByRole('checkbox');
     await expect(checkbox).toBeChecked(); await checkbox.uncheck(); await pending;
+    await closeSettings(page);
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(plugins).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();

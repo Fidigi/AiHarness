@@ -1,5 +1,18 @@
 import { expect, type Locator } from '@playwright/test';
 
+export async function expectThemeRoles(elements: Locator, surface: string | null, text = '--text-primary'): Promise<void> {
+  expect(await elements.count()).toBeGreaterThan(0);
+  const values = await elements.evaluateAll((nodes, { surface, text }) => nodes.map(element => {
+    const style = getComputedStyle(element);
+    const probe = document.createElement('span'); document.body.append(probe);
+    probe.style.color = surface ? style.getPropertyValue(surface) : 'transparent'; const background = getComputedStyle(probe).color;
+    probe.style.color = style.getPropertyValue(text); const foreground = getComputedStyle(probe).color;
+    probe.remove();
+    return { selector: element.className || element.tagName, background: style.backgroundColor === background, foreground: style.color === foreground };
+  }), { surface, text });
+  for (const value of values) expect(value, String(elements)).toMatchObject({ background: true, foreground: true });
+}
+
 // These audited surfaces use opaque sRGB colors; measure the rendered state,
 // walking transparent descendants to the actual painted ancestor.
 export async function expectContrast(elements: Locator, property: 'color' | 'borderTopColor' | 'outlineColor' | 'accentColor' | 'boxShadow' = 'color', minimum = 4.5): Promise<void> {

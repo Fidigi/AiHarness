@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 
 test('explicit Groq is saved in Settings, imports seven native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-gq-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -32,7 +33,7 @@ test('explicit Groq is saved in Settings, imports seven native chats and reloads
     expect((await page.request.post(`${base}/api/auth/login`, { data: { token: 'gq-admin' } })).status()).toBe(200);
     expect((await page.request.post(`${base}/api/workspaces/trust`, { data: { cwd, confirm: true } })).status()).toBe(200);
     await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
-    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#provider-lifecycle`);
     const section = page.locator('#provider-lifecycle');
     if (await section.locator('details.custom-resource-editor').getAttribute('open') === null)
       await section.getByText('Create or edit a compatible provider', { exact: true }).click();
@@ -66,7 +67,7 @@ test('explicit Groq is saved in Settings, imports seven native chats and reloads
     for (const [label, value] of [['Input', '0.8'], ['Output', '4'], ['Cache read', '0'], ['Cache write', '0']] as const) await expect(modelForm.getByLabel(`${label} price / million tokens`, { exact: true })).toHaveValue(value);
     expect(calls).toEqual([]);
     expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global', values: { provider: 'gq-native', model, thinking: 'off', toolPreset: 'chat-only' } } })).status()).toBe(200);
-    await page.reload(); await page.getByRole('button', { name: 'New chat', exact: true }).click();
+    await page.reload(); await closeSettings(page); await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await page.getByRole('textbox', { name: 'Message composer' }).fill('Exercise native Groq'); await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.locator('.message.assistant')).toContainText('Native Groq wire received.');
     expect(calls).toHaveLength(1); expect(calls[0]).toMatchObject({ url: '/proxy%2Fowned/v1/chat/completions', body: { model, stream: true, store: false, reasoning_effort: 'none', max_completion_tokens: 16384 } });

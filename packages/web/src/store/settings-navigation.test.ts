@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  readSettingsNavigation, writeSettingsNavigation, settingsSections, settingsScopeControls,
+  readSettingsNavigation, writeSettingsNavigation, settingsSections, settingsScopeControls, settingsSectionCategory,
   settingsSectionForContext, settingsScopeForContext, type NavigationStorage, type SettingsNavigation,
 } from './settings-navigation';
 const key = 'ai-harness-settings-navigation-v1';
@@ -25,8 +25,11 @@ describe('bounded per-context Settings presentation metadata', () => {
     expect(readSettingsNavigation('/other', 'about', local)).toEqual({ section: 'about', positions: {}, scopes: {} });
   });
   it.each(settingsSections)('retains the global/read-only %s surface without a project', section => {
-    const local = storage(); writeSettingsNavigation(undefined, state(section), local);
+    const local = storage();
+    const category = settingsSectionCategory[section];
+    writeSettingsNavigation(undefined, { ...state(section), categories: { [category]: section } }, local);
     expect(readSettingsNavigation(undefined, 'appearance', local).section).toBe(section);
+    expect(readSettingsNavigation(undefined, 'appearance', local).categories).toEqual({ [category]: section });
     expect(settingsSectionForContext(section)).toBe(section);
   });
   it.each(settingsScopeControls)('preserves %s scope intent but falls back only the project scope without cwd', control => {
@@ -47,16 +50,17 @@ describe('bounded per-context Settings presentation metadata', () => {
   });
   it('copies only recognized identifiers and scopes, dropping secrets, authority, drafts and inherited keys', () => {
     const local = storage();
-    const value = { ...state(), apiKey: 'SECRET', trusted: true, form: 'DRAFT', positions: {
+    const value = { ...state(), apiKey: 'SECRET', trusted: true, form: 'DRAFT',
+      categories: { models: 'model', general: 'mcp', mcp: 'SECRET', forged: 'appearance' }, positions: {
       skills: { group: 'project', selection: 'skill', revision: 'SECRET', config: { token: 'SECRET' } },
       forged: { selection: 'SECRET' },
     }, scopes: { tools: 'global', defaults: 'SECRET', forged: 'project' } };
     writeSettingsNavigation('/one', value as SettingsNavigation, local);
     const text = local.values.get(key)!;
     expect(text).not.toMatch(/SECRET|DRAFT|trusted|apiKey|revision|config|forged/);
-    expect(readSettingsNavigation('/one', undefined, local)).toEqual({ section: 'skills',
+    expect(readSettingsNavigation('/one', undefined, local)).toEqual({ section: 'skills', categories: { models: 'model' },
       positions: { skills: { group: 'project', selection: 'skill' } }, scopes: { tools: 'global' } });
-    writeSettingsNavigation('/one', { section: 'mcp', positions: Object.create({ mcp: { selection: 'SECRET' } }), scopes: Object.create({ tools: 'project' }) }, local);
+    writeSettingsNavigation('/one', { section: 'mcp', categories: Object.create({ mcp: 'mcp' }), positions: Object.create({ mcp: { selection: 'SECRET' } }), scopes: Object.create({ tools: 'project' }) }, local);
     expect(readSettingsNavigation('/one', undefined, local)).toEqual({ section: 'mcp', positions: {}, scopes: {} });
   });
   it('bounds IDs/cwd, count and document size, evicting oldest contexts while preserving the newest valid entry', () => {

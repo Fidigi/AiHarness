@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
+import { closeSettings } from './fixtures/settings-navigation';
 
 test('explicit mixed OpenRouter is saved in Settings, routes native A/C and reloads private persisted history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-router-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -38,7 +39,7 @@ test('explicit mixed OpenRouter is saved in Settings, routes native A/C and relo
     expect((await page.request.post(`${base}/api/auth/login`, { data: { token: 'router-admin' } })).status()).toBe(200);
     expect((await page.request.post(`${base}/api/workspaces/trust`, { data: { cwd, confirm: true } })).status()).toBe(200);
     await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
-    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#provider-lifecycle`);
     const section = page.locator('#provider-lifecycle');
     if (await section.locator('details.custom-resource-editor').getAttribute('open') === null)
       await section.getByText('Create or edit a compatible provider', { exact: true }).click();
@@ -73,7 +74,8 @@ test('explicit mixed OpenRouter is saved in Settings, routes native A/C and relo
       expect((await page.request.post(`${base}/api/provider-registry/models`, { data: { provider: 'router-native', id: model,
         capabilities: { reasoning: true, imageInput: true, toolCalls: true }, contextWindow: 128000, maxOutputTokens: 2048 } })).status()).toBe(201);
       expect((await page.request.patch(`${base}/api/configuration/scope`, { data: { scope: 'global', values: { provider: 'router-native', model, thinking: 'off', toolPreset: 'chat-only' } } })).status()).toBe(200);
-      await page.reload(); await page.getByRole('button', { name: 'New chat', exact: true }).click();
+      await page.reload(); if (!index) await closeSettings(page);
+      await page.getByRole('button', { name: 'New chat', exact: true }).click();
       await page.getByRole('textbox', { name: 'Message composer' }).fill('Exercise native OpenRouter'); await page.getByRole('button', { name: 'Send', exact: true }).click();
       await expect(page.locator('.message.assistant')).toContainText('Native router wire received.');
       expect(calls).toHaveLength(index + 1); expect(calls[index]).toMatchObject({ url: `/proxy/api/v1/${index ? 'chat/completions' : 'messages'}`, body: { model, stream: true } });

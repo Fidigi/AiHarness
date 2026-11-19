@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '../hooks/useI18n';
 import { Icon } from './Icon';
 import {
@@ -44,13 +45,20 @@ function StatusNotice({ notice }: { notice: AppNotice }) {
   );
 }
 
-/** Global status region kept outside routed views so notices survive navigation. */
-export default function StatusCenter() {
+/** Move a stable portal host into Settings without restarting notice lifetimes. */
+export default function StatusCenter({ container }: { container: HTMLElement | null }) {
   const { t } = useI18n();
   const notices = useSyncExternalStore(subscribeNotices, getNoticesSnapshot, getNoticesSnapshot);
-  return (
+  const [host] = useState(() => {
+    const node = document.createElement('div'); node.className = 'status-center-host'; return node;
+  });
+  useLayoutEffect(() => {
+    (container ?? document.body).append(host);
+    return () => host.remove();
+  }, [container, host]);
+  return createPortal(
     <aside className="status-center" aria-label={t('status.messages')} aria-live="polite">
       {notices.map(notice => <StatusNotice key={`${notice.id}:${notice.updatedAt}`} notice={notice} />)}
-    </aside>
+    </aside>, host,
   );
 }

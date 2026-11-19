@@ -6,6 +6,7 @@ import { settingsFrMessages } from './settings-locale-fr';
 import { getLocalePlugin, registerFeatureLocaleMessages } from '../i18n/registry';
 import { translateMessage } from '../i18n/format';
 import { settingsLocaleBoundaryMessage } from './settings-locale-boundary-messages';
+import { settingsCategories } from './settings-categories';
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const entryLines = (text: string) => text.match(/^ {4}'[^']+': .*\n/gm) ?? [];
@@ -70,11 +71,17 @@ describe('Settings locale allocation', () => {
       const retired = inventory.moved.filter(entry => retiredTransportKeys.has(entry.key))
         .map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']);
       const moved = retainedMoved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
-      expect(lazy).toEqual(moved);
+      // New category copy belongs only to the lazy Settings owner; the historical
+      // inventory still verifies every existing literal without regeneration.
+      const additions = ['settings.categories', ...settingsCategories.map(category => `settings.category.${category.id}`)].map(key => {
+        const lines = lazy.filter(line => line.startsWith(`    '${key}':`));
+        expect(lines).toHaveLength(1); return lines[0]!;
+      });
+      expect(lazy).toEqual([...additions, ...moved]);
       const projected = inventory.original[locale].lines.filter(line => !retired.includes(line)).flatMap(line =>
         line.startsWith("    'settings.mcp.exposureLabel':") ? [mcpExposureHelp[locale], mcpRegistrationHelp[locale], line] : [line]).flatMap(withVertexCredentials)
         .flatMap(line => line.startsWith("    'files.search':") ? [line, ...explorerFeedback[locale]] : [line]);
-      expect([...eager, ...lazy].sort()).toEqual([...projected].sort());
+      expect([...eager, ...lazy].sort()).toEqual([...projected, ...additions].sort());
       expect(eager).toEqual(projected.filter(line => !moved.includes(line)));
     }
   });

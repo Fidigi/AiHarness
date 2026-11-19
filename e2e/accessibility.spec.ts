@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { expectContrast } from './fixtures/contrast';
+import { selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function expectAccessible(page: Page, context?: string): Promise<void> {
   const result = await new AxeBuilder({ page })
@@ -83,12 +84,20 @@ test.describe('Accessibilité des parcours majeurs', () => {
 
     await page.goto('/settings#appearance');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-    await page.getByText('Manage model catalogue').click();
-    await expect(page.getByLabel('Filter models or providers')).toBeVisible();
-    await expect(page.getByLabel('Filter skills or sources')).toBeVisible();
-    await expect(page.getByLabel('Filter packages')).toBeVisible();
-    await expect(page.getByLabel('Filter profiles')).toBeVisible();
-    await expectAccessible(page, 'settings, model/skill/plugin catalogues and child agents (dark)');
+    // Each category must actually be presented for axe and control geometry checks.
+    for (const [category, filter] of [
+      ['general', null], ['models', 'Filter models or providers'], ['skills', 'Filter skills or sources'],
+      ['tools', null], ['plugins', 'Filter packages'], ['mcp', null], ['subagents', 'Filter profiles'],
+    ] as const) {
+      await selectSettingsCategory(page, category);
+      if (category === 'models') await page.getByText('Manage model catalogue').click();
+      if (filter) await expect(page.getByLabel(filter)).toBeVisible();
+      for (const theme of ['dark', 'light']) {
+        await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+        await expectAccessible(page, `settings ${category} (${theme})`);
+      }
+    }
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
     await page.getByRole('button', { name: 'Create profile' }).click();
     await expect(page.getByRole('dialog', { name: 'Create profile' })).toBeVisible();
     await expectAccessible(page, 'child-agent profile dialog (dark)');

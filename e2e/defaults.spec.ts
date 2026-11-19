@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { closeSettings } from './fixtures/settings-navigation';
 
 for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'mobile', width: 390, height: 844 }]) {
   for (const theme of ['light', 'dark'] as const) {
@@ -46,7 +47,9 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
         .toEqual({ scope: 'global', values: { thinking: 'xhigh' } });
       await expect(defaults.getByRole('status')).toContainText('project or environment');
       await expect.poll(global).toMatchObject({ values: { model: 'mock-model', thinking: 'xhigh', toolPreset: 'read-only' } });
-      const dismiss = page.locator('.status-center').getByRole('button', { name: 'Close', exact: true });
+      const notices = page.locator('.settings-dialog .status-center');
+      await expect(notices).toContainText('project or environment settings still override');
+      const dismiss = notices.getByRole('button', { name: 'Close', exact: true });
       for (let remaining = await dismiss.count(); remaining > 0; remaining -= 1) await dismiss.first().click();
       await expect(defaults).toHaveScreenshot(`settings-defaults-${viewport.name}-${theme}.png`);
       expect((await new AxeBuilder({ page }).include('#defaults').analyze()).violations).toEqual([]);
@@ -73,6 +76,7 @@ test('blocks unreadable defaults and gives a new draft fresh inherited values wi
   expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toHaveLength(0);
   await page.route('**/api/configuration/effective?**', route => route.fulfill({ status: 409, contentType: 'application/json',
     body: JSON.stringify({ error: 'Configuration cannot be read safely.' }) }));
+  await closeSettings(page);
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
   await page.getByRole('textbox', { name: 'Message composer' }).fill('Retain this unsent draft');
   await expect(page.locator('.status-center')).toContainText('Configuration cannot be read safely.');

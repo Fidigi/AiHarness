@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '../hooks/useI18n';
 import { publishNotice } from '../services/notices';
 
@@ -6,11 +7,16 @@ type PaletteProps = { onClose: () => void };
 let load: Promise<ComponentType<PaletteProps>> | undefined;
 
 /** Closed palettes fetch nothing. Pending imports never suspend the app or own focus. */
-export default function CommandPaletteBoundary({ onClose }: PaletteProps) {
+export default function CommandPaletteBoundary({ onClose, onModalChange }: PaletteProps & { onModalChange: (active: boolean) => void }) {
   const { locale } = useI18n();
   const close = useRef(onClose);
   close.current = onClose;
   const [Palette, setPalette] = useState<ComponentType<PaletteProps>>();
+  useLayoutEffect(() => {
+    if (!Palette) return;
+    onModalChange(true);
+    return () => onModalChange(false);
+  }, [Palette, onModalChange]);
   useEffect(() => {
     let current = true;
     // Retain rejections as well as success: retrying a failed ESM load needs reload.
@@ -27,5 +33,5 @@ export default function CommandPaletteBoundary({ onClose }: PaletteProps) {
     });
     return () => { current = false; };
   }, [locale]);
-  return Palette ? <Palette onClose={onClose} /> : null;
+  return Palette ? createPortal(<Palette onClose={onClose} />, document.body) : null;
 }
