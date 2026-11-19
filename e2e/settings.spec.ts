@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectPluginPackage, selectSettingsCategory, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -31,6 +31,7 @@ test.describe('Settings and authentication', () => {
     await expect(provider.getByLabel('Select the AI Provider', { exact: true })).toHaveValue('mock');
     await provider.getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
     await expect(provider.getByText('✅ OpenAI configured')).toBeVisible();
+    await selectModelSettings(page, 'model');
     await expect(settingsSection(page, 'Model').locator('select')).toBeEnabled();
     await expect(settingsSection(page, 'Model').locator('option')).toContainText([
       'GPT-4o (Recommended)', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
@@ -51,7 +52,9 @@ test.describe('Settings and authentication', () => {
       configurationScopes: { global: { provider: 'openai', model: 'gpt-4o', toolPreset: 'default' }, project: {} },
     });
     await page.goto('/settings#model');
+    await selectModelSettings(page, 'providers');
     await settingsSection(page, 'AI Provider').getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
+    await selectModelSettings(page, 'model');
 
     const section = settingsSection(page, 'Model');
     await section.getByText('Manage model catalogue').click();

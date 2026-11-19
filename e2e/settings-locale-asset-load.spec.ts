@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectModelSettings } from './fixtures/settings-navigation';
 
 const asset = /\/assets\/settings-locale-[^/]+\.js$/;
 const chat = '/chat/locale-first?cwd=%2Fworkspace';
@@ -37,7 +37,7 @@ test('closed Settings fetches no feature copy; opening and reopening register re
   await expect(composer(page)).toBeVisible();
   expect(requests).toEqual([]);
   await open(page);
-  await selectSettingsCategory(page, 'models');
+  await selectModelSettings(page, 'provider-lifecycle');
   await expect(page.getByRole('heading', { name: 'Provider connections and custom providers', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
   await closeSettings(page);
@@ -51,7 +51,7 @@ test('closed Settings fetches no feature copy; opening and reopening register re
   await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('fr');
   await open(page);
   await expect(page.getByRole('heading', { name: 'Authentification du serveur', exact: true })).toBeVisible();
-  await selectSettingsCategory(page, 'models');
+  await selectModelSettings(page, 'provider-lifecycle');
   await expect(page.getByRole('heading', { name: 'Connexions fournisseur et fournisseurs personnalisés', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
 });

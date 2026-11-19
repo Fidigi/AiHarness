@@ -10,6 +10,8 @@ export const settingsFrMessages: Readonly<Record<string, string>> = {
     'settings.category.mcp': 'MCP',
     'settings.generalNavigation': 'Paramètres généraux',
     'settings.generalBack': 'Retour aux paramètres généraux',
+    'settings.modelsNavigation': 'Paramètres des modèles',
+    'settings.modelsBack': 'Retour aux paramètres des modèles',
     'settings.behavior': 'Comportement',
     'settings.notificationPreferences': 'Notifications',
     'settings.access': 'Accès',

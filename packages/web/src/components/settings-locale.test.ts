@@ -74,7 +74,8 @@ describe('Settings locale allocation', () => {
       // New category copy belongs only to the lazy Settings owner; the historical
       // inventory still verifies every existing literal without regeneration.
       const additions = ['settings.categories', ...settingsCategories.map(category => `settings.category.${category.id}`),
-        'settings.generalNavigation', 'settings.generalBack', 'settings.behavior', 'settings.notificationPreferences', 'settings.access'].map(key => {
+        'settings.generalNavigation', 'settings.generalBack', 'settings.modelsNavigation', 'settings.modelsBack',
+        'settings.behavior', 'settings.notificationPreferences', 'settings.access'].map(key => {
         const lines = lazy.filter(line => line.startsWith(`    '${key}':`));
         expect(lines).toHaveLength(1); return lines[0]!;
       });

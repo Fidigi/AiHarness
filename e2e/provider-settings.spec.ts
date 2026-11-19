@@ -2,6 +2,7 @@ import { test, expect, type Page } from './fixtures/test-budget';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { installMockApi } from './fixtures/mock-api';
+import { selectGeneralSettings, selectModelSettings } from './fixtures/settings-navigation';
 
 async function fixture(page: Page) {
   await page.route('**/provider-settings-fixture', route => route.fulfill({ contentType: 'text/html', body:
@@ -94,11 +95,14 @@ test('real Vite → Express custom endpoint discovery, exact provider/model sele
     await expect(card.getByRole('button', { name: 'Rename provider', exact: true })).toBeDisabled();
     await card.getByRole('button', { name: 'Import models', exact: true }).click();
     await expect.poll(() => paths.includes('/gateway/v1/models')).toBe(true);
+    await selectModelSettings(page, 'providers');
     await page.getByLabel('Select the AI Provider').selectOption(id);
     await expect(page.getByLabel('Select the AI Provider').locator('option:checked')).toHaveText('Disposable endpoint (ui-disposable)');
+    await selectModelSettings(page, 'model');
     await page.getByLabel('Select the model', { exact: true }).selectOption('disposable-model');
     await expect(page.getByLabel('Select the model', { exact: true })).toHaveValue('disposable-model');
     await page.reload();
+    await selectModelSettings(page, 'provider-lifecycle');
     await expect(lifecycle).toContainText('Disposable endpoint');
     const actual = await page.request.get('/api/provider-registry/custom');
     expect((await actual.json()).some((provider: { id: string }) => provider.id === id)).toBe(true);
@@ -136,6 +140,7 @@ test('actual Settings reconcile uncertain failure without applying a late rename
   await page.getByLabel('New provider ID').fill('renamed');
   await page.getByRole('button', { name: 'Confirm rename', exact: true }).click();
   await requestEntered;
+  await selectModelSettings(page, 'providers');
   await page.getByLabel('Select the AI Provider').selectOption('anthropic');
   const canonicalRead = page.waitForResponse(response => new URL(response.url()).pathname === '/api/providers');
   release();
@@ -165,13 +170,17 @@ test('actual Settings successful restricted rename uses canonical IDs/models, no
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...custom, id, revision: 'b'.repeat(64) }) });
   });
   await page.goto('/settings#provider-lifecycle');
+  await selectModelSettings(page, 'providers');
   await page.getByLabel('Select the AI Provider').selectOption('acme');
+  await selectModelSettings(page, 'provider-lifecycle');
   await page.locator('#provider-lifecycle').getByText('Create or edit a compatible provider', { exact: true }).click();
   await page.getByRole('button', { name: 'Rename provider', exact: true }).click();
   await page.getByLabel('New provider ID').fill('renamed');
   await page.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  await selectModelSettings(page, 'providers');
   await expect(page.getByLabel('Select the AI Provider')).toHaveValue('renamed');
   await expect(page.getByLabel('Select the AI Provider').locator('option[value="acme"]')).toHaveCount(0);
+  await selectModelSettings(page, 'model');
   await expect(page.getByLabel('Select the model', { exact: true })).toHaveValue('canonical-model');
   await expect(page.getByLabel('Select the model', { exact: true }).locator('option:checked')).toHaveText('Canonical model');
   expect(api.requests.some(request => request.path === '/api/configuration/effective')).toBe(true);
@@ -257,13 +266,17 @@ test('actual Settings keeps the renamed source selected when the public old ID i
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(definitions()[0]) });
   });
   await page.goto('/settings#provider-lifecycle');
+  await selectModelSettings(page, 'providers');
   await page.getByLabel('Select the AI Provider').selectOption('acme');
+  await selectModelSettings(page, 'provider-lifecycle');
   await page.locator('#provider-lifecycle').getByText('Create or edit a compatible provider', { exact: true }).click();
   await page.getByRole('button', { name: 'Rename provider', exact: true }).click();
   await page.getByLabel('New provider ID').fill('renamed');
   await page.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  await selectModelSettings(page, 'providers');
   await expect(page.getByLabel('Select the AI Provider')).toHaveValue('renamed');
   await expect(page.getByLabel('Select the AI Provider').locator('option[value="acme"]')).toHaveText('New acme owner (acme)');
+  await selectModelSettings(page, 'model');
   await expect(page.getByLabel('Select the model', { exact: true })).toHaveValue('canonical-model');
 });
 
@@ -300,7 +313,9 @@ test('actual exclusive host enables Settings rename and conserves canonical save
     // Authenticate this actual browser context at the same origin as the built Web/server.
     expect((await page.request.post(base + '/api/auth/login', { data: { token } })).status()).toBe(200);
     await page.goto(base + '/settings#provider-lifecycle');
+    await selectModelSettings(page, 'providers');
     await page.getByLabel('Select the AI Provider').selectOption('ui-exclusive');
+    await selectModelSettings(page, 'provider-lifecycle');
     await page.locator('#provider-lifecycle').getByText('Create or edit a compatible provider', { exact: true }).click();
     const card = page.locator('#provider-lifecycle article').filter({ has: page.getByText('ui-exclusive', { exact: true }) });
     await expect(card.getByRole('button', { name: 'Rename provider', exact: true })).toBeEnabled();
@@ -309,11 +324,13 @@ test('actual exclusive host enables Settings rename and conserves canonical save
     const mutation = page.waitForResponse(response => new URL(response.url()).pathname === '/api/provider-registry/custom/ui-exclusive/rename');
     await card.getByRole('button', { name: 'Confirm rename', exact: true }).click();
     expect((await mutation).status()).toBe(200);
+    await selectModelSettings(page, 'providers');
     await expect(page.getByLabel('Select the AI Provider')).toHaveValue('exclusive-renamed');
+    await expect(page.getByLabel('Select the AI Provider').locator('option[value="ui-exclusive"]')).toHaveCount(0);
+    await selectModelSettings(page, 'model');
     await expect(page.getByLabel('Select the model', { exact: true })).toHaveValue('exclusive-model');
     const scope = await page.request.get(base + '/api/configuration/scope?scope=global', { headers });
     expect((await scope.json()).values).toMatchObject({ provider: 'exclusive-renamed', model: 'exclusive-renamed:exclusive-model', enabledModels: ['exclusive-renamed:exclusive-model'] });
-    await expect(page.getByLabel('Select the AI Provider').locator('option[value="ui-exclusive"]')).toHaveCount(0);
   } finally {
     await host.stop();
     endpoint.closeAllConnections(); await new Promise<void>(resolve => endpoint.close(() => resolve()));
@@ -331,6 +348,8 @@ for (const theme of ['dark', 'light'] as const) {
       version: 4, theme, sendMode: 'enter', contentWidth: 1000, fontSize: 16, sidebarVisible: true,
     })), { theme });
     await actualSettings(page);
+    // Keep this selector-boundary probe independent of the product theme's accent.
+    await page.addStyleTag({ content: '.settings-dialog { --accent: #a12645; }' });
     const controls = page.locator('#provider-lifecycle .custom-resource-editor form').locator('input, select, textarea');
     expect(await controls.count()).toBe(6);
     for (const control of await controls.all()) {
@@ -339,6 +358,7 @@ for (const theme of ['dark', 'light'] as const) {
       expect(style.background).not.toBe('rgb(161, 38, 69)');
     }
     // The accepted Defaults owner enables Save only after an explicit dirty intent.
+    await selectGeneralSettings(page, 'behavior');
     await page.locator('#defaults input').first().fill('paint-regression');
     const defaultsButton = page.locator('#defaults button:not(:disabled)').first();
     await expect(defaultsButton).toBeVisible();

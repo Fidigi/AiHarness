@@ -10,6 +10,8 @@ export const settingsEnMessages: Readonly<Record<string, string>> = {
     'settings.category.mcp': 'MCP',
     'settings.generalNavigation': 'General settings',
     'settings.generalBack': 'Back to General settings',
+    'settings.modelsNavigation': 'Model settings',
+    'settings.modelsBack': 'Back to Model settings',
     'settings.behavior': 'Behavior',
     'settings.notificationPreferences': 'Notifications',
     'settings.access': 'Access',

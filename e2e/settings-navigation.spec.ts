@@ -2,11 +2,109 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectModelSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
 const key = 'ai-harness-settings-navigation-v1';
+for (const scenario of [
+  { width: 1280, locale: 'en', theme: 'light' },
+  { width: 1280, locale: 'fr', theme: 'dark' },
+  { width: 390, locale: 'en', theme: 'light' },
+  { width: 390, locale: 'fr', theme: 'dark' },
+]) test(`Models contextual sections preserve drafts and explicit navigation: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: scenario.width, height: 844 });
+  await page.addInitScript(({ locale, theme }) => {
+    localStorage.setItem('ai-harness-locale', locale);
+    localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+  }, scenario);
+  const api = await installMockApi(page);
+  await page.goto('/settings#providers');
+  const sections = ['providers', 'provider-lifecycle', 'model', 'custom-models'] as const;
+  const navigation = page.getByRole('navigation', { name: /^(Model settings|Paramètres des modèles)$/u, includeHidden: true });
+  await expect(navigation.getByRole('link', { includeHidden: true })).toHaveCount(4);
+  const secret = page.locator('#providers .api-key-row input').first();
+  const providerEditor = page.locator('#provider-lifecycle .custom-resource-editor');
+  const catalog = page.locator('#model .model-catalog');
+  const modelEditor = page.locator('#custom-models .custom-resource-editor');
+  const drafts = [secret, providerEditor.getByLabel('ID', { exact: true }), catalog.getByRole('searchbox'), modelEditor.getByLabel('ID', { exact: true })];
+  const values = ['MODEL_NAV_SECRET_MUST_NOT_PERSIST', 'draft-provider-not-saved', 'mock', 'draft-model-not-saved'];
+  for (let index = 0; index < sections.length; index++) {
+    const section = sections[index]!;
+    await selectModelSettings(page, section);
+    await expect(page).toHaveURL(new RegExp(`#${section}$`, 'u'));
+    await expect(page.locator(`#${section}`)).toBeVisible();
+    for (const other of sections.filter(candidate => candidate !== section)) await expect(page.locator(`#${other}`)).toBeHidden();
+    await expect(navigation.locator(`a[href$="#${section}"]`)).toHaveAttribute('aria-current', 'page');
+    if (index > 0) await [providerEditor, catalog, modelEditor][index - 1]!.locator(':scope > summary').click();
+    await drafts[index]!.fill(values[index]!);
+    const capture = testInfo.outputPath(`model-panel-${section}-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach(`model-panel-${section}-${scenario.width}-${scenario.locale}`, {
+      path: capture, contentType: 'image/png',
+    });
+  }
+  await selectGeneralSettings(page, 'appearance');
+  for (let index = 0; index < sections.length; index++) {
+    await selectModelSettings(page, sections[index]!);
+    await expect(drafts[index]!).toHaveValue(values[index]!);
+  }
+  if (scenario.width < 960) {
+    const back = page.getByRole('button', { name: /^(Back to Model settings|Retour aux paramètres des modèles)$/u });
+    await back.focus();
+    await page.keyboard.press('Enter');
+    const current = navigation.locator('[aria-current="page"]');
+    await expect(current).toBeFocused();
+    await expect(page.locator('#custom-models')).toBeHidden();
+    for (const link of await navigation.getByRole('link').all()) {
+      await link.focus();
+      await expect(link).toBeInViewport({ ratio: 1 });
+      await expect(link).toHaveCSS('outline-style', 'solid');
+      await expectContrast(link, 'outlineColor', 3);
+      expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const clearance = await link.evaluate(element => {
+        const style = getComputedStyle(element);
+        const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const bounds = element.getBoundingClientRect();
+        const clip = element.closest('nav')!.getBoundingClientRect();
+        return [bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom]
+          .map(distance => distance - extent);
+      });
+      for (const distance of clearance) expect(distance).toBeGreaterThanOrEqual(-0.1);
+    }
+    await current.focus();
+    await page.keyboard.press('Enter');
+    await expect(back).toBeFocused();
+    await expect(back).toHaveCSS('outline-style', 'solid');
+    await expectContrast(back, 'outlineColor', 3);
+    const backClearance = await back.evaluate(element => {
+      const style = getComputedStyle(element);
+      const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+      const bounds = element.getBoundingClientRect();
+      const clip = element.closest('.settings-detail')!.getBoundingClientRect();
+      return Math.min(bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom) - extent;
+    });
+    expect(backClearance).toBeGreaterThanOrEqual(-0.1);
+    const capture = testInfo.outputPath(`model-panel-back-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('model-panel-back-focus', { path: capture, contentType: 'image/png' });
+    await expect(modelEditor.getByLabel('ID', { exact: true })).toHaveValue(values[3]!);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+  const stored = await page.evaluate(() => JSON.stringify(localStorage));
+  for (const value of [values[0], values[1], values[3]]) expect(stored).not.toContain(value);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  await selectModelSettings(page, 'model');
+  await selectModelSettings(page, 'custom-models');
+  await page.goBack();
+  await expect(page.locator('#model')).toBeVisible();
+  await page.goForward();
+  await expect(page.locator('#custom-models')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#custom-models')).toBeVisible();
+  await expect(page.locator('#providers')).toBeHidden();
+});
 test('Settings restores separate section, group, row and scope intent through real project switches and reload', async ({ page }) => {
   const api = await installMockApi(page);
   await page.goto('/settings?cwd=%2Fworkspace#model');
@@ -212,17 +310,18 @@ for (const scenario of [
   await row.getByRole('checkbox').focus();
   await page.goto('/settings');
   await expect(row).toBeInViewport();
-  // Defaults now belongs to General; Tab stays in the presented Models category.
-  const nextForm = page.locator('#custom-models > details > summary');
-  await expect(nextForm).toBeVisible();
+  // Sibling model forms are hidden; Tab wraps inside the dialog instead of entering them.
+  await expect(page.locator('#custom-models')).toBeHidden();
   await row.getByRole('checkbox').focus();
   await page.keyboard.press('Tab');
-  await expect(nextForm).toBeFocused();
+  await expect(page.locator('.settings-dialog-header button')).toBeFocused();
   await row.getByRole('checkbox').focus();
   expect((await new AxeBuilder({ page }).include('#model').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const draft = page.locator('#providers input[type="password"]').first();
+  await selectModelSettings(page, 'providers');
   await draft.fill('SYNTHETIC_CATEGORY_DRAFT');
+  await selectModelSettings(page, 'model');
   if (scenario.width > 959) {
     const general = page.locator('.settings-categories').getByRole('link', { name: 'General', exact: true });
     await general.focus(); await general.press('Enter');
@@ -237,7 +336,10 @@ for (const scenario of [
   await expect(page.locator('#appearance')).toBeVisible();
   await expect(page.locator('#model')).toBeHidden();
   await selectSettingsCategory(page, 'models');
+  await selectModelSettings(page, 'providers');
+  await expect(draft).toBeVisible();
   await expect(draft).toHaveValue('SYNTHETIC_CATEGORY_DRAFT');
+  await selectModelSettings(page, 'model');
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('SYNTHETIC_CATEGORY_DRAFT');
   expect(await page.evaluate(() => JSON.stringify(sessionStorage))).not.toContain('SYNTHETIC_CATEGORY_DRAFT');
   expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/config')).toEqual([]);

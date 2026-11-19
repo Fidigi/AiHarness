@@ -7,7 +7,7 @@ import '../settings.css';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { generalSettingsPanel, generalSettingsPanels, settingsCategories, settingsSectionCategory, type GeneralSettingsPanel, type SettingsCategory } from './settings-categories';
+import { generalSettingsPanel, generalSettingsPanels, modelSettingsPanel, modelSettingsPanels, settingsCategories, settingsSectionCategory, type GeneralSettingsPanel, type ModelSettingsPanel, type SettingsCategory } from './settings-categories';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
 import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
@@ -47,9 +47,10 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
+function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelPanel }: {
   category: SettingsCategory;
   generalPanel: GeneralSettingsPanel;
+  modelPanel: ModelSettingsPanel;
   entryRelease: { readonly current: (() => void) | null };
   entryEpoch: string;
 }) {
@@ -215,7 +216,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
 
       <div hidden={category !== 'models'}>
       {/* AI Provider Configuration */}
-      <section className="settings-section" id="providers">
+      <section className="settings-section" id="providers" hidden={modelPanel !== 'providers'}>
         <h3>{t('settings.aiProvider')}</h3>
         <select
           value={providers.active}
@@ -285,13 +286,15 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
         </div>
       </section>
 
-      <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
-        onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
-        onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
-        onCanonicalReload={() => setProviderReload(value => value + 1)} />
+      <div hidden={modelPanel !== 'provider-lifecycle'}>
+        <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+          onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
+          onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
+          onCanonicalReload={() => setProviderReload(value => value + 1)} />
+      </div>
 
       {/* Model Selection and server catalogue */}
-      <section className="settings-section" id="model">
+      <section className="settings-section" id="model" hidden={modelPanel !== 'model'}>
         <h3>{t('settings.model')}</h3>
         <select
           aria-label={t('settings.selectModel')}
@@ -373,7 +376,9 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
         </details>
       </section>
 
-      <CustomModelSettings key={`provider-models:${providerReload}`} />
+      <div hidden={modelPanel !== 'custom-models'}>
+        <CustomModelSettings key={`provider-models:${providerReload}`} />
+      </div>
       </div>
 
       <section className="settings-section" id="skills" hidden={category !== 'skills'}>
@@ -733,10 +738,10 @@ function SettingsNavigationBoundary() {
   const workspace = useSessionStore(state => state.workspace);
   const root = useRef<HTMLDivElement>(null);
   const entryRelease = useRef<(() => void) | null>(null);
-  const generalNavigation = useRef<HTMLElement>(null);
-  const generalBack = useRef<HTMLButtonElement>(null);
-  const generalFocus = useRef(false);
-  const [generalOverview, setGeneralOverview] = useState(false);
+  const contextualNavigation = useRef<HTMLElement>(null);
+  const contextBack = useRef<HTMLButtonElement>(null);
+  const contextFocus = useRef(false);
+  const [overview, setOverview] = useState(false);
   const cwd = workspace?.cwd;
   const { hash, pathname, search } = useLocation();
   const navigate = useNavigate();
@@ -746,7 +751,8 @@ function SettingsNavigationBoundary() {
   const initial = useMemo(() => readSettingsNavigation(cwd, readPreferences().lastSettingsSection), [cwd, hash]);
   const activeSection = isSettingsSection(section) ? section : initial.section;
   const category = settingsSectionCategory[activeSection];
-  const panel = generalSettingsPanel(activeSection);
+  const panels = category === 'general' ? generalSettingsPanels : category === 'models' ? modelSettingsPanels : [];
+  const panel = category === 'models' ? modelSettingsPanel(activeSection) : generalSettingsPanel(activeSection);
   const address = (section: string) => `${pathname}${search}#${section}`;
   const categorySection = (item: typeof settingsCategories[number]) => category === item.id ? activeSection
     : initial.categories?.[item.id] ?? item.section;
@@ -762,14 +768,14 @@ function SettingsNavigationBoundary() {
   // Keep navigation/focus ownership across a trust refresh; retire all forms,
   // pending local results and mounted sections before the replacement commits.
   const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
-  useLayoutEffect(() => { setGeneralOverview(false); }, [context, hash]);
+  useLayoutEffect(() => { setOverview(false); }, [context, hash]);
   useLayoutEffect(() => {
-    if (!generalFocus.current) return;
-    generalFocus.current = false;
-    if (category !== 'general') return;
-    if (generalOverview) generalNavigation.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus();
-    else if (generalBack.current?.offsetParent) generalBack.current.focus();
-  }, [generalOverview, activeSection, category]);
+    if (!contextFocus.current) return;
+    contextFocus.current = false;
+    if (category !== 'general' && category !== 'models') return;
+    if (overview) contextualNavigation.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus();
+    else if (contextBack.current?.offsetParent) contextBack.current.focus();
+  }, [overview, activeSection, category]);
   useLayoutEffect(() => {
     if (!root.current) return;
     const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
@@ -803,20 +809,21 @@ function SettingsNavigationBoundary() {
         {settingsCategories.map(item => <option key={item.id} value={item.id}>{t(`settings.category.${item.id}`)}</option>)}
       </select>
     </label>
-    <div className={`settings-content${category === 'general' && generalOverview ? ' settings-content-overview' : ''}`}>
-      <nav className="settings-context" ref={generalNavigation} aria-label={t('settings.generalNavigation')} hidden={category !== 'general'}>
-        {generalSettingsPanels.map(item => <Link key={item.section} to={address(item.section)}
+    <div className={`settings-content${panels.length && overview ? ' settings-content-overview' : ''}`}>
+      <nav className="settings-context" ref={contextualNavigation} aria-label={t(category === 'models' ? 'settings.modelsNavigation' : 'settings.generalNavigation')} hidden={!panels.length}>
+        {panels.map(item => <Link key={item.section} to={address(item.section)}
           aria-current={panel === item.section ? 'page' : undefined}
           onClick={event => {
             if (!event.defaultPrevented && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-              event.preventDefault(); generalFocus.current = generalOverview; setGeneralOverview(false); selectSection(item.section);
+              event.preventDefault(); contextFocus.current = overview; setOverview(false); selectSection(item.section);
             }
           }}>{t(item.label)}</Link>)}
       </nav>
       <div className="settings-detail">
-        <button type="button" className="settings-context-back" ref={generalBack} hidden={category !== 'general'}
-          onClick={() => { generalFocus.current = true; setGeneralOverview(true); }}>{t('settings.generalBack')}</button>
-        <div className="settings-view" ref={root}><SettingsView key={context} category={category} generalPanel={panel}
+        <button type="button" className="settings-context-back" ref={contextBack} hidden={!panels.length}
+          onClick={() => { contextFocus.current = true; setOverview(true); }}>{t(category === 'models' ? 'settings.modelsBack' : 'settings.generalBack')}</button>
+        <div className="settings-view" ref={root}><SettingsView key={context} category={category}
+          generalPanel={generalSettingsPanel(activeSection)} modelPanel={modelSettingsPanel(activeSection)}
           entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
       </div>
     </div>

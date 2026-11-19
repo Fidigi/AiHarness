@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectModelSettings } from './fixtures/settings-navigation';
 import { start, stop } from '../packages/server/dist/index.js';
 import { EncryptedCredentialStore, ProviderCredentialService, type MessageContentBlock, type Session } from '../packages/core/dist/index.js';
 
@@ -236,7 +236,10 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
         provider: 'github-copilot', model: row.model, thinking: 'off', toolPreset: 'default', autoCompaction: false,
       } } })).status()).toBe(200);
       await page.goto(f.base + '/settings#provider-lifecycle'); await page.reload();
-      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot'); await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
+      await selectModelSettings(page, 'providers');
+      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot');
+      await selectModelSettings(page, 'model');
+      await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
       await closeSettings(page);
       await page.getByRole('button', { name: copy.newChat, exact: true }).click();
       const id = await send('probe'); sessions.set(row.model, id);
@@ -275,7 +278,10 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
       const loaded = await page.request.get(f.base + '/api/sessions/' + id).then(response => response.json()) as Session;
       expect(loaded.messages.filter(message => message.role === 'assistant').map(message => message.blocks)).toEqual([row.blocks, row.blocks.filter(block => block.type !== 'tool_call')]);
       await page.goto(f.base + '/settings#provider-lifecycle');
-      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot'); await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
+      await selectModelSettings(page, 'providers');
+      await page.getByLabel(copy.select, { exact: true }).selectOption('github-copilot');
+      await selectModelSettings(page, 'model');
+      await page.getByLabel(copy.model, { exact: true }).selectOption(row.model);
       await closeSettings(page);
       await page.locator(`a.session-main[href*="${id}"]`).click();
       // Earlier drafts inherited changing global defaults; pin this conversation's physical target explicitly.

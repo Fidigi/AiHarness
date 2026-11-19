@@ -9,6 +9,7 @@ test.beforeEach(async ({ page }) => {
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 import { selectMcpServer } from './fixtures/mcp-navigation';
+import { selectModelSettings } from './fixtures/settings-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -339,7 +340,8 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       });
 
       await page.goto('/settings#model');
-      await page.addStyleTag({ content: '#skills, #plugins { display: none !important; }' });
+      await expect(page.locator('#providers')).toBeHidden();
+      await expect(page.locator('#custom-models')).toBeHidden();
       const section = page.getByRole('heading', { name: 'Model', exact: true }).locator('..');
       await expect(page.locator('#defaults')).toBeHidden();
       await section.getByText('Manage model catalogue').click();
@@ -391,7 +393,8 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       });
 
       await page.goto('/settings#provider-lifecycle');
-      await page.addStyleTag({ content: '.settings-section:not(#provider-lifecycle):not(#custom-models) { display: none !important; }' });
+      await expect(page.locator('#providers')).toBeHidden();
+      await expect(page.locator('#custom-models')).toBeHidden();
       await page.getByText('Create or edit a compatible provider').click();
       await expect(page.getByText('Acme Gateway')).toBeVisible();
       const fields = page.locator('#provider-lifecycle .custom-resource-editor input, #provider-lifecycle .custom-resource-editor textarea');
@@ -406,6 +409,12 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`provider-model-lifecycle-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+      });
+      await selectModelSettings(page, 'custom-models');
+      await expect(page.locator('#provider-lifecycle')).toBeHidden();
+      await expect(page.locator('#custom-models').getByText('Acme Reasoner', { exact: true })).toBeVisible();
+      await expect(page).toHaveScreenshot(`custom-models-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
     });

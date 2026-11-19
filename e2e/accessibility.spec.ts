@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { expectContrast } from './fixtures/contrast';
-import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectModelSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function expectAccessible(page: Page, context?: string): Promise<void> {
   const result = await new AxeBuilder({ page })
@@ -90,11 +90,17 @@ test.describe('Accessibilité des parcours majeurs', () => {
       ['tools', null], ['plugins', 'Filter packages'], ['mcp', null], ['subagents', 'Filter profiles'],
     ] as const) {
       await selectSettingsCategory(page, category);
-      if (category === 'models') await page.getByText('Manage model catalogue').click();
-      if (filter) await expect(page.getByLabel(filter)).toBeVisible();
-      const panels = category === 'general' ? ['appearance', 'behavior', 'notifications', 'authentication', 'about'] as const : [null];
+      if (filter && category !== 'models') await expect(page.getByLabel(filter)).toBeVisible();
+      const panels = category === 'general' ? ['appearance', 'behavior', 'notifications', 'authentication', 'about'] as const
+        : category === 'models' ? ['providers', 'provider-lifecycle', 'model', 'custom-models'] as const : [null];
       for (const panel of panels) {
-        if (panel) await selectGeneralSettings(page, panel);
+        if (panel === 'providers' || panel === 'provider-lifecycle' || panel === 'model' || panel === 'custom-models') {
+          await selectModelSettings(page, panel);
+          if (panel === 'model') {
+            await page.getByText('Manage model catalogue').click();
+            await expect(page.getByLabel('Filter models or providers')).toBeVisible();
+          }
+        } else if (panel) await selectGeneralSettings(page, panel);
         for (const theme of ['dark', 'light']) {
           await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
           await expectAccessible(page, `settings ${panel ?? category} (${theme})`);

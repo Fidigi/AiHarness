@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { selectPluginPackage, selectSettingsCategory, showPluginPackages } from './fixtures/settings-navigation';
+import { selectModelSettings, selectPluginPackage, selectSettingsCategory, showPluginPackages } from './fixtures/settings-navigation';
 
 // Emitted static Web and real authenticated HTTP/storage. The single dropped
 // response occurs AFTER route.fetch publishes to Express; no API data is mocked.
@@ -106,7 +106,7 @@ for (const scenario of [
     await expect(model).toBeEnabled(); await expect(model).toHaveValue('durable-despite-disconnect');
     await expect(defaults.getByRole('alert')).toHaveCount(0);
     // Exact-filter model batch: real catalogue/config publication, not fixtures.
-    await selectSettingsCategory(page, 'models');
+    await selectModelSettings(page, 'model');
     const models = page.locator('#model'), disclosure = models.locator('.model-catalog');
     if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
     await models.getByRole('searchbox').fill('visible-');

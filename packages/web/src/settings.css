@@ -20,6 +20,7 @@
 .settings-context a:focus-visible { outline-offset: -3px; }
 .settings-detail { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .settings-context-back { display: none; }
+.settings-context-back:focus-visible { outline-offset: -3px; }
 .settings-context[hidden], .settings-context-back[hidden] { display: none; }
 .settings-dialog .preference-grid label, .settings-dialog .preference-grid select { min-width: 0; }
 .settings-dialog .preference-grid .preference-toggle { display: flex; align-items: center; gap: .5rem; min-height: 24px; }

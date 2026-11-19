@@ -32,6 +32,21 @@ export async function selectGeneralSettings(page: Page, panel: keyof typeof gene
   await navigation.getByRole('link', { name: generalNames[panel] }).click();
 }
 
+const modelNames = {
+  providers: /^(AI Provider|Provider IA)$/u,
+  'provider-lifecycle': /^(Provider connections and custom providers|Connexions fournisseur et fournisseurs personnalisés)$/u,
+  model: /^(Model|Modèle)$/u,
+  'custom-models': /^(Custom models|Modèles personnalisés)$/u,
+};
+
+export async function selectModelSettings(page: Page, panel: keyof typeof modelNames): Promise<void> {
+  await selectSettingsCategory(page, 'models');
+  const back = page.getByRole('button', { name: /^(Back to Model settings|Retour aux paramètres des modèles)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.getByRole('navigation', { name: /^(Model settings|Paramètres des modèles)$/u });
+  await navigation.getByRole('link', { name: modelNames[panel] }).click();
+}
+
 /** Choose a profile through the visible contextual list, never its hidden actions. */
 export async function selectSubagentProfile(page: Page, name: string): Promise<void> {
   await selectSettingsCategory(page, 'subagents');

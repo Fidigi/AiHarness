@@ -16,6 +16,18 @@ export function generalSettingsPanel(section: SettingsSection): GeneralSettingsP
   return generalSettingsPanels.find(panel => panel.section === section)?.section ?? 'appearance';
 }
 
+export const modelSettingsPanels = [
+  { section: 'providers', label: 'settings.aiProvider' },
+  { section: 'provider-lifecycle', label: 'settings.providerLifecycle' },
+  { section: 'model', label: 'settings.model' },
+  { section: 'custom-models', label: 'settings.customModels.title' },
+] as const;
+export type ModelSettingsPanel = typeof modelSettingsPanels[number]['section'];
+
+export function modelSettingsPanel(section: SettingsSection): ModelSettingsPanel {
+  return modelSettingsPanels.find(panel => panel.section === section)?.section ?? 'providers';
+}
+
 export const settingsCategories = [
   { id: 'general', section: 'appearance', icon: 'settings' },
   { id: 'models', section: 'providers', icon: 'globe' },
