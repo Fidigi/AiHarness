@@ -31,6 +31,7 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
       { role: 'user', content: 'Inspect the workspace.' },
       { role: 'assistant', content: 'Readable content\n\n```ts\nconst label = "hello"; // readable comment\nconst count = 42;\n```' },
     ]);
+    session.cacheNotices = [{ id: 'theme-cache-warm', afterEntryId: session.messages[1]!.id, kind: 'cache_warm', costUsd: 0.001 }];
     session.messages[1]!.blocks = [
       { type: 'text', text: session.messages[1]!.content },
       { type: 'tool_call', id: 'theme-output', name: 'bash', input: { command: 'printf synthetic-output' } },
@@ -60,6 +61,10 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
     await expectRoles('.sidebar, .chat-toolbar, .input-container', '--surface-panel');
     await expectRoles('.input-container textarea, .composer-controls select', '--surface-input');
     await expectRoles('.message.assistant .message-content', '--surface-panel');
+    await expect(page.locator('.cache-notice')).toHaveCount(1);
+    await expect(page.locator('.cache-notice')).toBeInViewport({ ratio: 1 });
+    await expectContrast(page.locator('.cache-notice'));
+    await expectRoles('.cache-notice', '--surface-danger');
     await expectRoles('.code-container', '--surface-input');
     const output = page.locator('.tool-block').last();
     if (await output.getAttribute('open') === null) await output.locator('summary').click();

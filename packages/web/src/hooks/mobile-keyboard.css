@@ -27,10 +27,10 @@
   .chat-view[data-mobile-keyboard="true"] .composer-controls {
     flex-wrap: nowrap;
   }
-  /* The compact primary action keeps normal-sized white text at AA contrast. */
+  /* Compact actions retain the shared theme-owned text/background contrast. */
   .chat-view[data-mobile-keyboard="true"] .composer-controls > button[type="submit"] {
-    background-color: #bb2844;
-    color: #fff;
+    background-color: var(--accent);
+    color: var(--on-accent);
   }
   .chat-view[data-mobile-keyboard="true"] .composer-controls > button,
   .chat-view[data-mobile-keyboard="true"] .queue-mode {

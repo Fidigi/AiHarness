@@ -122,9 +122,11 @@ On viewports at most 959 CSS pixels wide, an explicit `aih-open-terminal`/`aih-t
 
 The view identity is a tuple of workspace ID/cwd, session ID and route key. Replacement scopes discard old publication and require fresh focus/input/composition intent. `hooks/mobileKeyboardStyles.ts` loads `hooks/mobile-keyboard.css` through a URL-only import; publication waits for readiness and a fresh measurement. Failed links are removed, stalled requests have an eight-second deadline, and a closed sample rearms retry. Disposal cancels the request, frame and listeners; success retains the link until its owner retires.
 
-Secondary chat chrome collapses without replacing the composer, images, Queue or Stop. Settings and MCP keep their own styles. Floating/overlay keyboards without viewport loss and initially zoomed/resized mounts may remain undetected; Chromium touch emulation is not physical Android/iOS/Safari certification. See the [mobile keyboard guide](../../users/en/mobile-keyboard.md).
+Secondary chat chrome collapses without replacing the composer, images, Queue or Stop. Compact primary actions retain the shared `--accent`/`--on-accent` roles rather than a separate fixed palette. Settings and MCP keep their own styles. Floating/overlay keyboards without viewport loss and initially zoomed/resized mounts may remain undetected; Chromium touch emulation is not physical Android/iOS/Safari certification. See the [mobile keyboard guide](../../users/en/mobile-keyboard.md).
 
 ## Rendering and Extensions
+
+`themes.css` owns shared surface, text, border, action, status, syntax and command-ANSI roles for Light/Dark and the retained alternate themes; System resolves through preferences. Cache transcript notices use the shared primary text role without changing notice derivation, billing or transcript data. Independent terminal, generated-diagram and document content canvases retain their own rendering palettes.
 
 - Memoized `MarkdownContentRenderer` shares currency/math, CJK autolink, raw-text and initial frontmatter parsing across messages, file previews and noninteractive minimap/accessibility projections. Only user messages preserve soft breaks. Raw HTML remains non-executable.
 - Composer paste treats plaintext as authoritative. An inert template provides bounded optional link metadata (65,536 code units, 1,024 nodes, 32 links); every failure/overflow preserves complete plaintext. List continuation obeys newline/send-mode/IME rules and restores the caret only on the same connected textarea.

@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-19)
 >
-> Six implementation decisions approved. Semantic colors have bounded qualification; FILE-01–05 and ACT-01–02 are verified, including left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category Settings, remaining palette gaps and final cross-surface qualification remain open.
+> Six implementation decisions approved. VIS-01–03, FILE-01–05 and ACT-01–02 are verified: semantic palette/contrast, left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category Settings, final visual-direction review and global qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–17 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–18 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -29,29 +29,29 @@
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Five explorer criteria and both action/input criteria are verified; nine criteria remain open and no gap is accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Three semantic-theme criteria, five explorer criteria and both action/input criteria are verified; six criteria remain open and no gap is accepted.
 
 | Status | Count | Details |
 |---|---:|---|
-| `DONE` | 7 | FILE-01–05 and ACT-01–02: explorer contracts and accessible controls/input |
+| `DONE` | 10 | VIS-01–03, FILE-01–05 and ACT-01–02: semantic themes, explorer contracts and accessible controls/input |
 | `PARTIAL` | 4 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
 | `ABSENT` | 1 | Category-tab Settings presentation |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
-| `IN PROGRESS` | 4 | VIS-01–03 and QA-01: remaining palette inventory and final qualification |
+| `IN PROGRESS` | 1 | QA-01: final global qualification |
 | `GAP ACCEPTED` | 0 | No waiver requested or granted |
-| **Total** | **16** | **43.75% closed: (7 + 0) / 16 × 100** |
+| **Total** | **16** | **62.5% closed: (10 + 0) / 16 × 100** |
 
 ### Summary by Surface
 
 | Surface | Done | Partial | Absent | To define | Blocked | In progress | Gap accepted | Total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Visual system | 0 | 1 | 0 | 0 | 0 | 3 | 0 | 4 |
+| Visual system | 3 | 1 | 0 | 0 | 0 | 0 | 0 | 4 |
 | Actions and input | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 2 |
 | File explorer | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
 | Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
 | Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **7** | **4** | **1** | **0** | **0** | **4** | **0** | **16** |
+| **Total** | **10** | **4** | **1** | **0** | **0** | **1** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -61,9 +61,9 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| VIS-01 | IN PROGRESS | P1 | Colors are mostly literal values across several stylesheets; variables cover focus/layout but not a semantic palette (S1–S4). Introduce shared surface/text/border/action/status tokens, used by audited chrome and states. DONE requires a reviewed token inventory and browser-computed checks showing those surfaces consume theme-owned values rather than unrelated overrides. |
-| VIS-02 | IN PROGRESS | P1 | Light file syntax, Git badges and frontmatter retain pale dark-theme colors; specific ratios are 1.58–2.04:1 (§8.1). Fix each identified pair; qualify normal text at ≥4.5:1, large text at ≥3:1 and essential non-text controls/state indicators at ≥3:1 against adjacent colors. Decorative separators need not all reach 3:1. DONE requires computed-color and visible-state evidence, including hover/focus/selected states. |
-| VIS-03 | IN PROGRESS | P2 | Mist/Rose/Pine recolor only body/main/sidebar/chat-toolbar/input-container backgrounds (S2), leaving Settings, file viewer and most controls on the default navy palette. Give every selectable theme complete audited-surface coverage. DONE requires chat, Settings and explorer captures plus contrast checks for all five explicit themes and both System resolutions, without silently deleting saved theme choices. |
+| VIS-01 | DONE | P1 | Colors are mostly literal values across several stylesheets; variables cover focus/layout but not a semantic palette (S1–S4). Introduce shared surface/text/border/action/status tokens, used by audited chrome and states. DONE requires a reviewed token inventory and browser-computed checks showing those surfaces consume theme-owned values rather than unrelated overrides. |
+| VIS-02 | DONE | P1 | Light file syntax, Git badges and frontmatter retain pale dark-theme colors; specific ratios are 1.58–2.04:1 (§8.1). Fix each identified pair; qualify normal text at ≥4.5:1, large text at ≥3:1 and essential non-text controls/state indicators at ≥3:1 against adjacent colors. Decorative separators need not all reach 3:1. DONE requires computed-color and visible-state evidence, including hover/focus/selected states. |
+| VIS-03 | DONE | P2 | Mist/Rose/Pine recolor only body/main/sidebar/chat-toolbar/input-container backgrounds (S2), leaving Settings, file viewer and most controls on the default navy palette. Give every selectable theme complete audited-surface coverage. DONE requires chat, Settings and explorer captures plus contrast checks for all five explicit themes and both System resolutions, without silently deleting saved theme choices. |
 | VIS-04 | PARTIAL | P2 | The user approved the six starting decisions in §5 on 2026-11-18, using U1/U2 as the preferred reference: neutral surfaces/blue accent, thin icons, horizontal category tabs, desktop modal/mobile full-screen Settings, left explorer/right reader and retained alternate themes. No starting design arbitration remains. Exact colors, spacing and responsive details may be refined after the first render. DONE still requires reviewed desktop/mobile Light/Dark visuals covering surface separation, typography and icon weight; approval of direction alone is not visual qualification. |
 
 ### Actions and input
@@ -155,6 +155,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-19 | FILE-05; ACT-01–02, QA-01 | FILE-05: PARTIAL → DONE; other states unchanged | Left explorer/right reader, responsive fallback, grouped controls and reviewed long-tree/path captures in §15 | Docker types/parity and Web 71/617 PASS; frozen no-update/no-retry owning browser gates **305 pass / 1 native worker failure**; FILE-05 scenarios pass; all 23 changed product/test sources SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Visual review exposed defects despite successful generation; tree allocation, selected-row reveal and upload progress were repaired. Responsive readiness assertions and eight stale Markdown baselines were corrected without weakening thresholds. Settings, remaining control/input polish and final qualification stay open. |
 | 2026-11-19 | ACT-01; ACT-02, QA-01 | ACT-01: PARTIAL → DONE; other states unchanged | Translated keyboard hints, compact utility controls, explicit states and constrained chat fit in §16 | Final Docker build/types and Web 71/617 PASS; **320/320** distinct owning browser cases PASS without updates/retries; all 13 changed source files SHA-256-equal to the frozen workspace; budgets PASS (149/160 KiB gzip entry/eager); 38 reviewed baseline changes | Retained native generation failure and initial functional chat failure. Controlled response timing reproduced the 180px tail gap on current and retained layout sources; synchronous explicit jumps corrected it without weakening the 96px assertion. Mobile terminal overlap, Settings and final global qualification remain open. |
 | 2026-11-19 | ACT-02; VIS-01–03, QA-01 | ACT-02: IN PROGRESS → DONE; other states unchanged | Composer-flow terminal control, keyboard-viewport bounds and message-bounded minimap in §17 | Final Docker build/types and Web 71/617 PASS; **342/342** distinct owning browser cases PASS without updates/retries; eight changed source files SHA-256-equal to the frozen container; budgets PASS (149/160 KiB gzip); 101 reviewed baseline changes | Retained incorrect-name, rectangle, keyboard-bound and capture-framing failures. No timeout, threshold or runtime-flag change. Palette inventory still has a compact-action override to correct; Settings and final global qualification remain open. |
+| 2026-11-19 | VIS-01–03; QA-01 | VIS-01–03: IN PROGRESS → DONE; QA-01 unchanged | Token inventory, nine retained reds, repaired compact action/cache notice and explicit criterion mapping in §18 | Docker build/types and Web 71/617 PASS; **342/342** distinct owning browser cases PASS without updates/retries; four changed source files and all 304 tracked PNGs SHA-256-equal to the frozen container; budgets PASS (149/160 KiB gzip); ten reviewed baseline changes | The earlier inventory omitted both overrides; Light/System Light notice contrast was 1.015:1. Historical native/functional failures remain retained. This closes the bounded semantic-theme criteria, not Settings, VIS-04 or global QA-01. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -360,7 +361,7 @@ The increment committed as `7f8bbbe1` extends the same roles to `index.css`, `ag
 - Active branch and command-palette rows now use the same inset blue marker as conversation/file/terminal selection, not just a low-contrast tint. The seven theme scenarios open the real keyboard command palette and measure its selected marker against the selected surface at ≥3:1.
 - Native range/checkbox/progress indicators use the already-readable `--text-link` blue, not the filled-button `--accent`: source arithmetic during image review found the latter only 2.32–2.75:1 against the dark/alternate panel surfaces. The browser cases verify the corrected indicators at ≥3:1. Filled actions retain their separate white-on-blue text role.
 - Capture review also found native inset borders on typeless provider inputs and unthemed textarea content. Text fields now share solid one-pixel role-colored boundaries, excluding native checkbox/radio/range/file controls. Six existing provider-form scenarios additionally assert border style/width and text/boundary contrast.
-- Independent terminal content/theme selection, generated diagram artwork and document canvases are retained; this is not a terminal emulator or diagram-renderer redesign. Content-specific surfaces, shadows and backdrops remain literal. The earlier inventory was incomplete: §17 later identifies an omitted compact-keyboard primary-action override, not qualified by this rollout.
+- Independent terminal content/theme selection, generated diagram artwork and document canvases are retained; this is not a terminal emulator or diagram-renderer redesign. Content-specific surfaces, shadows and backdrops remain literal. The earlier inventory was incomplete: §17 later identifies an omitted compact-keyboard primary-action override, and §18 identifies a cache-notice foreground override. Neither was qualified by this rollout; §18 records their repair and subsequent verification.
 
 ### Added evidence and validation state
 
@@ -528,4 +529,49 @@ The **342 distinct browser cases** ran without retries or snapshot updates, in D
 
 ACT-02 acceptance combines §11/§15's actual Tab/Enter/Space upload, arrow-key resizing, visible focus/mention and coarse-pointer file journeys with §16's minimum-target/name checks and this lot's responsive non-overlap, 44px terminal, no-submit and keyboard-viewport controls. The minimap keeps all its actions while respecting the composer boundary. This closes the defined input/control criterion, not a physical-device or whole-application accessibility certificate.
 
-**Still open:** the new keyboard captures expose a remaining VIS-01 gap: `hooks/mobile-keyboard.css` hard-codes the compact primary action to red/white instead of consuming the shared action tokens. Its contrast is not the issue; token ownership and consistency still require correction before Settings work.
+**Open at this increment (subsequently repaired in §18):** the new keyboard captures expose a remaining VIS-01 gap: `hooks/mobile-keyboard.css` hard-codes the compact primary action to red/white instead of consuming the shared action tokens. Its contrast is not the issue; token ownership and consistency still require correction before Settings work.
+
+## 18. Palette Remainder and Inventory — VIS-01–03 Verified
+
+The remaining source review found two control/text overrides: compact keyboard Send used fixed red/white, and `CacheNotices.tsx` forced a pale foreground on the themed notice surface. Existing mobile-keyboard scenarios covered geometry/axe but not action-token ownership; the seven shared-theme cases did not contain a cache notice. Those scenarios now reuse the existing contrast fixture and a synthetic cache notice, without new test cases or live accounts.
+
+The nine initial red cases separate **two action-role mismatches**, **five notice-role mismatches**, and **two actual notice contrast failures**: Light and System Light measured **1.0150394989:1** against the unchanged 4.5:1 threshold. Compact Send now consumes `--accent`/`--on-accent`; notices consume `--text-primary`, preserving their existing surface, text, derivation and billing. The corrected generation passed seven theme cases and eighteen mobile-keyboard cases. The strengthened final theme scenario also requires the notice to be fully in the viewport before measuring it.
+
+### Reviewed token ownership
+
+`themes.css` defines forty shared roles, loaded before component styles. Dark is the root palette; Light overrides its roles, Mist/Rose/Pine override their surfaces/borders while retaining readable Dark text/status roles, and preferences resolve System to Light/Dark without removing any saved choice.
+
+| Role family | Ownership and evidence |
+|---|---|
+| Six base surfaces plus success/warning/danger surfaces | Shared shell, Settings, explorer, reader, dialog and card consumers; browser-computed role checks in the seven theme cases |
+| Primary/secondary/link text, subtle/control borders, focus | Normal text ≥4.5:1; essential control boundaries/markers ≥3:1; reader hover/focus/selection and shared Settings/control checks in §11–12 |
+| Accent/on-accent and three status foregrounds | Filled-action text is distinct from the higher-contrast link/indicator role; native indicators and the newly corrected compact action are checked |
+| Four syntax aliases and sixteen ANSI roles | Chat syntax is verified with the explorer closed; reader syntax and all command-output classes retain rendered contrast checks |
+| Deliberate non-token content/shading | Independent terminal themes, generated Mermaid artwork, PDF/document canvases, shadows and dimming backdrops remain separate; this is not an emulator or renderer redesign |
+
+CSS and JSX literal-color review after the two repairs found no additional competing control/text override in the audited chrome; the retained content/shading exceptions are explicit above. Ten intended captures remain: seven theme-shell notices and three compact-keyboard views. All five explicit shell palettes and both System resolutions were reviewed, alongside compact Light/Dark and the loopback root view. One unrelated generated desktop-keyboard image was restored (12 pixels, maximum channel delta 1).
+
+### Final frozen verification
+
+Build/budgets (149/160 KiB gzip, 28 chunks), workspace/parity types and Web **71/617** pass. The container retains canonical **1 GiB shared memory**. Every final browser invocation used `--retries=0 --update-snapshots=none`:
+
+| Owning suite | Result |
+|---|---|
+| Fourteen standard/related files, including theme/reader/state and keyboard scenarios | **255/255 PASS**, 8.0m |
+| Workspace assets | **17/17 PASS**, 15.6s |
+| Linked directories/modal boundary | **44/44 PASS**, 4.2m |
+| Settings locale assets | **8/8 PASS**, 13.1s |
+| Pane lifetime | **18/18 PASS**, 21.4s |
+| **Distinct owning total** | **342/342 PASS** |
+
+Each dedicated suite used its owning configuration. After all runs, all four changed source files and **304 tracked PNGs** were SHA-256-equal between checkout and container. Logs, reports/results and source/image manifests remain under `/tmp/aih-web-design-palette-remainder-*`; this is frozen bounded evidence, not a whole-application campaign or physical-device certification. No retry, timeout, threshold, budget or runtime-flag relaxation was introduced.
+
+### Criterion reconciliation
+
+| Criterion | Acceptance evidence |
+|---|---|
+| VIS-01 — semantic inventory and consumption | The forty-role inventory above, §11–12 shared/reader consumers, and browser-computed role checks now also covering the omitted compact action and cache notice. Explicit content/shading exceptions are retained, not competing chrome palettes. |
+| VIS-02 — identified contrasts and states | §11's original syntax/Git/frontmatter reds and corrections; §12 normal text/control/marker checks; reader hover/focus/selection and §16 pressed/disabled evidence; the new Light/System Light notice red and correction. The final owning campaign re-executes those checks at unchanged 4.5:1 text and 3:1 essential-indicator thresholds. |
+| VIS-03 — every selectable theme | The existing seven reader/source and seven shared chat/Settings scenarios pass again, with reviewed captures for Light/Dark/Mist/Rose/Pine and both System resolutions. The preference choices/resolver remain intact; no saved theme is deleted. |
+
+VIS-01–03 are **DONE** on that mapping, not on generation alone. VIS-04 remains PARTIAL pending the completed Settings presentation and final desktop/mobile review. Category Settings and QA-01/global qualification remain open; historical failures in earlier increments are not erased by this campaign.

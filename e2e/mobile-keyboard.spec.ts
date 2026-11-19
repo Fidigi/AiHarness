@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Request } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpStateInventory } from './fixtures/mcp';
+import { expectContrast } from './fixtures/contrast';
 
 // Match both Vite's dev filename and its exact fingerprinted production asset.
 // Keep JS URL-module requests separate by resource type at each interception.
@@ -132,7 +133,19 @@ for (const scenario of [
         await expect(page.getByRole('combobox', { name: 'Select the model', exact: true })).toBeHidden();
         await expect(chat.locator('.composer-setting-scopes')).toBeHidden();
         await expect(chat.locator('.mobile-chat-actions')).toBeHidden();
-        await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
+        const send = page.getByRole('button', { name: 'Send', exact: true });
+        await expect(send).toBeVisible();
+        const actionRoles = await send.evaluate(button => {
+          const style = getComputedStyle(button), probe = document.createElement('span');
+          probe.style.backgroundColor = style.getPropertyValue('--accent');
+          probe.style.color = style.getPropertyValue('--on-accent');
+          document.body.append(probe);
+          const expected = getComputedStyle(probe);
+          const matches = { background: style.backgroundColor === expected.backgroundColor, foreground: style.color === expected.color };
+          probe.remove(); return matches;
+        });
+        expect(actionRoles).toEqual({ background: true, foreground: true });
+        await expectContrast(send);
         await expect(page.locator('button').and(page.getByRole('button', { name: 'Add images', exact: true }))).toBeVisible();
         const form = await chat.locator('.input-container').boundingBox();
         expect(form).not.toBeNull();

@@ -29,7 +29,7 @@ export default function CacheNotices({ notices, messageId, locale }: {
   notices: CacheTranscriptNotice[]; messageId: string; locale: string;
 }) {
   return <>{notices.filter(notice => notice.afterEntryId === messageId).map(notice =>
-    <aside key={notice.id} className="notice cache-notice" style={{ color: '#eef2fa' }} role="note" data-cache-notice={notice.id}>
+    <aside key={notice.id} className="notice cache-notice" style={{ color: 'var(--text-primary)' }} role="note" data-cache-notice={notice.id}>
       {cacheNoticeText(notice, locale)}
     </aside>)}</>;
 }
