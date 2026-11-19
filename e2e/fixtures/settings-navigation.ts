@@ -47,6 +47,18 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Browse catalogue metadata without selecting the active model or changing enablement. */
+export async function selectCatalogueModel(page: Page, providerName: string, modelId: string): Promise<void> {
+  await selectModelSettings(page, 'model');
+  const catalog = page.locator('#model .model-catalog');
+  if (await catalog.getAttribute('open') === null) { await catalog.locator('summary').focus(); await catalog.locator('summary').click(); }
+  const back = catalog.getByRole('button', { name: /^(Back to model catalogue|Retour au catalogue de modèles)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = catalog.getByRole('navigation', { name: /^(Manage model catalogue|Gérer le catalogue de modèles)$/u });
+  const code = page.getByText(modelId, { exact: true }).and(page.locator('code'));
+  await navigation.getByRole('group', { name: providerName, exact: true }).getByRole('button').filter({ has: code }).click();
+}
+
 /** Choose a fresh connection descriptor; selecting metadata never starts its operations. */
 export async function selectProviderConnection(page: Page, group: 'builtin' | 'custom', id: string): Promise<void> {
   await selectModelSettings(page, 'provider-lifecycle');

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -51,6 +51,8 @@ test('built Settings assets restore project-specific group, row and scope intent
   const connection = page.locator('.provider-context-detail').getByRole('article');
   await expect(connection).toHaveAttribute('data-settings-selection', 'mock');
   await selectProviderConnection(page, 'builtin', 'mock');
+  await selectCatalogueModel(page, 'OpenAI', 'gpt-4o');
+  await expect(page.locator('.model-catalog-detail [data-settings-selection="openai:gpt-4o"]')).toBeVisible();
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
@@ -70,6 +72,7 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();
+  await expect(page.locator('.model-catalog-detail .model-catalog-row:visible')).toHaveAttribute('data-settings-selection', identity!);
   await page.reload();
   await expect(row).toBeInViewport();
   expect(await row.getAttribute('data-settings-selection')).toBe(identity);

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { selectInstalledSkill, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, showPluginPackages } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, showPluginPackages } from './fixtures/settings-navigation';
 
 // Emitted static Web and real authenticated HTTP/storage. The single dropped
 // response occurs AFTER route.fetch publishes to Express; no API data is mocked.
@@ -109,8 +109,10 @@ for (const scenario of [
     // Exact-filter model batch: real catalogue/config publication, not fixtures.
     await selectModelSettings(page, 'model');
     const models = page.locator('#model'), disclosure = models.locator('.model-catalog');
+    const mockProvider = locale === 'fr' ? 'Mock (tests)' : 'Mock (Testing)';
     if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
     await models.getByRole('searchbox').fill('visible-');
+    await selectCatalogueModel(page, mockProvider, 'visible-a');
     const group = models.locator('fieldset[data-provider="mock"]');
     const response = page.waitForResponse(response => response.url().endsWith('/api/models/enabled/batch'));
     await group.getByRole('button', { name: text.disable, exact: true }).click();
@@ -121,6 +123,7 @@ for (const scenario of [
     ]);
     await expect(group.getByRole('checkbox').first()).not.toBeChecked();
     await models.getByRole('searchbox').fill('');
+    await selectCatalogueModel(page, mockProvider, 'hidden');
     await expect(group.locator('[data-settings-selection="mock:hidden"]').getByRole('checkbox')).toBeChecked();
     const persisted = JSON.parse(await readFile(file, 'utf8'));
     expect(persisted.global).toMatchObject({ model: 'durable-despite-disconnect', thinking: 'low', toolPreset: 'chat-only' });
@@ -131,6 +134,7 @@ for (const scenario of [
     // Own intent before reading/toggling a disclosure that deferred entry alignment can open.
     await disclosure.locator('summary').focus();
     if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
+    await selectCatalogueModel(page, mockProvider, 'visible-a');
     await expect(models.locator('[data-settings-selection="mock:visible-a"]').getByRole('checkbox')).not.toBeChecked();
     // A selected tool is presentation, not a reduced allowlist or a different write scope.
     const toolsUrl = `${base}/api/tools?${new URLSearchParams({ cwd, projectId: workspace.id })}`;

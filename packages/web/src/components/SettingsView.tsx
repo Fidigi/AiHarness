@@ -39,6 +39,7 @@ import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from '.
 import { SkillContentPane } from './SkillContentPane';
 import { skillSettingsMessage } from './skill-settings-messages';
 import { providerCredentialsMessage } from './provider-credentials-messages';
+import { modelCatalogMessage } from './model-catalog-messages';
 import { Icon } from './Icon';
 
 const PluginSettings = lazy(async () => ({
@@ -78,6 +79,14 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
+  const [modelPosition, setModelPosition] = useState(() => readSettingsNavigation(workspaceCwd).positions.model);
+  const [modelOverview, setModelOverview] = useState(!modelPosition?.selection);
+  const [modelMobile, setModelMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const modelNavigation = useRef<HTMLElement>(null);
+  const modelDetailPane = useRef<HTMLDivElement>(null);
+  const modelBack = useRef<HTMLButtonElement>(null);
+  const modelFocus = useRef<'navigation' | 'detail' | null>(null);
+  const modelDetailPrefix = useId();
   const [skillFilter, setSkillFilter] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string>();
   const skillInvoker = useRef<HTMLButtonElement | null>(null);
@@ -153,6 +162,34 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
       || model.id.toLocaleLowerCase().includes(normalizedModelFilter)
       || model.name.toLocaleLowerCase().includes(normalizedModelFilter)),
   })).filter(group => group.models.length > 0) ?? [];
+  const modelChoices = visibleModelGroups.flatMap(group => group.models.map(model => ({ model, group: group.provider })));
+  const modelMatches = modelChoices.filter(choice => choice.group === modelPosition?.group && choice.model.key === modelPosition?.selection);
+  const selectedModelMetadata = modelPosition?.selection
+    ? modelMatches.length === 1 ? modelMatches[0] : undefined
+    : modelPosition?.group ? modelChoices.find(choice => choice.group === modelPosition.group) : modelChoices[0];
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && modelDetailPane.current?.contains(document.activeElement)) setModelOverview(false);
+      setModelMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'models' || modelPanel !== 'model' || !modelFocus.current) return;
+    const target = modelFocus.current; modelFocus.current = null;
+    if (target === 'navigation') {
+      const current = modelNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? modelNavigation.current)?.focus();
+    } else if (modelMobile && !modelOverview) modelBack.current?.focus();
+  }, [category, modelPanel, modelMobile, modelOverview, selectedModelMetadata]);
+  const selectModelMetadata = (group: string, selection: string) => {
+    const position = { group, selection };
+    setModelPosition(position); setModelOverview(false); modelFocus.current = modelMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, { ...current, section: 'model', positions: { ...current.positions, model: position } });
+  };
   const normalizedSkillFilter = skillFilter.trim().toLocaleLowerCase();
   const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).flatMap(scope => {
     const candidates = (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
@@ -448,9 +485,30 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
           )}
           <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.models} error={batches.errors.models}
             names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
+          {(modelPosition?.group || modelPosition?.selection) && !selectedModelMetadata && !providers.catalogLoading
+            && <p role="status">{modelCatalogMessage(locale, 'unavailable')}</p>}
+          <div className="model-catalog-context">
+            <nav ref={modelNavigation} aria-label={t('settings.modelCatalog.manage')} tabIndex={-1}
+              hidden={modelMobile && !modelOverview && !!selectedModelMetadata}>
+              {visibleModelGroups.map((group, groupIndex) => <div key={group.provider} role="group" aria-label={getTypeLabel(group.provider as ProviderType, t)}>
+                <h4>{getTypeLabel(group.provider as ProviderType, t)}</h4>
+                {group.models.map((model, index) => {
+                  const id = `${modelDetailPrefix}-${groupIndex}-${index}`, current = selectedModelMetadata?.group === group.provider && selectedModelMetadata.model === model;
+                  return <button key={model.key} type="button" disabled={providers.catalogLoading || batches.busy}
+                    aria-current={current ? 'true' : undefined} aria-expanded={current && (!modelMobile || !modelOverview)}
+                    aria-controls={id} onClick={() => selectModelMetadata(group.provider, model.key)}>
+                    <strong>{model.name}</strong><code>{model.id}</code>
+                  </button>;
+                })}
+              </div>)}
+            </nav>
+            <div ref={modelDetailPane} className="model-catalog-detail" hidden={modelMobile && modelOverview}>
+              <button ref={modelBack} type="button" className="model-catalog-back" hidden={!modelMobile || modelOverview || !selectedModelMetadata}
+                onClick={() => { modelFocus.current = 'navigation'; setModelOverview(true); }}>{modelCatalogMessage(locale, 'back')}</button>
           <div className="model-catalog-groups">
-            {visibleModelGroups.map(group => (
-              <fieldset key={group.provider} data-provider={group.provider} data-settings-group={group.provider}>
+            {visibleModelGroups.map((group, groupIndex) => (
+              <fieldset key={group.provider} data-provider={group.provider} data-settings-group={group.provider}
+                hidden={selectedModelMetadata?.group !== group.provider}>
                 <legend>
                   {getTypeLabel(group.provider as ProviderType, t)}
                   <span className={group.configured ? 'status-success' : 'status-warning'}>
@@ -461,8 +519,9 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
                   rows={group.models.map(model => ({ key: model.key, enabled: model.enabled }))}
                   disabled={!!providers.catalogLoading || batches.busy}
                   save={changes => batches.save('models', changes)} />
-                {group.models.map(model => (
-                  <label key={model.key} className="model-catalog-row" data-settings-selection={model.key}>
+                {group.models.map((model, index) => (
+                  <label key={model.key} id={`${modelDetailPrefix}-${groupIndex}-${index}`} className="model-catalog-row" data-settings-selection={model.key}
+                    hidden={selectedModelMetadata?.model !== model}>
                     <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
                       onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
@@ -483,6 +542,8 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
                 ))}
               </fieldset>
             ))}
+          </div>
+            </div>
           </div>
         </details>
       </section>

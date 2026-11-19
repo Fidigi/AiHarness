@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectGeneralSettings, selectModelSettings, selectProviderCredential, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
@@ -422,6 +422,7 @@ for (const scenario of [
   await expect(page.locator('#appearance')).toBeHidden();
   const catalog = page.locator('#model .model-catalog');
   await catalog.locator('summary').click();
+  await selectCatalogueModel(page, 'Mock (Testing)', 'mock-model');
   const row = catalog.locator('.model-catalog-row').first();
   await row.getByRole('checkbox').focus();
   await page.goto('/settings');

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 import { selectMcpServer } from './fixtures/mcp-navigation';
-import { selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -346,7 +346,11 @@ test.describe('Régression visuelle du catalogue de modèles', () => {
       await expect(page.locator('#defaults')).toBeHidden();
       await section.getByText('Manage model catalogue').click();
       await section.getByLabel('Filter models or providers').fill('openai');
-      await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('GPT-4o (Recommended)');
+      await selectCatalogueModel(page, 'OpenAI', 'gpt-4o');
+      const detail = section.locator('[data-settings-selection="openai:gpt-4o"]');
+      await expect(detail).toBeVisible();
+      await expect(detail).toContainText('GPT-4o (Recommended)');
+      await expect(detail.getByRole('checkbox')).toBeChecked();
       await section.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });

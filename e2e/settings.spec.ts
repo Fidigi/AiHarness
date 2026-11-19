@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { SkillCatalog } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectCatalogueModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -59,11 +59,16 @@ test.describe('Settings and authentication', () => {
 
     const section = settingsSection(page, 'Model');
     await section.getByText('Manage model catalogue').click();
+    await selectCatalogueModel(page, 'OpenAI', 'gpt-4o');
+    await expect(section.locator('[data-settings-selection="openai:gpt-4o"]')).toBeVisible();
     await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('GPT-4o (Recommended)');
     await expect(section.locator('fieldset[data-provider="openai"]')).toContainText('images');
+    await selectCatalogueModel(page, 'Anthropic', 'claude-3-haiku-20240307');
+    await expect(section.locator('fieldset[data-provider="anthropic"]')).toBeVisible();
     await expect(section.locator('fieldset[data-provider="anthropic"]')).toContainText('unavailable');
 
     await section.getByLabel('Filter models or providers').fill('o3');
+    await selectCatalogueModel(page, 'OpenAI', 'o3');
     await expect(section.locator('.model-catalog-row')).toHaveCount(1);
     await expect(section.locator('.model-catalog-row')).toContainText('reasoning');
     await section.getByLabel('Filter models or providers').fill('');

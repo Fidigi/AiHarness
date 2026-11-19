@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import type { ModelCatalog, ResourceEnableChange, SkillCatalog } from '@ai-harness/core';
 import { installMockApi } from './fixtures/mock-api';
-import { closeSettings, selectInstalledSkill, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectCatalogueModel, selectInstalledSkill, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function resources(page: Page, options: { loseSkillResponse?: boolean; delayModelResponse?: (sequence: number) => Promise<void> } = {}) {
   let models: ModelCatalog = { updatedAt: '2025-01-01T12:00:00.000Z', enabledScope: 'global', enabledSource: 'global', providers:
@@ -55,6 +55,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       await model.locator('summary').click();
       await model.getByRole('searchbox').fill('visible');
       const openai = model.locator('fieldset[data-provider="openai"]');
+      await selectCatalogueModel(page, 'OpenAI', 'visible-on');
       await openai.getByRole('button', { name: 'Enable displayed', exact: true }).click();
       await expect.poll(() => api.requests).toEqual([{ resource: 'models', body: {
         changes: [{ key: 'openai:visible-off', enabled: true }], projectId: 'workspace-e2e',
@@ -67,9 +68,12 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       ], projectId: 'workspace-e2e' });
       await expect(openai.locator('label').filter({ hasText: 'visible-on' }).getByRole('checkbox')).not.toBeChecked();
       await model.getByRole('searchbox').fill('');
+      await selectCatalogueModel(page, 'OpenAI', 'hidden');
       await expect(openai.locator('label').filter({ hasText: 'hidden' }).getByRole('checkbox')).toBeChecked();
+      await selectCatalogueModel(page, 'Azure OpenAI', 'visible-on');
       await expect(model.locator('fieldset[data-provider="azure"]').locator('label').filter({ hasText: 'visible-on' }).getByRole('checkbox')).toBeChecked();
       // Individual toggles still save one selector via the same real batch contract.
+      await selectCatalogueModel(page, 'OpenAI', 'visible-on');
       await openai.locator('label').filter({ hasText: 'visible-on' }).getByRole('checkbox').click();
       await expect.poll(() => api.requests[2]?.body.changes).toEqual([{ key: 'openai:visible-on', enabled: true }]);
       await expect(openai.locator('label').filter({ hasText: 'visible-on' }).getByRole('checkbox')).toBeChecked();
@@ -115,6 +119,7 @@ test('does not let a retired Settings save replace a newer same-workspace catalo
   await page.goto('/settings#model');
   const models = page.locator('#model');
   await models.locator('summary').click();
+  await selectCatalogueModel(page, 'OpenAI', 'visible-on');
   const checkbox = models.locator('fieldset[data-provider="openai"] label').filter({ hasText: 'visible-on' }).getByRole('checkbox');
   try {
     await checkbox.click();
