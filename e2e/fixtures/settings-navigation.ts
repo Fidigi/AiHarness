@@ -47,6 +47,15 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Inspect a built-in credential row without changing the active provider. */
+export async function selectProviderCredential(page: Page, name: string): Promise<void> {
+  await selectModelSettings(page, 'providers');
+  const back = page.getByRole('button', { name: /^(Back to provider credentials|Retour aux identifiants fournisseurs)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.locator('#providers').getByRole('navigation', { name: /^(Provider credentials|Identifiants fournisseurs)$/u });
+  await navigation.getByRole('button', { name, exact: true }).click();
+}
+
 /** Metadata selection is separate from the explicit instruction-read action. */
 export async function selectInstalledSkill(page: Page, name: string): Promise<void> {
   await selectSettingsCategory(page, 'skills');

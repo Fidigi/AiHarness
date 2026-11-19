@@ -2,11 +2,120 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectGeneralSettings, selectModelSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectModelSettings, selectProviderCredential, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
 const key = 'ai-harness-settings-navigation-v1';
+for (const scenario of [
+  { width: 1280, locale: 'en', theme: 'light' },
+  { width: 1280, locale: 'fr', theme: 'dark' },
+  { width: 390, locale: 'en', theme: 'light' },
+  { width: 390, locale: 'fr', theme: 'dark' },
+]) test(`Built-in credential selection preserves drafts without changing provider: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: scenario.width, height: 844 });
+  await page.addInitScript(({ locale, theme }) => {
+    localStorage.setItem('ai-harness-locale', locale);
+    localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+  }, scenario);
+  const api = await installMockApi(page, { providers: [
+    { type: 'mock', configured: true }, { type: 'openai', configured: false }, { type: 'anthropic', configured: false },
+  ] });
+  await page.goto('/settings#providers');
+  const section = page.locator('#providers');
+  const navigation = section.getByRole('navigation', { name: /^(Provider credentials|Identifiants fournisseurs)$/u });
+  const active = section.locator(':scope > select');
+  const before = await active.inputValue();
+  const anthropic = navigation.getByRole('button', { name: 'Anthropic', exact: true });
+  await expect(navigation).toBeVisible();
+  await anthropic.focus(); await anthropic.press('Enter');
+  const detail = section.locator('.credential-context-detail');
+  const secret = detail.locator('input:visible');
+  await expect(secret).toHaveCount(1);
+  await expect(secret).toHaveAccessibleName(/Anthropic/u);
+  const current = section.getByRole('button', { name: 'Anthropic', exact: true, includeHidden: true });
+  await expect(current).toHaveAttribute('aria-current', 'true');
+  await expect(current).toHaveAttribute('aria-expanded', 'true');
+  await expect(current).toHaveCSS('border-left-width', '3px');
+  const back = section.getByRole('button', { name: /^(Back to provider credentials|Retour aux identifiants fournisseurs)$/u });
+  if (scenario.width < 960) {
+    await expect(back).toBeFocused(); await back.press('Enter');
+    for (const control of [anthropic, back]) {
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS('outline-style', 'solid');
+      await expectContrast(control, 'outlineColor', 3);
+      expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const clearance = await control.evaluate(element => {
+        const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+        const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        return Math.min(...[element.closest('nav') ?? element.closest('.credential-context-detail')!, element.closest('.settings-view')!]
+          .flatMap(owner => {
+            const clip = owner.getBoundingClientRect();
+            return [bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom];
+          })) - extent;
+      });
+      expect(clearance).toBeGreaterThanOrEqual(-0.1);
+      if (control === anthropic) await anthropic.press('Enter');
+    }
+  } else {
+    await expect(anthropic).toBeFocused();
+    const list = (await navigation.boundingBox())!, content = (await detail.boundingBox())!;
+    expect(list.x + list.width).toBeLessThanOrEqual(content.x);
+  }
+  const draft = 'CREDENTIAL_NAV_SECRET_MUST_NOT_PERSIST';
+  await secret.fill(draft);
+  if (scenario.width < 960) { await back.focus(); await back.press('Enter'); await expect(anthropic).toBeFocused(); }
+  await navigation.getByRole('button', { name: 'OpenAI', exact: true }).click();
+  await secret.fill('OTHER_CREDENTIAL_NAV_SECRET');
+  if (scenario.width < 960) await back.click();
+  await anthropic.click();
+  await expect(secret).toHaveValue(draft);
+  await selectGeneralSettings(page, 'appearance');
+  await selectModelSettings(page, 'providers');
+  await expect(secret).toHaveValue(draft);
+  await expect(active).toHaveValue(before);
+  expect((await new AxeBuilder({ page }).include('#providers').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await expectContrast(secret, 'color', 4.5);
+  expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const capture = testInfo.outputPath(`provider-credentials-${scenario.width}-${scenario.locale}.png`);
+  await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+  await testInfo.attach('provider-credentials', { path: capture, contentType: 'image/png' });
+  await expect(section).toHaveScreenshot(`provider-credentials-${scenario.width}-${scenario.locale}.png`);
+  const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+  expect(stored).not.toContain(draft); expect(stored).not.toContain('OTHER_CREDENTIAL_NAV_SECRET');
+  const memory = JSON.parse(await page.evaluate(key => localStorage.getItem(key)!, key));
+  expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.providers)
+    .toEqual({ group: 'builtin', selection: 'anthropic' });
+  await page.reload();
+  await expect(secret).toHaveAccessibleName(/Anthropic/u);
+  await expect(secret).toHaveValue('');
+  await expect(active).toHaveValue(before);
+  if (scenario.width > 959) {
+    await active.focus();
+    await page.setViewportSize({ width: 390, height: 844 }); await expect(active).toBeFocused();
+    await expect(back).toBeVisible();
+    await page.setViewportSize({ width: scenario.width, height: 844 }); await expect(active).toBeFocused();
+    await expect(back).toBeHidden();
+  }
+  await page.evaluate(key => {
+    const current = JSON.parse(localStorage.getItem(key)!);
+    current.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.providers = { group: 'builtin', selection: 'retired-provider' };
+    localStorage.setItem(key, JSON.stringify(current));
+  }, key);
+  await page.reload();
+  await expect(navigation).toBeVisible();
+  await expect(navigation.locator('[aria-current="true"]')).toHaveCount(0);
+  await expect(secret).toHaveCount(0);
+  await expect(section.getByRole('status').filter({ hasText: /selected provider credentials are unavailable|fournisseur sélectionné/u })).toBeVisible();
+  await expect(active).toHaveValue(before);
+  const unavailableCapture = testInfo.outputPath(`provider-credentials-unavailable-${scenario.width}-${scenario.locale}.png`);
+  await page.screenshot({ path: unavailableCapture, animations: 'disabled', caret: 'hide' });
+  await testInfo.attach('provider-credentials-unavailable', { path: unavailableCapture, contentType: 'image/png' });
+  await anthropic.click(); await expect(secret).toHaveValue('');
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+});
+
 for (const scenario of [
   { width: 1280, locale: 'en', theme: 'light' },
   { width: 1280, locale: 'fr', theme: 'dark' },
@@ -36,6 +145,7 @@ for (const scenario of [
     await expect(page.locator(`#${section}`)).toBeVisible();
     for (const other of sections.filter(candidate => candidate !== section)) await expect(page.locator(`#${other}`)).toBeHidden();
     await expect(navigation.locator(`a[href$="#${section}"]`)).toHaveAttribute('aria-current', 'page');
+    if (section === 'providers') await selectProviderCredential(page, 'OpenAI');
     if (index > 0) await [providerEditor, catalog, modelEditor][index - 1]!.locator(':scope > summary').click();
     await drafts[index]!.fill(values[index]!);
     const capture = testInfo.outputPath(`model-panel-${section}-${scenario.width}-${scenario.locale}.png`);
@@ -207,6 +317,9 @@ test('No-project Settings retains global sections and falls back only unavailabl
     await expect(scope).toHaveValue('global');
     await expect(scope.locator('option[value="project"]')).toHaveJSProperty('disabled', true);
   }
+  await selectProviderCredential(page, 'Anthropic');
+  const credential = page.locator('#providers .credential-context-detail input:visible');
+  await credential.fill('NO_PROJECT_CREDENTIAL_DRAFT');
   await selectGeneralSettings(page, 'authentication');
   await page.locator('#authentication input').fill('NAVIGATION_SECRET_MUST_NOT_PERSIST');
   await selectGeneralSettings(page, 'behavior');
@@ -215,6 +328,8 @@ test('No-project Settings retains global sections and falls back only unavailabl
   await expect(page.locator('#authentication input')).toHaveValue('NAVIGATION_SECRET_MUST_NOT_PERSIST');
   await selectGeneralSettings(page, 'behavior');
   await expect(page.locator('#defaults').getByLabel('Model', { exact: true })).toHaveValue('DRAFT_MODEL_NOT_SAVED');
+  await selectProviderCredential(page, 'Anthropic');
+  await expect(credential).toHaveValue('NO_PROJECT_CREDENTIAL_DRAFT');
   expect(api.requests.filter(request => request.method !== 'GET'
     && ['/api/config', '/api/configuration/scope'].includes(request.path))).toEqual([]);
   await selectSettingsCategory(page, 'mcp');
@@ -222,6 +337,7 @@ test('No-project Settings retains global sections and falls back only unavailabl
   const saved = await page.evaluate(key => localStorage.getItem(key), key);
   expect(saved).not.toContain('NAVIGATION_SECRET');
   expect(saved).not.toContain('DRAFT_MODEL_NOT_SAVED');
+  expect(saved).not.toContain('NO_PROJECT_CREDENTIAL_DRAFT');
   expect(JSON.parse(saved!).entries[0].section).toBe('mcp');
 });
 
@@ -319,7 +435,7 @@ for (const scenario of [
   expect((await new AxeBuilder({ page }).include('#model').analyze()).violations).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const draft = page.locator('#providers input[type="password"]').first();
-  await selectModelSettings(page, 'providers');
+  await selectProviderCredential(page, 'OpenAI');
   await draft.fill('SYNTHETIC_CATEGORY_DRAFT');
   await selectModelSettings(page, 'model');
   if (scenario.width > 959) {

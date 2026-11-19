@@ -38,6 +38,7 @@ import {
 import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
 import { SkillContentPane } from './SkillContentPane';
 import { skillSettingsMessage } from './skill-settings-messages';
+import { providerCredentialsMessage } from './provider-credentials-messages';
 import { Icon } from './Icon';
 
 const PluginSettings = lazy(async () => ({
@@ -93,6 +94,48 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const skillDetailPrefix = useId();
   const [pushStatus, setPushStatus] = useState('');
   const [preferences, setPreferences] = usePreferences();
+  const [credentialSelection, setCredentialSelection] = useState(() => {
+    const position = readSettingsNavigation(workspaceCwd).positions.providers;
+    return position?.group === 'builtin' ? position.selection : undefined;
+  });
+  const [credentialOverview, setCredentialOverview] = useState(!credentialSelection);
+  const [credentialMobile, setCredentialMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const credentialNavigation = useRef<HTMLElement>(null);
+  const credentialDetail = useRef<HTMLDivElement>(null);
+  const credentialBack = useRef<HTMLButtonElement>(null);
+  const credentialFocus = useRef<'navigation' | 'detail' | null>(null);
+  const credentialPrefix = useId();
+  const credentialProviders = Object.keys(providers.available).filter(type => [
+    'openai', 'anthropic', 'google', 'azure', 'bedrock', 'vertex', 'local', 'mock',
+  ].includes(type));
+  const selectedCredential = credentialSelection
+    ? credentialProviders.find(type => type === credentialSelection) : credentialProviders[0];
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && credentialDetail.current?.contains(document.activeElement)) setCredentialOverview(false);
+      setCredentialMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'models' || modelPanel !== 'providers' || !credentialFocus.current) return;
+    const target = credentialFocus.current; credentialFocus.current = null;
+    if (target === 'navigation') {
+      const current = credentialNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? credentialNavigation.current)?.focus();
+    } else if (credentialMobile && !credentialOverview) credentialBack.current?.focus();
+  }, [category, modelPanel, credentialMobile, credentialOverview, selectedCredential]);
+  const selectCredential = (selection: string) => {
+    setCredentialSelection(selection); setCredentialOverview(false);
+    credentialFocus.current = credentialMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, {
+      ...current, section: 'providers', positions: { ...current.positions, providers: { group: 'builtin', selection } },
+    });
+  };
 
   const activeCatalog = providers.catalog?.providers.find(group => group.provider === providers.active);
   const configuredModel = providers.available[providers.active]?.model || '';
@@ -281,16 +324,30 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
         </select>
 
         {/* API Key Configuration */}
-        <div className="api-key-section">
-          {Object.keys(providers.available).filter(type => [
-            'openai', 'anthropic', 'google', 'azure', 'bedrock', 'vertex', 'local', 'mock',
-          ].includes(type)).map(type => {
+        {credentialSelection && !selectedCredential && <p role="status">{providerCredentialsMessage(locale, 'unavailable')}</p>}
+        <div className="credential-context">
+          <nav ref={credentialNavigation} aria-label={providerCredentialsMessage(locale, 'navigation')} tabIndex={-1}
+            hidden={credentialMobile && !credentialOverview && !!selectedCredential}>
+            {credentialProviders.map(type => <button key={type} type="button" aria-label={getTypeLabel(type as ProviderType, t)}
+              aria-current={selectedCredential === type ? 'true' : undefined}
+              aria-expanded={selectedCredential === type && (!credentialMobile || !credentialOverview)}
+              aria-controls={`${credentialPrefix}-${type}`} aria-describedby={`${credentialPrefix}-${type}-summary`}
+              onClick={() => selectCredential(type)}>
+              <strong>{getTypeLabel(type as ProviderType, t)}</strong><small id={`${credentialPrefix}-${type}-summary`}>{type}</small>
+            </button>)}
+          </nav>
+          <div ref={credentialDetail} className="credential-context-detail" hidden={credentialMobile && (credentialOverview || !selectedCredential)}>
+            <button ref={credentialBack} type="button" className="credential-context-back" hidden={!credentialMobile}
+              onClick={() => { credentialFocus.current = 'navigation'; setCredentialOverview(true); }}>{providerCredentialsMessage(locale, 'back')}</button>
+        <div className="api-key-section" data-settings-group="builtin">
+          {credentialProviders.map(type => {
             const providerType = type as ProviderType;
             const providerLabel = getTypeLabel(providerType, t);
             const status = saveStatus[type];
             const environmentVariable = type === 'vertex' && vertexCredentialMode === 'api-key' ? 'GOOGLE_CLOUD_API_KEY' : getTypeEnvVar(providerType);
             return (
-              <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
+              <div key={type} id={`${credentialPrefix}-${type}`} className={`api-key-row ${providers.active === type ? 'active' : ''}`}
+                data-settings-selection={type} hidden={selectedCredential !== type}>
                 <label>{providerLabel}</label>
                 {type === 'vertex' && <select aria-label={t('settings.vertexCredentialMode')} value={vertexCredentialMode}
                   onChange={event => setVertexCredentialMode(event.target.value === 'api-key' ? 'api-key' : 'bearer')}>
@@ -316,6 +373,9 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
               </div>
             );
           })}
+        </div>
+
+          </div>
         </div>
 
         {/* Active provider status */}

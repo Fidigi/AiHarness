@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectGeneralSettings, selectInstalledSkill, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -29,7 +29,8 @@ test('built Settings assets restore project-specific group, row and scope intent
   await scope.selectOption('global');
   await selectSettingsTool(page, 'write');
   await selectInstalledSkill(page, 'release-notes');
-  await selectSettingsCategory(page, 'models');
+  await selectProviderCredential(page, 'Anthropic');
+  await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await switchSettingsWorkspace(page, '/workspace/other');
   await selectSettingsCategory(page, 'tools');
@@ -41,6 +42,10 @@ test('built Settings assets restore project-specific group, row and scope intent
   const skillNavigation = page.locator('#skills').getByRole('navigation');
   await expect(skillNavigation.getByRole('button', { name: 'review-project', exact: true })).toHaveAttribute('aria-current', 'true');
   await selectInstalledSkill(page, 'test-plan');
+  await selectModelSettings(page, 'providers');
+  const credentialNavigation = page.locator('#providers').getByRole('navigation');
+  await expect(credentialNavigation.getByRole('button', { name: 'OpenAI', exact: true })).toHaveAttribute('aria-current', 'true');
+  await selectProviderCredential(page, 'Google AI');
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
@@ -52,7 +57,10 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectSettingsCategory(page, 'skills');
   await expect(skillNavigation.getByRole('button', { name: 'release-notes', exact: true })).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.skill-context-detail').getByRole('checkbox')).toHaveAccessibleName(/release-notes/u);
-  await selectSettingsCategory(page, 'models');
+  await selectModelSettings(page, 'providers');
+  await expect(credentialNavigation.getByRole('button', { name: 'Anthropic', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.credential-context-detail input:visible')).toHaveAccessibleName(/Anthropic/u);
+  await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();
   await page.reload();

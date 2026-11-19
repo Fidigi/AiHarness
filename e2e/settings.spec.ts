@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { SkillCatalog } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -1194,6 +1194,7 @@ test.describe('Settings and authentication', () => {
   test('enregistre une clé fournisseur côté serveur puis masque sa valeur', async ({ page }) => {
     const api = await installMockApi(page);
     await page.goto('/settings#providers');
+    await selectProviderCredential(page, 'OpenAI');
     const openAiRow = page.locator('.api-key-row').filter({ has: page.getByText('OpenAI', { exact: true }) });
     const keyInput = openAiRow.locator('input');
     await keyInput.fill('sk-e2e-secret');
@@ -1207,6 +1208,7 @@ test.describe('Settings and authentication', () => {
   test('signale un échec de configuration fournisseur', async ({ page }) => {
     await installMockApi(page, { configureProviderError: true });
     await page.goto('/settings#providers');
+    await selectProviderCredential(page, 'Anthropic');
     const anthropicRow = page.locator('.api-key-row').filter({ has: page.getByText('Anthropic', { exact: true }) });
     await anthropicRow.locator('input').fill('invalid-key');
     await anthropicRow.getByRole('button', { name: 'Save' }).click();

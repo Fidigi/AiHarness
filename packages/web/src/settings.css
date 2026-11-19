@@ -106,6 +106,25 @@
   .skill-context { grid-template-columns: minmax(0, 1fr); }
   .skill-context > nav { max-height: none; }
 }
+.credential-context { display: grid; grid-template-columns: minmax(190px, 28%) minmax(0, 1fr); gap: 1rem; align-items: start; margin-top: 1rem; }
+.credential-context > nav { display: grid; min-width: 0; max-height: 60vh; overflow: auto; }
+.credential-context > nav button { display: grid; gap: .25rem; width: 100%; min-width: 0; min-height: 44px; padding: .65rem; border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--border-subtle); border-radius: 0; color: var(--text-primary); background: transparent; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.credential-context > nav small { color: var(--text-secondary); }
+.credential-context > nav button:hover { background: var(--surface-hover); }
+.credential-context > nav button[aria-current="true"] { border-left-color: var(--text-link); background: var(--surface-selected); }
+.credential-context :is(button, input, select):focus-visible, .credential-context > nav:focus-visible { outline-offset: -3px; }
+.credential-context-detail { min-width: 0; }
+.credential-context .api-key-row { display: grid; gap: .65rem; min-width: 0; }
+.credential-context .api-key-input-group { display: flex; flex-wrap: wrap; gap: .5rem; }
+.credential-context input { flex: 1; }
+.credential-context input, .credential-context select { min-width: 0; min-height: 44px; padding: .5rem; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); }
+.credential-context button { min-height: 44px; }
+.credential-context-back { display: block; width: 100%; margin-bottom: .75rem; text-align: left; }
+.credential-context [hidden] { display: none; }
+@media (max-width: 959px) {
+  .credential-context { grid-template-columns: minmax(0, 1fr); }
+  .credential-context > nav { max-height: none; }
+}
 .provider-lifecycle-list, .settings-resource-list { display: grid; gap: .55rem; margin: .75rem 0; }
 .oauth-device-flow { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1rem; margin: .75rem 0; padding: .7rem; border: 1px solid var(--border-control); border-radius: 6px; background: var(--surface-raised); }
 .oauth-device-flow p { margin: 0; }
