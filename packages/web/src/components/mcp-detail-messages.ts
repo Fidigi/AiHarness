@@ -2,13 +2,13 @@ import type { Locale } from '../i18n/types.js';
 
 const messages = {
   en: {
-    action: 'Details',
+    back: 'Back to MCP servers',
     show: 'Show details for',
     region: 'Server details:',
     unavailable: 'The selected server is no longer available. Select another server.',
   },
   fr: {
-    action: 'Détails',
+    back: 'Retour aux serveurs MCP',
     show: 'Afficher les détails de',
     region: 'Détails du serveur :',
     unavailable: 'Le serveur sélectionné n’est plus disponible. Sélectionnez un autre serveur.',

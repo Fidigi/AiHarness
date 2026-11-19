@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -474,13 +475,20 @@ test.describe('Régression visuelle de l’inventaire MCP', () => {
       await section.getByLabel('MCP server text').fill('https://docs.example.test/mcp');
       await section.getByRole('button', { name: 'Preview', exact: true }).click();
       await expect(section.getByRole('article', { name: 'docs-import' })).toBeVisible();
+      await selectMcpServer(page, 'global', 'remote-docs');
       const testedServer = section.getByRole('article', { name: 'remote-docs: Configured', exact: true });
       await expect(testedServer).toBeVisible();
       await testedServer.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
       await expect(testedServer.getByRole('region', { name: 'Last connection test for remote-docs' })).toContainText('Connected');
+      await selectMcpServer(page, 'global', 'local-tools');
       await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+      await selectMcpServer(page, 'global', 'shared');
       await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+      await selectMcpServer(page, 'global', 'bad\\u202ename');
       await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
+      await selectMcpServer(page, 'global', 'remote-docs');
+      await expect(testedServer.getByRole('region', { name: 'Last connection test for remote-docs' })).toContainText('Connected');
+      if (scenario.width < 960) await section.getByRole('button', { name: 'Back to MCP servers', exact: true }).click();
       await section.getByText('Configuration file diagnostics').click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });

@@ -63,6 +63,8 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
   const doc = root.ownerDocument;
   const dialogs = 'dialog,[aria-modal="true"],[role="dialog"],[role="alertdialog"]';
   const ownerDialog = root.closest(dialogs);
+  const isEntryFocus = (element: Element | null) => Boolean(ownerDialog && element
+    && (element === ownerDialog || element.matches('[data-settings-entry-focus]') && ownerDialog.contains(element)));
   const hasOtherDialog = () => Array.from(doc.querySelectorAll(dialogs)).some(dialog => dialog !== ownerDialog);
   const otherDialog = (element: Element) => {
     const dialog = element.closest(dialogs);
@@ -91,7 +93,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
     openAncestors(target, root);
     target.scrollIntoView({ block: 'start' });
     if (hash === 'mcp' && !hasOtherDialog()
-      && (doc.activeElement === doc.body || doc.activeElement === root)) focusRegion(target);
+      && (doc.activeElement === doc.body || doc.activeElement === root || isEntryFocus(doc.activeElement))) focusRegion(target);
     // A lazy catalogue may not yet contain the saved identity. Refine only while
     // there has been no user intent. Never substitute another resource.
     if ((!position?.selection || target.getAttribute('data-settings-selection') === position.selection)
@@ -102,8 +104,7 @@ export function bindSettingsNavigation(root: HTMLElement, initial: SettingsNavig
     if (restoringFallback || !(event.target instanceof HTMLElement)) return;
     // The modal's initial non-editable focus is not newer navigation intent.
     // Pointer/key intent still retires entry before a user focuses this control.
-    if (entryPending && (event.target === ownerDialog
-      || event.target.matches('[data-settings-entry-focus]') && ownerDialog?.contains(event.target))) return;
+    if (entryPending && isEntryFocus(event.target)) return;
     entryPending = false; pending = undefined;
     // Preserve only the invoking section, never modal inputs. The dialog keeps
     // normal return ownership; navigation takes over only if its invoker retires.

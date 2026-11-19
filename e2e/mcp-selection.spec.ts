@@ -2,7 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { mcpStateInventory } from './fixtures/mcp.js';
-import { switchMcpWorkspace } from './fixtures/mcp-navigation.js';
+import { selectMcpServer, switchMcpWorkspace } from './fixtures/mcp-navigation.js';
+import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 
 const key = 'ai-harness-mcp-selection-v1';
 const scopeLabels = { global: 'Global configuration', project: 'Project configuration' };
@@ -150,10 +151,13 @@ test('MCP Test selects its report and excludes add and selection intent while th
     await section.locator('#mcp-import-text').fill('https://new.example.test');
     const preview = section.getByRole('button', { name: 'Preview', exact: true });
     await expect(preview).toBeEnabled();
+    await selectMcpServer(page, 'global', 'local-tools');
     await section.getByRole('button', { name: 'Test local-tools', exact: true }).click();
     await expect(detail(page, 'global', 'local-tools')).toBeVisible();
     await expect(preview).toBeDisabled();
     await expect(button(page, 'project', 'shared')).toBeDisabled();
+    await expect(button(page, 'project', 'shared')).toHaveCSS('opacity', '0.5');
+    await expect(button(page, 'project', 'shared')).toHaveCSS('cursor', 'not-allowed');
     await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
     release();
     await expect(section.getByRole('region', { name: 'Last connection test for local-tools', exact: true })).toBeVisible();
@@ -171,18 +175,58 @@ for (const scenario of [
       localStorage.setItem('ai-harness-locale', locale);
       localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme, lastSettingsSection: 'mcp' }));
     }, scenario);
-    await installMockApi(page, { mcpConfig: mcpStateInventory() });
+    const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');
-    const selectedButton = page.getByRole('button', { name: scenario.button, exact: true });
+    // Hidden metadata remains inspectable after mobile navigation; interactions
+    // below still require the list to be visible and never force a click.
+    const navigation = page.getByRole('navigation', { name: scenario.locale === 'fr' ? 'Serveurs MCP' : 'MCP servers', exact: true, includeHidden: true });
+    await expect(navigation).toBeVisible();
+    const selectedButton = navigation.getByRole('button', { name: scenario.button, exact: true, includeHidden: true });
+    await expect(selectedButton).toHaveAccessibleDescription(/Configured|Configuré/u);
     await selectedButton.focus();
+    await expect(selectedButton).toHaveCSS('outline-style', 'solid');
+    await expectContrast(selectedButton, 'outlineColor', 3);
     await selectedButton.press('Enter');
-    await expect(selectedButton).toBeFocused();
+    if (scenario.width >= 960) {
+      await expect(selectedButton).toBeFocused();
+      await expectThemeRoles(selectedButton, '--surface-selected');
+      await expectContrast(selectedButton, 'borderLeftColor', 3);
+    }
+    else {
+      const back = page.getByRole('button', { name: 'Retour aux serveurs MCP', exact: true });
+      await expect(back).toBeFocused();
+      await expect(navigation).toBeHidden();
+      await back.press('Enter');
+      await expect(navigation).toBeVisible();
+      await expect(selectedButton).toBeFocused();
+      await expect(selectedButton).toHaveAttribute('aria-expanded', 'false');
+      await expect(selectedButton).toHaveAttribute('aria-current', 'true');
+      await expectThemeRoles(selectedButton, '--surface-selected');
+      await expectContrast(selectedButton, 'borderLeftColor', 3);
+      await expect(page.getByRole('region', { name: scenario.region, exact: true })).toBeHidden();
+      await selectedButton.press('Enter');
+      await expect(back).toBeFocused();
+    }
     await expect(selectedButton).toHaveAttribute('aria-expanded', 'true');
     const selectedDetail = page.getByRole('region', { name: scenario.region, exact: true });
     await expect(selectedDetail).toBeVisible();
     await expect(selectedDetail).toHaveCSS('display', 'grid');
     await expect(selectedDetail).toHaveAttribute('id', (await selectedButton.getAttribute('aria-controls'))!);
+    if (scenario.width >= 960) {
+      const listBounds = await navigation.boundingBox(), detailBounds = await selectedDetail.boundingBox();
+      expect(listBounds).not.toBeNull(); expect(detailBounds).not.toBeNull();
+      expect(detailBounds!.x).toBeGreaterThanOrEqual(listBounds!.x + listBounds!.width);
+      expect(Math.min(listBounds!.y + listBounds!.height, detailBounds!.y + detailBounds!.height)
+        - Math.max(listBounds!.y, detailBounds!.y)).toBeGreaterThan(0);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
     expect((await new AxeBuilder({ page }).include('#mcp').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    expect(api.requests.filter(request => request.method === 'POST' && (
+      request.path.startsWith('/api/mcp/') && request.path !== '/api/mcp/oauth/status'
+      || request.path === '/api/agent/runs'))).toEqual([]);
+    await test.info().attach(`mcp-context-${scenario.width}-${scenario.locale}`, {
+      body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`mcp-context-${scenario.width}-${scenario.locale}.png`),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
   });
 }

@@ -3,6 +3,7 @@ import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { closeSettings, selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
   MCP_FILE_PROBLEM_MESSAGES,
   MCP_FILE_PROBLEM_REASONS,
@@ -269,11 +270,15 @@ test.describe('Settings and authentication', () => {
     const section = page.locator('#mcp');
 
     await expect(section.getByRole('article', { name: 'remote-docs: Configured', exact: true })).toBeVisible();
+    await selectMcpServer(page, 'global', 'local-tools');
     await expect(section.getByRole('article', { name: 'local-tools: Disabled', exact: true })).toBeVisible();
+    await selectMcpServer(page, 'global', 'shared');
     await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await selectMcpServer(page, 'global', 'bad\\u202ename');
     await expect(section.getByRole('article', { name: 'bad\\u202ename: Invalid', exact: true })).toBeVisible();
-    const projectReplacement = section.locator('fieldset[data-scope="project"]')
-      .getByRole('article', { name: 'shared: Configured', exact: true });
+    await selectMcpServer(page, 'project', 'shared');
+    const projectReplacement = section.getByRole('article', { name: 'shared: Configured', exact: true });
+    await expect(projectReplacement).toContainText('Project configuration');
     await expect(projectReplacement).toContainText('replaces the global entry');
     await expect(section.getByText('Connected', { exact: true })).toHaveCount(0);
     await expect(section).toContainText('Command-backed fields: headers.X-Command');
@@ -384,11 +389,21 @@ test.describe('Settings and authentication', () => {
     });
 
     await page.goto('/settings#mcp');
+    await selectMcpServer(page, 'global', 'remote-docs');
     const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
     await expect(card).toContainText('Not signed in');
     await card.getByRole('button', { name: 'Sign in', exact: true }).click();
     const authorization = card.getByRole('link', { name: 'Open the authorization page', exact: true });
     await expect(authorization).toHaveAttribute('href', 'https://login.example.test/authorize?state=browser-state');
+    const callback = 'http://127.0.0.1:32123/oauth/callback?code=public-code&state=browser-state';
+    const callbackField = card.getByLabel('Full redirected address');
+    await callbackField.fill(callback);
+    await selectMcpServer(page, 'global', 'local-tools');
+    await selectMcpServer(page, 'global', 'remote-docs');
+    await expect(callbackField).toHaveValue(callback);
+    expect(oauthRequests.filter(request => request.path.endsWith('/redirect'))).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('public-code');
+    await callbackField.fill('');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
     const accessibility = await new AxeBuilder({ page }).include('.mcp-oauth-panel')
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
@@ -396,9 +411,7 @@ test.describe('Settings and authentication', () => {
     await expect(card).toHaveScreenshot(`mcp-oauth-authorize-${scenario.name}.png`, {
       animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
     });
-    await card.getByLabel('Full redirected address').fill(
-      'http://127.0.0.1:32123/oauth/callback?code=public-code&state=browser-state',
-    );
+    await callbackField.fill(callback);
     await card.getByRole('button', { name: 'Use redirected address', exact: true }).click();
     await expect(card).toContainText('OAuth sign-in completed.');
     await expect(card).toContainText('Signed in');
@@ -727,16 +740,18 @@ test.describe('Settings and authentication', () => {
     const global = section.locator('fieldset[data-scope="global"]');
 
     await global.getByRole('button', { name: 'Disable all', exact: true }).click();
-    await expect(global.getByRole('article', { name: 'remote-docs: Disabled', exact: true })).toBeVisible();
-    await expect(global.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
+    await expect(section.getByRole('article', { name: 'remote-docs: Disabled', exact: true })).toBeVisible();
+    await selectMcpServer(page, 'global', 'shared');
+    await expect(section.getByRole('article', { name: 'shared: Replaced by project', exact: true })).toBeVisible();
     await expect(section).toContainText('MCP configuration updated.');
     const groupRequest = api.requests.find(request => request.path === '/api/mcp/actions');
     expect(groupRequest?.body).toMatchObject({
       action: 'set-enabled', scope: 'global', names: ['remote-docs', 'shared'], enabled: false,
     });
 
-    await global.getByRole('button', { name: 'Enable local-tools', exact: true }).click();
-    await expect(global.getByRole('article', { name: 'local-tools: Configured', exact: true })).toBeVisible();
+    await selectMcpServer(page, 'global', 'local-tools');
+    await section.getByRole('button', { name: 'Enable local-tools', exact: true }).click();
+    await expect(section.getByRole('article', { name: 'local-tools: Configured', exact: true })).toBeVisible();
     const mutationRequests = api.requests.filter(request => request.path === '/api/mcp/actions');
     expect(mutationRequests).toHaveLength(2);
     expect(mutationRequests[1]?.body).toMatchObject({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type {
   McpConfigFileInventory,
   McpConfigInventory,
@@ -249,7 +249,7 @@ function McpOAuthPanel({
 function ServerCard({
   server,
   selected,
-  onSelect,
+  detailId,
   disabled,
   testing,
   oauthStatus,
@@ -268,7 +268,7 @@ function ServerCard({
 }: {
   server: McpServerInventoryEntry;
   selected: boolean;
-  onSelect: () => void;
+  detailId: string;
   disabled: boolean;
   testing: boolean;
   oauthStatus?: McpOAuthStatusEntry;
@@ -288,21 +288,15 @@ function ServerCard({
   const { locale, t } = useI18n();
   const state = serverState(server);
   const fileDisabled = disabled || Boolean(server.registration);
-  const detailId = useId();
   const identity = `${t(SCOPE_KEYS[server.scope])} / ${server.name}`;
   const target = server.transport === 'stdio'
     ? [server.command, ...(server.args ?? [])].filter(Boolean).join(' ')
     : server.url;
-  return <article className="settings-resource-card mcp-server-card"
+  return <article className="settings-resource-card mcp-server-card" hidden={!selected}
     aria-label={`${server.name}: ${t(`settings.mcp.state.${state}`)}`}>
     <div>
       <strong>{server.name}</strong>
       <code>{t(SCOPE_KEYS[server.scope])} · {server.transport ? t(`settings.mcp.transport.${server.transport}`) : t('settings.mcp.transport.unknown')}</code>
-      <button type="button" className="mcp-detail-toggle" disabled={disabled}
-        aria-label={`${mcpDetailMessage(locale, 'show')} ${identity}`}
-        aria-expanded={selected} aria-controls={detailId} onClick={onSelect}>
-        {mcpDetailMessage(locale, 'action')}
-      </button>
     </div>
     <div className="mcp-server-controls">
       <span className={state === 'configured' ? 'status-success' : 'status-warning'}>
@@ -413,12 +407,36 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
   const workspace = useSessionStore(state => state.workspace);
   const refreshWorkspace = useSessionStore(state => state.refreshWorkspace);
   const [selection, setSelection] = useState<(McpSelection & { configKey?: string }) | undefined>(() => readMcpSelection(workspace?.cwd));
+  const [overview, setOverview] = useState(!selection);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const navigationFocus = useRef(false);
+  const detailPrefix = useId();
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!navigationFocus.current) return;
+    navigationFocus.current = false;
+    if (!presented) return;
+    if (overview) navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+    else if (mobile) backRef.current?.focus();
+  }, [mobile, overview, presented, selection]);
   const selectServer = (server: McpSelection & { configKey?: string }): void => {
     const next = { scope: server.scope, name: server.name };
     const configKey = server.configKey;
     setSelection(previous => ({ ...next, configKey: configKey ?? (
       previous?.scope === next.scope && previous.name === next.name ? previous.configKey : undefined
     ) }));
+    setOverview(false);
     setPendingControlFocus(undefined);
     setTestError(undefined);
     writeMcpSelection(workspace?.cwd, next);
@@ -866,7 +884,6 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
   const projectFile = inventory?.files.find(file => file.scope === 'project');
   const groups = (['global', 'project'] as const).map(scope => ({
     scope,
-    file: inventory ? fileForScope(inventory, scope) : undefined,
     servers: inventory?.servers.filter(server => server.scope === scope) ?? [],
   })).filter(group => group.scope === 'global' || Boolean(inventory?.project));
 
@@ -928,11 +945,12 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
     {inventory && selection && !selected && <p role="status" className="settings-help">
       {mcpDetailMessage(locale, 'unavailable')}
     </p>}
+    <div className="mcp-context">
+    <nav ref={navigationRef} aria-label={t('settings.mcp.title')} hidden={mobile && !overview && Boolean(selected)}>
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid && !server.registration);
       const enableNames = actionable.filter(server => !server.enabled).map(server => server.name);
       const disableNames = actionable.filter(server => server.enabled).map(server => server.name);
-      const revision = group.file?.revision ?? null;
       return <fieldset className="mcp-scope" data-scope={group.scope} key={group.scope}>
         <legend>{t(SCOPE_KEYS[group.scope])}</legend>
         {actionable.length > 0 && <div className="mcp-group-actions" aria-label={t('settings.mcp.groupActions')}>
@@ -949,11 +967,30 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
           ? <p className="settings-help">{group.scope === 'project' && projectFile?.exists && !inventory.project?.contentTrusted
             ? t('settings.mcp.projectLocked')
             : t('settings.mcp.empty')}</p>
-          : <div className="settings-resource-list">{group.servers.map((server, index) => (
+          : <div className="mcp-server-list">{group.servers.map((server, index) => (
+            <button type="button" className="mcp-detail-toggle" key={`${server.scope}:${server.name}:${index}`}
+              disabled={controlsDisabled || Boolean(pendingRemoval)}
+              aria-label={`${mcpDetailMessage(locale, 'show')} ${t(SCOPE_KEYS[server.scope])} / ${server.name}`}
+              aria-current={server === selected ? 'true' : undefined}
+              aria-describedby={`${detailPrefix}-${group.scope}-${index}-state`}
+              aria-expanded={server === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${group.scope}-${index}`}
+              onClick={() => { navigationFocus.current = true; selectServer(server); }}>
+              <strong>{server.name}</strong>
+              <small id={`${detailPrefix}-${group.scope}-${index}-state`}>{server.transport ? t(`settings.mcp.transport.${server.transport}`) : t('settings.mcp.transport.unknown')}
+                {' · '}{t(`settings.mcp.state.${serverState(server)}`)}</small>
+            </button>
+          ))}</div>}
+      </fieldset>;
+    })}
+    </nav>
+    <div ref={detailRef} className="mcp-context-detail" hidden={mobile && (overview || !selected)}>
+      <button ref={backRef} type="button" className="mcp-context-back" hidden={!mobile}
+        onClick={() => { navigationFocus.current = true; setOverview(true); }}>{mcpDetailMessage(locale, 'back')}</button>
+      {inventory && groups.flatMap(group => group.servers.map((server, index) => (
             <ServerCard
               server={server}
               selected={server === selected}
-              onSelect={() => selectServer(server)}
+              detailId={`${detailPrefix}-${group.scope}-${index}`}
               disabled={controlsDisabled || Boolean(pendingRemoval)}
               testing={testing === `${server.scope}:${server.name}`}
               oauthStatus={oauthStatuses[oauthKey(server)]}
@@ -986,12 +1023,12 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
               onRemove={trigger => {
                 selectServer(server);
                 removalReturnFocus.current = trigger;
-                setPendingRemoval({ scope: server.scope, name: server.name, revision });
+                setPendingRemoval({ scope: server.scope, name: server.name, revision: fileForScope(inventory, server.scope)?.revision ?? null });
               }}
             />
-          ))}</div>}
-      </fieldset>;
-    })}
+          )))}
+    </div>
+    </div>
     {inventory?.files.some(file => file.problems.length > 0) && <details className="mcp-file-diagnostics">
       <summary>{t('settings.mcp.fileDiagnostics')}</summary>
       {inventory.files.filter(file => file.problems.length > 0).map(file => <div key={file.scope}>

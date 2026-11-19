@@ -2,13 +2,14 @@ import AxeBuilder from '@axe-core/playwright';
 import { access, lstat, readFile } from 'node:fs/promises';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { nativeMcpInheritance } from './fixtures/mcp-inheritance';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 
 const locales = {
-  en: { scope: 'Project configuration', show: 'Show details for', exposure: 'Tool exposure for', perTool: 'Per-tool exposure overrides',
+  en: { scope: 'Project configuration', region: 'Server details:', exposure: 'Tool exposure for', perTool: 'Per-tool exposure overrides',
     test: 'Test shared', replaces: 'replaces the global entry',
     fields: 'A targetless project override may only set enabled, exposure, and toolExposure.',
     orphan: 'A targetless project override requires a valid readable global server with the same name.' },
-  fr: { scope: 'Configuration du projet', show: 'Afficher les détails de', exposure: 'Exposition des outils pour', perTool: 'Surcharges d’exposition par outil',
+  fr: { scope: 'Configuration du projet', region: 'Détails du serveur :', exposure: 'Exposition des outils pour', perTool: 'Surcharges d’exposition par outil',
     test: 'Tester shared', replaces: 'remplace l’entrée globale',
     fields: 'Une surcharge de projet sans cible ne peut définir que enabled, exposure et toolExposure.',
     orphan: 'Une surcharge de projet sans cible nécessite un serveur global valide et lisible de même nom.' },
@@ -19,14 +20,11 @@ async function appearance(page: Page, locale: 'en' | 'fr') {
     localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme: locale === 'en' ? 'light' : 'dark', filesOpen: false, lastSettingsSection: 'mcp' }));
   }, locale);
 }
-function projectCard(page: Page, locale: 'en' | 'fr') {
-  const messages = locales[locale];
-  return page.locator('#mcp .mcp-server-card').filter({ has: page.getByRole('button', { name: `${messages.show} ${messages.scope} / shared`, exact: true }) });
-}
 async function showDetails(page: Page, locale: 'en' | 'fr') {
-  const card = projectCard(page, locale); await expect(card).toHaveCount(1);
-  const button = card.locator('.mcp-detail-toggle');
-  if (await button.getAttribute('aria-expanded') !== 'true') await button.click();
+  await selectMcpServer(page, 'project', 'shared');
+  const messages = locales[locale];
+  const card = page.locator('#mcp').getByRole('region', { name: `${messages.region} ${messages.scope} / shared`, exact: true }).locator('..');
+  await expect(card).toHaveCount(1);
   await expect(card.locator('.mcp-server-detail')).toBeVisible();
   return card;
 }

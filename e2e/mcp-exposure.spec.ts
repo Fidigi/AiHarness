@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpStateInventory } from './fixtures/mcp';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 
 for (const scenario of [
   { name: 'desktop-dark', width: 1440, theme: 'dark' },
@@ -14,6 +15,7 @@ for (const scenario of [
     await page.addInitScript(theme => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme, lastSettingsSection: 'mcp' })), scenario.theme);
     const api = await installMockApi(page, { mcpConfig: mcpStateInventory() });
     await page.goto('/settings#mcp');
+    await selectMcpServer(page, 'global', 'remote-docs');
     const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
     await card.getByRole('button', { name: 'Test remote-docs', exact: true }).click();
     await card.getByText('Per-tool exposure overrides', { exact: true }).click();
@@ -52,7 +54,7 @@ test('MCP pattern inheritance displays canonical Test exposure and writes only a
   const api = await installMockApi(page, { mcpConfig: inventory });
   await page.goto('/settings#mcp');
   const card = page.locator('#mcp').getByRole('article', { name: 'remote-docs: Configured', exact: true });
-  await card.getByRole('button', { name: 'Show details for Global configuration / remote-docs', exact: true }).click();
+  await selectMcpServer(page, 'global', 'remote-docs');
   await card.getByText('Per-tool exposure overrides', { exact: true }).click();
   const selected = card.getByRole('combobox', { name: 'Tool exposure for remote-docs / search_docs', exact: true });
   await expect(selected).toHaveValue('deferred');

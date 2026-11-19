@@ -1,6 +1,22 @@
 import { expect, type Page } from './test-budget.js';
 import { closeSettings, selectSettingsCategory } from './settings-navigation';
 
+/** Select a fresh inventory row through the contextual list, including mobile Back. */
+export async function selectMcpServer(page: Page, scope: 'global' | 'project', name: string): Promise<void> {
+  await selectSettingsCategory(page, 'mcp');
+  const french = await page.locator('html').getAttribute('lang') === 'fr';
+  const scopes = french ? { global: 'Configuration globale', project: 'Configuration du projet' }
+    : { global: 'Global configuration', project: 'Project configuration' };
+  const choice = page.locator('#mcp').getByRole('button', {
+    name: `${french ? 'Afficher les détails de' : 'Show details for'} ${scopes[scope]} / ${name}`,
+    exact: true, includeHidden: true,
+  });
+  await expect(choice).toBeAttached();
+  const back = page.getByRole('button', { name: /^(Back to MCP servers|Retour aux serveurs MCP)$/u });
+  if (await back.isVisible()) await back.click();
+  await choice.click();
+}
+
 /** Use the actual workspace owner; cwd query parameters are bootstrap hints only. */
 export async function switchSettingsWorkspace(page: Page, cwd: string): Promise<void> {
   if (await page.locator('.settings-dialog').isVisible()) await closeSettings(page);
