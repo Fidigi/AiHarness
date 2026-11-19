@@ -159,6 +159,13 @@ test('MCP Test selects its report and excludes add and selection intent while th
     await expect(button(page, 'project', 'shared')).toHaveCSS('opacity', '0.5');
     await expect(button(page, 'project', 'shared')).toHaveCSS('cursor', 'not-allowed');
     await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0);
+    const viewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    const back = section.getByRole('button', { name: 'Back to MCP servers', exact: true });
+    await back.focus();
+    await back.press('Enter');
+    await expect(section.getByRole('navigation')).toBeFocused();
+    await page.setViewportSize(viewport);
     release();
     await expect(section.getByRole('region', { name: 'Last connection test for local-tools', exact: true })).toBeVisible();
     await expect(preview).toBeEnabled();

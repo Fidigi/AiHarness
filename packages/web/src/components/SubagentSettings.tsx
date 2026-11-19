@@ -92,8 +92,10 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
     if (!navigationFocus.current) return;
     navigationFocus.current = false;
     if (!presented) return;
-    if (overview) navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
-    else if (mobile) backRef.current?.focus();
+    if (overview) {
+      const choice = navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (choice ?? navigationRef.current)?.focus();
+    } else if (mobile) backRef.current?.focus();
   }, [mobile, overview, presented, selectedId]);
   const selectProfile = (profile: SubagentProfile) => {
     setSelectedId(profile.id);
@@ -267,7 +269,7 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
         {subagentSettingsMessage(locale, 'unavailable')}
       </p>}
       <div className="subagent-context">
-        <nav ref={navigationRef} aria-label={t('subagents.title')} hidden={mobile && !overview && Boolean(selected)}>
+        <nav ref={navigationRef} tabIndex={-1} aria-label={t('subagents.title')} hidden={mobile && !overview && Boolean(selected)}>
           {visible.map((profile, index) => <button key={profile.id} type="button" disabled={loading}
             aria-label={`${profile.name} (${profile.id})`} aria-current={profile === selected ? 'true' : undefined}
             aria-expanded={profile === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${index}`}

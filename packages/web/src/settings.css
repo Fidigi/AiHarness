@@ -123,7 +123,7 @@
 .mcp-context .mcp-detail-toggle:hover { background: var(--surface-hover); }
 .mcp-context > nav button:disabled { opacity: .5; cursor: not-allowed; }
 .mcp-context .mcp-detail-toggle[aria-current="true"] { border-left-color: var(--text-link); background: var(--surface-selected); }
-.mcp-detail-toggle:focus-visible { outline-offset: -3px; }
+.mcp-detail-toggle:focus-visible, .mcp-context > nav:focus-visible { outline-offset: -3px; }
 .mcp-context-detail { min-width: 0; }
 .mcp-context-detail .mcp-server-card { grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; background: transparent; }
 .mcp-context-detail .mcp-server-card > .mcp-server-controls { max-width: none; justify-content: flex-start; }
@@ -133,6 +133,27 @@
   .mcp-context { grid-template-columns: minmax(0, 1fr); }
   .mcp-context > nav { max-height: none; }
 }
+.plugin-context { display: grid; grid-template-columns: minmax(190px, 28%) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.plugin-context > nav { display: grid; min-width: 0; max-height: 60vh; overflow: auto; }
+.plugin-context > nav fieldset { min-width: 0; margin: 0; padding: .55rem 0; border: 0; }
+.plugin-context > nav legend { padding: 0 .4rem; color: var(--text-secondary); font-size: .8rem; font-weight: 600; }
+.plugin-context .plugin-context-choice { display: grid; gap: .25rem; width: 100%; min-width: 0; min-height: 44px; padding: .65rem; border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--border-subtle); border-radius: 0; color: var(--text-primary); background: transparent; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.plugin-context-choice small { color: var(--text-secondary); }
+.plugin-context .plugin-context-choice:hover { background: var(--surface-hover); }
+.plugin-context .plugin-context-choice:disabled { opacity: .5; cursor: not-allowed; }
+.plugin-context .plugin-context-choice[aria-current="true"] { border-left-color: var(--text-link); background: var(--surface-selected); }
+.plugin-context button:focus-visible, .plugin-context > nav:focus-visible { outline-offset: -3px; }
+.plugin-context input { scroll-margin-block: 8px; }
+.plugin-context-detail { min-width: 0; }
+.plugin-context-detail .plugin-groups > fieldset { padding: 0; border: 0; }
+.plugin-context-detail .plugin-card { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.plugin-context-back { display: block; min-height: 44px; width: 100%; text-align: left; }
+.plugin-context [hidden] { display: none; }
+.plugin-context + .plugin-groups { margin-top: .8rem; }
+@media (max-width: 959px) {
+  .plugin-context { grid-template-columns: minmax(0, 1fr); }
+  .plugin-context > nav { max-height: none; }
+}
 .subagent-context { display: grid; grid-template-columns: minmax(190px, 28%) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .subagent-context > nav { display: grid; min-width: 0; max-height: 60vh; overflow: auto; }
 .subagent-context > nav button { display: grid; gap: .25rem; width: 100%; min-width: 0; min-height: 44px; padding: .65rem; border: 0; border-left: 3px solid transparent; border-bottom: 1px solid var(--border-subtle); border-radius: 0; color: var(--text-primary); background: transparent; text-align: left; overflow-wrap: anywhere; white-space: normal; }
@@ -140,7 +161,7 @@
 .subagent-context > nav button:hover { background: var(--surface-hover); }
 .subagent-context > nav button:disabled { opacity: .5; cursor: not-allowed; }
 .subagent-context > nav button[aria-current="true"] { border-left-color: var(--text-link); background: var(--surface-selected); }
-.subagent-context button:focus-visible { outline-offset: -3px; }
+.subagent-context button:focus-visible, .subagent-context > nav:focus-visible { outline-offset: -3px; }
 .subagent-context input { scroll-margin-block: 8px; }
 .subagent-context-detail { min-width: 0; }
 .subagent-context-detail .subagent-profile-card { border: 0; border-radius: 0; background: transparent; }

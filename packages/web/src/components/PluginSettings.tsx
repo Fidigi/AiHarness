@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   PluginCatalog,
   PluginPackageInfo,
@@ -18,6 +18,8 @@ import {
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { settingsAdminMessage } from './settings-admin-messages';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { pluginSettingsMessage } from './plugin-settings-messages';
 
 function normalizedSource(value: string): string {
   return value.trim();
@@ -45,10 +47,44 @@ function packageSummary(pkg: PluginPackageInfo): string {
     .join(' · ');
 }
 
-export function PluginSettings() {
+export function PluginSettings({ presented }: { presented: boolean }) {
   const { t, locale } = useI18n();
   const epoch = useRef(0);
   const workspace = useSessionStore(state => state.workspace);
+  const [selection, setSelection] = useState(() => readSettingsNavigation(workspace?.cwd).positions.plugins);
+  const [overview, setOverview] = useState(!selection?.selection);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const navigationFocus = useRef(false);
+  const detailPrefix = useId();
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!navigationFocus.current) return;
+    navigationFocus.current = false;
+    if (!presented) return;
+    if (overview) {
+      const choice = navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (choice ?? navigationRef.current)?.focus();
+    } else if (mobile) backRef.current?.focus();
+  }, [mobile, overview, presented, selection]);
+  const selectPackage = (pkg: PluginPackageInfo) => {
+    const next = { group: pkg.scope, selection: pkg.key };
+    setSelection(next);
+    setOverview(false);
+    const current = readSettingsNavigation(workspace?.cwd);
+    writeSettingsNavigation(workspace?.cwd, { ...current, section: 'plugins',
+      positions: { ...current.positions, plugins: next } });
+  };
   const activeSessionId = useSessionStore(state => {
     const session = state.sessions.find(item => item.id === state.activeSessionId);
     return session && !session.draft ? session.id : undefined;
@@ -73,6 +109,11 @@ export function PluginSettings() {
     || pkg.source.toLocaleLowerCase().includes(normalizedFilter)
     || pkg.packageName?.toLocaleLowerCase().includes(normalizedFilter)
     || pkg.description?.toLocaleLowerCase().includes(normalizedFilter)), [catalog?.packages, normalizedFilter]);
+  const groups = (['project', 'global'] as PluginScope[]).map(groupScope => ({
+    scope: groupScope, packages: visiblePackages.filter(pkg => pkg.scope === groupScope),
+  })).filter(group => group.packages.length > 0);
+  const matches = selection?.selection ? visiblePackages.filter(pkg => pkg.scope === selection.group && pkg.key === selection.selection) : [];
+  const selected = selection?.selection ? matches.length === 1 ? matches[0] : undefined : groups[0]?.packages[0];
 
   const load = async (refresh = false) => {
     const generation = epoch.current;
@@ -112,6 +153,7 @@ export function PluginSettings() {
     action: PluginMutationAction,
     pkg?: PluginPackageInfo,
   ) => {
+    if (pkg) selectPackage(pkg);
     const actionKey = `${action}:${pkg?.key ?? 'all'}`;
     const generation = epoch.current;
     setBusy(actionKey);
@@ -207,6 +249,7 @@ export function PluginSettings() {
   };
 
   const check = async (pkg?: PluginPackageInfo) => {
+    if (pkg) selectPackage(pkg);
     const generation = epoch.current;
     setBusy(`check:${pkg?.key ?? 'all'}`);
     setError(undefined);
@@ -333,14 +376,17 @@ export function PluginSettings() {
         <p className="plugin-empty">{t('settings.plugins.empty')}</p>
       )}
 
-      <div className="plugin-groups">
-        {(['project', 'global'] as PluginScope[]).map(groupScope => {
-          const group = visiblePackages.filter(pkg => pkg.scope === groupScope);
-          if (group.length === 0) return null;
+      {selection?.selection && !selected && catalog && <p role="status" className="settings-help">
+        {pluginSettingsMessage(locale, 'unavailable')}
+      </p>}
+      <div className="plugin-context">
+        <nav ref={navigationRef} tabIndex={-1} aria-label={t('settings.plugins.title')}
+          hidden={mobile && !overview && Boolean(selected)}>
+        {groups.map(({ scope: groupScope, packages: group }) => {
           const enableCount = group.filter(pkg => !pkg.enabled).length;
           const disableCount = group.filter(pkg => pkg.enabled).length;
           return (
-            <fieldset key={groupScope} data-scope={groupScope} data-settings-group={groupScope}>
+            <fieldset key={groupScope}>
               <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
               <div className="plugin-group-actions" role="group"
                 aria-label={t('settings.plugins.groupActions', { scope: t(`settings.plugins.scope.${groupScope}`) })}>
@@ -359,11 +405,31 @@ export function PluginSettings() {
                     : t('settings.plugins.disableAll', { count: disableCount })}
                 </button>
               </div>
-              {group.map(pkg => {
+              {group.map((pkg, index) => <button key={pkg.key} type="button" className="plugin-context-choice" disabled={Boolean(busy)}
+                aria-label={pkg.packageName || pkg.source} aria-current={pkg === selected ? 'true' : undefined}
+                aria-expanded={pkg === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${groupScope}-${index}`}
+                aria-describedby={`${detailPrefix}-${groupScope}-${index}-state`}
+                onClick={() => { navigationFocus.current = mobile; selectPackage(pkg); }}>
+                <strong>{pkg.packageName || pkg.source}</strong>
+                <small id={`${detailPrefix}-${groupScope}-${index}-state`}>{pkg.source} · {t(`settings.plugins.status.${pkg.status}`)}</small>
+              </button>)}
+            </fieldset>
+          );
+        })}
+        </nav>
+        <div ref={detailRef} className="plugin-context-detail" hidden={mobile && (overview || !selected)}>
+          <button ref={backRef} type="button" className="plugin-context-back" hidden={!mobile}
+            onClick={() => { navigationFocus.current = true; setOverview(true); }}>{pluginSettingsMessage(locale, 'back')}</button>
+          <div className="plugin-groups">
+          {groups.map(({ scope: groupScope, packages: group }) => (
+            <fieldset key={groupScope} data-scope={groupScope} data-settings-group={groupScope} hidden={selected?.scope !== groupScope}>
+              <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
+              {group.map((pkg, index) => {
                 const update = updates[pkg.key];
                 const packageBusy = busy?.endsWith(pkg.key) || false;
                 return (
-                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key} data-settings-selection={pkg.key}>
+                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key} data-settings-selection={pkg.key}
+                    aria-label={pkg.packageName || pkg.source} id={`${detailPrefix}-${groupScope}-${index}`} hidden={pkg !== selected}>
                     <header>
                       <div className="plugin-identity">
                         <div>
@@ -440,9 +506,12 @@ export function PluginSettings() {
                 );
               })}
             </fieldset>
-          );
-        })}
+          ))}
+          </div>
+        </div>
+      </div>
 
+      <div className="plugin-groups">
         {catalog && catalog.standaloneExtensions.length > 0 && (
           <fieldset data-scope="standalone">
             <legend>{t('settings.plugins.standalone')}</legend>

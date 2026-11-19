@@ -1,4 +1,4 @@
-import { expect, type Page } from './test-budget';
+import { expect, type Locator, type Page } from './test-budget';
 
 export async function closeSettings(page: Page): Promise<void> {
   await page.locator('.settings-dialog-header button').click();
@@ -39,6 +39,21 @@ export async function selectSubagentProfile(page: Page, name: string): Promise<v
   if (await back.isVisible()) await back.click();
   const navigation = page.locator('#subagents').getByRole('navigation', { name: /^(Sub-agents|Sous-agents)$/u });
   await navigation.getByRole('button').filter({ has: page.getByText(name, { exact: true }) }).click();
+}
+
+/** Reveal package rows and their scoped batch controls through the actual Back view. */
+export async function showPluginPackages(page: Page): Promise<Locator> {
+  await selectSettingsCategory(page, 'plugins');
+  await expect(page.locator('#plugins .plugin-catalog-footer')).toBeVisible();
+  const back = page.getByRole('button', { name: /^(Back to plugins|Retour aux plugins)$/u });
+  if (await back.isVisible()) await back.click();
+  return page.locator('#plugins').getByRole('navigation', { name: /^(Plugins and packages|Plugins et packages)$/u });
+}
+
+export async function selectPluginPackage(page: Page, scope: 'global' | 'project', name: string): Promise<void> {
+  const navigation = await showPluginPackages(page);
+  const group = navigation.getByRole('group', { name: scope === 'global' ? /^(Global|Globale)$/u : /^(Project|Projet)$/u });
+  await group.getByRole('button', { name, exact: true }).click();
 }
 
 /** Exercise the presented desktop navigation or native mobile category picker. */

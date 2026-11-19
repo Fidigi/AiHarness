@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectPluginPackage } from './fixtures/settings-navigation';
 
 for (const locale of ['en', 'fr'] as const) test(`defaults ${locale} recover an unreadable initial scope without reflecting server details`, async ({ page }) => {
   await page.addInitScript(locale => localStorage.setItem('ai-harness-locale', locale), locale);
@@ -24,6 +24,7 @@ test('packages withdraw stale controls after failed canonical readback and recov
   await installMockApi(page);
   await page.goto('/settings#plugins');
   const plugins = page.locator('#plugins');
+  await selectPluginPackage(page, 'global', '@aiharness/review-kit');
   const checkbox = plugins.locator('fieldset[data-scope="global"]').getByRole('checkbox');
   await expect(checkbox).toBeChecked();
   const failure = async (route: import('@playwright/test').Route) => route.fulfill({ status: 500, contentType: 'application/json',
@@ -94,6 +95,7 @@ test('a retired package action cannot reread or announce into a newer Settings l
   try {
     await page.goto('/settings#plugins');
     const plugins = page.locator('#plugins');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
     const checkbox = plugins.locator('fieldset[data-scope="global"]').getByRole('checkbox');
     await expect(checkbox).toBeChecked(); await checkbox.uncheck(); await pending;
     await closeSettings(page);

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectSettingsCategory, selectSubagentProfile } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectPluginPackage, selectSettingsCategory, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -856,12 +856,23 @@ test.describe('Settings and authentication', () => {
     await expect(section.locator('fieldset[data-scope="global"]')).toContainText('@aiharness/review-kit');
     await expect(section.locator('fieldset[data-scope="standalone"]')).toContainText('workspace-banner');
     await expect(section).toContainText('1 extension · 1 skill · 1 prompt · 1 theme');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
     const globalCard = section.locator('.plugin-card').filter({ hasText: '@aiharness/review-kit' });
     await globalCard.getByText('Resources and diagnostics').click();
     await expect(globalCard).toContainText('extensions/review-tools.js');
     await expect(globalCard).toContainText('skills/release-review');
 
-    const globalGroup = section.locator('fieldset[data-scope="global"]');
+    await section.getByLabel('Package source').fill('npm:@example/unsaved-plugin');
+    await selectSettingsCategory(page, 'subagents');
+    await selectPluginPackage(page, 'project', 'workspace-kit');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
+    await expect(section.getByLabel('Package source')).toHaveValue('npm:@example/unsaved-plugin');
+    await expect(globalCard.locator('.plugin-resources')).toHaveAttribute('open', '');
+    expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('npm:@example/unsaved-plugin');
+    expect(api.requests.filter(request => request.method !== 'GET' && request.path.startsWith('/api/plugins'))).toEqual([]);
+    await section.getByLabel('Package source').fill('');
+
+    const globalGroup = (await showPluginPackages(page)).getByRole('group', { name: 'Global', exact: true });
     const disableRequestPromise = page.waitForRequest(request => request.url().endsWith('/api/plugins/enabled'));
     await globalGroup.getByRole('button', { name: 'Disable all (1)' }).click();
     const disableRequest = await disableRequestPromise;
@@ -897,20 +908,44 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => api.requests.filter(request => request.path === '/api/plugins' && request.method === 'POST').at(-1)?.body)
       .toMatchObject({ action: 'install', source: 'npm:@example/new-plugin', scope: 'global' });
 
+    await selectPluginPackage(page, 'global', '@example/new-plugin');
     const installed = section.locator('.plugin-card').filter({ hasText: '@example/new-plugin' });
-    await installed.getByRole('checkbox', { name: 'Enable or disable @example/new-plugin' }).uncheck();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/plugins', async route => { await held; await route.fallback(); });
+    try {
+      await installed.getByRole('checkbox', { name: 'Enable or disable @example/new-plugin' }).uncheck();
+      const choice = section.getByRole('navigation').getByRole('button', { name: '@example/new-plugin', exact: true });
+      await expect(choice).toBeDisabled();
+      await expect(choice).toHaveCSS('opacity', '0.5');
+      await expect(choice).toHaveCSS('cursor', 'not-allowed');
+      const viewport = page.viewportSize()!;
+      await page.setViewportSize({ width: 390, height: 844 });
+      const back = section.getByRole('button', { name: 'Back to plugins', exact: true });
+      await back.focus();
+      await back.press('Enter');
+      await expect(section.getByRole('navigation')).toBeFocused();
+      await expect(choice).toHaveAttribute('aria-current', 'true');
+      await page.setViewportSize(viewport);
+    } finally { release(); }
+    await expect(installed.getByRole('checkbox')).toBeEnabled();
+    await page.unroute('**/api/plugins');
     await expect(installed).toContainText('Disabled');
     page.once('dialog', dialog => dialog.accept());
     await installed.getByRole('button', { name: 'Remove' }).click();
     await expect(installed).toHaveCount(0);
+    await expect(section.getByRole('article')).toHaveCount(0);
+    await expect(section.getByRole('status')).toHaveText('The selected package is unavailable in this view.');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
+    await expect(globalCard).toBeVisible();
   });
 
   test('refuse indépendamment une activation groupée projet sans confiance', async ({ page }) => {
     await installMockApi(page, { workspaceTrusted: false });
     await page.goto('/settings#plugins');
     const section = page.locator('#plugins');
-    const projectGroup = section.locator('fieldset[data-scope="project"]');
-    const projectCard = projectGroup.locator('.plugin-card').filter({ hasText: 'workspace-kit' });
+    const projectGroup = (await showPluginPackages(page)).getByRole('group', { name: 'Project', exact: true });
+    const projectCard = section.locator('.plugin-card').filter({ hasText: 'workspace-kit' });
 
     await projectGroup.getByRole('button', { name: 'Disable all (1)' }).click();
     await expect(projectCard.getByRole('checkbox')).not.toBeChecked();
@@ -972,6 +1007,13 @@ test.describe('Settings and authentication', () => {
       await expect(choice).toBeDisabled();
       await expect(choice).toHaveCSS('opacity', '0.5');
       await expect(choice).toHaveCSS('cursor', 'not-allowed');
+      const viewport = page.viewportSize()!;
+      await page.setViewportSize({ width: 390, height: 844 });
+      const back = section.getByRole('button', { name: 'Back to profiles', exact: true });
+      await back.focus();
+      await back.press('Enter');
+      await expect(section.getByRole('navigation')).toBeFocused();
+      await page.setViewportSize(viewport);
     } finally { release(); }
     await expect.poll(() => api.requests.filter(request => request.path === '/api/subagents/profiles/plan').at(-1)?.body)
       .toMatchObject({ profile: { enabled: false } });

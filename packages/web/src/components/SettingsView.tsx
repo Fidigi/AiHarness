@@ -460,7 +460,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
           <p role="status">{t('common.loading')}…</p>
         </section>
       )}>
-        <PluginSettings key={workspaceId ?? 'default-workspace'} />
+        <PluginSettings key={workspaceId ?? 'default-workspace'} presented={category === 'plugins'} />
       </Suspense></div>
 
       <div hidden={category !== 'subagents'}><SubagentSettings presented={category === 'subagents'} /></div>

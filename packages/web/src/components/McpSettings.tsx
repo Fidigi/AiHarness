@@ -427,8 +427,10 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
     if (!navigationFocus.current) return;
     navigationFocus.current = false;
     if (!presented) return;
-    if (overview) navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
-    else if (mobile) backRef.current?.focus();
+    if (overview) {
+      const choice = navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (choice ?? navigationRef.current)?.focus();
+    } else if (mobile) backRef.current?.focus();
   }, [mobile, overview, presented, selection]);
   const selectServer = (server: McpSelection & { configKey?: string }): void => {
     const next = { scope: server.scope, name: server.name };
@@ -946,7 +948,7 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
       {mcpDetailMessage(locale, 'unavailable')}
     </p>}
     <div className="mcp-context">
-    <nav ref={navigationRef} aria-label={t('settings.mcp.title')} hidden={mobile && !overview && Boolean(selected)}>
+    <nav ref={navigationRef} tabIndex={-1} aria-label={t('settings.mcp.title')} hidden={mobile && !overview && Boolean(selected)}>
     {inventory && groups.map(group => {
       const actionable = group.servers.filter(server => server.valid && !server.registration);
       const enableNames = actionable.filter(server => !server.enabled).map(server => server.name);

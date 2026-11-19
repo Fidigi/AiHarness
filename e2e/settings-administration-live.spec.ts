@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectPluginPackage, selectSettingsCategory, showPluginPackages } from './fixtures/settings-navigation';
 
 // Emitted static Web and real authenticated HTTP/storage. The single dropped
 // response occurs AFTER route.fetch publishes to Express; no API data is mocked.
@@ -135,13 +135,18 @@ for (const scenario of [
     const plugins = page.locator('#plugins');
     await plugins.getByRole('searchbox').fill('visible-one');
     const globalPackages = plugins.locator('fieldset[data-scope="global"]');
+    const globalActions = (await showPluginPackages(page)).getByRole('group', { name: locale === 'fr' ? 'Globale' : 'Global', exact: true });
     const pluginBatch = page.waitForResponse(response => response.url().endsWith('/api/plugins/enabled'));
-    await globalPackages.getByRole('button', { name: locale === 'fr' ? 'Tout désactiver (1)' : 'Disable all (1)', exact: true }).click();
+    await globalActions.getByRole('button', { name: locale === 'fr' ? 'Tout désactiver (1)' : 'Disable all (1)', exact: true }).click();
     expect((await pluginBatch).request().postDataJSON().changes).toMatchObject([{ scope: 'global', enabled: false }]);
+    await selectPluginPackage(page, 'global', 'visible-one');
     await expect(globalPackages.getByRole('checkbox')).not.toBeChecked();
     await plugins.getByRole('searchbox').fill('');
+    await selectPluginPackage(page, 'global', 'hidden-package');
     await expect(globalPackages.locator('.plugin-card').filter({ hasText: 'hidden-package' }).getByRole('checkbox')).toBeChecked();
+    await selectPluginPackage(page, 'global', 'visible-two');
     await expect(globalPackages.locator('.plugin-card').filter({ hasText: 'visible-two' }).getByRole('checkbox')).toBeChecked();
+    await selectPluginPackage(page, 'global', 'visible-one');
     await page.route('**/api/plugins', async route => {
       expect((await route.fetch()).status()).toBe(200); await route.abort('failed');
     }, { times: 1 });

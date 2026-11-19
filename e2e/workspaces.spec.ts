@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
+import { closeSettings, selectPluginPackage, selectSettingsCategory } from './fixtures/settings-navigation';
 
 test.describe('Workspaces et worktrees', () => {
   test('parcourt, annule et restaure un workspace partageable sans créer de session', async ({ page }) => {
@@ -112,7 +113,7 @@ test.describe('Workspaces et worktrees', () => {
   });
 
   test('recharge le catalogue de plugins par workspace sans conserver les packages projet précédents', async ({ page }) => {
-    await installMockApi(page, {
+    const api = await installMockApi(page, {
       workspaceBrowse: {
         '/workspace': { cwd: '/workspace', entries: [{ name: 'project', path: '/workspace/project', isDirectory: true, isSymbolicLink: false }] },
         '/workspace/project': { cwd: '/workspace/project', parent: '/workspace', entries: [] },
@@ -121,7 +122,10 @@ test.describe('Workspaces et worktrees', () => {
     await page.goto('/settings#plugins');
     const plugins = page.locator('#plugins');
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toBeVisible();
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
     await expect(plugins.locator('.plugin-card').filter({ hasText: '@aiharness/review-kit' })).toBeVisible();
+    await selectPluginPackage(page, 'project', 'workspace-kit');
+    await closeSettings(page);
 
     await page.locator('.workspace-button').click();
     const picker = page.locator('.directory-picker');
@@ -130,14 +134,20 @@ test.describe('Workspaces et worktrees', () => {
     await expect(page).toHaveURL(/cwd=%2Fworkspace%2Fproject/);
     await page.getByRole('button', { name: /Settings/ }).click();
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toHaveCount(0);
+    await selectSettingsCategory(page, 'plugins');
     await expect(plugins.locator('.plugin-card').filter({ hasText: '@aiharness/review-kit' })).toBeVisible();
     await expect(plugins.locator('fieldset[data-scope="standalone"]')).not.toContainText('workspace-banner');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
+    await closeSettings(page);
 
     await page.locator('.workspace-button').click();
     await picker.getByRole('button', { name: 'Parent directory' }).click();
     await picker.getByRole('button', { name: 'Use this workspace' }).click();
     await page.getByRole('button', { name: /Settings/ }).click();
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toBeVisible();
+    await expect(plugins.getByRole('navigation').getByRole('button', { name: 'workspace-kit', exact: true }))
+      .toHaveAttribute('aria-current', 'true');
+    expect(api.requests.filter(request => request.method !== 'GET' && request.path.startsWith('/api/plugins'))).toEqual([]);
   });
 
   test('bascule, crée et retire des worktrees avec confirmation', async ({ page }) => {
