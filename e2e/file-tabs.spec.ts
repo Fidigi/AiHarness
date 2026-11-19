@@ -10,21 +10,22 @@ test('file tabs are bounded, keyboard navigable and distinguish identical basena
   ] });
   await page.goto('/chat/file-tabs');
   await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-  if (!await panel.isVisible()) await page.keyboard.press('Control+Shift+F');
-  await panel.locator('.file-name').filter({ hasText: 'file-1.csv' }).click();
+  const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+  const panel = page.getByRole('complementary', { name: 'File reader' });
+  if (!await explorer.isVisible()) await page.keyboard.press('Control+Shift+F');
+  await explorer.locator('.file-name').filter({ hasText: 'file-1.csv' }).click();
   await panel.locator('.file-viewer nav').getByRole('button', { name: 'Preview', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('Table preview limit exceeded');
   await expect(panel.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   await panel.locator('.file-viewer nav').getByRole('button', { name: 'Source', exact: true }).click();
   await expect(panel.locator('.source-view')).toContainText('too many rows');
   for (let index = 2; index <= 8; index++) {
-    await panel.locator('.file-name').filter({ hasText: `file-${index}.csv` }).click();
+    await explorer.locator('.file-name').filter({ hasText: `file-${index}.csv` }).click();
     await expect(panel.locator('.file-viewer > header')).toContainText(`file-${index}.csv`);
   }
   const reads = api.requests.filter(request => request.path === '/api/files/content').length;
-  await panel.locator('.file-name').filter({ hasText: 'file-9.csv' }).click();
-  await expect(panel.getByRole('alert')).toContainText('At most 8 files');
+  await explorer.locator('.file-name').filter({ hasText: 'file-9.csv' }).click();
+  await expect(explorer.getByRole('alert')).toContainText('At most 8 files');
   await expect(panel.getByRole('tab')).toHaveCount(8);
   expect(api.requests.filter(request => request.path === '/api/files/content')).toHaveLength(reads);
   await panel.getByRole('tab', { name: 'file-1.csv', exact: true }).focus(); await page.keyboard.press('ArrowRight');
@@ -34,17 +35,17 @@ test('file tabs are bounded, keyboard navigable and distinguish identical basena
   await panel.getByRole('tab', { name: 'file-8.csv', exact: true }).focus(); await page.keyboard.press('Delete');
   await expect(panel.getByRole('tab', { name: 'file-2.csv', exact: true })).toBeFocused();
   for (const folder of ['left', 'right']) {
-    await panel.locator('.file-name').filter({ hasText: folder }).click();
-    await panel.locator(`button[title="${folder}/same.csv"]`).click();
+    await explorer.locator('.file-name').filter({ hasText: folder }).click();
+    await explorer.locator(`button[title="${folder}/same.csv"]`).click();
     await expect(panel.locator('.file-viewer > header')).toContainText('same.csv');
   }
   await expect(panel.getByRole('tab', { name: 'left/same.csv', exact: true })).toBeVisible();
   await expect(panel.getByRole('tab', { name: 'right/same.csv', exact: true })).toBeVisible();
-  await expect(panel.locator('button.file-name[title="right/same.csv"]')).toHaveAttribute('aria-current', 'true');
+  await expect(explorer.locator('button.file-name[title="right/same.csv"]')).toHaveAttribute('aria-current', 'true');
   await expect(panel.locator('.viewer-path')).toHaveText('right/same.csv');
   await panel.getByRole('tab', { name: 'left/same.csv', exact: true }).click();
-  await expect(panel.locator('button.file-name[title="left/same.csv"]')).toHaveAttribute('aria-current', 'true');
-  await expect(panel.locator('button.file-name[title="right/same.csv"]')).not.toHaveAttribute('aria-current', 'true');
+  await expect(explorer.locator('button.file-name[title="left/same.csv"]')).toHaveAttribute('aria-current', 'true');
+  await expect(explorer.locator('button.file-name[title="right/same.csv"]')).not.toHaveAttribute('aria-current', 'true');
   await expect(panel.locator('.viewer-path')).toHaveText('left/same.csv');
 });
 
@@ -64,24 +65,30 @@ for (const scene of [
   await page.goto('/chat/file-reading');
   const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
   await composer.fill('Keep my draft');
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-  if (!await panel.isVisible()) await page.keyboard.press('Control+Shift+F');
+  const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+  const panel = page.getByRole('complementary', { name: 'File reader' });
+  if (!await explorer.isVisible()) await page.keyboard.press('Control+Shift+F');
   for (const file of ['second.md', 'first.md']) {
-    await panel.locator('.file-name').filter({ hasText: file }).click();
+    await explorer.locator('.file-name').filter({ hasText: file }).click();
     await expect(panel.locator('.file-viewer > header')).toContainText(file);
   }
-  const tree = panel.locator('.file-tree');
+  const tree = explorer.locator('.file-tree');
   await expect(tree).toBeVisible();
   const normalHeight = await panel.locator('.viewer-content').evaluate(element => element.clientHeight);
+  const normalWidth = await panel.locator('.viewer-content').evaluate(element => element.clientWidth);
   const reads = api.requests.filter(request => request.path === '/api/files/content').length;
   await panel.getByRole('button', { name: 'Maximize file viewer', exact: true }).click();
   await expect(tree).toBeHidden();
-  await expect(panel.locator('.panel-linked-directories')).toBeHidden();
-  await expect(panel.locator('.file-toolbar')).toBeHidden();
+  await expect(explorer.getByRole('button', { name: 'File options', exact: true })).toBeHidden();
+  await expect(explorer.locator('.file-toolbar')).toBeHidden();
   await expect(panel.getByRole('tab')).toHaveCount(2);
   await expect(panel.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   const readingHeight = await panel.locator('.viewer-content').evaluate(element => element.clientHeight);
-  expect(readingHeight).toBeGreaterThan(normalHeight + 100);
+  if (scene.width > 959) {
+    // The desktop reader already uses full height; maximize frees horizontal space.
+    expect(readingHeight).toBeGreaterThanOrEqual(normalHeight);
+    expect(await panel.locator('.viewer-content').evaluate(element => element.clientWidth)).toBeGreaterThan(normalWidth + 100);
+  } else expect(readingHeight).toBeGreaterThan(normalHeight + 100);
   expect(readingHeight).toBeGreaterThan(scene.height / 2);
   expect(api.requests.filter(request => request.path === '/api/files/content')).toHaveLength(reads);
   for (const file of ['second.md', 'first.md']) {
@@ -95,8 +102,8 @@ for (const scene of [
   await expect(panel.locator('.file-viewer > header')).toContainText('second.md');
   await panel.getByRole('button', { name: 'Restore file viewer', exact: true }).click();
   await expect(tree).toBeVisible();
-  await expect(panel.locator('.file-toolbar')).toBeVisible();
-  await expect(panel.locator('.panel-linked-directories')).toBeVisible();
+  await expect(explorer.locator('.file-toolbar')).toBeVisible();
+  await expect(explorer.getByRole('button', { name: 'File options', exact: true })).toBeVisible();
   expect(await panel.locator('.viewer-content').evaluate(element => element.clientHeight)).toBe(normalHeight);
   await expect(composer).toHaveValue('Keep my draft');
   await panel.getByRole('button', { name: 'Maximize file viewer', exact: true }).click();
@@ -106,7 +113,7 @@ for (const scene of [
   }
   await expect(panel.getByRole('tab')).toHaveCount(0);
   await expect(tree).toBeVisible();
-  await expect(panel.locator('.file-toolbar')).toBeVisible();
+  await expect(explorer.locator('.file-toolbar')).toBeVisible();
 });
 
 for (const kind of ['content', 'preview'] as const) test(`retired ${kind} read cannot recreate tabs or replace a newer file`, async ({ page }) => {
@@ -129,14 +136,15 @@ for (const kind of ['content', 'preview'] as const) test(`retired ${kind} read c
   try {
     await page.goto('/chat/file-tabs');
     await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
-    const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-    if (!await panel.isVisible()) await page.keyboard.press('Control+Shift+F');
-    await panel.locator('.file-name').filter({ hasText: 'held.' }).click();
+    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+    const panel = page.getByRole('complementary', { name: 'File reader' });
+    if (!await explorer.isVisible()) await page.keyboard.press('Control+Shift+F');
+    await explorer.locator('.file-name').filter({ hasText: 'held.' }).click();
     if (kind === 'preview') await panel.locator('.file-viewer nav').getByRole('button', { name: 'Preview', exact: true }).click();
     await pending;
     await page.keyboard.press('Control+Shift+F'); await expect(panel).toHaveCount(0);
     await page.keyboard.press('Control+Shift+F');
-    await panel.locator('.file-name').filter({ hasText: 'new.csv' }).click();
+    await explorer.locator('.file-name').filter({ hasText: 'new.csv' }).click();
     await expect(panel.locator('.source-view')).toContainText('current,canonical');
     release(); await completed;
     await page.evaluate(async () => { await fetch('/api/auth/status'); await new Promise(requestAnimationFrame); });

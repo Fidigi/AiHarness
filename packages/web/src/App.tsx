@@ -17,7 +17,7 @@ import { getAgentRun, getWebAuthStatus, listRunningAgentRuns } from './services/
 import { captureCanonicalRunGuard, useSessionStore } from './store/session-store';
 import { readPreferences, usePreferences } from './store/preferences';
 import { matchesShortcut } from './services/keyboard';
-import { keyboardComposing } from './services/escape-stack';
+import { currentEscapeModal, keyboardComposing } from './services/escape-stack';
 import { useEscapeLayer } from './hooks/useEscapeLayer';
 import { InteractionViewLifetime } from './services/interaction-scope';
 
@@ -28,6 +28,7 @@ const TerminalPanel = lazy(() => import('./components/TerminalPanel'));
 function App() {
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia?.('(max-width: 959px)').matches ?? false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [explorerHost, setExplorerHost] = useState<HTMLDivElement | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(() => readPreferences().sidebarVisible);
   const [filesOpen, setFilesOpen] = useState(() => !window.matchMedia?.('(max-width: 959px)').matches && readPreferences().filesOpen);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -81,7 +82,6 @@ function App() {
     const update = () => {
       const narrow = media?.matches ?? false;
       setIsNarrow(narrow);
-      setFilesOpen(narrow ? false : readPreferences().filesOpen);
       if (!narrow) setSidebarOpen(false);
     };
     media?.addEventListener('change', update);
@@ -204,7 +204,7 @@ function App() {
         const id = useSessionStore.getState().activeSessionId;
         if (id) navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
       } else if (matchesShortcut(event, binding.focusPrompt)) {
-        window.dispatchEvent(new CustomEvent('aih-focus-prompt'));
+        if (!currentEscapeModal(document)) window.dispatchEvent(new CustomEvent('aih-focus-prompt'));
       } else if (matchesShortcut(event, binding.toggleSidebar)) {
         if (isNarrow) setSidebarOpen(value => !value);
         else {
@@ -263,7 +263,7 @@ function App() {
         aria-expanded={filesOpen} aria-label={t('files.explorer')}><Icon name="folder" /></button>}
       {sidebarOpen && <button className="mobile-backdrop" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
       {(isNarrow || sidebarVisible) && <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
-        inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} />}
+        inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} explorerHostRef={setExplorerHost} />}
       <main className="main-content" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<ChatView />} />
@@ -273,7 +273,7 @@ function App() {
           }><SettingsView /></Suspense>} />
         </Routes>
       </main>
-      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} onRequestClose={() => {
+      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} explorerHost={isNarrow ? null : explorerHost} onRequestClose={() => {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}

@@ -1,5 +1,6 @@
 const messages = {
   en: {
+    reader: 'File reader', options: 'File options', destination: 'Destination (workspace root)', chooseFiles: 'Choose files',
     tabs: 'Open files', close: 'Close file', limit: 'At most 8 files can be open. Close a tab first.',
     loading: 'Loading file…', previewLoading: 'Loading document preview…',
     failed: 'Preview unavailable. The document may be invalid, encrypted or exceed preview limits. Reopen it or reload the page to retry.',
@@ -10,6 +11,7 @@ const messages = {
     readFailed: 'The file could not be read. Select it again to retry.',
   },
   fr: {
+    reader: 'Lecteur de fichiers', options: 'Options des fichiers', destination: 'Destination (racine du projet)', chooseFiles: 'Choisir des fichiers',
     tabs: 'Fichiers ouverts', close: 'Fermer le fichier', limit: 'Au maximum 8 fichiers ouverts. Fermez d’abord un onglet.',
     loading: 'Chargement du fichier…', previewLoading: 'Chargement de l’aperçu du document…',
     failed: 'Aperçu indisponible. Le document est peut-être invalide, chiffré ou dépasse les limites. Rouvrez-le ou rechargez la page pour réessayer.',

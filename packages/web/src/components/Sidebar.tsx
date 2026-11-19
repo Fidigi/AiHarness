@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent, type Ref } from 'react';
 import type { GitWorktree, WorkspaceDescriptor } from '@ai-harness/core';
 import { useSidebarOrganisation } from '../hooks/useSidebarOrganisation';
 import { organisedSessions, organisationMessages, sidebarFamilyId } from './sidebar-organisation';
@@ -40,6 +40,7 @@ interface SidebarProps {
   modal?: boolean;
   inactive?: boolean;
   onRequestClose?: () => void;
+  explorerHostRef?: Ref<HTMLDivElement>;
   /** Host presentation hook only; default native context menus remain intact. */
   onSessionContextMenu?: SessionContextMenuHook;
 }
@@ -77,7 +78,7 @@ function operationTrusted(workspace: WorkspaceDescriptor): boolean {
   return workspace.operationTrusted ?? workspace.trusted;
 }
 
-function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSessionContextMenu }: SidebarProps) {
+function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSessionContextMenu, explorerHostRef }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
@@ -582,6 +583,7 @@ function Sidebar({ isOpen, modal = false, inactive = false, onRequestClose, onSe
         </ul>
       </nav>
 
+      <div className="sidebar-files-slot" ref={explorerHostRef} />
       <div className="sidebar-footer">
         <button onClick={() => navigate(`/settings${query}`)}><Icon name="settings" /> {t('common.settings')}</button>
       </div>

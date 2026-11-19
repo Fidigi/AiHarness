@@ -809,6 +809,6 @@ test.describe('Conversation detached agent', () => {
     await expect(message.locator('.message-meta').getByRole('button', { name: 'Assistant response copied.' })).toBeVisible();
 
     await message.getByRole('button', { name: 'src/generated.ts' }).click();
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toContainText('generated.ts');
+    await expect(page.getByRole('complementary', { name: 'File reader' })).toContainText('generated.ts');
   });
 });

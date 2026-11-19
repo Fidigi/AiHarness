@@ -20,9 +20,10 @@ test.describe('native terminal touch controls', () => {
     expect(trust.status()).toBe(200);
     await page.goto('/'); await expect(page.locator('.workspace-button small')).not.toBeEmpty();
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    const explorer = page.getByRole('complementary', { name: 'Workspace explorer', exact: true });
+    const explorer = page.getByRole('region', { name: 'Workspace explorer', exact: true });
     await expect(explorer).toBeVisible();
     const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/terminals' && response.request().method() === 'POST');
+    await explorer.getByRole('button', { name: 'File options', exact: true }).click();
     await explorer.getByRole('button', { name: 'Open terminal from file explorer', exact: true }).click();
     const response = await created; expect(response.status()).toBe(201);
     const snapshot = await response.json() as { id: string }; expect(typeof snapshot.id).toBe('string');

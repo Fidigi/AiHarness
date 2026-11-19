@@ -1,3 +1,10 @@
+.sidebar:has(.sidebar-files-slot:not(:empty)) { flex-shrink: 0; overflow-y: auto; }
+.sidebar-files-slot:empty { display: none; }
+.sidebar-files-slot:not(:empty) { display: flex; flex: 1; min-height: 160px; border-top: 1px solid var(--border-subtle); }
+.sidebar-files-slot:has(.collapsed) { flex: 0 0 auto; min-height: 44px; }
+.sidebar-files-slot > .workspace-panel-loading { width: 100%; min-width: 0; max-width: none; flex: 1; }
+.sidebar:has(.sidebar-files-slot:not(:empty)) .sidebar-nav { flex: 0 1 auto; min-height: 64px; max-height: 35%; }
+.sidebar:has(.sidebar-files-slot .collapsed) .sidebar-nav { flex: 1; max-height: none; }
 .sidebar-organisation { margin: .4rem .65rem; padding: .4rem; border: 1px solid var(--border-subtle); border-radius: 5px; font-size: .8rem; }
 .sidebar-organisation summary { cursor: pointer; padding: .35rem 0; }
 .sidebar-organisation label { display: flex; align-items: center; gap: .35rem; padding: .3rem 0; }

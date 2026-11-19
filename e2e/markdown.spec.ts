@@ -253,8 +253,8 @@ test('file preview and noninteractive minimap share currency, CJK and math seman
   const mapEntry = minimap.locator('.minimap-entry').filter({ hasText: 'Price:' });
   await expect(mapEntry).toHaveAccessibleName('assistant: Price: $20/month Plus a $6 fee. Formula: 2 + 2 = 4. https://example.com/docs，后面');
   expect(await mapEntry.getAttribute('title')).toBeNull();
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-  await panel.locator('.file-name').filter({ hasText: 'README.md' }).click();
+  const panel = page.getByRole('complementary', { name: 'File reader' });
+  await page.getByRole('region', { name: 'Workspace explorer' }).locator('.file-name').filter({ hasText: 'README.md' }).click();
   await panel.getByRole('button', { name: 'Preview', exact: true }).click();
   const preview = panel.locator('.markdown-preview .markdown-content');
   await expect(preview.locator('.katex')).toHaveCount(1);

@@ -14,11 +14,12 @@ test.describe('Palette globale et raccourcis', () => {
     await page.keyboard.press('Escape');
     await expect(palette).toHaveCount(0);
 
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toBeVisible();
+    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+    await expect(explorer).toBeVisible();
     await page.keyboard.press('Control+Shift+F');
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toHaveCount(0);
+    await expect(explorer).toHaveCount(0);
     await page.keyboard.press('Control+Shift+F');
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toBeVisible();
+    await expect(explorer).toBeVisible();
 
     await page.keyboard.press('Control+L');
     const composer = page.getByPlaceholder(/Type your message/);
@@ -58,13 +59,15 @@ for (const viewport of [
     await page.goto('/chat/responsive');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
 
+    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
     if (viewport.width <= 959) {
       await page.getByRole('button', { name: 'Workspace explorer' }).click();
-      await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toBeVisible();
+      await expect(explorer).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-      await page.getByRole('complementary', { name: 'Workspace explorer' }).getByRole('button', { name: 'Close' }).click();
+      await explorer.getByRole('button', { name: 'File options', exact: true }).click();
+      await explorer.getByRole('button', { name: 'Close' }).click();
     } else {
-      await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toBeVisible();
+      await expect(explorer).toBeVisible();
       await expect(page.locator('.sidebar')).toBeVisible();
     }
   });

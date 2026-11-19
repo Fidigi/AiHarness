@@ -778,21 +778,23 @@ test.describe('Régression visuelle de l’explorer et du viewer', () => {
           reasoningOpen: false, sound: false, notifications: false, selectionActions: true,
         }));
       }, { theme: scenario.theme });
+      const longPath = 'docs/nested/a-long-directory-name-that-keeps-the-complete-file-path-visible/README.md';
       await installMockApi(page, {
-        sessions: [mockSession('visual-files', 'Workspace files')],
-        workspaceFiles: [{
-          path: 'README.md', language: 'markdown', gitStatus: 'modified', additions: 3, deletions: 1,
+        sessions: [mockSession('visual-files', 'Workspace files', [{ role: 'assistant', content: `[Open readme](file:${longPath})` }])],
+        workspaceFiles: [...Array.from({ length: 40 }, (_, index) => ({ path: `file-${index}.ts`, content: 'fixture' })), {
+          path: longPath, language: 'markdown', gitStatus: 'modified', additions: 3, deletions: 1,
           content: '---\ntitle: Visual fixture\n---\n# Workspace viewer\n\nSafe **Markdown** preview.',
           diff: '@@ -1 +1 @@\n-old\n+new',
         }],
       });
 
       await page.goto('/chat/visual-files');
-      if (scenario.width <= 959) await page.getByRole('button', { name: 'Workspace explorer' }).click();
-      const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-      await panel.locator('.file-name').filter({ hasText: 'README.md' }).click();
+      await page.getByRole('link', { name: 'Open readme', exact: true }).click();
+      const panel = page.getByRole('complementary', { name: 'File reader' });
+      await expect(panel.locator('.viewer-path')).toHaveText(longPath);
       await panel.getByRole('button', { name: 'Preview' }).click();
       await expect(panel.locator('.markdown-preview h1')).toHaveText('Workspace viewer');
+      await expect(page.getByRole('region', { name: 'Workspace explorer' }).locator('.file-name[aria-current="true"]')).toBeInViewport({ ratio: 1 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);

@@ -50,12 +50,23 @@ test.describe('Accessibilité des parcours majeurs', () => {
       { role: 'user', content: 'Inspect the project' },
       { role: 'assistant', content: '# Result\n\nA safe [external link](https://example.com).\n\n- Item one\n- Item two' },
     ]);
-    await installMockApi(page, { sessions: [session] });
+    await installMockApi(page, { sessions: [session], workspaceFiles: [{ path: 'accessible.md', content: '# Accessible reader' }] });
     await page.goto('/chat/accessible');
     await expect(page.getByPlaceholder(/Type your message/)).toBeVisible();
     await expectAccessible(page, 'chat and workspace explorer (light)');
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
     await expectAccessible(page, 'chat and workspace explorer (dark)');
+    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+    await explorer.getByRole('button', { name: 'File options', exact: true }).click();
+    await expectAccessible(page, 'file options (dark)');
+    await page.keyboard.press('Escape');
+    await explorer.getByRole('button', { name: 'Upload files', exact: true }).click();
+    await expectAccessible(page, 'file upload policy (dark)');
+    await page.keyboard.press('Escape');
+    await explorer.getByRole('button', { name: 'accessible.md', exact: true }).click();
+    await page.getByRole('button', { name: 'Maximize file viewer', exact: true }).click();
+    await expectAccessible(page, 'fullscreen reader (dark)');
+    await page.keyboard.press('Escape');
 
     await page.goto('/settings#appearance');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();

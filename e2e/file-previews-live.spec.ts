@@ -54,11 +54,12 @@ for (const scenario of [
     page.on('request', request => { if (request.url().startsWith('https://external.invalid/')) external.push(request.url()); });
     await page.goto(`${base}/chat/${session.id}?cwd=${encodeURIComponent(cwd)}`);
     await expect(page.getByRole('textbox', { name: locale === 'fr' ? 'Zone de rédaction' : 'Message composer', exact: true })).toBeVisible();
-    const panel = page.getByRole('complementary', { name: copy.explorer });
-    if (!await panel.isVisible()) await page.keyboard.press('Control+Shift+F');
-    await expect(panel.locator('.file-name').filter({ hasText: 'data.csv' })).toBeVisible();
+    const explorer = page.getByRole('region', { name: copy.explorer });
+    const panel = page.getByRole('complementary', { name: locale === 'fr' ? 'Lecteur de fichiers' : 'File reader' });
+    if (!await explorer.isVisible()) await page.keyboard.press('Control+Shift+F');
+    await expect(explorer.locator('.file-name').filter({ hasText: 'data.csv' })).toBeVisible();
     const open = async (name: string) => {
-      await panel.locator('.file-name').filter({ hasText: name }).click();
+      await explorer.locator('.file-name').filter({ hasText: name }).click();
       await expect(panel.locator('.file-viewer > header')).toContainText(name);
       await panel.locator('.file-viewer nav').getByRole('button', { name: copy.preview, exact: true }).click();
     };
@@ -84,25 +85,30 @@ for (const scenario of [
     await panel.getByRole('tab', { name: 'data.csv', exact: true }).click();
     await expect(panel.getByRole('cell', { name: 'canonical read', exact: true })).toBeVisible();
     await expect(panel.getByRole('tab')).toHaveCount(5);
-    expect((await new AxeBuilder({ page }).include('.workspace-panel').analyze()).violations).toEqual([]);
+    expect((await new AxeBuilder({ page }).include('.workspace-panel').include('.workspace-explorer').analyze()).violations).toEqual([]);
     expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await expect(panel).toHaveScreenshot(`file-previews-${locale}-${theme}-${width}.png`);
     const download = page.waitForEvent('download');
     await panel.getByRole('link', { name: copy.download, exact: true }).click();
     expect(await readFile((await (await download).path())!, 'utf8')).toBe(fresh);
     // Real collision refusal must not overwrite; rename is a distinct explicit action.
-    const upload = panel.locator('input[type=file]');
+    const upload = explorer.locator('input[type=file]');
+    const uploadButton = explorer.getByRole('button', { name: locale === 'fr' ? 'Importer des fichiers' : 'Upload files', exact: true });
+    await uploadButton.click();
+    await expect(explorer.locator('.upload-options')).toContainText(cwd);
+    await expect(explorer.locator('.upload-options select')).toHaveValue('reject');
     const rejected = page.waitForResponse(response => response.url().endsWith('/api/files/upload'));
     await upload.setInputFiles({ name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from('new,value\n') });
     expect((await rejected).status()).toBe(409); expect(await readFile(path.join(cwd, 'data.csv'), 'utf8')).toBe(fresh);
     await expect(upload).toBeEnabled();
-    await panel.locator('.upload-options select').selectOption('rename');
+    await uploadButton.click();
+    await explorer.locator('.upload-options select').selectOption('rename');
     const renamed = page.waitForResponse(response => response.url().endsWith('/api/files/upload'));
     await upload.setInputFiles({ name: 'data.csv', mimeType: 'text/csv', buffer: Buffer.from('new,value\n') });
     expect((await renamed).status()).toBe(201);
     expect(await readFile(path.join(cwd, 'data (1).csv'), 'utf8')).toBe('new,value\n');
-    await panel.getByRole('button', { name: new RegExp(`^${copy.changes}`) }).click();
-    await panel.locator('.change-row > button:first-child').filter({ hasText: 'tracked.txt' }).click();
+    await explorer.getByRole('button', { name: new RegExp(`^${copy.changes}`) }).click();
+    await explorer.locator('.change-row > button:first-child').filter({ hasText: 'tracked.txt' }).click();
     await expect(panel.locator('.diff-view .added')).toContainText('+after');
 
     if (locale === 'en' && width === 1280) {

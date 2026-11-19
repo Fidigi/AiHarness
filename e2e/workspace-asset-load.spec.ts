@@ -5,7 +5,8 @@ import { installMockApi, mockSession } from './fixtures/mock-api';
 const js = /\/assets\/WorkspacePanel-[^/]+\.js$/;
 const css = /\/assets\/workspace-panel-[^/]+\.css$/;
 const url = '/chat/workspace-assets?cwd=%2Fworkspace';
-const pane = (page: Page) => page.getByRole('complementary', { name: 'Workspace explorer' });
+const pane = (page: Page) => page.getByRole('region', { name: 'Workspace explorer' });
+const reader = (page: Page) => page.getByRole('complementary', { name: 'File reader' });
 const composer = (page: Page) => page.getByRole('textbox', { name: 'Message composer', exact: true });
 const toggle = (page: Page) => page.keyboard.press('Control+Shift+F');
 
@@ -44,6 +45,7 @@ test('closed production pane fetches no JS/CSS; open fetches both and close/reop
   await expect(pane(page)).toHaveCSS('display', 'flex');
   expect(assets.filter(asset => js.test(asset))).toHaveLength(1);
   expect(assets.filter(asset => css.test(asset))).toHaveLength(1);
+  await pane(page).getByRole('button', { name: 'File options', exact: true }).click();
   await pane(page).getByRole('button', { name: 'Close', exact: true }).click();
   await expect(pane(page)).toHaveCount(0);
   await toggle(page);
@@ -78,6 +80,13 @@ for (const [kind, asset] of [['JS', js], ['CSS', css]] as const) {
     await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect.poll(() => Boolean(held)).toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const close = pane(page).getByRole('button', { name: 'Close', exact: true });
+    await expect(close).toBeInViewport({ ratio: 1 });
+    expect(await close.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+    })).toBe(true);
     await pane(page).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(pane(page)).toHaveCount(0);
     await composer(page).focus();
@@ -127,8 +136,8 @@ test('file-link intent waits for delayed pane then the real viewer opens the req
     window.dispatchEvent(new CustomEvent('aih-open-file', { detail: 'x'.repeat(4097) }));
   });
   await held!.continue();
-  await expect(pane(page).locator('.file-viewer > header')).toContainText('app.ts');
-  await expect(pane(page).locator('#source-line-2')).toHaveClass(/target-line/);
+  await expect(reader(page).locator('.file-viewer > header')).toContainText('app.ts');
+  await expect(reader(page).locator('#source-line-2')).toHaveClass(/target-line/);
 });
 
 for (const end of ['settings', 'session', 'workspace'] as const) {
@@ -173,7 +182,7 @@ test('commit-phase open-file intent survives actual pane mount', async ({ page }
   await product(page);
   await page.addInitScript(() => {
     const observer = new MutationObserver(() => {
-      if (!document.querySelector('.workspace-panel .file-toolbar')) return;
+      if (!document.querySelector('.workspace-explorer .file-toolbar')) return;
       observer.disconnect();
       window.dispatchEvent(new CustomEvent('aih-open-file', { detail: { path: 'src/app.ts', line: 2 } }));
       document.documentElement.dataset.commitFileDispatched = 'yes';
@@ -184,8 +193,8 @@ test('commit-phase open-file intent survives actual pane mount', async ({ page }
   await expect(composer(page)).toBeVisible();
   await toggle(page);
   await expect(page.locator('html')).toHaveAttribute('data-commit-file-dispatched', 'yes');
-  await expect(pane(page).locator('.file-viewer > header')).toContainText('app.ts');
-  await expect(pane(page).locator('#source-line-2')).toHaveClass(/target-line/);
+  await expect(reader(page).locator('.file-viewer > header')).toContainText('app.ts');
+  await expect(reader(page).locator('#source-line-2')).toHaveClass(/target-line/);
 });
 
 // The palette is also reachable while the optional workspace asset is pending.

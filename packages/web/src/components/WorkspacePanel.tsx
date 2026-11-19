@@ -1,5 +1,8 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { FileUploadProgress, WorkspaceFileContent, WorkspaceFileEntry, GitStatusFile } from '../services/api';
 import {
   getFileContent,
@@ -29,7 +32,7 @@ function quoteMention(path: string): string {
   return path.includes(' ') ? `@"${path}"` : `@${path}`;
 }
 
-function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden, activePath, expandedPaths, onToggle, refreshVersion }: {
+function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden, activePath, expandedPaths, onToggle, refreshVersion, onReveal }: {
   entry: WorkspaceFileEntry;
   cwd: string;
   depth: number;
@@ -41,6 +44,7 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
   expandedPaths: ReadonlySet<string>;
   onToggle: (path: string) => void;
   refreshVersion: number;
+  onReveal: (path: string, element: HTMLButtonElement) => void;
 }) {
   const { t, locale } = useI18n();
   const open = expandedPaths.has(entry.path);
@@ -66,7 +70,7 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
   return (
     <li className="file-node">
       <div style={{ paddingLeft: `${depth * .8}rem` }}>
-        <button className="file-name" onClick={event => entry.isDirectory ? onToggle(entry.path)
+        <button ref={element => { if (element) onReveal(entry.path, element); }} className="file-name" onClick={event => entry.isDirectory ? onToggle(entry.path)
           : onOpen(entry.path, entry.isSymbolicLink ? event.currentTarget : undefined)} title={entry.path}
           aria-expanded={entry.isDirectory ? open : undefined} aria-busy={entry.isDirectory ? loading : undefined}
           aria-current={!entry.isDirectory && activePath === entry.path ? 'true' : undefined}>
@@ -82,13 +86,13 @@ function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, sho
       {entry.isDirectory && open && children && <ul>{children.map(child => (
         <FileNode key={child.path} entry={child} cwd={cwd} depth={depth + 1}
           onOpen={onOpen} onMention={onMention} onLinkedDirectory={onLinkedDirectory} showHidden={showHidden}
-          activePath={activePath} expandedPaths={expandedPaths} onToggle={onToggle} refreshVersion={refreshVersion} />
+          activePath={activePath} expandedPaths={expandedPaths} onToggle={onToggle} refreshVersion={refreshVersion} onReveal={onReveal} />
       ))}</ul>}
     </li>
   );
 }
 
-function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; onRequestClose?: () => void }) {
+function WorkspacePanel({ isOpen = true, onRequestClose, explorerHost }: { isOpen?: boolean; onRequestClose?: () => void; explorerHost?: HTMLElement | null }) {
   const workspace = useSessionStore(state => state.workspace);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const draft = useSessionStore(state => activeSessionId ? getSessionRecord(state.drafts, activeSessionId) ?? '' : '');
@@ -110,20 +114,29 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   // Watch ticks retain their bounded root refresh; only explicit Refresh fans out.
   const [refreshVersion, setRefreshVersion] = useState(0);
   const directoryIntent = useRef(0);
+  const revealRequest = useRef<string | undefined>(undefined);
+  const revealRow = (path: string, element: HTMLButtonElement) => {
+    if (revealRequest.current !== path || !element.getClientRects().length) return;
+    revealRequest.current = undefined;
+    element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
   const toggleDirectory = (path: string) => {
-    directoryIntent.current++;
+    directoryIntent.current++; revealRequest.current = undefined;
     setExpandedPaths(current => {
       const next = new Set(current);
       if (next.has(path)) next.delete(path); else next.add(path);
       return next;
     });
   };
-  const revealFile = (path: string) => setExpandedPaths(current => {
-    const next = new Set(current);
-    const parts = path.split('/');
-    for (let length = 1; length < parts.length; length++) next.add(parts.slice(0, length).join('/'));
-    return next;
-  });
+  const revealFile = (path: string) => {
+    revealRequest.current = path;
+    setExpandedPaths(current => {
+      const next = new Set(current);
+      const parts = path.split('/');
+      for (let length = 1; length < parts.length; length++) next.add(parts.slice(0, length).join('/'));
+      return next;
+    });
+  };
   const [changes, setChanges] = useState<GitStatusFile[]>([]);
   const [gitSummary, setGitSummary] = useState({ repository: true, additions: 0, deletions: 0 });
   const [showHidden, setShowHidden] = useState(false);
@@ -133,7 +146,16 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   const tabsRef = useRef<OpenFile[]>([]);
   const publishTabs = (files: OpenFile[]) => { tabsRef.current = files; setOpenedFiles(files); };
   const [activePath, setActivePath] = useState('');
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const explorerRef = useRef<HTMLElement>(null);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const focusAfterExpand = useRef(false);
+  const readerSurface = useRef<HTMLDivElement>(null);
+  const maximizeButton = useRef<HTMLButtonElement>(null);
+  const controlsRef = useRef<HTMLElement>(null);
+  const optionsButton = useRef<HTMLButtonElement>(null);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const [popup, setPopup] = useState<'options' | 'upload'>();
   const [reading, setReading] = useState(false);
   const readEpoch = useRef(0);
   const tabId = useId();
@@ -159,6 +181,44 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     && (workspace.operationTrusted ?? workspace.trusted));
 
   const workspaceScope = JSON.stringify([workspace?.id, workspace?.cwd, workspaceOperationTrusted]);
+  const hasReader = openedFiles.length > 0 && workspaceOperationTrusted;
+  const expanded = viewerExpanded && hasReader && !collapsed;
+  useFocusTrap(expanded, readerSurface, () => setViewerExpanded(false), maximizeButton);
+  useLayoutEffect(() => {
+    if (collapsed) expandButton.current?.focus({ preventScroll: true });
+    else if (focusAfterExpand.current) {
+      focusAfterExpand.current = false;
+      explorerRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button')?.focus({ preventScroll: true });
+    }
+  }, [collapsed]);
+  useLayoutEffect(() => {
+    // Reparenting the tree must not leave the current row outside its new scrollport.
+    revealRequest.current = activePath || undefined;
+    const row = explorerRef.current?.querySelector<HTMLButtonElement>('.file-name[aria-current="true"]');
+    if (row) revealRow(activePath, row);
+  }, [explorerHost]);
+  useEscapeLayer(Boolean(popup), 'menu', () => {
+    (popup === 'upload' ? uploadButton : optionsButton).current?.focus({ preventScroll: true });
+    setPopup(undefined);
+  }, controlsRef);
+  useEffect(() => {
+    if (!popup) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !controlsRef.current?.contains(event.target)) setPopup(undefined);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => document.removeEventListener('pointerdown', outside, true);
+  }, [popup]);
+  useEffect(() => {
+    if (!expanded) return;
+    const restore = () => setViewerExpanded(false);
+    window.addEventListener('aih-open-terminal', restore);
+    window.addEventListener('aih-toggle-terminal', restore);
+    return () => {
+      window.removeEventListener('aih-open-terminal', restore);
+      window.removeEventListener('aih-toggle-terminal', restore);
+    };
+  }, [expanded]);
   const normalizedQuery = query.trim();
   const currentSearch = searchResult?.scope === workspaceScope && searchResult.query === normalizedQuery ? searchResult : undefined;
 
@@ -183,7 +243,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   };
 
   useEffect(() => {
-    setExpandedPaths(new Set());
+    setExpandedPaths(new Set()); revealRequest.current = undefined;
+    setPopup(undefined); setViewerExpanded(false);
     uploadAbortRef.current?.abort();
     openFileAbortRef.current?.abort();
     refreshAbortRef.current?.abort();
@@ -262,6 +323,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     const generation = ++readEpoch.current;
     // A delayed read must not undo a newer explicit disclosure action.
     const directoryGeneration = directoryIntent.current;
+    revealRequest.current = undefined;
     setActivePath(filePath); setSelected(undefined); setDiff(''); setDiffBinary(false); setReading(true);
     openFileAbortRef.current?.abort();
     const controller = new AbortController();
@@ -312,6 +374,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     const remaining = tabsRef.current.filter(file => file.path !== filePath);
     publishTabs(remaining);
     if (activePath === filePath) {
+      revealRequest.current = undefined;
       readEpoch.current++; openFileAbortRef.current?.abort();
       setSelected(undefined); setReading(false); setActivePath(''); setError('');
       const next = remaining[Math.max(0, index - 1)];
@@ -321,7 +384,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     window.requestAnimationFrame(() => {
       if (generation !== readEpoch.current || document.activeElement !== document.body) return;
       const target = panelRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')
-        ?? panelRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button');
+        ?? explorerRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button');
       target?.focus();
     });
   };
@@ -402,10 +465,12 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   }, [changes]);
 
   useEffect(() => {
-    const resize = () => setViewerMaxWidth(Math.max(360, Math.min(1200, window.innerWidth * .65)));
+    const resize = () => setViewerMaxWidth(Math.max(360, Math.min(1200, window.innerWidth * .65,
+      window.innerWidth - (explorerHost?.closest('.sidebar')?.getBoundingClientRect().width ?? 0) - 240)));
+    resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, []);
+  }, [explorerHost]);
 
   const resizeViewer = (width: number) => setViewerWidth(Math.max(360, Math.min(viewerMaxWidth, width)));
   const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -429,22 +494,18 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     : '', [selected, workspace]);
 
   if (!workspace) return null;
-  if (collapsed) return <aside className="workspace-panel collapsed"><button onClick={() => setCollapsed(false)} aria-label={t('files.expand')}><Icon name="chevron-left" /></button></aside>;
+  if (collapsed) {
+    const closed = <section role="region" aria-label={t('files.explorer')}
+      className={explorerHost ? 'workspace-explorer collapsed' : 'workspace-panel collapsed panel-open'}>
+      <button ref={expandButton} onClick={() => { focusAfterExpand.current = true; setCollapsed(false); }} aria-label={t('files.expand')}><Icon name="chevron-down" /> <span className="collapsed-label">{t('files.files')}</span></button>
+    </section>;
+    return explorerHost ? createPortal(closed, explorerHost) : closed;
+  }
 
-  return (
-    <aside ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
-      style={selected ? { flexBasis: `${visibleViewerWidth}px`, width: `${visibleViewerWidth}px` } : undefined}
-      aria-label={t('files.explorer')}>
-      {selected && !viewerExpanded && <div className="panel-resizer" role="separator" aria-orientation="vertical"
-        tabIndex={0} aria-valuemin={360} aria-valuemax={viewerMaxWidth} aria-valuenow={visibleViewerWidth}
-        aria-label={t('files.resize')} onPointerDown={beginResize} onKeyDown={event => {
-          const width = event.key === 'ArrowLeft' ? visibleViewerWidth + 20
-            : event.key === 'ArrowRight' ? visibleViewerWidth - 20
-              : event.key === 'Home' ? 360 : event.key === 'End' ? viewerMaxWidth : undefined;
-          if (width === undefined) return;
-          event.preventDefault(); resizeViewer(width);
-        }} />}
-      <header>
+  const explorer = <section ref={explorerRef} className="workspace-explorer" role="region" aria-label={t('files.explorer')} hidden={expanded}>
+      <header ref={controlsRef} onBlurCapture={event => {
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setPopup(undefined);
+      }}>
         <div className="panel-tabs">
           <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>{t('files.files')}</button>
           <button className={tab === 'changes' ? 'active' : ''} onClick={() => setTab('changes')}>
@@ -452,15 +513,42 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           </button>
         </div>
         <div className="panel-header-actions">
-          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose} aria-label={t('common.close')}><Icon name="close" /></button>}
-          <button onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))} aria-label={t('terminal.openFromFiles')}><Icon name="terminal" /></button>
-          <button onClick={() => { setLinkedDirectoryRequest(undefined); setCollapsed(true); }} aria-label={t('files.collapse')}><Icon name="chevron-right" /></button>
+          <button disabled={!workspaceOperationTrusted} onClick={() => { setRefreshVersion(value => value + 1); void refresh(); }} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
+          <button ref={uploadButton} disabled={!workspaceOperationTrusted || Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
+            aria-label={t('files.upload')} aria-expanded={popup === 'upload'} aria-controls={popup === 'upload' ? `${tabId}-upload` : undefined}
+            onClick={() => setPopup(popup === 'upload' ? undefined : 'upload')}><Icon name="upload" /></button>
+          <button ref={optionsButton} aria-label={copy.options} aria-expanded={popup === 'options'} aria-controls={popup === 'options' ? `${tabId}-options` : undefined}
+            onClick={() => setPopup(popup === 'options' ? undefined : 'options')}><Icon name="more" /></button>
         </div>
+        {popup === 'options' && <div className="file-tools-popup" id={`${tabId}-options`} role="group" aria-label={copy.options}>
+          <label className="hidden-toggle"><input type="checkbox" checked={showHidden} disabled={!workspaceOperationTrusted}
+            onChange={event => setShowHidden(event.target.checked)} /> {t('files.hidden')}</label>
+          <button className="panel-linked-directories" onClick={() => {
+            // The stable trigger owns the lazy modal, not this retiring menu item.
+            optionsButton.current?.focus({ preventScroll: true }); setPopup(undefined); openLinkedDirectory('.');
+          }}>{linkedDirectoryMessages(locale).title}</button>
+          <button onClick={() => { setPopup(undefined); window.dispatchEvent(new Event('aih-open-terminal')); }}>{t('terminal.openFromFiles')}</button>
+          <button onClick={() => { setPopup(undefined); setLinkedDirectoryRequest(undefined); setCollapsed(true); }}>{t('files.collapse')}</button>
+          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose}>{t('common.close')}</button>}
+        </div>}
+        {popup === 'upload' && <div className="file-tools-popup upload-options" id={`${tabId}-upload`} role="group" aria-label={t('files.upload')}>
+          <p>{copy.destination}<code>{workspace.cwd}</code></p>
+          <label>{t('files.collision')}
+            <select value={collision} onChange={event => setCollision(event.target.value as typeof collision)}>
+              <option value="reject">{t('files.collision.reject')}</option>
+              <option value="rename">{t('files.collision.rename')}</option>
+              <option value="overwrite">{t('files.collision.overwrite')}</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => uploadInput.current?.click()}>{copy.chooseFiles}</button>
+        </div>}
       </header>
-
-      <button className="panel-linked-directories" onClick={() => openLinkedDirectory('.')}>
-        {linkedDirectoryMessages(locale).title}
-      </button>
+      <input ref={uploadInput} hidden type="file" multiple disabled={!workspaceOperationTrusted || Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
+        const files = [...(event.target.files ?? [])];
+        uploadButton.current?.focus({ preventScroll: true }); setPopup(undefined);
+        if (files.length) void uploadSelectedFiles(files);
+        event.target.value = '';
+      }} />
       {linkedDirectoryFolder !== undefined && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation, linkedDirectoryFolder])}
         cwd={workspace.cwd} initialDirectory={linkedDirectoryFolder} onClose={() => setLinkedDirectoryRequest(undefined)} />}
       {!workspaceOperationTrusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
@@ -469,25 +557,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
             <input type="search" value={query} onChange={event => setQuery(event.target.value)}
               placeholder={t('files.search')} aria-label={t('files.search')} />
             {query && <button onClick={() => setQuery('')} aria-label={t('files.clearSearch')}><Icon name="close" /></button>}
-            <button onClick={() => { setRefreshVersion(value => value + 1); void refresh(); }} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
-            <button type="button" title={t('files.upload')} aria-label={t('files.upload')}
-              disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
-              onClick={() => uploadInput.current?.click()}><Icon name="upload" /></button>
-            <input ref={uploadInput} hidden type="file" multiple disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
-              const files = [...(event.target.files ?? [])];
-              if (files.length) void uploadSelectedFiles(files);
-              event.target.value = '';
-            }} />
           </div>
-          <div className="upload-options">
-            <label>{t('files.collision')}
-              <select value={collision} disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
-                onChange={event => setCollision(event.target.value as typeof collision)}>
-                <option value="reject">{t('files.collision.reject')}</option>
-                <option value="rename">{t('files.collision.rename')}</option>
-                <option value="overwrite">{t('files.collision.overwrite')}</option>
-              </select>
-            </label>
             {uploadProgress && <div className="upload-progress" role="status" aria-live="polite">
               <progress max={Math.max(1, uploadProgress.totalBytes)} value={uploadProgress.loadedBytes}
                 aria-label={t('files.uploadProgress')} />
@@ -498,8 +568,6 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
               })}</span>
               {uploadProgress.phase !== 'complete' && <button onClick={() => uploadAbortRef.current?.abort()}>{t('common.cancel')}</button>}
             </div>}
-          </div>
-          <label className="hidden-toggle"><input type="checkbox" checked={showHidden} onChange={event => setShowHidden(event.target.checked)} /> {t('files.hidden')}</label>
           {error && <p className="panel-error" role="alert">{error}</p>}
           <div className="file-tree">
             {query && !normalizedQuery && <p className="panel-empty" role="status">{t('files.searchWhitespace')}</p>}
@@ -513,7 +581,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
             ) : tab === 'files' ? (
               entries.length ? <ul>{entries.map(entry => <FileNode key={entry.path} entry={entry} cwd={workspace.cwd}
                 depth={0} onOpen={(path, origin) => void openFile(path, 'source', undefined, origin)} onMention={mention} showHidden={showHidden}
-                activePath={activePath} expandedPaths={expandedPaths} onToggle={toggleDirectory} refreshVersion={refreshVersion}
+                activePath={activePath} expandedPaths={expandedPaths} onToggle={toggleDirectory} refreshVersion={refreshVersion} onReveal={revealRow}
                 onLinkedDirectory={path => openLinkedDirectory(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.')} />)}</ul>
                 : <p className="panel-empty">{t('files.empty')}</p>
             ) : gitSummary.repository ? (
@@ -538,6 +606,26 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         </>
       )}
 
+    </section>;
+
+  return <>
+    {explorerHost && createPortal(explorer, explorerHost)}
+    <div ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${hasReader ? 'viewer-open' : ''} ${expanded ? 'viewer-expanded' : ''} ${explorerHost ? 'split' : ''} ${explorerHost && !hasReader ? 'reader-empty' : ''}`}
+      style={hasReader ? { flexBasis: `${visibleViewerWidth}px`, width: `${visibleViewerWidth}px` } : undefined}>
+      {!explorerHost && explorer}
+      <aside className="workspace-reader" aria-label={copy.reader} hidden={!hasReader}>
+      <div ref={readerSurface} className="reader-surface" role={expanded ? 'dialog' : undefined}
+        aria-modal={expanded || undefined} aria-label={expanded ? copy.reader : undefined} tabIndex={expanded ? -1 : undefined}>
+      {selected && !expanded && <div className="panel-resizer" role="separator" aria-orientation="vertical"
+        tabIndex={0} aria-valuemin={360} aria-valuemax={viewerMaxWidth} aria-valuenow={visibleViewerWidth}
+        aria-label={t('files.resize')} onPointerDown={beginResize} onKeyDown={event => {
+          const width = event.key === 'ArrowLeft' ? visibleViewerWidth + 20
+            : event.key === 'ArrowRight' ? visibleViewerWidth - 20
+              : event.key === 'Home' ? 360 : event.key === 'End' ? viewerMaxWidth : undefined;
+          if (width === undefined) return;
+          event.preventDefault(); resizeViewer(width);
+        }} />}
+      {expanded && error && <p className="panel-error" role="alert">{error}</p>}
       {openedFiles.length > 0 && <div className="open-file-tabs">
         <div role="tablist" aria-label={copy.tabs}>
         {openedFiles.map((file, index) => <button key={file.path} role="tab" id={`${tabId}-${index}`} aria-selected={activePath === file.path}
@@ -562,14 +650,13 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         <section className="file-viewer" role="tabpanel" id={`${tabId}-panel`}
           aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
           <header>
-            <strong title={selected.path}>{selected.name}</strong>
+            <code className="viewer-path" tabIndex={0}>{selected.path}</code>
             <div>
-              <button onClick={() => setViewerExpanded(value => !value)} aria-pressed={viewerExpanded}
+              <button ref={maximizeButton} data-autofocus onClick={() => setViewerExpanded(value => !value)} aria-pressed={expanded}
                 aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}><Icon name={viewerExpanded ? 'minimize' : 'maximize'} /></button>
               <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}><Icon name="close" /></button>
             </div>
           </header>
-          <code className="viewer-path" tabIndex={0}>{selected.path}</code>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>
           <nav>
             <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => selectMode('source')}>{t('files.source')}</button>
@@ -590,8 +677,10 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
           </footer>
         </section>
       )}
-    </aside>
-  );
+      </div>
+      </aside>
+    </div>
+  </>;
 }
 
 function SourceView({ content, language, targetLine }: { content: string; language: string; targetLine?: number }) {

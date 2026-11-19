@@ -5,7 +5,7 @@ import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtu
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
 const url = '/chat/pane-lifetime?cwd=%2Fworkspace';
-const pane = (page: Page) => page.getByRole('complementary', { name: 'Workspace explorer' });
+const pane = (page: Page) => page.getByRole('region', { name: 'Workspace explorer' });
 
 async function product(page: Page) {
   await page.addInitScript(() => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({

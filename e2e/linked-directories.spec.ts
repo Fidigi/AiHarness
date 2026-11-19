@@ -1,7 +1,15 @@
 import { mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from './fixtures/test-budget';
+import { expect, test, type Page } from './fixtures/test-budget';
+
+async function openDirectories(page: Page) {
+  const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+  const invoker = explorer.getByRole('button', { name: 'File options', exact: true });
+  await invoker.click();
+  await explorer.getByRole('button', { name: 'Linked directories', exact: true }).click();
+  return invoker;
+}
 
 // Real product server only. No mock API, intercepted responses or replacement fixture UI.
 // Stable names are private to this isolated Docker container; mkdir refuses pre-existing paths.
@@ -42,11 +50,10 @@ for (const scenario of [
     await page.goto(`/?cwd=${encodeURIComponent(source)}`);
     await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
+    const panel = page.getByRole('region', { name: 'Workspace explorer' });
     await expect(panel).toBeVisible();
     await expect(panel.locator('.file-link-reason')).toContainText('Review directory consent');
-    const invoker = panel.getByRole('button', { name: 'Linked directories', exact: true });
-    await invoker.click();
+    const invoker = await openDirectories(page);
     const dialog = page.getByRole('dialog', { name: 'Linked directories', exact: true });
     await expect(dialog).toContainText('does not grant project trust');
     await expect(dialog).toContainText('provider maintenance scanners');
@@ -82,14 +89,14 @@ for (const scenario of [
     expect(escape.status()).toBe(403);
     await page.reload();
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    await panel.getByRole('button', { name: 'Linked directories', exact: true }).click();
+    await openDirectories(page);
     await expect(dialog.getByRole('button', { name: 'Revoke consent' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Revoke consent' }).click();
     await expect(dialog.getByRole('button', { name: 'Review directory consent' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0); await expect(invoker).toBeFocused();
     await page.context().setOffline(true);
-    await invoker.click();
+    await openDirectories(page);
     await expect(dialog.getByRole('alert')).toContainText('The server could not be reached.');
     await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
     await page.context().setOffline(false);
@@ -118,8 +125,7 @@ test('real source trust is independent of consent; direct files, Git, tools and 
   await page.goto(`/?cwd=${encodeURIComponent(source)}`);
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-  await panel.getByRole('button', { name: 'Linked directories', exact: true }).click();
+  await openDirectories(page);
   const dialog = page.getByRole('dialog', { name: 'Linked directories', exact: true });
   await dialog.getByRole('button', { name: 'Review directory consent' }).click();
   await dialog.getByLabel('I allow file browsing through this exact directory link.').check();
@@ -160,9 +166,7 @@ test('real external consent revocation retires stale file content and revision-b
   await page.goto(`/?cwd=${encodeURIComponent(source)}`);
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
-  const invoker = panel.getByRole('button', { name: 'Linked directories', exact: true });
-  await invoker.click();
+  const invoker = await openDirectories(page);
   const dialog = page.getByRole('dialog', { name: 'Linked directories', exact: true });
   await dialog.getByRole('button', { name: 'Browse allowed directory' }).click();
   await dialog.getByRole('button', { name: /allowed.txt/ }).click();
@@ -183,7 +187,7 @@ test('real external consent revocation retires stale file content and revision-b
   await expect(dialog).not.toContainText('EXTERNALLY_UPDATED_BODY');
   await expect(dialog).toBeFocused();
   await page.keyboard.press('Escape'); await expect(invoker).toBeFocused();
-  await invoker.click(); await expect(dialog.getByRole('button', { name: 'Review directory consent' })).toBeVisible();
+  await openDirectories(page); await expect(dialog.getByRole('button', { name: 'Review directory consent' })).toBeVisible();
   await page.keyboard.press('Escape');
   await writeFile(path.join(target, 'allowed.txt'), 'CONFIRMED_DIRECTORY_BODY');
 });
@@ -196,7 +200,7 @@ test('real target replacement invalidates the open browser selector and requires
   await page.goto(`/?cwd=${encodeURIComponent(source)}`);
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-  await page.getByRole('complementary', { name: 'Workspace explorer' }).getByRole('button', { name: 'Linked directories', exact: true }).click();
+  await openDirectories(page);
   const dialog = page.getByRole('dialog', { name: 'Linked directories', exact: true });
   await expect(dialog.getByRole('button', { name: 'Browse allowed directory' })).toBeVisible();
   const previous = `${target}-previous`;
@@ -233,8 +237,7 @@ test('closing a real in-flight file open aborts its retired modal without late c
   await page.goto(`/?cwd=${encodeURIComponent(source)}`);
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-  const invoker = page.getByRole('complementary', { name: 'Workspace explorer' }).getByRole('button', { name: 'Linked directories', exact: true });
-  await invoker.click();
+  const invoker = await openDirectories(page);
   const dialog = page.getByRole('dialog', { name: 'Linked directories', exact: true });
   await dialog.getByRole('button', { name: 'Browse allowed directory' }).click();
   // Delay the genuine network, not the API response/body or product source.
@@ -252,7 +255,7 @@ test('closing a real in-flight file open aborts its retired modal without late c
   await page.waitForTimeout(1600);
   await expect(dialog).toHaveCount(0); await expect(invoker).toBeFocused();
   await expect(page.getByRole('region', { name: 'File content' })).toHaveCount(0);
-  await invoker.click();
+  await openDirectories(page);
   await expect(dialog.getByRole('button', { name: 'Browse allowed directory' })).toBeVisible();
   await expect(dialog.getByRole('region', { name: 'File content' })).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(invoker).toBeFocused();
@@ -279,10 +282,10 @@ test('real in-root file links retain ordinary file opening without consent reque
   await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
   await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-  const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
+  const panel = page.getByRole('region', { name: 'Workspace explorer' });
   await expect(panel).toBeVisible();
   await panel.getByRole('button', { name: 'ordinary-link.txt', exact: true }).click();
-  await expect(panel.locator('.file-viewer')).toContainText('ORDINARY_IN_ROOT_LINK_BODY');
+  await expect(page.getByRole('complementary', { name: 'File reader' })).toContainText('ORDINARY_IN_ROOT_LINK_BODY');
   await expect(page.locator('.linked-directory-dialog')).toHaveCount(0);
   expect(consentRequests).toEqual([]);
 });
@@ -299,13 +302,14 @@ test('real nested directory refresh follows filesystem additions and removals', 
     await page.goto(`/?cwd=${encodeURIComponent(source)}`);
     await expect(page.locator('.workspace-button')).toHaveAttribute('title', source);
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    const panel = page.getByRole('complementary', { name: 'Workspace explorer' });
+    const panel = page.getByRole('region', { name: 'Workspace explorer' });
+    const reader = page.getByRole('complementary', { name: 'File reader' });
     for (const name of ['nested-files', 'deep', 'leaf']) {
       const disclosure = panel.getByRole('button', { name, exact: true });
       await disclosure.click(); await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     }
     const keep = panel.getByRole('button', { name: 'keep.ts', exact: true });
-    await keep.click(); await expect(panel.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
+    await keep.click(); await expect(reader.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
     await rm(path.join(directory, 'removed.ts'));
     await writeFile(path.join(directory, 'added.ts'), 'ADDED_NESTED_CONTENT');
     const listed = await page.request.get('/api/files', { params: { cwd: source, path: relative } });
@@ -315,7 +319,7 @@ test('real nested directory refresh follows filesystem additions and removals', 
     await expect(panel.getByRole('button', { name: 'added.ts', exact: true })).toBeVisible();
     await expect(panel.getByRole('button', { name: 'removed.ts', exact: true })).toHaveCount(0);
     await expect(keep).toHaveAttribute('aria-current', 'true');
-    await expect(panel.locator('.viewer-path')).toHaveText(`${relative}/keep.ts`);
-    await expect(panel.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
+    await expect(reader.locator('.viewer-path')).toHaveText(`${relative}/keep.ts`);
+    await expect(reader.locator('.source-view')).toContainText('KEEP_NESTED_CONTENT');
   } finally { await rm(path.join(source, 'nested-files'), { recursive: true, force: true }); }
 });

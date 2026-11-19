@@ -433,6 +433,10 @@ a:has(> .ui-icon) { display: inline-flex; align-items: center; gap: .35rem; }
   .plugin-identity code { max-width: 80vw; }
 }
 
+@media (max-width: 959px) and (pointer: coarse) {
+  .mobile-menu, .mobile-files { width: 44px; height: 44px; }
+}
+
 @media (max-width: 560px) {
   .global-command-palette-backdrop { padding-top: 3.5rem; }
   .global-command-palette-results > button { grid-template-columns: 1fr auto; }

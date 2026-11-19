@@ -31,9 +31,14 @@ async function product(page: Page, owner: 'sidebar' | 'panel') {
   });
   await page.goto('/chat/assets?cwd=%2Fworkspace');
   await expect(composer(page)).toBeVisible();
-  const invoker = page.locator(owner === 'sidebar' ? '.workspace-linked-directories' : '.panel-linked-directories');
+  const invoker = owner === 'sidebar' ? page.locator('.workspace-linked-directories')
+    : page.getByRole('button', { name: 'File options', exact: true });
   await expect(invoker).toBeVisible();
   return { invoker, requests, errors };
+}
+async function activate(page: Page, owner: 'sidebar' | 'panel') {
+  if (owner === 'panel') await page.getByRole('button', { name: 'File options', exact: true }).click();
+  await page.locator(owner === 'sidebar' ? '.workspace-linked-directories' : '.panel-linked-directories').click();
 }
 async function settle(page: Page) {
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -44,7 +49,7 @@ for (const owner of ['sidebar', 'panel'] as const) {
       let held: Route | undefined;
       await page.route(asset, route => { held = route; });
       const { invoker, requests, errors } = await product(page, owner);
-      await invoker.click();
+      await activate(page, owner);
       await expect.poll(() => Boolean(held)).toBe(true);
       await expect(boundary(page).getByRole('status')).toBeVisible();
       await expect(boundary(page).getByRole('button', { name: 'Close', exact: true })).toBeEnabled();
@@ -77,8 +82,8 @@ for (const owner of ['sidebar', 'panel'] as const) {
     });
     test(owner + ' failed real ' + kind + ': local error, cached reopen, explicit reload warning and recovery', async ({ page }) => {
       await page.route(asset, route => route.abort('failed'));
-      const { invoker, requests, errors } = await product(page, owner);
-      await invoker.click();
+      const { requests, errors } = await product(page, owner);
+      await activate(page, owner);
       await expect(boundary(page).getByRole('alert')).toContainText('Reload the page to retry');
       await expect(boundary(page)).toContainText('unsent text may be lost');
       await expect(composer(page)).toBeVisible();
@@ -86,13 +91,13 @@ for (const owner of ['sidebar', 'panel'] as const) {
       await boundary(page).getByRole('button', { name: 'Close', exact: true }).click();
       await expect(boundary(page)).toHaveCount(0);
       await page.unroute(asset);
-      await invoker.click();
+      await activate(page, owner);
       await expect(boundary(page).getByRole('alert')).toBeVisible();
       await expect(dialog(page)).toHaveCount(0); expect(requests).toEqual([]);
       await boundary(page).getByRole('button', { name: 'Reload page to retry', exact: true }).click();
       await expect(composer(page)).toBeVisible();
       await expect(boundary(page)).toHaveCount(0);
-      await invoker.click(); await expect(dialog(page)).toBeVisible();
+      await activate(page, owner); await expect(dialog(page)).toBeVisible();
       await expect(dialog(page).getByRole('button', { name: 'Close', exact: true })).toBeFocused();
       expect(requests).toHaveLength(1);
       await page.keyboard.press('Escape');
@@ -102,13 +107,15 @@ for (const owner of ['sidebar', 'panel'] as const) {
     test(owner + ' late real JS after ' + end + ' cannot reopen or request stale metadata', async ({ page }) => {
       let held: Route | undefined;
       await page.route(js, route => { held = route; });
-      const { invoker, requests } = await product(page, owner);
-      await invoker.click(); await expect.poll(() => Boolean(held)).toBe(true);
+      const { requests } = await product(page, owner);
+      await activate(page, owner); await expect.poll(() => Boolean(held)).toBe(true);
       await expect(boundary(page)).toBeVisible();
       if (end === 'close') await boundary(page).getByRole('button', { name: 'Close', exact: true }).click();
       else if (end === 'pane-close') {
-        if (owner === 'panel') await page.getByRole('button', { name: 'Collapse workspace explorer' }).click();
-        else await page.keyboard.press('Control+Shift+S');
+        if (owner === 'panel') {
+          await page.getByRole('button', { name: 'File options', exact: true }).click();
+          await page.getByRole('button', { name: 'Collapse workspace explorer' }).click();
+        } else await page.keyboard.press('Control+Shift+S');
       } else if (end === 'workspace') {
         await page.locator('.workspace-button').click();
         const picker = page.locator('.directory-picker');
@@ -125,7 +132,7 @@ for (const owner of ['sidebar', 'panel'] as const) {
       await held!.continue(); await loaded; await settle(page);
       await expect(boundary(page)).toHaveCount(0); await expect(dialog(page)).toHaveCount(0);
       expect(requests).toEqual([]);
-      if (end === 'close') { await invoker.click(); await expect(dialog(page)).toBeVisible(); expect(requests).toHaveLength(1); }
+      if (end === 'close') { await activate(page, owner); await expect(dialog(page)).toBeVisible(); expect(requests).toHaveLength(1); }
     });
   }
 }
@@ -135,14 +142,14 @@ for (const owner of ['sidebar', 'panel'] as const) {
     let held: Route | undefined; let downloads = 0;
     await page.route(js, route => { held = route; downloads++; });
     const { invoker, requests } = await product(page, owner);
-    await invoker.click(); await expect(boundary(page)).toBeVisible();
+    await activate(page, owner); await expect(boundary(page)).toBeVisible();
     await expect.poll(() => Boolean(held)).toBe(true);
     await boundary(page).getByRole('button', { name: 'Close', exact: true }).click();
     await expect(invoker).toBeFocused(); await expect(boundary(page)).toHaveCount(0);
-    await invoker.click(); await expect(boundary(page).getByRole('status')).toBeVisible();
+    await activate(page, owner); await expect(boundary(page).getByRole('status')).toBeVisible();
     await page.keyboard.press('Escape'); await expect(invoker).toBeFocused();
     await expect(boundary(page)).toHaveCount(0);
-    await invoker.click(); await expect(boundary(page).getByRole('status')).toBeVisible();
+    await activate(page, owner); await expect(boundary(page).getByRole('status')).toBeVisible();
     expect(requests).toEqual([]); expect(downloads).toBe(1);
     await held!.continue(); await expect(dialog(page)).toBeVisible();
     await expect(dialog(page).getByRole('button', { name: 'Close', exact: true })).toBeFocused();
@@ -158,7 +165,7 @@ test('folder replacement during the real import requests only the latest explici
     { name: 'first link', path: 'first/external', isDirectory: false, isSymbolicLink: true, hidden: false },
     { name: 'second link', path: 'second/external', isDirectory: false, isSymbolicLink: true, hidden: false },
   ] } }));
-  const panel = page.locator('.workspace-panel');
+  const panel = page.getByRole('region', { name: 'Workspace explorer' });
   await panel.getByRole('button', { name: 'Refresh files' }).click();
   await panel.getByRole('button', { name: /first link/ }).click();
   await expect.poll(() => Boolean(held)).toBe(true); await expect(boundary(page)).toBeVisible();
@@ -175,8 +182,8 @@ test('latest Sidebar/pane activation during import owns one modal and one focus 
   const { invoker, requests } = await product(page, 'sidebar');
   await invoker.click(); await expect(boundary(page)).toHaveCount(1);
   await expect.poll(() => Boolean(held)).toBe(true);
-  const latest = page.locator('.panel-linked-directories');
-  await latest.click(); await expect(boundary(page)).toHaveCount(1);
+  const latest = page.getByRole('button', { name: 'File options', exact: true });
+  await activate(page, 'panel'); await expect(boundary(page)).toHaveCount(1);
   expect(requests).toEqual([]);
   await held!.continue(); await expect(dialog(page)).toHaveCount(1);
   await expect(dialog(page).getByRole('button', { name: 'Close', exact: true })).toBeFocused();
@@ -185,13 +192,13 @@ test('latest Sidebar/pane activation during import owns one modal and one focus 
   await expect(dialog(page)).toHaveCount(0);
 });
 
-// Appended regressions: original 22 production boundary cases are unchanged.
+// Preserve the original production boundary contracts across grouped file controls.
 for (const owner of ['sidebar', 'panel'] as const) {
   test(owner + ' pending linked focus: composing Escape is inert', async ({ page }) => {
     let held: Route | undefined;
     await page.route(js, route => { held = route; });
-    const { invoker, requests } = await product(page, owner);
-    await invoker.click();
+    const { requests } = await product(page, owner);
+    await activate(page, owner);
     await expect.poll(() => Boolean(held)).toBe(true);
     await expect(boundary(page)).toBeVisible();
     await composer(page).focus();
@@ -206,8 +213,8 @@ for (const owner of ['sidebar', 'panel'] as const) {
   test(owner + ' pending linked focus: ordinary Escape preserves newer composer focus', async ({ page }) => {
     let held: Route | undefined;
     await page.route(js, route => { held = route; });
-    const { invoker, requests } = await product(page, owner);
-    await invoker.click();
+    const { requests } = await product(page, owner);
+    await activate(page, owner);
     await expect.poll(() => Boolean(held)).toBe(true);
     await expect(boundary(page)).toBeVisible();
     await composer(page).fill('A newer unsent focus owner');
@@ -221,8 +228,8 @@ for (const owner of ['sidebar', 'panel'] as const) {
   test(owner + ' pending linked focus: late readiness cannot steal newer composer focus or open metadata', async ({ page }) => {
     let held: Route | undefined;
     await page.route(js, route => { held = route; });
-    const { invoker, requests } = await product(page, owner);
-    await invoker.click();
+    const { requests } = await product(page, owner);
+    await activate(page, owner);
     await expect.poll(() => Boolean(held)).toBe(true);
     await expect(boundary(page)).toBeVisible();
     await composer(page).fill('Keep this new edit and focus');
@@ -249,7 +256,7 @@ for (const owner of ['sidebar', 'panel'] as const) {
     };
     await page.route('**/api/workspaces/linked-directories?*', route => route.fulfill({ json: inventory }));
     await page.route('**/api/workspaces/linked-directories/consent', route => { held = route; });
-    await invoker.click();
+    await activate(page, owner);
     await expect(dialog(page)).toBeVisible();
     await dialog(page).getByRole('button', { name: 'Review directory consent', exact: true }).click();
     await dialog(page).getByRole('checkbox').check();
@@ -267,12 +274,12 @@ for (const owner of ['sidebar', 'panel'] as const) {
   });
 }
 
-// Ready-modal IME regressions append; no existing case/body/assertion is changed.
+// Ready-modal IME guards also cover the explicit file-menu activation.
 for (const owner of ['sidebar', 'panel'] as const) {
   test(owner + ' ready linked IME: composing and legacy Escape preserve the source edit', async ({ page }) => {
     const { invoker, requests } = await product(page, owner);
     await composer(page).fill('Preserve the unsent composer draft');
-    await invoker.click();
+    await activate(page, owner);
     await expect(dialog(page)).toBeVisible();
     const source = dialog(page).getByRole('textbox', { name: 'Relative source folder', exact: true });
     await source.fill('中文目录');
@@ -305,7 +312,7 @@ test('late refused ordinary link read cannot replace newer composer intent', asy
     { name: 'late link', path: 'late/external', isDirectory: false, isSymbolicLink: true, hidden: false },
   ] } }));
   await page.route('**/api/files/content?*', route => { held = route; });
-  const panel = page.locator('.workspace-panel');
+  const panel = page.getByRole('region', { name: 'Workspace explorer' });
   await panel.getByRole('button', { name: 'Refresh files' }).click();
   await panel.getByRole('button', { name: /late link/ }).click();
   await expect.poll(() => Boolean(held)).toBe(true);

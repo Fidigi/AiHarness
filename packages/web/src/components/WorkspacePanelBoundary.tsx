@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '../hooks/useI18n';
 import { workspacePanelMessages } from './workspace-panel-messages';
 import './workspace-panel-boundary.css';
 import { Icon } from './Icon';
 
-type PanelProps = { isOpen?: boolean; onRequestClose?: () => void };
+type PanelProps = { isOpen?: boolean; onRequestClose?: () => void; explorerHost?: HTMLElement | null };
 let load: Promise<ComponentType<PanelProps>> | undefined;
 function loadPanel() {
   // Preserve failures too: Vite's preload bookkeeping alone is not proof that
@@ -13,7 +14,7 @@ function loadPanel() {
     .then(([module]) => module.default);
 }
 
-export default function WorkspacePanelBoundary({ onRequestClose }: { onRequestClose: () => void }) {
+export default function WorkspacePanelBoundary({ onRequestClose, explorerHost }: { onRequestClose: () => void; explorerHost?: HTMLElement | null }) {
   const { t, locale } = useI18n();
   const [Panel, setPanel] = useState<ComponentType<PanelProps>>();
   const [failed, setFailed] = useState(false);
@@ -72,11 +73,11 @@ export default function WorkspacePanelBoundary({ onRequestClose }: { onRequestCl
     return () => { current = false; };
   }, []);
 
-  if (Panel) return <Panel isOpen onRequestClose={onRequestClose} />;
+  if (Panel) return <Panel isOpen onRequestClose={onRequestClose} explorerHost={explorerHost} />;
   const copy = workspacePanelMessages(locale);
   // This is deliberately non-modal: no Suspense of the app, focus trap, DOM
   // state mutation or prompt/Stop/palette replacement during a network wait.
-  return <aside className="workspace-panel-loading" aria-label={t('files.explorer')} aria-busy={!failed}>
+  const placeholder = <section role="region" className="workspace-panel-loading" aria-label={t('files.explorer')} aria-busy={!failed}>
     <header><strong>{t('files.explorer')}</strong>
       <button type="button" onClick={onRequestClose} aria-label={t('common.close')}><Icon name="close" /></button>
     </header>
@@ -86,5 +87,6 @@ export default function WorkspacePanelBoundary({ onRequestClose }: { onRequestCl
       <button type="button" onClick={() => window.location.reload()}>{copy.retry}</button>
     </>}
     <button type="button" onClick={onRequestClose}>{t('common.cancel')}</button>
-  </aside>;
+  </section>;
+  return explorerHost ? createPortal(placeholder, explorerHost) : placeholder;
 }

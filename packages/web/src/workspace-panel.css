@@ -1,42 +1,50 @@
-.panel-linked-directories { margin: .45rem; padding: .4rem; border: 1px solid var(--border-control); border-radius: 5px; color: var(--text-primary); background: var(--surface-raised); text-align: left; cursor: pointer; }
+.workspace-explorer { position: relative; z-index: 11; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; color: var(--text-primary); background: var(--surface-panel); }
+.workspace-reader, .reader-surface { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; }
+.workspace-explorer[hidden], .workspace-reader[hidden], .workspace-panel.split.reader-empty { display: none; }
+.workspace-panel:not(.split).viewer-open > .workspace-explorer { flex: 0 1 42%; min-height: 130px; }
+.file-tools-popup { position: absolute; z-index: 20; top: 100%; inset-inline: .4rem; display: flex; flex-direction: column; gap: .4rem; padding: .6rem; max-height: 60vh; overflow: auto; border: 1px solid var(--border-control); border-radius: 5px; background: var(--surface-panel); box-shadow: 0 5px 18px #0004; }
+.file-tools-popup button { min-height: 32px; padding: .4rem; border: 0; border-radius: 3px; color: var(--text-primary); background: var(--surface-raised); text-align: left; cursor: pointer; }
+.file-tools-popup button:hover { background: var(--surface-hover); }
+.file-tools-popup code { display: block; overflow-wrap: anywhere; }
+.file-tools-popup .hidden-toggle { display: flex; align-items: center; gap: .4rem; padding: .4rem; }
 .file-node > .file-link-reason { padding-left: .6rem; color: var(--status-warning); font-size: .72rem; white-space: normal; }
 .workspace-panel { position: relative; flex: 0 0 320px; min-width: 230px; max-width: min(1200px, 65vw); display: flex; flex-direction: column; border-left: 1px solid var(--border-subtle); color: var(--text-primary); background: var(--surface-panel); }
 .workspace-panel.viewer-open { min-width: 360px; }
-.workspace-panel.viewer-expanded { position: fixed; z-index: 45; inset: 0; width: 100vw !important; max-width: none; }
-.workspace-panel.viewer-open.viewer-expanded > header,
-.workspace-panel.viewer-open.viewer-expanded > .panel-linked-directories,
-.workspace-panel.viewer-open.viewer-expanded > .file-toolbar,
-.workspace-panel.viewer-open.viewer-expanded > .upload-options,
-.workspace-panel.viewer-open.viewer-expanded > .hidden-toggle,
-.workspace-panel.viewer-open.viewer-expanded > .file-tree { display: none; }
+.workspace-panel.viewer-expanded { position: fixed; z-index: 60; inset: 0; width: 100vw !important; max-width: none; }
 .panel-resizer { position: absolute; z-index: 12; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
 .panel-resizer::after { position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; content: ''; background: var(--border-control); }
 .workspace-panel.collapsed { flex-basis: 34px; min-width: 34px; }
-.workspace-panel.collapsed > button { height: 100%; border: 0; color: var(--text-secondary); background: var(--surface-panel); cursor: pointer; }
-.workspace-panel > header, .file-viewer > header { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: .45rem; border-bottom: 1px solid var(--border-subtle); }
-.workspace-panel > header > button, .workspace-panel .panel-header-actions button, .file-viewer > header button { border: 0; color: var(--text-secondary); background: transparent; cursor: pointer; }
-.file-viewer > header > div { display: flex; align-items: center; gap: .25rem; }
+.workspace-panel.collapsed > button, .workspace-explorer.collapsed > button { min-height: 44px; border: 0; color: var(--text-primary); background: var(--surface-panel); cursor: pointer; }
+.workspace-panel.collapsed .collapsed-label { display: none; }
+.workspace-explorer > header, .file-viewer > header { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: .45rem; border-bottom: 1px solid var(--border-subtle); }
+.workspace-explorer .panel-header-actions button, .file-viewer > header button { border: 0; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.workspace-explorer > header { position: relative; flex: 0 0 auto; flex-wrap: wrap; gap: .3rem; }
+.panel-header-actions { display: flex; gap: .2rem; }
+.workspace-explorer .panel-header-actions button { min-height: 32px; min-width: 32px; }
+.file-viewer > header > div { display: flex; flex-shrink: 0; align-items: center; gap: .25rem; }
 .file-viewer > header button { min-width: 32px; min-height: 32px; }
 .panel-tabs { display: flex; gap: .2rem; }
-.panel-tabs button, .file-viewer nav button { padding: .4rem .55rem; border: 0; border-radius: 4px; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.panel-tabs button, .file-viewer nav button { padding: .4rem .35rem; border: 0; border-radius: 4px; color: var(--text-secondary); background: transparent; cursor: pointer; }
 .panel-tabs button.active, .file-viewer nav button.active { color: var(--text-primary); background: var(--surface-selected); box-shadow: inset 0 -2px var(--text-link); }
 .file-toolbar { display: flex; gap: .3rem; padding: .45rem; }
 .file-toolbar input[type="search"] { min-width: 0; flex: 1; padding: .4rem; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); }
 .file-toolbar input::placeholder { color: var(--text-secondary); }
 .file-toolbar button { display: grid; place-items: center; min-width: 32px; min-height: 32px; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-raised); cursor: pointer; }
-.file-toolbar button:disabled { cursor: wait; opacity: .6; }
+.workspace-explorer .panel-header-actions button:disabled { cursor: not-allowed; opacity: .6; }
+.workspace-explorer .panel-header-actions button:not(:disabled):hover { background: var(--surface-hover); }
+.workspace-explorer .panel-header-actions button[aria-expanded="true"] { background: var(--surface-selected); box-shadow: inset 0 -2px var(--text-link); }
 .hidden-toggle { padding: 0 .55rem .4rem; color: var(--text-secondary); font-size: .72rem; }
-.upload-options { display: flex; align-items: center; gap: .5rem; padding: 0 .45rem .35rem; color: var(--text-secondary); font-size: .68rem; }
+.upload-options { align-items: stretch; color: var(--text-secondary); font-size: .8rem; }
 .upload-options label { display: flex; min-width: 0; align-items: center; gap: .35rem; }
-.upload-options select { min-width: 0; padding: .2rem; border: 1px solid var(--border-control); border-radius: 3px; color: var(--text-primary); background: var(--surface-input); }
-.upload-options progress { min-width: 0; flex: 1; accent-color: var(--text-link); }
-.upload-progress { display: grid; min-width: 0; flex: 1; grid-template-columns: minmax(3rem, 1fr) minmax(7rem, auto) auto; align-items: center; gap: .35rem; }
+.upload-options select { min-width: 0; min-height: 28px; padding: .2rem; border: 1px solid var(--border-control); border-radius: 3px; color: var(--text-primary); background: var(--surface-input); }
+.upload-progress progress { min-width: 0; flex: 1; accent-color: var(--text-link); }
+.upload-progress { display: grid; min-width: 0; flex: 0 0 auto; padding: .35rem .45rem; color: var(--text-secondary); font-size: .72rem; grid-template-columns: minmax(3rem, 1fr) minmax(7rem, auto) auto; align-items: center; gap: .35rem; }
 .upload-progress span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.upload-progress button { padding: .15rem .35rem; border: 1px solid var(--border-control); border-radius: 3px; color: inherit; background: transparent; cursor: pointer; }
-.file-tree { flex: 1; overflow: auto; padding: .25rem; }
+.upload-progress button { min-width: 32px; min-height: 32px; padding: .15rem .35rem; border: 1px solid var(--border-control); border-radius: 3px; color: inherit; background: transparent; cursor: pointer; }
+.file-tree { flex: 1; min-height: 0; overflow: auto; padding: .25rem; }
 .file-tree ul { list-style: none; }
 .file-node > div, .file-tree > ul > li:not(.file-node) { display: flex; min-width: 0; align-items: center; }
-.file-name, .file-tree > ul > li > button:first-child { min-width: 0; min-height: 32px; flex: 1; overflow: hidden; padding: .35rem; border: 0; border-radius: 3px; color: var(--text-primary); background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.file-name, .file-tree > ul > li > button:first-child { scroll-margin-block: .3rem; min-width: 0; min-height: 32px; flex: 1; overflow: hidden; padding: .35rem; border: 0; border-radius: 3px; color: var(--text-primary); background: transparent; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .git-badge { float: right; min-width: 1.1rem; margin-left: .3rem; color: var(--status-warning); font: 600 .68rem ui-monospace, monospace; text-align: center; }
 .git-badge.added, .git-badge.untracked { color: var(--status-success); }
 .git-badge.deleted, .git-badge.conflict { color: var(--status-danger); }
@@ -60,7 +68,6 @@
 .change-row small i { color: var(--status-success); font-style: normal; }
 .change-row small em { color: var(--status-danger); font-style: normal; }
 .file-viewer { position: relative; z-index: 10; display: flex; flex: 1 1 0; min-height: 0; flex-direction: column; color: var(--text-primary); background: var(--surface-panel); }
-.workspace-panel.viewer-open .file-tree { flex: 0 1 140px; min-height: 60px; }
 .open-file-tabs { display: flex; flex: 0 0 auto; overflow-x: auto; border-block: 1px solid var(--border-subtle); }
 .open-file-tabs [role="tablist"] { display: flex; flex: 1; min-width: 0; overflow-x: auto; }
 .open-file-tabs button { min-height: 36px; border: 0; color: var(--text-primary); background: transparent; cursor: pointer; }
@@ -80,13 +87,12 @@
 .delimited-preview th, .delimited-preview td { max-width: 40rem; padding: .45rem; border: 1px solid var(--border-subtle); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (pointer: coarse) {
   .open-file-tabs button, .pdf-controls button, .file-toolbar button, .file-viewer > header button,
-  .workspace-panel .panel-header-actions button, .panel-tabs button, .file-viewer nav button,
-  .file-name, .file-mention, .file-tree > ul > li > button, .upload-options select,
+  .workspace-explorer .panel-header-actions button, .file-tools-popup button, .file-tools-popup label, .panel-tabs button, .file-viewer nav button,
+  .file-name, .file-mention, .file-tree > ul > li > button, .upload-options select, .upload-progress button,
   .workspace-panel .file-viewer footer button, .workspace-panel .file-viewer footer a { min-width: 44px; min-height: 44px; }
   .file-mention, .file-tree > ul > li > button:last-child { opacity: 1; }
 }
-.file-viewer > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.viewer-path { display: block; flex-shrink: 0; max-height: 4.5rem; overflow: auto; padding: .35rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
+.viewer-path { display: block; flex: 1; min-width: 0; max-height: 4.5rem; overflow: auto; padding: .2rem .1rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
 .viewer-path:focus-visible { outline-offset: -2px; }
 .viewer-meta { padding: .35rem .6rem; color: var(--text-secondary); font-size: .72rem; }
 .file-viewer nav { display: flex; padding: 0 .4rem .35rem; border-bottom: 1px solid var(--border-subtle); }
@@ -115,9 +121,10 @@
 }
 @media (max-width: 959px) {
   .workspace-panel { display: none; }
-  .workspace-panel.panel-open { position: fixed; z-index: 38; top: 0; right: 0; bottom: 0; width: min(560px, calc(100vw - 48px)) !important; min-width: 0; max-width: 100vw; display: flex; box-shadow: -12px 0 36px #0009; }
+  .workspace-panel.panel-open { position: fixed; z-index: 38; top: 56px; right: 0; bottom: 0; width: min(560px, calc(100vw - 48px)) !important; min-width: 0; max-width: 100vw; display: flex; box-shadow: -12px 0 36px #0009; }
   .panel-resizer { display: none; }
-  .workspace-panel.viewer-open.viewer-expanded > .open-file-tabs { min-height: 48px; padding-inline: 48px; }
+  .workspace-panel.panel-open.viewer-expanded { z-index: 60; inset: 0; width: 100vw !important; height: 100dvh; }
+  .workspace-panel.panel-open.collapsed { left: auto; right: .5rem; bottom: auto; width: 44px !important; }
 }
 @media (max-width: 640px) {
   .workspace-panel.panel-open { left: 0; width: 100vw !important; }

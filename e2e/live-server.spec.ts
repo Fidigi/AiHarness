@@ -91,7 +91,7 @@ test.describe('Intégration navigateur avec le vrai serveur', () => {
     });
     expect(uploaded.status()).toBe(201);
     await page.evaluate(() => window.dispatchEvent(new Event('aih-show-files')));
-    const explorer = page.getByRole('complementary', { name: 'Workspace explorer' });
+    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
     await expect(explorer).toBeVisible();
     // The upload bypassed the explorer UI. Refresh its directory explicitly so
     // this case also works on a fresh server, without an earlier case warming it.

@@ -1,8 +1,8 @@
 # Audit Report — AiHarness Web Design and UX
 
-> **Status: IN PROGRESS** (2026-11-18)
+> **Status: IN PROGRESS** (2026-11-19)
 >
-> Six implementation decisions approved. Semantic colors and decorative icons have bounded qualification; FILE-01–04 are verified. Explorer placement/chrome, category Settings, remaining input polish and final cross-surface qualification remain open.
+> Six implementation decisions approved. Semantic colors and decorative icons have bounded qualification; FILE-01–05 are verified, including left explorer/right reader and compact controls. Category Settings, remaining control/input polish and final cross-surface qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–14 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–15 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -29,18 +29,18 @@
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Four functional explorer criteria are verified; twelve criteria remain open and no gap is accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Five explorer criteria are verified; eleven criteria remain open and no gap is accepted.
 
 | Status | Count | Details |
 |---|---:|---|
-| `DONE` | 4 | FILE-01–04: selection/path, native disclosures, nested refresh and search feedback |
-| `PARTIAL` | 6 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
+| `DONE` | 5 | FILE-01–05: selection/path, disclosures, nested refresh, search and compact explorer/reader layout |
+| `PARTIAL` | 5 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
 | `ABSENT` | 1 | Category-tab Settings presentation |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
 | `IN PROGRESS` | 5 | VIS-01–03, ACT-02 and QA-01: reader palette/input implementation and focused qualification underway |
 | `GAP ACCEPTED` | 0 | No waiver requested or granted |
-| **Total** | **16** | **25.0% closed: (4 + 0) / 16 × 100** |
+| **Total** | **16** | **31.25% closed: (5 + 0) / 16 × 100** |
 
 ### Summary by Surface
 
@@ -48,10 +48,10 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Visual system | 0 | 1 | 0 | 0 | 0 | 3 | 0 | 4 |
 | Actions and input | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
-| File explorer | 4 | 1 | 0 | 0 | 0 | 0 | 0 | 5 |
+| File explorer | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
 | Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
 | Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **4** | **6** | **1** | **0** | **0** | **5** | **0** | **16** |
+| **Total** | **5** | **5** | **1** | **0** | **0** | **5** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -75,7 +75,7 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 ### File explorer
 
-FILE-01–04 are verified by §14. The findings below retain the pinned baseline and its acceptance contract.
+FILE-01–05 are verified by §14–15. The findings below retain the pinned baseline and its acceptance contract.
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
@@ -83,7 +83,7 @@ FILE-01–04 are verified by §14. The findings below retain the pinned baseline
 | FILE-02 | DONE | P1 | Directory expansion is a button inside nested lists, without `aria-expanded`, explicit chevron or pending state; only directory emoji changes. Each row/action joins the normal Tab order (S5). Add an accessible disclosure or a complete tree pattern, not incomplete ARIA roles. DONE requires announced expanded/collapsed/loading state and predictable keyboard traversal on a three-level fixture. If using tree semantics, implement roving focus, arrows, Home/End and typeahead; preserve distinct open-file and mention actions. |
 | FILE-03 | DONE | P1 | Each `FileNode` caches `children`; Refresh fetches only the root and Git status. Same-key nodes retain the old child cache, so a nested addition/removal can remain invisible after Refresh (S5). Refresh expanded directories or invalidate their caches while keeping useful expansion/selection. DONE requires an actual nested add/remove followed by Refresh and canonical rows, including safe handling of a delayed older expansion response. |
 | FILE-04 | DONE | P1 | Search renders a bare list for any truthy `query`, while requests require trimmed nonempty input. Loading, no-match and request failure all look like an empty region; JSX supplies no explicit labeled reset control, leaving native search-clearing affordances browser-dependent (S5). Distinguish those states, normalize whitespace consistently and provide reliable reset. DONE requires delayed/failed/zero-result/superseded searches and a whitespace query to give explicit, localized feedback without opening or mentioning a stale result. |
-| FILE-05 | PARTIAL | P2 | Linked-directory, search, upload collision and hidden-file controls occupy permanent rows; viewer and explorer share a vertical stack whose tree shrinks to a 140px flex basis when a viewer opens (S3, V1, V3). Put uncommon options in an accessible menu/upload flow, retain Files/Changes discovery and prioritize the file list. DONE requires a many-file/long-path fixture at 1440×900 and 390×844 plus short-mobile checks; source/preview/diff, upload collision policy, trust and maximize/restore must remain reachable. Existing maximize already hides tree/chrome; do not report it as missing. |
+| FILE-05 | DONE | P2 | Linked-directory, search, upload collision and hidden-file controls occupy permanent rows; viewer and explorer share a vertical stack whose tree shrinks to a 140px flex basis when a viewer opens (S3, V1, V3). Put uncommon options in an accessible menu/upload flow, retain Files/Changes discovery and prioritize the file list. DONE requires a many-file/long-path fixture at 1440×900 and 390×844 plus short-mobile checks; source/preview/diff, upload collision policy, trust and maximize/restore must remain reachable. Existing maximize already hides tree/chrome; do not report it as missing. |
 
 ### Settings
 
@@ -152,6 +152,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-18 | VIS-01–03, ACT-02, QA-01 | IN PROGRESS → IN PROGRESS | Shared semantic palette, native control boundaries, selection markers and reviewed captures in §12 | Frozen palette: workspace/parity typechecks PASS; Web units 71/617 PASS; focused no-update/no-retry browser gate **39/39 PASS** (1.2m), with canonical 1 GiB shared memory; build budgets PASS (147/158 KiB gzip entry/eager). Earlier full workspace units: 653/11,590 PASS before final CSS/test refinements | Bounded color progress only. Full browser campaign 218/221 and diagnostic shard set 220/221 retain native failures; baseline comparison and its limits are documented below. Icons/layout/category work and final QA remain open. |
 | 2026-11-18 | ACT-01–02, FILE-02, QA-01 | States unchanged | Decorative SVG family, preserved translated names, disclosure semantics and reviewed captures in §13 | Canonical typechecks and Web 71/617 PASS; 108 distinct no-update/no-retry owning browser cases PASS (40 focused, 43 linked, 17 workspace assets, 8 locale assets); source/image SHA-256 equality for all 29 staged source files; bundle budgets PASS (148/159 KiB gzip entry/eager) | Initial locale-source assertion and tactile CSS regression corrected; native global/diagnostic failures remain recorded. Icon consistency does not close action-density, mobile-header overlap, explorer or Settings work. |
 | 2026-11-18 | FILE-01–04; VIS-01–03, ACT-02, QA-01 | FILE-01–04: PARTIAL → DONE; other states unchanged | Functional explorer, hierarchical flow repair, contrast/path captures and criterion mapping in §14 | Canonical typechecks PASS; Web 71/617 PASS; frozen no-update/no-retry owning browser gates **104/104 PASS** (35 standard, 17 workspace assets, 44 linked/real files, 8 locale assets); all ten changed source files SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Mock and actual filesystem/API/browser regressions reproduced before repair. Native build failures and the initial locale-inventory assertion remain recorded. FILE-05 layout/chrome, Settings and final global qualification remain open. |
+| 2026-11-19 | FILE-05; ACT-01–02, QA-01 | FILE-05: PARTIAL → DONE; other states unchanged | Left explorer/right reader, responsive fallback, grouped controls and reviewed long-tree/path captures in §15 | Docker types/parity and Web 71/617 PASS; frozen no-update/no-retry owning browser gates **305 pass / 1 native worker failure**; FILE-05 scenarios pass; all 23 changed product/test sources SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Visual review exposed defects despite successful generation; tree allocation, selected-row reveal and upload progress were repaired. Responsive readiness assertions and eight stale Markdown baselines were corrected without weakening thresholds. Settings, remaining control/input polish and final qualification stay open. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -414,3 +415,48 @@ Final frozen-source checks, with 1 GiB shared memory and no snapshot updates or 
 | FILE-04 | Both EN/FR scenarios cover pending, failure, zero results, normalized/whitespace queries, reset, supersession and separate fresh-result mention/open. Old results cannot be acted on after a newer query. |
 
 These four contracts are closed on this increment, not the whole redesign. The left explorer/right reader layout, compact options/upload flow, mobile header overlap, category Settings and final global qualification are not delivered by this functional increment.
+
+## 15. Explorer Placement and Compact Controls
+
+On desktop, the lazy explorer is portaled beneath conversations in the Sidebar; the independent reader stays right of the main content. A hidden Sidebar or narrow viewport uses the combined fallback without forcing navigation open. Sidebar/breakpoint changes preserve the mounted reader, current path, mode and bytes; they do not become authority/lifetime boundaries. Conversation navigation takes its content height, capped at 35% while the tree is expanded, instead of reserving an equal empty area. Collapsing files returns the freed height to conversations. Canonical selection receives a one-shot scroll reveal when its row mounts, including after host changes, without taking focus or reopening a newer manual disclosure.
+
+Files/Changes, Refresh and Upload remain direct. File options groups hidden files, linked directories, terminal, collapse and close. Upload exposes the existing workspace-root destination, reject/rename/overwrite policy and native Choose files action; progress stays compact and cancellable. Named EN/FR groups use ordinary Tab traversal, Escape/outside dismissal and stable triggers; the linked-directory boundary receives the persistent Options trigger, not a retiring popup item. No upload destination feature, API, permission or persistence-format change is introduced.
+
+The reader retains full paths, eight-file tabs, source/preview/diff and preview/download utilities. Its maximized surface is a named modal with focus containment, Escape restoration and protection against the global focus-prompt shortcut. Terminal requests leave maximization; the existing narrow-screen terminal handoff still retires files. Ordinary mobile panes/loading placeholders start below the 56px header, and coarse controls keep their larger targets. Collapse/expand restores focus explicitly rather than remount autofocus.
+
+### Reproductions, review and retained failures
+
+- Both new compact-layout scenarios first failed against the frozen foundation because the separate reader did not exist. The first implementation build failed with `TS1117`: a duplicate `more` glyph; the duplicate was removed, leaving no Icon source change.
+- Early assertions incorrectly omitted the mock upload's `U` badge and expected mobile files to survive the established terminal handoff. The latter capture run was **28 pass / 1 fail**. Expectations were corrected to retain those existing contracts, not to change product behavior.
+- Initial expanded generation passed **169/169**, but visual review found excessive empty navigation space and an offscreen current file. Strengthened tests reproduced both: tree height **150.28px** versus navigation **257.80px**, and selected-row viewport ratio **0**. The first repair passed mobile but left a desktop ratio of **0.99755859375**; scroll margin fixed the fractional clipping without lowering the required ratio of 1. Both cases then passed.
+- A held-upload fixture separately reproduced the moved progress strip growing into spare vertical space (**2/2 red**, `flex-grow: 1` rather than 0). Compact sizing, cancel targets and toolbar disabled/expanded/hover states were repaired. Final compact controls passed **2/2** (10.0s), also included in the standard gate below.
+- Subsequent generation was **168 pass / 1 fail** because the desktop scenario toggled navigation before the responsive handoff had committed. The first owning asset gate similarly finished **15 pass / 2 fail** while hit-testing a still-transitioning placeholder. The tests now await observable Sidebar/viewport readiness and retain the center hit-test; no timeout or retry was added.
+- Final layout review also caught the content-height rule continuing after collapse. The existing nested-disclosure scenario reproduced navigation staying at **70.15625px** rather than growing; a collapsed-state override restores that space, with the geometry assertion retained and passing in the final standard gate.
+- The related Markdown/chat/terminal/real-server gate initially finished **46 pass / 4 snapshot failures**. Desktop conversation width had changed with placement; other Markdown baselines still contained the earlier palette/icons, including dark code surfaces in Light. Actual/expected images were inspected, all eight affected Markdown captures were generated (**4/4**) and reviewed, then the full 50-case group passed without updates. These mismatches are not native crashes or waived assertions.
+
+- Before that final collapsed-state correction, the six groups had passed **306/306**; the 169-case standard group also passed after removing unrelated pixel-only baseline changes. Those earlier successes are not a green result for the final revision. Its expanded standard run finished **168 pass / 1 failure**: the Playwright worker exited with `SIGSEGV` in the desktop-Light plugin-catalogue visual case. There was no automatic retry, new runtime flag or relaxed assertion. The other owning groups passed; the cause of the native failure is not established.
+
+### Frozen qualification and closure
+
+Production build and workspace/parity typechecks passed in Docker. Web units passed **71 files / 617 tests** (7.45s). Budgets remain **148/159 KiB gzip entry/eager**, 28 JS chunks, with unchanged limits. All **23 changed product/test source files** match the retained container by SHA-256. Final browser checks used **1 GiB shared memory**, **zero retries** and **no snapshot updates**:
+
+| Owning surface/configuration | Result | Duration |
+|---|---:|---:|
+| Standard files, file tabs, keyboard/responsive, accessibility, real previews and visual scenarios | 168 pass / 1 native failure | 4.6m |
+| `workspace-asset-load.config.ts` | 17/17 | 15.4s |
+| `linked-modal-boundary.config.ts`, including actual linked-directory/filesystem scenarios | 44/44 | 4.1m |
+| `settings-locale-asset-load.config.ts` | 8/8 | 12.4s |
+| `pane-lifetime.config.ts` | 18/18 | 20.3s |
+| Terminal controls, live server, Markdown and chat | 50/50 | 1.7m |
+| **Distinct total** | **305 pass / 1 native failure** | — |
+
+Light/Dark desktop/mobile workspace captures were reviewed after the geometry repair: long path and selected row remain visible, and the desktop tree uses the previously empty space. Reader touch/preview captures, options/upload attachments and the refreshed Markdown captures were also reviewed. Broad generation initially rewrote 70 baselines. Pixel comparison identified twelve unrelated variations with unchanged dimensions and only 1–16 changed pixels (maximum channel delta 7); those were restored to HEAD rather than committed as design changes. The remaining 58 baselines cover the changed presentation and refreshed Markdown evidence. Generation alone was not accepted as qualification.
+
+| FILE-05 requirement | Concrete completion evidence |
+|---|---|
+| Compact options, direct Files/Changes and useful tree height | `files.spec.ts` checks named groups, native keyboard choice, hidden-file action, Escape/focus restoration, direct mode switching and tree/navigation geometry. Options/upload attachments show the actual grouped presentation. |
+| Many files/long paths at 1440×900 and 390×844 | Existing mock fixture extended with 40 files and nested long paths; full selected-row intersection is asserted initially and after Sidebar/breakpoint return. `visual.spec.ts` captures both Light/Dark placements. |
+| Short mobile and reachable source/preview/diff/maximize/restore | Existing touch and short-height file/tab journeys retain source/preview/diff, resize, maximize/restore geometry, focus containment and Escape. The reader mode/path survives presentation changes without another content read. |
+| Upload policy, trust and independent terminal controls | Mock request bodies retain root/collision policy; real preview uploads retain reject/rename behavior and bytes. Owning linked/asset/pane suites preserve cancellation, authority and modal ownership. Native PTY tests retain the narrow handoff and desktop independence. |
+
+FILE-05 is closed; five of sixteen criteria are now verified. Remaining control/tooltips/input work, category Settings and final reconciled cross-surface acceptance stay open. This bounded FILE-05 acceptance does not qualify the failed plugin-catalogue case, erase earlier native failures or constitute physical-device verification.
