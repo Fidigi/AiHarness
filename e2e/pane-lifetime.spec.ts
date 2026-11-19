@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -17,7 +17,7 @@ async function product(page: Page) {
 }
 
 test('built Settings assets restore project-specific group, row and scope intent without submitting configuration', async ({ page }) => {
-  const api = await installMockApi(page);
+  const api = await installMockApi(page, { providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: false }] });
   await page.goto('/settings?cwd=%2Fworkspace#model');
   const catalog = page.locator('#model .model-catalog');
   await catalog.locator('summary').click();
@@ -30,6 +30,7 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectSettingsTool(page, 'write');
   await selectInstalledSkill(page, 'release-notes');
   await selectProviderCredential(page, 'Anthropic');
+  await selectProviderConnection(page, 'builtin', 'openai');
   await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await switchSettingsWorkspace(page, '/workspace/other');
@@ -46,6 +47,10 @@ test('built Settings assets restore project-specific group, row and scope intent
   const credentialNavigation = page.locator('#providers').getByRole('navigation');
   await expect(credentialNavigation.getByRole('button', { name: 'OpenAI', exact: true })).toHaveAttribute('aria-current', 'true');
   await selectProviderCredential(page, 'Google AI');
+  await selectModelSettings(page, 'provider-lifecycle');
+  const connection = page.locator('.provider-context-detail').getByRole('article');
+  await expect(connection).toHaveAttribute('data-settings-selection', 'mock');
+  await selectProviderConnection(page, 'builtin', 'mock');
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
@@ -60,6 +65,8 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectModelSettings(page, 'providers');
   await expect(credentialNavigation.getByRole('button', { name: 'Anthropic', exact: true })).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.credential-context-detail input:visible')).toHaveAccessibleName(/Anthropic/u);
+  await selectModelSettings(page, 'provider-lifecycle');
+  await expect(connection).toHaveAttribute('data-settings-selection', 'openai');
   await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();

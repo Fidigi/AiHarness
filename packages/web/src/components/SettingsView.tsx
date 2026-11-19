@@ -398,6 +398,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
 
       <div hidden={modelPanel !== 'provider-lifecycle'}>
         <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+          presented={category === 'models' && modelPanel === 'provider-lifecycle'}
           onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
           onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
           onCanonicalReload={() => setProviderReload(value => value + 1)} />

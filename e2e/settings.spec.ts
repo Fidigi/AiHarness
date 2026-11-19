@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { SkillCatalog } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -117,6 +117,7 @@ test.describe('Settings and authentication', () => {
     await page.goto('/settings#provider-lifecycle');
     const section = settingsSection(page, 'Provider connections and custom providers');
     const openai = section.locator('.settings-resource-card').filter({ hasText: 'OpenAI' });
+    await selectProviderConnection(page, 'builtin', 'openai');
     await openai.getByRole('button', { name: 'Connect', exact: true }).click();
     await expect(section.getByText('E2E-CODE')).toBeVisible();
     await expect(section.getByRole('link', { name: 'Open the provider authorization page' }))

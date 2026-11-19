@@ -47,6 +47,17 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Choose a fresh connection descriptor; selecting metadata never starts its operations. */
+export async function selectProviderConnection(page: Page, group: 'builtin' | 'custom', id: string): Promise<void> {
+  await selectModelSettings(page, 'provider-lifecycle');
+  const back = page.getByRole('button', { name: /^(Back to provider connections|Retour aux connexions fournisseurs)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.locator('#provider-lifecycle').getByRole('navigation', { name: /^(Provider connections|Connexions fournisseurs)$/u });
+  const name = group === 'builtin' ? /^(Built-in providers|Fournisseurs intégrés)$/u : /^(Custom providers|Fournisseurs personnalisés)$/u;
+  const code = page.getByText(id, { exact: true }).and(page.locator('code'));
+  await navigation.getByRole('group', { name }).getByRole('button').filter({ has: code }).click();
+}
+
 /** Inspect a built-in credential row without changing the active provider. */
 export async function selectProviderCredential(page: Page, name: string): Promise<void> {
   await selectModelSettings(page, 'providers');

@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 import { selectMcpServer } from './fixtures/mcp-navigation';
-import { selectModelSettings } from './fixtures/settings-navigation';
+import { selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -373,7 +373,7 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
           lastSettingsSection: 'provider-lifecycle', keybindings: {},
         }));
       }, { theme: scenario.theme });
-      await installMockApi(page, {
+      const api = await installMockApi(page, {
         providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: true }],
         providerAuthStatuses: [{
           type: 'openai', name: 'OpenAI', configured: true, connected: true, method: 'oauth',
@@ -395,8 +395,17 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       await page.goto('/settings#provider-lifecycle');
       await expect(page.locator('#providers')).toBeHidden();
       await expect(page.locator('#custom-models')).toBeHidden();
+      // Retain the original usage/actions evidence when details are no longer simultaneous.
+      await selectProviderConnection(page, 'builtin', 'openai');
+      const builtin = page.locator('.provider-context-detail').getByRole('article');
+      await expect(builtin).toContainText('24 requests · 14500 tokens · $0.1432');
+      for (const name of ['Reconnect', 'Test connection', 'Disconnect']) await expect(builtin.getByRole('button', { name, exact: true })).toBeVisible();
+      const builtinCapture = test.info().outputPath(`provider-connection-builtin-${scenario.name}.png`);
+      await page.screenshot({ path: builtinCapture, animations: 'disabled', caret: 'hide' });
+      await test.info().attach('provider-connection-builtin', { path: builtinCapture, contentType: 'image/png' });
+      await selectProviderConnection(page, 'custom', 'acme');
       await page.getByText('Create or edit a compatible provider').click();
-      await expect(page.getByText('Acme Gateway')).toBeVisible();
+      await expect(page.locator('.provider-context-detail').getByText('Acme Gateway', { exact: true })).toBeVisible();
       const fields = page.locator('#provider-lifecycle .custom-resource-editor input, #provider-lifecycle .custom-resource-editor textarea');
       expect(await fields.count()).toBeGreaterThan(0);
       for (const field of await fields.all()) {
@@ -406,6 +415,8 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       await expectContrast(fields);
       await expectContrast(fields, 'borderTopColor', 3);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
+      expect(api.requests.filter(request => request.method !== 'GET'
+        && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`provider-model-lifecycle-${scenario.name}.png`, {

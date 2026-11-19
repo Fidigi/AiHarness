@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
-import { closeSettings, selectModelSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
 import { start, stop } from '../packages/server/dist/index.js';
 import { EncryptedCredentialStore, ProviderCredentialService, type MessageContentBlock, type Session } from '../packages/core/dist/index.js';
 
@@ -167,6 +167,7 @@ for (const locale of ['en', 'fr'] as const) test(`native Copilot Settings ${loca
     const mutations: string[] = [];
     page.on('request', request => { if (request.method() !== 'GET' && request.url().includes('/api/')) mutations.push(new URL(request.url()).pathname); });
     await page.goto(f.base + '/settings#provider-lifecycle');
+    await selectProviderConnection(page, 'builtin', 'github-copilot');
     const section = page.locator('#provider-lifecycle'), panel = section.locator('.oauth-device-flow');
     const card = section.locator('article[data-settings-selection="github-copilot"]');
     await expect(card.getByRole('button', { name: copy.connect, exact: true })).toBeVisible();

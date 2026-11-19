@@ -18,6 +18,7 @@ import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { toolSettingsMessage } from './tool-settings-messages';
+import { providerContextMessage } from './provider-context-messages';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -53,7 +54,8 @@ function error(message?: string): void {
   publishNotice(message || 'Operation failed.', { level: 'error' });
 }
 
-export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
+export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
+  presented: boolean;
   onCanonicalReload?: () => void;
   onSelectionInvalidated?: () => void;
   onProvidersLoaded?: (providers: CustomProviderDefinition[]) => void;
@@ -71,7 +73,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
   const [oauthStarting, setOauthStarting] = useState(false);
-  const oauthOperation = useRef<{ provider: string; method: 'device' | 'browser' | 'copy-code'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
+  const oauthOperation = useRef<{ provider: string; group: 'builtin' | 'custom'; method: 'device' | 'browser' | 'copy-code'; controller: AbortController; flow?: ProviderOAuthFlow } | undefined>(undefined);
   const retireOAuth = () => {
     const previous = oauthOperation.current;
     oauthOperation.current = undefined;
@@ -81,6 +83,56 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   };
   const [form, setForm] = useState({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [position, setPosition] = useState(() => readSettingsNavigation(origin.workspace?.cwd).positions['provider-lifecycle']);
+  const positionRef = useRef(position);
+  const navigationEpoch = useRef(0);
+  const navigationGeneration = navigationEpoch.current;
+  const [overview, setOverview] = useState(!position?.selection);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigation = useRef<HTMLElement>(null);
+  const detail = useRef<HTMLDivElement>(null);
+  const back = useRef<HTMLButtonElement>(null);
+  const focus = useRef<'navigation' | 'detail' | null>(null);
+  const prefix = useId();
+  const builtinStatuses = statuses.filter(status => !providers.some(provider => provider.id === status.type));
+  const groups = [
+    { id: 'builtin' as const, rows: builtinStatuses.map(status => ({ id: status.type, name: status.name, connected: status.connected })) },
+    { id: 'custom' as const, rows: providers.map(provider => ({ id: provider.id, name: provider.name, connected: provider.configured })) },
+  ];
+  const choices = groups.flatMap(group => group.rows.map(row => ({ ...row, group: group.id })));
+  const matches = choices.filter(choice => choice.group === position?.group && choice.id === position?.selection);
+  const selected = position?.selection ? matches.length === 1 ? matches[0] : undefined
+    : position?.group ? choices.find(choice => choice.group === position.group) : choices[0];
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && detail.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (!presented || !focus.current) return;
+    const target = focus.current; focus.current = null;
+    if (target === 'navigation') {
+      const current = navigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? navigation.current)?.focus();
+    } else if (mobile && !overview) back.current?.focus();
+  }, [presented, mobile, overview, selected]);
+  const selectProviderChoice = (group: 'builtin' | 'custom', selection: string, explicit = true) => {
+    const next = { group, selection };
+    positionRef.current = next; setPosition(next); ++navigationEpoch.current; setOverview(false);
+    focus.current = explicit && mobile ? 'detail' : null;
+    const current = readSettingsNavigation(origin.workspace?.cwd);
+    writeSettingsNavigation(origin.workspace?.cwd, { ...current,
+      ...(explicit ? { section: 'provider-lifecycle' as const } : {}),
+      positions: { ...current.positions, 'provider-lifecycle': next } });
+  };
+  const captureProviderChoice = (group: 'builtin' | 'custom', selection: string) => {
+    if (positionRef.current?.group !== group || positionRef.current?.selection !== selection) selectProviderChoice(group, selection, false);
+  };
   const load = async () => {
     const generation = epoch.current;
     const sequence = ++loadSequence.current;
@@ -89,8 +141,10 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
     if (auth.success && auth.data) setStatuses(auth.data);
     setRenameCapability(custom.renameCapability);
     if (custom.success && custom.data) { setProviders(custom.data); onProvidersLoaded?.(custom.data); }
+    setLoaded(true);
+    return custom.success ? custom.data : undefined;
   };
-  const reconcile = async (outcome?: ProviderRenameResult, notify = true, renameTarget?: string) => {
+  const reconcile = async (outcome?: ProviderRenameResult, notify = true, renameTarget?: string, choiceGeneration?: number) => {
     const generation = epoch.current;
     const sequence = ++loadSequence.current;
     // Bound to the operation's rendered selection, not the selection after a
@@ -115,8 +169,12 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
       return;
     }
     // Navigation/new selection owns its own reload.
-    setStatuses(auth.data ?? []); setProviders(custom.data); setRenameCapability(custom.renameCapability);
+    setStatuses(auth.data ?? []); setProviders(custom.data); setRenameCapability(custom.renameCapability); setLoaded(true);
     onProvidersLoaded?.(custom.data);
+    const renamedChoice = outcome?.success && outcome.data && custom.data.filter(provider => provider.id === outcome.data!.id).length === 1
+      ? outcome.data.id : undefined;
+    if (renamedChoice && navigationEpoch.current === choiceGeneration && positionRef.current?.group === 'custom'
+      && positionRef.current.selection === renameTarget) selectProviderChoice('custom', renamedChoice, false);
     useSessionStore.setState(state => {
       if (state.workspace?.id !== initial.workspace?.id || state.activeSessionId !== initial.activeSessionId
         || state.providers.active !== initial.providers.active
@@ -180,7 +238,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   }, [oauthFlow]);
   const login = async (provider: string, method: 'device' | 'browser' | 'copy-code' = 'device') => {
     retireOAuth();
-    const operation = { provider, method, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
+    const group: 'builtin' | 'custom' = providers.some(item => item.id === provider) ? 'custom' : 'builtin';
+    const operation = { provider, group, method, controller: new AbortController(), flow: undefined as ProviderOAuthFlow | undefined };
     oauthOperation.current = operation;
     setOauthFlow(undefined); setOauthStarting(true);
     const result = await startProviderOAuth(provider, operation.controller.signal, method);
@@ -206,6 +265,7 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
+    const generation = epoch.current, choiceGeneration = navigationEpoch.current;
     try {
       let headers: Record<string, string> | undefined;
       try { if (form.headers.trim()) headers = JSON.parse(form.headers) as Record<string, string>; }
@@ -220,15 +280,38 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
         setEditing(undefined);
         setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
         publishNotice(t('settings.customProviders.saved'), { level: 'success' });
-        await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
+        const [canonical] = await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
+        if (mounted.current && generation === epoch.current && choiceGeneration === navigationEpoch.current && result.data?.id
+          && canonical?.filter(provider => provider.id === result.data!.id).length === 1) selectProviderChoice('custom', result.data.id, false);
       }
     } finally { setBusy(false); }
   };
   return <section className="settings-section" id="provider-lifecycle">
     <h3>{t('settings.providerLifecycle')}</h3>
     <CacheNoticeSettings />
+    {loaded && (position?.group || position?.selection) && !selected && <p role="status">{providerContextMessage(locale, 'unavailable')}</p>}
+    <div className="provider-context">
+      <nav ref={navigation} aria-label={providerContextMessage(locale, 'navigation')} tabIndex={-1} hidden={mobile && !overview && !!selected}>
+        {groups.filter(group => group.rows.length > 0).map(group => <div key={group.id} role="group" aria-label={providerContextMessage(locale, group.id)}>
+          <h4>{providerContextMessage(locale, group.id)}</h4>
+          {group.rows.map((row, index) => {
+            const id = `${prefix}-${group.id}-${index}`, current = selected?.group === group.id && selected.id === row.id;
+            return <button key={row.id} type="button" aria-label={`${row.name} (${row.id})`}
+              aria-current={current ? 'true' : undefined} aria-expanded={current && (!mobile || !overview)}
+              aria-controls={id} aria-describedby={`${id}-summary`} onClick={() => selectProviderChoice(group.id, row.id)}>
+              <strong>{row.name}</strong><code>{row.id}</code>
+              <small id={`${id}-summary`}>{row.connected ? t('settings.connected') : t('settings.disconnected')}</small>
+            </button>;
+          })}
+        </div>)}
+      </nav>
+      <div ref={detail} className="provider-context-detail">
+        <button ref={back} type="button" className="provider-context-back" hidden={!mobile || overview || !selected}
+          onClick={() => { ++navigationEpoch.current; focus.current = 'navigation'; setOverview(true); }}>{providerContextMessage(locale, 'back')}</button>
     <div className="provider-lifecycle-list" data-settings-group="builtin">
-      {statuses.filter(status => !providers.some(provider => provider.id === status.type)).map(status => <article key={status.type} className="settings-resource-card" data-settings-selection={status.type}>
+      {builtinStatuses.map((status, index) => <article key={status.type} id={`${prefix}-builtin-${index}`} className="settings-resource-card" data-settings-selection={status.type}
+        hidden={selected?.group !== 'builtin' || selected.id !== status.type || mobile && overview}
+        onFocusCapture={() => captureProviderChoice('builtin', status.type)} onClickCapture={() => captureProviderChoice('builtin', status.type)}>
         <div><strong>{status.name}</strong><code>{status.type}</code></div>
         <span className={status.connected ? 'status-success' : 'status-warning'}>
           {status.connected ? t('settings.connected') : t('settings.disconnected')} · {status.method}
@@ -261,7 +344,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
         </div>
       </article>)}
     </div>
-    {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status">
+    {(oauthStarting || oauthFlow) && <aside className="oauth-device-flow" role="status"
+      hidden={selected?.group !== oauthOperation.current?.group || selected?.id !== oauthOperation.current?.provider || mobile && overview}>
       {oauthOperation.current?.method === 'browser' || oauthOperation.current?.method === 'copy-code' ? <strong>PKCE</strong> :
       <strong>{t('settings.oauth.title')}</strong>}
       {oauthStarting && <button type="button" onClick={() => {
@@ -341,10 +425,13 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           setEditing(undefined); setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
         }}>{t('common.cancel')}</button>}</div>
       </form>
+    </details>
       <div className="settings-resource-list" data-settings-group="custom">
-        {providers.map(provider => <article key={provider.id} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`} data-settings-selection={provider.id}>
+        {providers.map((provider, index) => <article key={provider.id} id={`${prefix}-custom-${index}`} className={`settings-resource-card${isRenameableProvider(provider) ? ' provider-custom-card' : ''}`} data-settings-selection={provider.id}
+          hidden={selected?.group !== 'custom' || selected.id !== provider.id || mobile && overview}
+          onFocusCapture={() => captureProviderChoice('custom', provider.id)} onClickCapture={() => captureProviderChoice('custom', provider.id)}>
           <div><strong>{provider.name}</strong><code>{provider.id}</code><small>{provider.dialect} · {provider.baseUrl}</small></div>
-          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id)} capability={renameCapability}
+          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id, navigationGeneration)} capability={renameCapability}
             disabled={busy || Boolean(editing) || oauthFlow?.state === 'pending' || !renameCapability.supported}
             disabledReason={!renameCapability.supported ? renameCapability.reason === 'exclusive-host-required' ? 'disabled' : 'capabilityUnknown' : undefined} />
             : null}
@@ -384,7 +471,8 @@ export function ProviderLifecycleSettings({ onCanonicalReload, onProvidersLoaded
           </div>
         </article>)}
       </div>
-    </details>
+      </div>
+    </div>
   </section>;
 }
 
