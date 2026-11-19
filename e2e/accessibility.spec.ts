@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { expectContrast } from './fixtures/contrast';
-import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 async function expectAccessible(page: Page, context?: string): Promise<void> {
   const result = await new AxeBuilder({ page })
@@ -92,9 +92,13 @@ test.describe('Accessibilité des parcours majeurs', () => {
       await selectSettingsCategory(page, category);
       if (category === 'models') await page.getByText('Manage model catalogue').click();
       if (filter) await expect(page.getByLabel(filter)).toBeVisible();
-      for (const theme of ['dark', 'light']) {
-        await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-        await expectAccessible(page, `settings ${category} (${theme})`);
+      const panels = category === 'general' ? ['appearance', 'behavior', 'notifications', 'authentication', 'about'] as const : [null];
+      for (const panel of panels) {
+        if (panel) await selectGeneralSettings(page, panel);
+        for (const theme of ['dark', 'light']) {
+          await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+          await expectAccessible(page, `settings ${panel ?? category} (${theme})`);
+        }
       }
     }
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });

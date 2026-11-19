@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -32,7 +32,7 @@ test('built Settings assets restore project-specific group, row and scope intent
   await switchSettingsWorkspace(page, '/workspace/other');
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
-  await selectSettingsCategory(page, 'general');
+  await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
   await expect(row).toBeInViewport();
@@ -163,7 +163,7 @@ test('picker retirement does not cancel the nested folder modal initial focus', 
   await page.keyboard.press('Escape');
   await expect(folder).toHaveCount(0);
   await expect(picker).toBeVisible();
-  expect(await picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await expect.poll(() => picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
 });
 
 // WEB-CHAT-10: real production App/controls, with only backend responses isolated.

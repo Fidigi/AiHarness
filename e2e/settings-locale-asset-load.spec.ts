@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 
 const asset = /\/assets\/settings-locale-[^/]+\.js$/;
 const chat = '/chat/locale-first?cwd=%2Fworkspace';
@@ -44,7 +44,7 @@ test('closed Settings fetches no feature copy; opening and reopening register re
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
   await expect(composer(page)).toBeVisible();
   await open(page);
-  await selectSettingsCategory(page, 'general');
+  await selectGeneralSettings(page, 'authentication');
   await expect(page.getByRole('heading', { name: 'Server authentication', exact: true })).toBeVisible();
   expect(requests).toHaveLength(1);
   await closeSettings(page);
@@ -106,6 +106,7 @@ for (const locale of ['en', 'fr'] as const) {
     const retry = boundary(page).getByRole('button', { name: locale === 'fr' ? 'Recharger et réessayer' : 'Reload and retry', exact: true });
     await retry.focus(); await expect(retry).toBeFocused();
     await retry.press('Enter');
+    await selectGeneralSettings(page, 'authentication');
     await expect(page.getByRole('heading', { name: locale === 'fr' ? 'Authentification du serveur' : 'Server authentication', exact: true })).toBeVisible();
     await expect(boundary(page)).toHaveCount(0);
   });

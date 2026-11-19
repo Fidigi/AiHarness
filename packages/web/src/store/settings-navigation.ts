@@ -2,14 +2,14 @@
 export const settingsSections = [
   'authentication', 'providers', 'provider-lifecycle', 'model', 'defaults',
   'custom-models', 'skills', 'tools', 'plugins', 'subagents', 'appearance', 'shortcuts',
-  'sessions', 'mcp', 'about',
+  'sessions', 'mcp', 'about', 'behavior', 'notifications',
 ] as const;
 export type SettingsSection = typeof settingsSections[number];
 export const settingsCategoryIds = ['general', 'models', 'skills', 'tools', 'plugins', 'subagents', 'mcp'] as const;
 export type SettingsCategory = typeof settingsCategoryIds[number];
 export const settingsSectionCategory: Record<SettingsSection, SettingsCategory> = {
   authentication: 'general', appearance: 'general', shortcuts: 'general',
-  defaults: 'general', sessions: 'general', about: 'general',
+  defaults: 'general', sessions: 'general', about: 'general', behavior: 'general', notifications: 'general',
   providers: 'models', 'provider-lifecycle': 'models', model: 'models', 'custom-models': 'models',
   skills: 'skills', tools: 'tools', plugins: 'plugins', subagents: 'subagents', mcp: 'mcp',
 };

@@ -12,6 +12,18 @@
 .settings-categories a:focus-visible { outline-offset: -5px; }
 .settings-categories a[aria-current="page"] { color: var(--text-primary); border-bottom-color: var(--text-link); }
 .settings-category-picker { display: none; }
+.settings-content { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.settings-context { display: flex; flex-direction: column; flex: 0 0 190px; gap: .25rem; min-height: 0; overflow: auto; padding: .75rem .5rem; border-right: 1px solid var(--border-subtle); background: var(--surface-panel); }
+.settings-context a { display: flex; align-items: center; min-height: 40px; padding: .6rem .75rem; border-left: 3px solid transparent; color: var(--text-secondary); text-decoration: none; }
+.settings-context a:hover { color: var(--text-primary); background: var(--surface-hover); }
+.settings-context a[aria-current="page"] { color: var(--text-primary); background: var(--surface-selected); border-left-color: var(--text-link); }
+.settings-context a:focus-visible { outline-offset: -3px; }
+.settings-detail { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.settings-context-back { display: none; }
+.settings-context[hidden], .settings-context-back[hidden] { display: none; }
+.settings-dialog .preference-grid label, .settings-dialog .preference-grid select { min-width: 0; }
+.settings-dialog .preference-grid .preference-toggle { display: flex; align-items: center; gap: .5rem; min-height: 24px; }
+.settings-dialog .preference-toggle input { flex: 0 0 auto; margin: 0; }
 .settings-dialog > .status-center-host { flex-shrink: 0; max-height: 25%; overflow: auto; }
 .settings-dialog .status-center { position: static; width: auto; margin: .75rem; }
 .settings-dialog .status-center:empty { display: none; }
@@ -22,6 +34,12 @@
   .settings-dialog-header { padding: .5rem .75rem; }
   .settings-dialog-header button { width: 44px; height: 44px; }
   .settings-categories { display: none; }
+  .settings-context { display: none; }
+  .settings-content-overview .settings-context { display: flex; flex: 1; border-right: 0; }
+  .settings-content-overview .settings-detail { display: none; }
+  .settings-context a { min-height: 44px; }
+  .settings-context-back { display: flex; flex-shrink: 0; align-items: center; min-height: 44px; padding: .5rem .75rem; border: 0; border-bottom: 1px solid var(--border-subtle); color: var(--text-link); background: var(--surface-panel); text-align: left; cursor: pointer; }
+  .settings-dialog .preference-grid .preference-toggle { min-height: 44px; }
   .settings-category-picker { display: flex; flex-direction: column; gap: .3rem; padding: .6rem .75rem; background: var(--surface-panel); border-bottom: 1px solid var(--border-subtle); font-size: .85rem; }
   .settings-category-picker select { min-height: 44px; width: 100%; padding: .4rem; color: var(--text-primary); background: var(--surface-input); border: 1px solid var(--border-control); border-radius: 4px; }
 }

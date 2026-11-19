@@ -1,7 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import {
   MCP_FILE_PROBLEM_MESSAGES,
   MCP_FILE_PROBLEM_REASONS,
@@ -33,7 +34,7 @@ test.describe('Settings and authentication', () => {
     await expect(settingsSection(page, 'Model').locator('option')).toContainText([
       'GPT-4o (Recommended)', 'GPT-4 Turbo', 'GPT-3.5 Turbo',
     ]);
-    await selectSettingsCategory(page, 'general');
+    await selectGeneralSettings(page, 'about');
     await expect(settingsSection(page, 'Sessions')).toContainText('Total sessions: 2');
     await expect(page.locator('#transport')).toHaveCount(0);
     await expect(page.getByLabel('Select the real-time transport', { exact: true })).toHaveCount(0);
@@ -157,7 +158,7 @@ test.describe('Settings and authentication', () => {
     await expect.poll(() => api.requests.filter(request => request.path === '/api/provider-registry/models' && request.method === 'POST').at(-1)?.body)
       .toMatchObject({ provider: 'openai', id: 'gpt-e2e', contextWindow: 64000, maxOutputTokens: 4096 });
 
-    await selectSettingsCategory(page, 'general');
+    await selectGeneralSettings(page, 'behavior');
     const defaults = settingsSection(page, 'Provider and model defaults');
     await defaults.getByLabel('Provider').fill('openai');
     await defaults.getByLabel('Model').fill('gpt-e2e');
@@ -1001,7 +1002,7 @@ test.describe('Settings and authentication', () => {
 
   test('applique le Bearer token à l’agent sans le persister durablement', async ({ page }) => {
     const api = await installMockApi(page);
-    await page.goto('/settings');
+    await page.goto('/settings#authentication');
     const authentication = settingsSection(page, 'Server authentication');
     await authentication.getByPlaceholder('Bearer token').fill('  e2e-token  ');
     await authentication.getByRole('button', { name: 'Apply' }).click();
@@ -1017,15 +1018,121 @@ test.describe('Settings and authentication', () => {
       .toBe('Bearer e2e-token');
   });
 
-  test('persiste thème, largeur, police et options dans des préférences versionnées', async ({ page }) => {
+  for (const scenario of [
+    { name: 'desktop-en-light', width: 1280, locale: 'en', theme: 'light' },
+    { name: 'desktop-fr-dark', width: 1280, locale: 'fr', theme: 'dark' },
+    { name: 'mobile-en-dark', width: 390, locale: 'en', theme: 'dark' },
+    { name: 'mobile-fr-light', width: 390, locale: 'fr', theme: 'light' },
+  ]) test(`persiste thème, largeur, police et options dans des panneaux séparés : ${scenario.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.addInitScript(({ locale, theme }) => {
+      localStorage.setItem('ai-harness-locale', locale);
+      if (!localStorage.getItem('ai-harness-preferences-v4')) {
+        localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+      }
+    }, scenario);
     await installMockApi(page);
-    await page.goto('/settings');
-    const appearance = settingsSection(page, 'Appearance');
-    await appearance.getByLabel(/^Theme/u).selectOption('pine');
+    await page.goto('/settings#appearance');
+    const appearance = page.locator('#appearance');
+    await expect(appearance).toBeVisible();
+    await expect(appearance.locator('input[type=checkbox]')).toHaveCount(0);
+    await expect(page.locator('#behavior')).toBeHidden();
+    await expect(page.locator('#notifications')).toBeHidden();
+    const navigation = page.getByRole('navigation', { name: /^(General settings|Paramètres généraux)$/u });
+    const appearanceLink = navigation.getByRole('link').first();
+    if (scenario.width < 960) {
+      const back = page.getByRole('button', { name: /^(Back to General settings|Retour aux paramètres généraux)$/u });
+      await back.focus(); await back.press('Enter');
+      await expect(appearance).toBeHidden();
+      await expect(appearanceLink).toBeFocused();
+      await expect(appearanceLink).toHaveCSS('outline-style', 'solid');
+      await expectContrast(appearanceLink, 'outlineColor', 3);
+      await expect(page.locator('.settings-dialog')).toHaveScreenshot(`general-sections-${scenario.name}.png`, {
+        animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+      });
+      await page.keyboard.press('Enter');
+      await expect(appearance).toBeVisible();
+      await expect(back).toBeFocused();
+    } else {
+      await expect(navigation.getByRole('link')).toHaveText(scenario.locale === 'fr'
+        ? ['Apparence', 'Comportement', 'Notifications', 'Accès', 'À propos']
+        : ['Appearance', 'Behavior', 'Notifications', 'Access', 'About']);
+      await expectThemeRoles(appearanceLink, '--surface-selected');
+      await expectContrast(appearanceLink, 'borderLeftColor', 3);
+      await appearanceLink.focus();
+      await page.keyboard.press('Tab');
+      const behaviorLink = navigation.getByRole('link').nth(1);
+      await expect(behaviorLink).toBeFocused();
+      await expect(behaviorLink).toHaveCSS('outline-style', 'solid');
+      await expectContrast(behaviorLink, 'outlineColor', 3);
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#behavior')).toBeVisible();
+      await selectGeneralSettings(page, 'appearance');
+    }
     await appearance.locator('input[type=range]').nth(0).fill('1200');
     await appearance.locator('input[type=range]').nth(1).fill('18');
-    await appearance.locator('input[type=checkbox]').nth(0).check();
-    await appearance.locator('input[type=checkbox]').nth(1).check();
+    await test.info().attach(`general-appearance-${scenario.name}`, {
+      body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`general-appearance-${scenario.name}.png`),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
+    await selectGeneralSettings(page, 'behavior');
+    const behavior = page.locator('#behavior');
+    await expect(appearance).toBeHidden();
+    await behavior.getByRole('checkbox').first().check();
+    await selectGeneralSettings(page, 'notifications');
+    const notifications = page.locator('#notifications');
+    await expect(behavior).toBeHidden();
+    await notifications.getByRole('checkbox').first().check();
+    await page.goBack();
+    await expect(behavior.getByRole('checkbox').first()).toBeChecked();
+    await page.goForward();
+    await expect(notifications.getByRole('checkbox').first()).toBeChecked();
+    for (const panel of ['behavior', 'notifications'] as const) {
+      await selectGeneralSettings(page, panel);
+      const controls = await page.locator(`#${panel} :is(select, input[type=range])`).evaluateAll(elements => elements.map(element => {
+        const bounds = element.getBoundingClientRect();
+        const section = element.closest('.settings-section')!;
+        const parent = section.getBoundingClientRect(), style = getComputedStyle(section);
+        return { left: bounds.left - parent.left - parseFloat(style.paddingLeft), right: parent.right - parseFloat(style.paddingRight) - bounds.right };
+      }));
+      for (const control of controls) {
+        expect(control.left).toBeGreaterThanOrEqual(-0.1);
+        expect(control.right).toBeGreaterThanOrEqual(-0.1);
+      }
+      const alignment = await page.locator(`#${panel} label:has(input[type=checkbox])`).evaluateAll(labels => labels.map(label => {
+        const input = label.querySelector('input')!.getBoundingClientRect();
+        const text = [...label.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())!;
+        const range = document.createRange(); range.selectNode(text);
+        const caption = range.getBoundingClientRect();
+        return { gap: caption.left - input.right, offset: Math.abs(input.top + input.height / 2 - caption.top - caption.height / 2), height: label.getBoundingClientRect().height };
+      }));
+      expect(alignment.length).toBeGreaterThan(0);
+      for (const label of alignment) {
+        expect(label.gap).toBeGreaterThanOrEqual(4);
+        expect(label.offset).toBeLessThanOrEqual(3);
+        expect(label.height).toBeGreaterThanOrEqual(scenario.width < 960 ? 44 : 24);
+      }
+      if (panel === 'behavior') {
+        await page.locator('.settings-view').evaluate(element => element.scrollTo(0, 0));
+        await test.info().attach(`general-behavior-${scenario.name}`, {
+          body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`general-behavior-${scenario.name}.png`),
+            animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+        });
+      }
+    }
+    expect((await new AxeBuilder({ page }).include('.settings-dialog').analyze()).violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    for (const control of await notifications.getByRole('checkbox').all()) {
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeInViewport({ ratio: 1 });
+    }
+    await page.locator('.settings-view').evaluate(element => element.scrollTo(0, 0));
+    await expect(notifications.getByRole('heading')).toBeInViewport({ ratio: 1 });
+    await expect(page.locator('.settings-dialog')).toHaveScreenshot(`general-notifications-${scenario.name}.png`, {
+      animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
+    });
+    await selectGeneralSettings(page, 'appearance');
+    await appearance.getByLabel(/^(Theme|Thème)/u).selectOption('pine');
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'pine');
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ai-harness-preferences-v4') || '{}')))
@@ -1036,9 +1143,10 @@ test.describe('Settings and authentication', () => {
         pushEvents: { completion: true, attention: true },
       });
     await page.reload();
-    const theme = settingsSection(page, 'Appearance').getByLabel(/^Theme/u);
+    const theme = page.locator('#appearance').getByLabel(/^(Theme|Thème)/u);
     await expect(theme).toHaveValue('pine');
-    await expect(theme.locator('option')).toHaveText(['System', 'Light', 'Dark', 'Mist', 'Rose', 'Pine']);
+    await expect(theme.locator('option')).toHaveText(scenario.locale === 'fr'
+      ? ['Système', 'Clair', 'Sombre', 'Brume', 'Rose', 'Pin'] : ['System', 'Light', 'Dark', 'Mist', 'Rose', 'Pine']);
     await theme.selectOption('system');
     await page.emulateMedia({ colorScheme: 'dark' });
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -1089,6 +1197,9 @@ test.describe('Settings and authentication', () => {
     await page.goto('/settings#appearance');
     await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toBeVisible();
     await expect(page.locator('#appearance .preference-grid')).toBeVisible();
+    await expect(page.locator('.push-notification-toggle')).toBeHidden();
+    await selectGeneralSettings(page, 'notifications');
+    expect(await page.evaluate(() => (window as any).__permissionRequests || 0)).toBe(0);
     const localEvents = page.locator('.notification-event-settings input[type=checkbox]');
     await expect(localEvents.nth(1)).toBeChecked();
 

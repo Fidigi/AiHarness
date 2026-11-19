@@ -36,7 +36,7 @@ test.describe('Conversation detached agent', () => {
 
   test('persiste le mode Ctrl/Cmd+Entrée, conserve les retours à la ligne et envoie sans intercepter l’IME', async ({ page }) => {
     const api = await installMockApi(page);
-    await page.goto('/settings#appearance');
+    await page.goto('/settings#behavior');
 
     const sendMode = page.getByRole('combobox', { name: 'Send key' });
     await sendMode.selectOption('mod-enter');

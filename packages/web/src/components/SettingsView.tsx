@@ -7,7 +7,7 @@ import '../settings.css';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useFocusTrap } from '../hooks/useFocusTrap';
-import { settingsCategories, settingsSectionCategory, type SettingsCategory } from './settings-categories';
+import { generalSettingsPanel, generalSettingsPanels, settingsCategories, settingsSectionCategory, type GeneralSettingsPanel, type SettingsCategory } from './settings-categories';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
 import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
@@ -47,8 +47,9 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView({ entryRelease, entryEpoch, category }: {
+function SettingsView({ entryRelease, entryEpoch, category, generalPanel }: {
   category: SettingsCategory;
+  generalPanel: GeneralSettingsPanel;
   entryRelease: { readonly current: (() => void) | null };
   entryEpoch: string;
 }) {
@@ -189,7 +190,7 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
 
   return (
     <>
-      <section className="settings-section" id="authentication" hidden={category !== 'general'}>
+      <section className="settings-section" id="authentication" hidden={category !== 'general' || generalPanel !== 'authentication'}>
         <h3>{t('settings.serverAuthentication')}</h3>
         <div className="api-key-input-group">
           <input
@@ -374,7 +375,6 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
 
       <CustomModelSettings key={`provider-models:${providerReload}`} />
       </div>
-      <div hidden={category !== 'general'}><DefaultModelSettings key={`provider-defaults:${providerReload}`} /></div>
 
       <section className="settings-section" id="skills" hidden={category !== 'skills'}>
         <h3>{t('settings.skills.title')}</h3>
@@ -466,7 +466,7 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
       <div hidden={category !== 'subagents'}><SubagentSettings presented={category === 'subagents'} /></div>
 
       {/* Appearance */}
-      <section className="settings-section" id="appearance" hidden={category !== 'general'}>
+      <section className="settings-section" id="appearance" hidden={category !== 'general' || generalPanel !== 'appearance'}>
         <h3>{t('settings.appearance')}</h3>
         <div className="preference-grid">
           <label>{t('settings.theme')}
@@ -474,13 +474,6 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
               {['system', 'light', 'dark', 'mist', 'rose', 'pine'].map(theme => (
                 <option key={theme} value={theme}>{t(`settings.theme.${theme}`)}</option>
               ))}
-            </select>
-          </label>
-          <label>{t('settings.sendMode')}
-            <select value={preferences.sendMode}
-              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
-              <option value="enter">{t('settings.sendMode.enter')}</option>
-              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
             </select>
           </label>
           <label>{t('settings.contentWidth', { width: preferences.contentWidth })}
@@ -491,9 +484,31 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
             <input type="range" min="12" max="24" value={preferences.fontSize}
               onChange={event => setPreferences({ fontSize: Number(event.target.value) })} />
           </label>
-          <label><input type="checkbox" checked={preferences.reasoningOpen}
+        </div>
+      </section>
+
+      <section className="settings-section" id="behavior" hidden={category !== 'general' || generalPanel !== 'behavior'}>
+        <h3>{t('settings.behavior')}</h3>
+        <div className="preference-grid">
+          <label>{t('settings.sendMode')}
+            <select value={preferences.sendMode}
+              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
+              <option value="enter">{t('settings.sendMode.enter')}</option>
+              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
+            </select>
+          </label>
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.reasoningOpen}
             onChange={event => setPreferences({ reasoningOpen: event.target.checked })} /> {t('settings.reasoningOpen')}</label>
-          <label><input type="checkbox" checked={preferences.sound}
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.selectionActions}
+            onChange={event => setPreferences({ selectionActions: event.target.checked })} /> {t('settings.selectionActions')}</label>
+        </div>
+      </section>
+      <div hidden={category !== 'general' || generalPanel !== 'behavior'}><DefaultModelSettings key={`provider-defaults:${providerReload}`} /></div>
+
+      <section className="settings-section" id="notifications" hidden={category !== 'general' || generalPanel !== 'notifications'}>
+        <h3>{t('settings.notificationPreferences')}</h3>
+        <div className="preference-grid">
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.sound}
             onChange={event => setPreferences({ sound: event.target.checked })} /> {t('settings.sound')}</label>
           <label>{t('settings.soundVolume')}
             <input type="range" min="0" max="1" step="0.05" value={preferences.soundVolume}
@@ -501,13 +516,13 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
           </label>
           <fieldset className="preference-events">
             <legend>{t('settings.soundEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.soundEvents[kind]}
                 onChange={event => setPreferences({ soundEvents: { ...preferences.soundEvents, [kind]: event.target.checked } })} />
               {t(`settings.event.${kind}`)}
             </label>)}
           </fieldset>
-          <label><input type="checkbox" checked={preferences.notifications}
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.notifications}
             onChange={async event => {
               const enabled = event.target.checked;
               if (enabled && 'Notification' in window && Notification.permission === 'default') {
@@ -517,7 +532,7 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
             }} /> {t('settings.notifications')}</label>
           <fieldset className="preference-events notification-event-settings">
             <legend>{t('settings.notificationEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.notificationEvents[kind]}
                 onChange={event => {
                   const next = { ...preferences.notificationEvents, [kind]: event.target.checked };
@@ -526,14 +541,14 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
               {t(`settings.event.${kind}`)}
             </label>)}
           </fieldset>
-          <label title={pushSupported() ? undefined : t('settings.push.unsupported')}>
+          <label className="preference-toggle" title={pushSupported() ? undefined : t('settings.push.unsupported')}>
             <input className="push-notification-toggle" type="checkbox" checked={preferences.pushNotifications} disabled={!pushSupported()}
               onChange={event => void configurePush(event.target.checked)} />
             {t('settings.push')}
           </label>
           <fieldset className="preference-events push-event-settings">
             <legend>{t('settings.pushEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.pushEvents[kind]}
                 onChange={event => {
                   const next = { ...preferences.pushEvents, [kind]: event.target.checked };
@@ -544,12 +559,10 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
             </label>)}
           </fieldset>
           {pushStatus && <small role="status">{pushStatus}</small>}
-          <label><input type="checkbox" checked={preferences.selectionActions}
-            onChange={event => setPreferences({ selectionActions: event.target.checked })} /> {t('settings.selectionActions')}</label>
         </div>
       </section>
 
-      <section className="settings-section" id="shortcuts" hidden={category !== 'general'}>
+      <section className="settings-section" id="shortcuts" hidden={category !== 'general' || generalPanel !== 'behavior'}>
         <h3>{t('settings.shortcuts')}</h3>
         <p className="settings-help">{t('settings.shortcutsHelp')}</p>
         <div className="shortcut-grid">
@@ -576,19 +589,17 @@ function SettingsView({ entryRelease, entryEpoch, category }: {
         <button onClick={() => setPreferences({ keybindings: { ...defaultKeybindings } })}>{t('settings.shortcutsReset')}</button>
       </section>
 
-      {/* Session Management */}
-      <section className="settings-section" id="sessions" hidden={category !== 'general'}>
-        <h3>{t('settings.sessions')}</h3>
-        <p>{t('settings.totalSessions', { count: sessionCount })}</p>
-        <small>{t('settings.sessionsLocation')}</small>
-      </section>
-
       <div hidden={category !== 'mcp'}><McpSettings presented={category === 'mcp'} /></div>
 
       {/* About */}
-      <section className="settings-section about" id="about" hidden={category !== 'general'}>
+      <section className="settings-section about" id="about" hidden={category !== 'general' || generalPanel !== 'about'}>
         <h3>{t('settings.about')}</h3>
         <p>{t('settings.aboutDescription')}</p>
+        <section className="settings-section" id="sessions">
+          <h4>{t('settings.sessions')}</h4>
+          <p>{t('settings.totalSessions', { count: sessionCount })}</p>
+          <small>{t('settings.sessionsLocation')}</small>
+        </section>
         <div className="version-status" aria-live="polite">
           <dl>
             <dt>{t('settings.webVersion')}</dt><dd>{updateStatus?.webVersion ?? '…'}</dd>
@@ -722,6 +733,10 @@ function SettingsNavigationBoundary() {
   const workspace = useSessionStore(state => state.workspace);
   const root = useRef<HTMLDivElement>(null);
   const entryRelease = useRef<(() => void) | null>(null);
+  const generalNavigation = useRef<HTMLElement>(null);
+  const generalBack = useRef<HTMLButtonElement>(null);
+  const generalFocus = useRef(false);
+  const [generalOverview, setGeneralOverview] = useState(false);
   const cwd = workspace?.cwd;
   const { hash, pathname, search } = useLocation();
   const navigate = useNavigate();
@@ -731,18 +746,30 @@ function SettingsNavigationBoundary() {
   const initial = useMemo(() => readSettingsNavigation(cwd, readPreferences().lastSettingsSection), [cwd, hash]);
   const activeSection = isSettingsSection(section) ? section : initial.section;
   const category = settingsSectionCategory[activeSection];
+  const panel = generalSettingsPanel(activeSection);
   const address = (section: string) => `${pathname}${search}#${section}`;
   const categorySection = (item: typeof settingsCategories[number]) => category === item.id ? activeSection
     : initial.categories?.[item.id] ?? item.section;
-  const selectCategory = (item: typeof settingsCategories[number]) => {
-    if (item.id === category) return;
+  const selectSection = (target: string) => {
     // Give a remembered /settings entry a stable Back target before leaving it.
     if (!isSettingsSection(section)) navigate(address(activeSection), { replace: true });
-    navigate(address(categorySection(item)));
+    navigate(address(target));
+  };
+  const selectCategory = (item: typeof settingsCategories[number]) => {
+    if (item.id === category) return;
+    selectSection(categorySection(item));
   };
   // Keep navigation/focus ownership across a trust refresh; retire all forms,
   // pending local results and mounted sections before the replacement commits.
   const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
+  useLayoutEffect(() => { setGeneralOverview(false); }, [context, hash]);
+  useLayoutEffect(() => {
+    if (!generalFocus.current) return;
+    generalFocus.current = false;
+    if (category !== 'general') return;
+    if (generalOverview) generalNavigation.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus();
+    else if (generalBack.current?.offsetParent) generalBack.current.focus();
+  }, [generalOverview, activeSection, category]);
   useLayoutEffect(() => {
     if (!root.current) return;
     const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
@@ -776,8 +803,23 @@ function SettingsNavigationBoundary() {
         {settingsCategories.map(item => <option key={item.id} value={item.id}>{t(`settings.category.${item.id}`)}</option>)}
       </select>
     </label>
-    <div className="settings-view" ref={root}><SettingsView key={context} category={category}
-      entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
+    <div className={`settings-content${category === 'general' && generalOverview ? ' settings-content-overview' : ''}`}>
+      <nav className="settings-context" ref={generalNavigation} aria-label={t('settings.generalNavigation')} hidden={category !== 'general'}>
+        {generalSettingsPanels.map(item => <Link key={item.section} to={address(item.section)}
+          aria-current={panel === item.section ? 'page' : undefined}
+          onClick={event => {
+            if (!event.defaultPrevented && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+              event.preventDefault(); generalFocus.current = generalOverview; setGeneralOverview(false); selectSection(item.section);
+            }
+          }}>{t(item.label)}</Link>)}
+      </nav>
+      <div className="settings-detail">
+        <button type="button" className="settings-context-back" ref={generalBack} hidden={category !== 'general'}
+          onClick={() => { generalFocus.current = true; setGeneralOverview(true); }}>{t('settings.generalBack')}</button>
+        <div className="settings-view" ref={root}><SettingsView key={context} category={category} generalPanel={panel}
+          entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
+      </div>
+    </div>
   </div>;
 }
 

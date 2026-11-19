@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
@@ -27,7 +27,7 @@ test('Settings restores separate section, group, row and scope intent through re
   await switchSettingsWorkspace(page, '/workspace/other');
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
-  await selectSettingsCategory(page, 'general');
+  await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
   await expect(row).toBeInViewport();
@@ -96,24 +96,34 @@ test('Settings focus conserves another tab’s fresh other-section position with
 });
 
 test('No-project Settings retains global sections and falls back only unavailable project scope; forms never enter navigation storage', async ({ page }) => {
-  await installMockApi(page);
+  const api = await installMockApi(page);
   await page.route('**/api/workspaces/default', route => route.fulfill({ status: 404, json: { error: 'No workspace' } }));
   await page.addInitScript(key => localStorage.setItem(key, JSON.stringify({ version: 1, entries: [
     { cwd: null, section: 'tools', positions: {}, scopes: { tools: 'project', defaults: 'project', subagents: 'project', registry: 'project' } },
   ] })), key);
   await page.goto('/settings');
   for (const section of ['tools', 'defaults', 'subagents'] as const) {
-    await selectSettingsCategory(page, section === 'defaults' ? 'general' : section);
+    if (section === 'defaults') await selectGeneralSettings(page, 'behavior');
+    else await selectSettingsCategory(page, section);
     const scope = page.locator(`#${section} select`).first();
     await expect(scope).toHaveValue('global');
     await expect(scope.locator('option[value="project"]')).toHaveJSProperty('disabled', true);
   }
-  await selectSettingsCategory(page, 'general');
+  await selectGeneralSettings(page, 'authentication');
   await page.locator('#authentication input').fill('NAVIGATION_SECRET_MUST_NOT_PERSIST');
+  await selectGeneralSettings(page, 'behavior');
+  await page.locator('#defaults').getByLabel('Model', { exact: true }).fill('DRAFT_MODEL_NOT_SAVED');
+  await selectGeneralSettings(page, 'authentication');
+  await expect(page.locator('#authentication input')).toHaveValue('NAVIGATION_SECRET_MUST_NOT_PERSIST');
+  await selectGeneralSettings(page, 'behavior');
+  await expect(page.locator('#defaults').getByLabel('Model', { exact: true })).toHaveValue('DRAFT_MODEL_NOT_SAVED');
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && ['/api/config', '/api/configuration/scope'].includes(request.path))).toEqual([]);
   await selectSettingsCategory(page, 'mcp');
   await page.locator('#mcp').getByRole('button', { name: 'Refresh', exact: true }).focus();
   const saved = await page.evaluate(key => localStorage.getItem(key), key);
   expect(saved).not.toContain('NAVIGATION_SECRET');
+  expect(saved).not.toContain('DRAFT_MODEL_NOT_SAVED');
   expect(JSON.parse(saved!).entries[0].section).toBe('mcp');
 });
 

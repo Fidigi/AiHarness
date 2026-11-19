@@ -73,7 +73,8 @@ describe('Settings locale allocation', () => {
       const moved = retainedMoved.map(entry => entry[locale === 'en' ? 'enLine' : 'frLine']).flatMap(withVertexCredentials);
       // New category copy belongs only to the lazy Settings owner; the historical
       // inventory still verifies every existing literal without regeneration.
-      const additions = ['settings.categories', ...settingsCategories.map(category => `settings.category.${category.id}`)].map(key => {
+      const additions = ['settings.categories', ...settingsCategories.map(category => `settings.category.${category.id}`),
+        'settings.generalNavigation', 'settings.generalBack', 'settings.behavior', 'settings.notificationPreferences', 'settings.access'].map(key => {
         const lines = lazy.filter(line => line.startsWith(`    '${key}':`));
         expect(lines).toHaveLength(1); return lines[0]!;
       });
@@ -95,10 +96,13 @@ describe('Settings locale allocation', () => {
       for (const consumer of entry.consumers) {
         const name = consumer.path.split('/').at(-1)!;
         expect(allowed.has(name)).toBe(true);
-        // AUDIT-1 changes only the decorative glyph, not locale ownership/copy.
+        // AUDIT-1 changes glyphs/grouping/alignment, not locale ownership/copy.
         const projectedSource = entry.key === 'settings.starOnGitHub'
           ? consumer.source.replace('⭐', '<Icon name="star" />')
-          : entry.key === 'settings.documentation' ? consumer.source.replace('📖', '<Icon name="file" />') : consumer.source;
+          : entry.key === 'settings.documentation' ? consumer.source.replace('📖', '<Icon name="file" />')
+          : entry.key === 'settings.push.unsupported' ? consumer.source.replace('<label title=', '<label className="preference-toggle" title=')
+          : entry.key === 'settings.sessions' ? consumer.source.replace('<h3>', '<h4>').replace('</h3>', '</h4>')
+          : consumer.source;
         expect(source(`./${name}`)).toContain(projectedSource);
         expect(consumer.source).toContain(`t('${entry.key}'`);
       }

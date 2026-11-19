@@ -604,7 +604,7 @@ for (const [locale, theme] of [['en', 'light'], ['fr', 'dark']] as const) test(`
       localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme: preferences.theme }));
       localStorage.setItem('ai-harness-locale', preferences.locale);
     }, { locale, theme });
-    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}`);
+    await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#defaults`);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     const defaults = page.locator('#defaults');

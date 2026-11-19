@@ -36,7 +36,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       expect((await new AxeBuilder({ page }).include('.input-container').analyze()).violations).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-      await page.goto('/settings');
+      await page.goto('/settings#defaults');
       const defaults = page.getByRole('heading', { name: 'Provider and model defaults' }).locator('..');
       await defaults.getByRole('combobox', { name: 'Scope', exact: true }).selectOption('global');
       await expect(defaults.getByLabel('Model', { exact: true })).toHaveValue('mock-model');
@@ -68,7 +68,7 @@ test('blocks unreadable defaults and gives a new draft fresh inherited values wi
   await expect.poll(() => api.requests.find(request => request.path === '/api/agent/runs' && request.method === 'POST')?.body)
     .toMatchObject({ model: 'inherited-model', thinking: 'minimal', settingOverrides: [] });
   await page.route('**/api/configuration/scope?**', route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: 'Configuration cannot be read safely.' }) }));
-  await page.goto('/settings');
+  await page.goto('/settings#defaults');
   const defaults = page.getByRole('heading', { name: 'Provider and model defaults' }).locator('..');
   await expect(defaults.getByRole('alert')).toBeVisible();
   await expect(defaults.getByLabel('Model', { exact: true })).toBeDisabled();

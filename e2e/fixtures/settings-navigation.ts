@@ -15,6 +15,23 @@ const names = {
   mcp: /^MCP$/u,
 };
 
+const generalNames = {
+  appearance: /^(Appearance|Apparence)$/u,
+  behavior: /^(Behavior|Comportement)$/u,
+  notifications: /^Notifications$/u,
+  authentication: /^(Access|Accès)$/u,
+  about: /^(About|À propos)$/u,
+};
+
+/** Follow the contextual list, including the explicit mobile Back view. */
+export async function selectGeneralSettings(page: Page, panel: keyof typeof generalNames): Promise<void> {
+  await selectSettingsCategory(page, 'general');
+  const back = page.getByRole('button', { name: /^(Back to General settings|Retour aux paramètres généraux)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.getByRole('navigation', { name: /^(General settings|Paramètres généraux)$/u });
+  await navigation.getByRole('link', { name: generalNames[panel] }).click();
+}
+
 /** Exercise the presented desktop navigation or native mobile category picker. */
 export async function selectSettingsCategory(page: Page, category: keyof typeof names): Promise<void> {
   await expect(page.locator('.settings-dialog')).toBeVisible();
