@@ -641,6 +641,15 @@ test.describe('Régression visuelle des historiques paginés', () => {
       await expect.poll(async () => Math.abs(
         await page.locator('#visual-history-message-101').evaluate(element => element.getBoundingClientRect().top) - priorAnchor,
       )).toBeLessThan(3);
+      // The real pagination assertion above retains its measured user anchor.
+      // Normalize only the capture: native initial reveal can differ by 16–32px.
+      const captureAnchor = page.locator('#visual-history-message-101');
+      await captureAnchor.evaluate(element => {
+        const viewport = element.closest('.messages-container')!;
+        viewport.scrollTop += element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 16;
+      });
+      await expect.poll(() => captureAnchor.evaluate(element => Math.abs(element.getBoundingClientRect().top
+        - element.closest('.messages-container')!.getBoundingClientRect().top - 16))).toBeLessThan(1);
       await expect(page).toHaveScreenshot(`history-minimap-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

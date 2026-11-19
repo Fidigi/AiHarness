@@ -1747,7 +1747,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     scrollRestoration.current?.();
     const container = messagesContainerRef.current;
     if (location.hash) navigate(`${location.pathname}${location.search}`, { replace: true });
-    container?.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    // Reach the current tail before an incoming response can invalidate a smooth target.
+    container?.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     nearBottomRef.current = true;
     readingTail.current = lastMessageId;
     setNearBottom(true);

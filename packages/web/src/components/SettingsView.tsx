@@ -618,7 +618,7 @@ function SettingsView({ entryRelease, entryEpoch }: {
         </div>
         <div className="about-links">
           <a href="https://github.com/Fidigi/AiHarness#readme" target="_blank" rel="noopener noreferrer">
-            📖 {t('settings.documentation')}
+            <Icon name="file" /> {t('settings.documentation')}
           </a>
           <span>•</span>
           <a href="https://github.com/Fidigi/AiHarness" target="_blank" rel="noopener noreferrer">

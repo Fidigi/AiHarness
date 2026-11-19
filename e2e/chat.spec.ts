@@ -691,6 +691,13 @@ test.describe('Conversation detached agent', () => {
       content: `Message ${index + 1} — ${'contenu '.repeat(12)}`,
     }));
     await installMockApi(page, { sessions: [mockSession('long-session', 'Long historique', messages)] });
+    let holdCompletion = false;
+    let releaseCompletion!: () => void;
+    const completion = new Promise<void>(resolve => { releaseCompletion = resolve; });
+    await page.route('**/api/agent/sessions/long-session/events*', async route => {
+      if (holdCompletion) await completion;
+      await route.fallback();
+    });
     await page.goto('/chat/long-session');
     const container = page.locator('.messages-container');
     await expect.poll(() => container.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -701,12 +708,20 @@ test.describe('Conversation detached agent', () => {
     const backToBottom = page.getByRole('button', { name: /Back to bottom/ });
     await expect(backToBottom).toBeVisible();
     await page.getByPlaceholder(/Type your message/).fill('Nouveau message hors écran');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => page.locator('.message').count()).toBeGreaterThan(70);
-    await expect(backToBottom).toContainText(/\([1-9]\d*\)/);
-    await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeLessThan(100);
-    await backToBottom.click();
-    await expect.poll(() => container.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight < 96)).toBe(true);
+    holdCompletion = true;
+    try {
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect.poll(() => page.locator('.message').count()).toBeGreaterThan(70);
+      await expect(backToBottom).toContainText(/\([1-9]\d*\)/);
+      await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeLessThan(100);
+      await backToBottom.click();
+      // Deliver the response after scrolling starts, not before the click by chance.
+      await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    } finally {
+      releaseCompletion();
+    }
+    await expect(page.locator('.message')).toHaveCount(messages.length + 2);
+    await expect.poll(() => container.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThan(96);
   });
 
   test('suit les agents enfants, signale leur attention et navigue parent/enfant', async ({ page }) => {

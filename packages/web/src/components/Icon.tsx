@@ -13,6 +13,8 @@ const paths = {
   check: 'M5 12l4 4L19 6',
   refresh: 'M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9',
   upload: 'M12 16V3M7 8l5-5 5 5M4 16v5h16v-5',
+  download: 'M12 3v13M7 11l5 5 5-5M4 16v5h16v-5',
+  copy: 'M8 8h13v13H8zM16 8V3H3v13h5',
   'arrow-up': 'M12 20V4M5 11l7-7 7 7',
   'arrow-down': 'M12 4v16M5 13l7 7 7-7',
   'arrow-left': 'M20 12H4M11 5l-7 7 7 7',

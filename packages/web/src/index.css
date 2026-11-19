@@ -299,7 +299,11 @@ body {
 .ui-icon { width: 18px; height: 18px; flex-shrink: 0; vertical-align: -.2em; }
 /* Existing larger component/touch targets must override these defaults. */
 :where(button, a):has(> .ui-icon) { min-width: 28px; min-height: 28px; }
+:where(button, a):has(> .ui-icon):where(:not(:disabled):active) { box-shadow: inset 0 0 0 1px currentColor; }
+:where(button):has(> .ui-icon):where(:disabled) { opacity: .6; cursor: not-allowed; }
 a:has(> .ui-icon) { display: inline-flex; align-items: center; gap: .35rem; }
+.icon-control-hint { position: fixed; z-index: 200; max-width: min(300px, calc(100vw - 16px)); overflow: auto; padding-block: 4px; font-size: .8rem; line-height: 1.4; }
+.icon-control-hint > span { display: block; padding: .35rem .5rem; overflow-wrap: anywhere; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-raised); box-shadow: 0 2px 8px #0003; }
 @media (pointer: coarse) {
   :where(button, a):has(> .ui-icon) { min-width: 36px; min-height: 36px; }
 }

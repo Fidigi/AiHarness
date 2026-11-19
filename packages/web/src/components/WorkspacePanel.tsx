@@ -507,8 +507,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose, explorerHost }: { isOpe
         if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setPopup(undefined);
       }}>
         <div className="panel-tabs">
-          <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>{t('files.files')}</button>
-          <button className={tab === 'changes' ? 'active' : ''} onClick={() => setTab('changes')}>
+          <button className={tab === 'files' ? 'active' : ''} aria-pressed={tab === 'files'} onClick={() => setTab('files')}>{t('files.files')}</button>
+          <button className={tab === 'changes' ? 'active' : ''} aria-pressed={tab === 'changes'} onClick={() => setTab('changes')}>
             {t('files.changes')} {changes.length ? `(${changes.length})` : ''}
           </button>
         </div>
@@ -659,9 +659,9 @@ function WorkspacePanel({ isOpen = true, onRequestClose, explorerHost }: { isOpe
           </header>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>
           <nav>
-            <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => selectMode('source')}>{t('files.source')}</button>
-            <button className={viewerTab === 'preview' ? 'active' : ''} onClick={() => selectMode('preview')}>{t('files.preview')}</button>
-            <button className={viewerTab === 'diff' ? 'active' : ''} onClick={() => void openFile(selected.path, 'diff')}>{t('files.diff')}</button>
+            <button className={viewerTab === 'source' ? 'active' : ''} aria-pressed={viewerTab === 'source'} onClick={() => selectMode('source')}>{t('files.source')}</button>
+            <button className={viewerTab === 'preview' ? 'active' : ''} aria-pressed={viewerTab === 'preview'} onClick={() => selectMode('preview')}>{t('files.preview')}</button>
+            <button className={viewerTab === 'diff' ? 'active' : ''} aria-pressed={viewerTab === 'diff'} onClick={() => void openFile(selected.path, 'diff')}>{t('files.diff')}</button>
           </nav>
           <div className="viewer-content">
             {viewerTab === 'diff' ? diffBinary ? <p className="panel-empty">{t('files.binaryDiff')}</p> : <DiffView diff={diff} />
@@ -672,8 +672,8 @@ function WorkspacePanel({ isOpen = true, onRequestClose, explorerHost }: { isOpe
           </div>
           <footer>
             <button onClick={() => mention(selected.path)}>@ {t('files.mention')}</button>
-            <button disabled={selected.binary || selected.tooLarge} onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}>{t('chat.copy')}</button>
-            <a href={downloadUrl} download>{t('files.download')}</a>
+            <button disabled={selected.binary || selected.tooLarge} aria-label={t('chat.copy')} onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}><Icon name="copy" /></button>
+            <a href={downloadUrl} download aria-label={t('files.download')}><Icon name="download" /></a>
           </footer>
         </section>
       )}

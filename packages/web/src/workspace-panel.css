@@ -31,7 +31,8 @@
 .file-toolbar input::placeholder { color: var(--text-secondary); }
 .file-toolbar button { display: grid; place-items: center; min-width: 32px; min-height: 32px; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-raised); cursor: pointer; }
 .workspace-explorer .panel-header-actions button:disabled { cursor: not-allowed; opacity: .6; }
-.workspace-explorer .panel-header-actions button:not(:disabled):hover { background: var(--surface-hover); }
+.workspace-explorer .panel-header-actions button:not(:disabled):hover, .workspace-explorer.collapsed > button:hover,
+.file-toolbar button:hover, .open-file-tabs > button:hover, .file-viewer > header button:hover { background: var(--surface-hover); }
 .workspace-explorer .panel-header-actions button[aria-expanded="true"] { background: var(--surface-selected); box-shadow: inset 0 -2px var(--text-link); }
 .hidden-toggle { padding: 0 .55rem .4rem; color: var(--text-secondary); font-size: .72rem; }
 .upload-options { align-items: stretch; color: var(--text-secondary); font-size: .8rem; }
@@ -109,6 +110,8 @@
 .diff-view .hunk { color: var(--text-link); }
 .file-viewer footer { display: flex; gap: .4rem; padding: .5rem; border-top: 1px solid var(--border-subtle); }
 .file-viewer footer button, .file-viewer footer a { min-height: 32px; padding: .4rem; border: 1px solid var(--border-control); border-radius: 4px; color: var(--text-primary); background: var(--surface-raised); text-decoration: none; cursor: pointer; }
+.file-viewer footer button:not(:disabled):hover, .file-viewer footer a:hover { background: var(--surface-hover); }
+.file-viewer footer button:not(:disabled):active, .file-viewer footer a:active { background: var(--surface-selected); }
 .text-preview, .markdown-preview { padding: 1rem; line-height: 1.5; }
 .frontmatter-card { margin-bottom: .8rem; border: 1px solid var(--border-subtle); border-radius: 5px; color: var(--text-secondary); }
 .frontmatter-card summary { padding: .45rem; cursor: pointer; }

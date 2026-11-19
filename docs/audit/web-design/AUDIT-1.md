@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-19)
 >
-> Six implementation decisions approved. Semantic colors and decorative icons have bounded qualification; FILE-01–05 are verified, including left explorer/right reader and compact controls. Category Settings, remaining control/input polish and final cross-surface qualification remain open.
+> Six implementation decisions approved. Semantic colors have bounded qualification; FILE-01–05 and ACT-01 are verified, including left explorer/right reader, compact controls and accessible icon hints. Category Settings, remaining control/input polish and final cross-surface qualification remain open.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–15 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–16 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -29,29 +29,29 @@
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Five explorer criteria are verified; eleven criteria remain open and no gap is accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. Five explorer criteria and the icon-control criterion are verified; ten criteria remain open and no gap is accepted.
 
 | Status | Count | Details |
 |---|---:|---|
-| `DONE` | 5 | FILE-01–05: selection/path, disclosures, nested refresh, search and compact explorer/reader layout |
-| `PARTIAL` | 5 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
+| `DONE` | 6 | FILE-01–05 and ACT-01: explorer contracts and accessible icon controls |
+| `PARTIAL` | 4 | Implementation foundations or approved design direction exist, but completion evidence remains missing |
 | `ABSENT` | 1 | Category-tab Settings presentation |
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
 | `IN PROGRESS` | 5 | VIS-01–03, ACT-02 and QA-01: reader palette/input implementation and focused qualification underway |
 | `GAP ACCEPTED` | 0 | No waiver requested or granted |
-| **Total** | **16** | **31.25% closed: (5 + 0) / 16 × 100** |
+| **Total** | **16** | **37.5% closed: (6 + 0) / 16 × 100** |
 
 ### Summary by Surface
 
 | Surface | Done | Partial | Absent | To define | Blocked | In progress | Gap accepted | Total |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Visual system | 0 | 1 | 0 | 0 | 0 | 3 | 0 | 4 |
-| Actions and input | 0 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
+| Actions and input | 1 | 0 | 0 | 0 | 0 | 1 | 0 | 2 |
 | File explorer | 5 | 0 | 0 | 0 | 0 | 0 | 0 | 5 |
 | Settings | 0 | 3 | 1 | 0 | 0 | 0 | 0 | 4 |
 | Qualification | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 1 |
-| **Total** | **5** | **5** | **1** | **0** | **0** | **5** | **0** | **16** |
+| **Total** | **6** | **4** | **1** | **0** | **0** | **5** | **0** | **16** |
 
 ## 3. Traceability by Surface
 
@@ -70,7 +70,7 @@ Priority: **P1** = accessibility/task-orientation problem to address first; **P2
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| ACT-01 | PARTIAL | P2 | Textual toolbar buttons coexist with emoji and Unicode glyphs (`📁`, `📄`, `⌘`, arrows) of inconsistent appearance (S5, V1–V8). Use one consistent SVG icon style for frequent utilities and an overflow menu for secondary actions; retain text for ambiguous/destructive/consent actions. DONE requires translated accessible names, decorative icon hiding, keyboard-visible tooltips and clear hover/pressed/disabled states, with no removed capability or larger eager bundle beyond its existing budget. |
+| ACT-01 | DONE | P2 | Textual toolbar buttons coexist with emoji and Unicode glyphs (`📁`, `📄`, `⌘`, arrows) of inconsistent appearance (S5, V1–V8). Use one consistent SVG icon style for frequent utilities and an overflow menu for secondary actions; retain text for ambiguous/destructive/consent actions. DONE requires translated accessible names, decorative icon hiding, keyboard-visible tooltips and clear hover/pressed/disabled states, with no removed capability or larger eager bundle beyond its existing budget. |
 | ACT-02 | IN PROGRESS | P1 | Upload relies on a non-focusable label whose file input is `display: none`; the resizer has a separator role but no keyboard focus/handler/value model. File mention buttons have opacity zero unless a row is hovered (S3, S5). Make upload keyboard-operable, resizing keyboard-operable or provide an equivalent accessible width control, and show row actions on focus as well as touch. DONE requires real Tab/Enter/Space/arrow and coarse-pointer journeys. Small visual icons must not imply tiny targets: use ≥24×24 CSS-pixel targets as a baseline, with a preferred 44×44 touch target, visible focus and no overlap. |
 
 ### File explorer
@@ -153,6 +153,7 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-18 | ACT-01–02, FILE-02, QA-01 | States unchanged | Decorative SVG family, preserved translated names, disclosure semantics and reviewed captures in §13 | Canonical typechecks and Web 71/617 PASS; 108 distinct no-update/no-retry owning browser cases PASS (40 focused, 43 linked, 17 workspace assets, 8 locale assets); source/image SHA-256 equality for all 29 staged source files; bundle budgets PASS (148/159 KiB gzip entry/eager) | Initial locale-source assertion and tactile CSS regression corrected; native global/diagnostic failures remain recorded. Icon consistency does not close action-density, mobile-header overlap, explorer or Settings work. |
 | 2026-11-18 | FILE-01–04; VIS-01–03, ACT-02, QA-01 | FILE-01–04: PARTIAL → DONE; other states unchanged | Functional explorer, hierarchical flow repair, contrast/path captures and criterion mapping in §14 | Canonical typechecks PASS; Web 71/617 PASS; frozen no-update/no-retry owning browser gates **104/104 PASS** (35 standard, 17 workspace assets, 44 linked/real files, 8 locale assets); all ten changed source files SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Mock and actual filesystem/API/browser regressions reproduced before repair. Native build failures and the initial locale-inventory assertion remain recorded. FILE-05 layout/chrome, Settings and final global qualification remain open. |
 | 2026-11-19 | FILE-05; ACT-01–02, QA-01 | FILE-05: PARTIAL → DONE; other states unchanged | Left explorer/right reader, responsive fallback, grouped controls and reviewed long-tree/path captures in §15 | Docker types/parity and Web 71/617 PASS; frozen no-update/no-retry owning browser gates **305 pass / 1 native worker failure**; FILE-05 scenarios pass; all 23 changed product/test sources SHA-256-equal to the frozen workspace; budgets PASS (148/159 KiB gzip entry/eager) | Visual review exposed defects despite successful generation; tree allocation, selected-row reveal and upload progress were repaired. Responsive readiness assertions and eight stale Markdown baselines were corrected without weakening thresholds. Settings, remaining control/input polish and final qualification stay open. |
+| 2026-11-19 | ACT-01; ACT-02, QA-01 | ACT-01: PARTIAL → DONE; other states unchanged | Translated keyboard hints, compact utility controls, explicit states and constrained chat fit in §16 | Final Docker build/types and Web 71/617 PASS; **320/320** distinct owning browser cases PASS without updates/retries; all 13 changed source files SHA-256-equal to the frozen workspace; budgets PASS (149/160 KiB gzip entry/eager); 38 reviewed baseline changes | Retained native generation failure and initial functional chat failure. Controlled response timing reproduced the 180px tail gap on current and retained layout sources; synchronous explicit jumps corrected it without weakening the 96px assertion. Mobile terminal overlap, Settings and final global qualification remain open. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -460,3 +461,41 @@ Light/Dark desktop/mobile workspace captures were reviewed after the geometry re
 | Upload policy, trust and independent terminal controls | Mock request bodies retain root/collision policy; real preview uploads retain reject/rename behavior and bytes. Owning linked/asset/pane suites preserve cancellation, authority and modal ownership. Native PTY tests retain the narrow handoff and desktop independence. |
 
 FILE-05 is closed; five of sixteen criteria are now verified. Remaining control/tooltips/input work, category Settings and final reconciled cross-surface acceptance stay open. This bounded FILE-05 acceptance does not qualify the failed plugin-catalogue case, erase earlier native failures or constitute physical-device verification.
+
+## 16. Control Hints and Compact-Chat Correction — ACT-01 Qualified
+
+`IconControlHints.tsx` visually mirrors existing translated icon-control names without adding an accessible-name duplicate, focus target, command, Escape lease or stored draft. Keyboard hints also cover native-title controls; untitled icon controls receive hover hints. Geometry uses fractional rectangles and follows scroll; hidden/inert/disconnected owners and changed names retire the hint. Clicking the hint cannot take focus or activate its control. Copy/download and the documentation link reuse the decorative SVG family. File/explorer mode buttons expose their pressed state; low-specificity pressed/disabled defaults preserve larger component/touch targets.
+
+Review at 1280px exposed a model input reduced to **19.59375px**, plus a French toolbar action extending outside the chat column. Toolbar/composer wrapping and a bounded minimum model width now preserve readable controls with a reader open. Existing EN/FR accessibility scenarios were extended with keyboard/hover/click/Escape, full hint visibility, non-overlap, contrast, binary-copy disability and 1280/960px control geometry. No configuration save, authority or transport behavior changes.
+
+Retained development evidence:
+
+- Two initial red cases lacked keyboard hints. The first implementation then failed both strict boundary assertions because integer dimensions overlapped the trigger; fractional rectangles fixed this without relaxing the assertion.
+- A strengthened click check reproduced focus loss in both locales; preventing hint mouse-focus while retaining its owner corrected it.
+- Both compact-pane cases reproduced the collapsed model field; both pressed-state checks then found `box-shadow: none`. The corrected accessibility group passed **9/9**, before the final documentation-glyph/observer refinement.
+- Current production build/budgets and workspace/parity types pass; Web units pass **71 files / 617 tests**. Entry/eager sizes are **149/160 KiB gzip**, with 28 chunks and unchanged limits.
+- Broad capture generation retained **232 passes / one native worker SIGSEGV**, in the mobile-Light terminal visual case. Six owning About captures subsequently passed for the documentation glyph. Generation is not final qualification.
+- Minimap review found 16–32px capture-only scroll differences despite passing real-pagination anchor assertions. The capture now normalizes position only after that original assertion; no tolerance or timeout changed. Its first discovery attempt retained a parenthesis syntax error (no cases executed); the corrected owning generation passed **6/6**.
+
+The first no-update campaign passed **232/233** cases but failed the existing long-chat “Back to bottom” check. Its four dedicated configurations passed **17 + 44 + 8 + 18**, giving **319 distinct passes / one functional failure**, not global acceptance. Uncontrolled single-case and five-case diagnostics passed on both current and retained layout sources; those successes did not clear the failure. A controlled completion hold in the existing scenario then reproduced an exact **180px** tail gap on both sources against the unchanged **<96px** limit: a response arriving during the smooth jump invalidated its original target after intermediate scrolling revoked follow-tail intent. Explicit jumps now reach the current tail synchronously; normal follow-tail behavior is unchanged. The strengthened scenario passed **1/1** after this correction. No extra case, retry, wait extension or threshold relaxation was introduced; the final-source gates below supersede the earlier bounded results without erasing them.
+
+Capture reconciliation retained 38 changed baseline images. Eighteen unrelated task-generated images were restored: sixteen small raster variations (1–57 pixels, maximum channel delta 14), plus two mobile-agent captures differing only in message scroll beneath the existing notice. Six minimap frames retain the explicit post-assertion framing described above. Reviewed EN/FR hint attachments show full edge visibility and readable compact-column controls; reviewed reader, workspace, About and minimap captures retain their scope.
+
+### Final frozen-source verification
+
+| Gate | Result |
+|---|---|
+| Production Web build and existing budgets | PASS — 149/160 KiB gzip entry/eager; 28 chunks |
+| Workspace/parity types | PASS |
+| Web units | PASS — 71 files / 617 tests |
+| Eleven owning standard/related browser files | **233/233 PASS**, 6.9m |
+| Workspace asset loading, owning configuration | **17/17 PASS**, 15.6s |
+| Linked directories/modal boundary, owning configuration | **44/44 PASS**, 4.2m |
+| Settings locale asset loading, owning configuration | **8/8 PASS**, 14.6s |
+| Pane lifetime, owning configuration | **18/18 PASS**, 21.2s |
+
+These **320 distinct browser cases** used Docker with 1 GiB shared memory, no retries and no snapshot updates. All thirteen changed product/test source files match the frozen container by SHA-256. The eleven standard files are `files`, `file-tabs`, `keyboard-responsive`, `visual`, `accessibility`, `file-previews-live`, `settings-navigation`, `terminal-controls`, `live-server`, `markdown` and `chat`.
+
+ACT-01 acceptance maps to the typed decorative SVG family (§13), the keyboard-operated secondary Options group (§15), retained text for ambiguous/consent actions, EN/FR accessible names and visible keyboard hints, explicit hover/pressed/disabled checks in `e2e/accessibility.spec.ts`, and the unchanged build limits above. Reader Copy/Download preserve their original operations. Current focused gates pass; the native capture failure and older global failures remain separate, not retroactively green.
+
+**Still open:** visual review exposes the existing floating terminal launcher overlapping mobile/tablet composer controls, visible in both HEAD and current captures. ACT-02 remains open for that focused correction. Category Settings and final cross-surface/global qualification remain open; this lot does not claim physical-device verification.

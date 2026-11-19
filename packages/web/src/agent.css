@@ -82,10 +82,12 @@
 .trust-dialog button.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 
 /* Agent chat */
-.chat-toolbar { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .65rem 1.25rem; border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel); }
+.chat-toolbar { min-height: 58px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: .65rem 1.25rem; border-bottom: 1px solid var(--border-subtle); background: var(--surface-panel); }
+.chat-toolbar > div:first-child { min-width: 0; max-width: 100%; }
+.chat-toolbar strong { overflow-wrap: anywhere; }
 .chat-toolbar strong, .chat-toolbar small { display: block; }
 .chat-toolbar small { max-width: min(55vw, 500px); overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); white-space: nowrap; }
-.chat-toolbar-actions { display: flex; align-items: center; gap: .75rem; }
+.chat-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
 .session-navigation { display: flex; gap: .35rem; }
 .mobile-chat-actions { display: none; }
 .agent-phase { color: var(--text-secondary); font-size: .8rem; }
@@ -270,14 +272,14 @@
 .attachment-previews button { position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; padding: 0; border-radius: 50%; }
 .message-image { display: inline-block; margin: .5rem .5rem 0 0; }
 .message-image img { max-width: min(360px, 100%); max-height: 300px; border-radius: 6px; object-fit: contain; }
-.composer-controls { display: flex; align-items: center; gap: .4rem; }
+.composer-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .composer-controls .attach-button { margin: 0; padding: .4rem .5rem; color: var(--text-primary); background: var(--surface-raised); }
-.composer-controls label { min-width: 0; flex: 1; }
+.composer-controls label { min-width: min(12rem, 100%); flex: 1; }
 .composer-controls input, .composer-controls select { max-width: 165px; min-width: 0; padding: .45rem .55rem; border: 1px solid var(--border-control); border-radius: 5px; background: var(--surface-input); color: var(--text-primary); }
 .composer-controls label input { width: 100%; max-width: none; }
 .composer-controls button { margin-left: auto; padding: .5rem 1rem; }
 .composer-setting-scopes { display: flex; flex-wrap: wrap; gap: .25rem .75rem; padding-top: .3rem; color: var(--text-secondary); font-size: .65rem; }
-.composer-setting-scopes span { white-space: nowrap; }
+.composer-setting-scopes span { overflow-wrap: anywhere; }
 .staged-history-edit { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding-bottom: .5rem; font-size: .8rem; }
 .staged-history-edit span { flex: 1 1 200px; }
 .composer-setting-scopes details button { background: var(--surface-danger); color: var(--status-danger); }
@@ -297,8 +299,7 @@
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 
 @media (max-width: 959px) {
-  .chat-toolbar { padding-left: 3.4rem; padding-right: 3.55rem; }
-  .chat-toolbar > div:first-child { min-width: 0; }
+  .chat-toolbar { flex-wrap: nowrap; padding-left: 3.4rem; padding-right: 3.55rem; }
   .chat-toolbar-actions { flex: 0 0 auto; gap: .35rem; }
   .chat-toolbar-actions .toolbar-button, .chat-toolbar-actions .session-navigation { display: none; }
   .subagent-parent-link { max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -318,7 +319,6 @@
 @media (max-width: 700px) {
   .chat-toolbar { padding-top: .55rem; padding-bottom: .55rem; }
   .message-content { max-width: 92%; }
-  .composer-controls { flex-wrap: wrap; }
   .composer-controls label { flex-basis: 100%; }
   .composer-controls input, .composer-controls select { max-width: 100%; flex: 1; }
   .composer-controls select.composer-setting { flex: 1 1 calc(33.333% - .3rem); }

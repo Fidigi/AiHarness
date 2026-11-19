@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 're
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import ChatView from './components/ChatView';
 import { Icon } from './components/Icon';
+import IconControlHints from './components/IconControlHints';
 import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
@@ -286,6 +287,7 @@ function App() {
       <SubagentMonitor />
       <StatusCenter />
       <PwaStatus />
+      <IconControlHints />
       </div>
     </Suspense>
   );
