@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectGeneralSettings, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectGeneralSettings, selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -176,7 +176,9 @@ test.describe('Settings and authentication', () => {
     await tools.getByLabel('Default tool preset').selectOption('read-only');
     await expect.poll(() => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').at(-1)?.body)
       .toMatchObject({ projectId: 'workspace-e2e', toolPreset: 'read-only' });
-    await expect(tools.getByText('powershell', { exact: true }).locator('../..').locator('input')).toBeDisabled();
+    await selectSettingsTool(page, 'powershell');
+    await expect(tools.locator('[data-settings-selection="powershell"]')).toBeVisible();
+    await expect(tools.locator('[data-settings-selection="powershell"]').getByRole('checkbox')).toBeDisabled();
 
     await selectSettingsCategory(page, 'skills');
     const skills = settingsSection(page, 'Skills');

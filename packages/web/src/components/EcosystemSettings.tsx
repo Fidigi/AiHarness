@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type {
   CustomModelDefinition,
   CustomProviderDefinition,
@@ -16,6 +16,8 @@ import { reasoningSettingsMessage } from './reasoning-settings-messages';
 import { settingsAdminMessage, type SettingsAdminMessage } from './settings-admin-messages';
 import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { toolSettingsMessage } from './tool-settings-messages';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -470,13 +472,58 @@ export function CustomModelSettings() {
   </section>;
 }
 
-export function ToolSettingsPanel() {
-  const { t } = useI18n();
+export function ToolSettingsPanel({ presented }: { presented: boolean }) {
+  const workspace = useSessionStore(state => state.workspace);
+  const [scope, setScope] = useSettingsScope('tools', workspace?.id ? 'project' : 'global');
+  return <ScopedToolSettings key={scope} scope={scope} setScope={setScope} presented={presented} />;
+}
+
+function ScopedToolSettings({ scope, setScope, presented }: {
+  scope: 'global' | 'project'; setScope(scope: 'global' | 'project'): void; presented: boolean;
+}) {
+  const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [settings, setSettings] = useState<ToolSettings>();
-  const [scope, setScope] = useSettingsScope('tools', workspace?.id ? 'project' : 'global');
   const [busy, setBusy] = useState(false);
   const epoch = useRef(0);
+  const [selectedName, setSelectedName] = useState(() => {
+    const position = readSettingsNavigation(workspace?.cwd).positions.tools;
+    return position?.group === scope ? position.selection : undefined;
+  });
+  const [overview, setOverview] = useState(!selectedName);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const navigationFocus = useRef(false);
+  const detailPrefix = useId();
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!navigationFocus.current) return;
+    navigationFocus.current = false;
+    if (!presented) return;
+    if (overview) {
+      const choice = navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (choice ?? navigationRef.current)?.focus();
+    } else if (mobile) backRef.current?.focus();
+  }, [mobile, overview, presented, selectedName]);
+  const selectTool = (tool: ToolSettings['tools'][number]) => {
+    setSelectedName(tool.name);
+    setOverview(false);
+    const current = readSettingsNavigation(workspace?.cwd);
+    writeSettingsNavigation(workspace?.cwd, { ...current, section: 'tools',
+      positions: { ...current.positions, tools: { group: scope, selection: tool.name } } });
+  };
+  const matches = selectedName ? settings?.tools.filter(tool => tool.name === selectedName) ?? [] : [];
+  const selected = selectedName ? matches.length === 1 ? matches[0] : undefined : settings?.tools[0];
   const projectScoped = scope === 'project';
   const load = async () => {
     const generation = epoch.current;
@@ -502,6 +549,30 @@ export function ToolSettingsPanel() {
     if (result.success && result.data) setSettings(result.data); else { error(result.error); await load(); }
     setBusy(false);
   };
+  const codemodeFields = settings?.codemode && <fieldset className="codemode-settings">
+    <legend>{t('settings.codemode.title')}</legend>
+    <p role="status">QuickJS · {t(`settings.codemode.selfTest.${settings.codemode.selfTest.state}`)}</p>
+    <label>{t('settings.codemode.activation')}<select value={settings.codemode.enabled ? 'on' : 'automatic'} disabled={busy || settings.codemode.selfTest.state !== 'passed'}
+      onChange={event => void persist({ ...settings,
+        tools: settings.tools.map(tool => tool.name === 'codemode' ? { ...tool, enabled: true } : tool),
+        codemode: { ...settings.codemode!, enabled: event.target.value === 'on' } })}>
+      <option value="automatic">{t('settings.codemode.automatic')}</option>
+      <option value="on">{t('settings.codemode.always')}</option>
+    </select></label>
+    <label>{t('settings.codemode.mode')}<select value={settings.codemode.mode} disabled={busy}
+      onChange={event => void persist({ ...settings, codemode: { ...settings.codemode!, mode: event.target.value as 'on' | 'only' } })}>
+      <option value="on">on</option><option value="only">only</option>
+    </select></label>
+    <label>{t('settings.codemode.inlineBudget')}<input key={`${scope}:${settings.codemode.inlineBudget}`} type="number" min="0" max="3000" step="100" defaultValue={settings.codemode.inlineBudget} disabled={busy}
+      onBlur={event => {
+        const value = event.currentTarget.valueAsNumber;
+        if (Number.isSafeInteger(value) && value >= 0 && value <= 3000 && value !== settings.codemode!.inlineBudget) {
+          void persist({ ...settings, codemode: { ...settings.codemode!, inlineBudget: value } });
+        } else event.currentTarget.value = String(settings.codemode!.inlineBudget);
+      }} /></label>
+    <p className="settings-help">{t('settings.codemode.limits')}</p>
+    <p className="settings-help">{t('settings.codemode.warning')}</p>
+  </fieldset>;
   return <section className="settings-section" id="tools">
     <h3>{t('settings.tools.title')}</h3>
     <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
@@ -514,39 +585,38 @@ export function ToolSettingsPanel() {
         onChange={event => void persist({ ...settings, preset: event.target.value as ToolSettings['preset'] })}>
         {['configured', 'chat-only', 'read-only', 'default', 'full'].map(preset => <option key={preset}>{preset}</option>)}
       </select></label>
-      {settings.codemode && <fieldset className="codemode-settings">
-        <legend>{t('settings.codemode.title')}</legend>
-        <p role="status">QuickJS · {t(`settings.codemode.selfTest.${settings.codemode.selfTest.state}`)}</p>
-        <label>{t('settings.codemode.activation')}<select value={settings.codemode.enabled ? 'on' : 'automatic'} disabled={busy || settings.codemode.selfTest.state !== 'passed'}
-          onChange={event => void persist({ ...settings,
-            tools: settings.tools.map(tool => tool.name === 'codemode' ? { ...tool, enabled: true } : tool),
-            codemode: { ...settings.codemode!, enabled: event.target.value === 'on' } })}>
-          <option value="automatic">{t('settings.codemode.automatic')}</option>
-          <option value="on">{t('settings.codemode.always')}</option>
-        </select></label>
-        <label>{t('settings.codemode.mode')}<select value={settings.codemode.mode} disabled={busy}
-          onChange={event => void persist({ ...settings, codemode: { ...settings.codemode!, mode: event.target.value as 'on' | 'only' } })}>
-          <option value="on">on</option><option value="only">only</option>
-        </select></label>
-        <label>{t('settings.codemode.inlineBudget')}<input key={`${scope}:${settings.codemode.inlineBudget}`} type="number" min="0" max="3000" step="100" defaultValue={settings.codemode.inlineBudget} disabled={busy}
-          onBlur={event => {
-            const value = event.currentTarget.valueAsNumber;
-            if (Number.isSafeInteger(value) && value >= 0 && value <= 3000 && value !== settings.codemode!.inlineBudget) {
-              void persist({ ...settings, codemode: { ...settings.codemode!, inlineBudget: value } });
-            } else event.currentTarget.value = String(settings.codemode!.inlineBudget);
-          }} /></label>
-        <p className="settings-help">{t('settings.codemode.limits')}</p>
-        <p className="settings-help">{t('settings.codemode.warning')}</p>
-      </fieldset>}
-      <div className="tool-settings-list">
-        {settings.tools.map(tool => <label key={tool.name}>
-          <input type="checkbox" checked={tool.enabled} disabled={busy || !tool.available}
-            onChange={event => void persist({ ...settings, tools: settings.tools.map(item => item.name === tool.name ? { ...item, enabled: event.target.checked } : item) })} />
-          <span><strong>{tool.name}</strong><small>{tool.description} · {tool.extensionId}</small>
-            {tool.disabledReason && <small>{t(`settings.tools.reason.${tool.disabledReason}`)}</small>}
-            {tool.unavailableReason && <small>{tool.unavailableReason}</small>}
-          </span>
-        </label>)}
+      {selectedName && !selected && <p role="status" className="settings-help">{toolSettingsMessage(locale, 'unavailable')}</p>}
+      <div className="tool-context">
+        <nav ref={navigationRef} tabIndex={-1} aria-label={t('settings.tools.title')}
+          hidden={mobile && !overview && Boolean(selected)}>
+          {settings.tools.map((tool, index) => <button key={tool.name} type="button" disabled={busy}
+            aria-label={tool.name} aria-current={tool === selected ? 'true' : undefined}
+            aria-expanded={tool === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${index}`}
+            aria-describedby={`${detailPrefix}-${index}-state`}
+            onClick={() => { navigationFocus.current = mobile; selectTool(tool); }}>
+            <strong>{tool.name}</strong>
+            <small id={`${detailPrefix}-${index}-state`}>{tool.extensionId} · {toolSettingsMessage(locale, tool.enabled ? 'enabled' : 'disabled')}</small>
+          </button>)}
+        </nav>
+        <div ref={detailRef} className="tool-context-detail" hidden={mobile && (overview || !selected)}>
+          <button ref={backRef} type="button" className="tool-context-back" hidden={!mobile}
+            onClick={() => { navigationFocus.current = true; setOverview(true); }}>{toolSettingsMessage(locale, 'back')}</button>
+          <div className="tool-settings-list" data-settings-group={scope}>
+            {settings.tools.map((tool, index) => <div key={tool.name} id={`${detailPrefix}-${index}`}
+              data-settings-selection={tool.name} hidden={tool !== selected}>
+              <label><input type="checkbox" checked={tool.enabled} disabled={busy || !tool.available}
+                onChange={event => {
+                  selectTool(tool);
+                  void persist({ ...settings, tools: settings.tools.map(item => item.name === tool.name ? { ...item, enabled: event.target.checked } : item) });
+                }} />
+              <span><strong>{tool.name}</strong><small>{tool.description} · {tool.extensionId}</small>
+                {tool.disabledReason && <small>{t(`settings.tools.reason.${tool.disabledReason}`)}</small>}
+                {tool.unavailableReason && <small>{tool.unavailableReason}</small>}
+              </span></label>
+              {tool.name === 'codemode' && codemodeFields}
+            </div>)}
+          </div>
+        </div>
       </div>
       <label><input type="checkbox" checked={settings.powershellEnabled} disabled={busy || !settings.powershellAvailable}
         onChange={event => void persist({ ...settings, powershellEnabled: event.target.checked })} /> {t('settings.tools.powershell')}</label>

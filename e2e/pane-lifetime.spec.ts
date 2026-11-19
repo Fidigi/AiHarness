@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectGeneralSettings, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectGeneralSettings, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -27,17 +27,23 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectSettingsCategory(page, 'tools');
   const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
   await scope.selectOption('global');
+  await selectSettingsTool(page, 'write');
   await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
   await switchSettingsWorkspace(page, '/workspace/other');
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
+  const toolNavigation = page.locator('#tools').getByRole('navigation');
+  await expect(toolNavigation.getByRole('button', { name: 'read', exact: true })).toHaveAttribute('aria-current', 'true');
+  await selectSettingsTool(page, 'powershell');
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
   await expect(row).toBeInViewport();
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('global');
+  await expect(toolNavigation.getByRole('button', { name: 'write', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.tool-context-detail [data-settings-selection="write"]')).toBeVisible();
   await selectSettingsCategory(page, 'models');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();

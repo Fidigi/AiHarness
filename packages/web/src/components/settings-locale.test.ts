@@ -103,6 +103,8 @@ describe('Settings locale allocation', () => {
           : entry.key === 'settings.documentation' ? consumer.source.replace('📖', '<Icon name="file" />')
           : entry.key === 'settings.push.unsupported' ? consumer.source.replace('<label title=', '<label className="preference-toggle" title=')
           : entry.key === 'settings.sessions' ? consumer.source.replace('<h3>', '<h4>').replace('</h3>', '</h4>')
+          // Code-mode controls retain their literals in a local selected-detail fragment.
+          : name === 'EcosystemSettings.tsx' && entry.key.startsWith('settings.codemode.') ? consumer.source.replace(/^ {4}/u, '')
           : consumer.source;
         expect(source(`./${name}`)).toContain(projectedSource);
         expect(consumer.source).toContain(`t('${entry.key}'`);

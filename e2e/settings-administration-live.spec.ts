@@ -1,10 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
+import type { ToolSettings } from '@ai-harness/core';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { selectModelSettings, selectPluginPackage, selectSettingsCategory, showPluginPackages } from './fixtures/settings-navigation';
+import { selectModelSettings, selectPluginPackage, selectSettingsCategory, selectSettingsTool, showPluginPackages } from './fixtures/settings-navigation';
 
 // Emitted static Web and real authenticated HTTP/storage. The single dropped
 // response occurs AFTER route.fetch publishes to Express; no API data is mocked.
@@ -127,8 +128,35 @@ for (const scenario of [
     expect(persisted.projects[workspace.id].enabledModels).toContain('mock:hidden');
     expect(persisted.projects[workspace.id].enabledModels).not.toContain('mock:visible-a');
     await page.reload();
+    // Own intent before reading/toggling a disclosure that deferred entry alignment can open.
+    await disclosure.locator('summary').focus();
     if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
     await expect(models.locator('[data-settings-selection="mock:visible-a"]').getByRole('checkbox')).not.toBeChecked();
+    // A selected tool is presentation, not a reduced allowlist or a different write scope.
+    const toolsUrl = `${base}/api/tools?${new URLSearchParams({ cwd, projectId: workspace.id })}`;
+    const beforeTools = await page.request.get(toolsUrl).then(response => response.json()) as ToolSettings;
+    expect(beforeTools.scope).toBe('global'); // Effective provenance differs from the Project write target.
+    const selectedTool = beforeTools.tools.find(tool => tool.enabled && tool.available && tool.name !== 'codemode')!;
+    expect(selectedTool).toBeDefined();
+    const expectedTools = beforeTools.tools.filter(tool => tool.enabled && tool.name !== selectedTool.name).map(tool => tool.name);
+    expect(expectedTools.length).toBeGreaterThan(0);
+    await selectSettingsTool(page, selectedTool.name);
+    await expect(page.locator('#tools').getByRole('combobox', { name: text.scope, exact: true })).toHaveValue('project');
+    const toolCheckbox = page.locator('.tool-context-detail').getByRole('checkbox');
+    const toolSave = page.waitForResponse(response => response.url().endsWith('/api/tools') && response.request().method() === 'PATCH');
+    await toolCheckbox.focus(); await toolCheckbox.press('Space');
+    const savedTools = await toolSave;
+    expect(savedTools.status()).toBe(200);
+    expect(savedTools.request().postDataJSON()).toMatchObject({ cwd, projectId: workspace.id, enabledTools: expectedTools, toolPreset: 'chat-only' });
+    await expect(toolCheckbox).not.toBeChecked();
+    const toolReadback = await page.request.get(toolsUrl).then(response => response.json()) as ToolSettings;
+    expect(toolReadback.tools.filter(tool => tool.enabled).map(tool => tool.name)).toEqual(expectedTools);
+    const toolConfig = JSON.parse(await readFile(file, 'utf8'));
+    expect(toolConfig.projects[workspace.id].enabledTools).toEqual(expectedTools);
+    expect(toolConfig.global).toEqual(persisted.global);
+    await page.reload();
+    await expect(toolCheckbox).not.toBeChecked();
+    await expect(toolCheckbox).toHaveAccessibleName(new RegExp(selectedTool.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     // The package group must obey its filter too, rather than disabling hidden
     // packages in the same scope. Real local packages need no registry/network.
     await selectSettingsCategory(page, 'plugins');

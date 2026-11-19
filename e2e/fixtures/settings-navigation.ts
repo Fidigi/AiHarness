@@ -47,6 +47,14 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+export async function selectSettingsTool(page: Page, name: string): Promise<void> {
+  await selectSettingsCategory(page, 'tools');
+  const back = page.getByRole('button', { name: /^(Back to tools|Retour aux outils)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = page.getByRole('navigation', { name: /^(Tools and presets|Outils et préréglages)$/u });
+  await navigation.getByRole('button', { name, exact: true }).click();
+}
+
 /** Choose a profile through the visible contextual list, never its hidden actions. */
 export async function selectSubagentProfile(page: Page, name: string): Promise<void> {
   await selectSettingsCategory(page, 'subagents');

@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from './fixtures/test-budget';
 import type { CodemodeCall, ToolSettings } from '@ai-harness/core';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { selectGeneralSettings, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { expectContrast } from './fixtures/contrast';
 
 function sandboxSettings(): ToolSettings {
   return { scope: 'project', source: 'workspace-e2e', preset: 'default', powershellAvailable: false, powershellEnabled: false,
@@ -14,6 +16,156 @@ function sandboxSettings(): ToolSettings {
       { name: 'powershell', description: 'Run PowerShell', extensionId: 'builtin:workspace-tools', enabled: false, available: false, unavailableReason: 'Windows only' },
     ] };
 }
+
+for (const scenario of [
+  { width: 1280, locale: 'en', theme: 'light' },
+  { width: 1280, locale: 'fr', theme: 'dark' },
+  { width: 390, locale: 'en', theme: 'light' },
+  { width: 390, locale: 'fr', theme: 'dark' },
+] as const) test(`Tools contextual selection is scoped and never executes tools: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: scenario.width, height: 844 });
+  await page.addInitScript(({ locale, theme }) => {
+    localStorage.setItem('ai-harness-locale', locale);
+    localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+  }, scenario);
+  const api = await installMockApi(page, { toolSettings: sandboxSettings() });
+  await page.goto('/settings#tools');
+  const navigation = page.getByRole('navigation', { name: /^(Tools and presets|Outils et préréglages)$/u });
+  await expect(navigation).toBeVisible();
+  await expect(navigation.getByRole('button')).toHaveCount(5);
+  const choice = navigation.getByRole('button', { name: 'write', exact: true });
+  await choice.focus(); await choice.press('Enter');
+  const detail = page.locator('.tool-context-detail');
+  await expect(detail.getByRole('checkbox')).toHaveCount(1);
+  await expect(detail.getByRole('checkbox')).toHaveAccessibleName(/write/u);
+  await expect(detail).toContainText('Write a workspace file');
+  const selectedMetadata = page.getByRole('button', { name: 'write', exact: true, includeHidden: true });
+  await expect(selectedMetadata).toHaveAttribute('aria-current', 'true');
+  await expect(selectedMetadata).toHaveAttribute('aria-expanded', 'true');
+  await expect(selectedMetadata).toHaveCSS('border-left-width', '3px');
+  await expect(page.locator('.codemode-settings')).toBeHidden();
+  const back = page.getByRole('button', { name: /^(Back to tools|Retour aux outils)$/u });
+  if (scenario.width < 960) {
+    await expect(back).toBeFocused();
+    await back.press('Enter');
+    for (const control of [choice, back]) {
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS('outline-style', 'solid');
+      await expectContrast(control, 'outlineColor', 3);
+      expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const clearance = await control.evaluate(element => {
+        const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+        const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+        const owners = [element.closest('nav') ?? element.closest('.tool-context-detail')!, element.closest('.settings-view')!];
+        return Math.min(...owners.flatMap(owner => {
+          const clip = owner.getBoundingClientRect();
+          return [bounds.left - clip.left, clip.right - bounds.right, bounds.top - clip.top, clip.bottom - bounds.bottom];
+        })) - extent;
+      });
+      expect(clearance).toBeGreaterThanOrEqual(-0.1);
+      if (control === choice) await choice.press('Enter');
+    }
+  } else {
+    const list = (await navigation.boundingBox())!, content = (await detail.boundingBox())!;
+    expect(list.x + list.width).toBeLessThanOrEqual(content.x);
+  }
+  await selectGeneralSettings(page, 'appearance');
+  await selectSettingsCategory(page, 'tools');
+  await expect(detail).toContainText('Write a workspace file');
+  await page.reload();
+  await expect(detail).toContainText('Write a workspace file');
+  const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
+  expect(stored.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.tools)
+    .toEqual({ group: 'project', selection: 'write' });
+  await selectSettingsTool(page, 'codemode');
+  await expect(page.locator('.codemode-settings')).toBeVisible();
+  expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await accessible(page, '#tools', scenario.width);
+  const codeCapture = testInfo.outputPath(`tools-codemode-${scenario.width}-${scenario.locale}.png`);
+  await page.screenshot({ path: codeCapture, animations: 'disabled', caret: 'hide' });
+  await testInfo.attach('tools-codemode', { path: codeCapture, contentType: 'image/png' });
+  await selectSettingsTool(page, 'write');
+  const scopeControl = page.locator('#tools').getByRole('combobox', { name: /^(Scope|Portée)$/u });
+  await scopeControl.focus();
+  await scopeControl.selectOption('global');
+  await expect(navigation.getByRole('button', { name: 'read', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(scopeControl).toBeFocused();
+  await expect(choice).not.toHaveAttribute('aria-current', 'true');
+  await navigation.getByRole('button', { name: 'powershell', exact: true }).click();
+  await expect(detail).toContainText('Windows only');
+  await expect(detail.getByRole('checkbox')).toBeDisabled();
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  await accessible(page, '#tools', scenario.width);
+  const capture = testInfo.outputPath(`tools-context-${scenario.width}-${scenario.locale}.png`);
+  await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+  await testInfo.attach('tools-context', { path: capture, contentType: 'image/png' });
+
+  await selectSettingsTool(page, 'write');
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const pending = new Promise<void>(resolve => { entered = resolve; });
+  await page.route('**/api/tools', async route => {
+    if (route.request().method() === 'PATCH') { entered(); await held; }
+    await route.fallback();
+  });
+  try {
+    // The controlled value stays canonical while this write is held; no optimistic toggle is required.
+    await detail.getByRole('checkbox').focus();
+    await detail.getByRole('checkbox').press('Space');
+    await pending;
+    if (scenario.width < 960) {
+      await back.focus(); await back.press('Enter');
+      await expect(navigation).toBeFocused();
+      await expect(navigation.getByRole('button', { name: 'write', exact: true })).toBeDisabled();
+      const pendingCapture = testInfo.outputPath(`tools-pending-${scenario.width}-${scenario.locale}.png`);
+      await page.screenshot({ path: pendingCapture, animations: 'disabled', caret: 'hide' });
+      await testInfo.attach('tools-pending-focus', { path: pendingCapture, contentType: 'image/png' });
+    }
+  } finally { release(); }
+  await expect(selectedMetadata).toBeEnabled();
+  await expect.poll(() => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').at(-1)?.body)
+    .toMatchObject({ enabledTools: ['read', 'codemode', 'tool_search'], toolPreset: 'default', powershellEnabled: false,
+      codemodeEnabled: false, codemodeMode: 'on', codemodeInlineBudget: 3000 });
+  const body = api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').at(-1)!.body;
+  expect(body).not.toHaveProperty('projectId');
+  expect(body).not.toHaveProperty('cwd');
+  await selectSettingsTool(page, 'write');
+  await expect(detail.getByRole('checkbox')).not.toBeChecked();
+  if (scenario.width > 959) {
+    await selectSettingsTool(page, 'write');
+    const scope = page.locator('#tools').getByRole('combobox', { name: /^(Scope|Portée)$/u });
+    await scope.focus();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(back).toBeVisible();
+    await expect(scope).toBeFocused();
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await expect(back).toBeHidden();
+    await expect(scope).toBeFocused();
+  }
+  // A fresh missing explicit choice cannot silently borrow another tool or scope.
+  const longName = 'fixture_read_workspace_metadata_with_an_explicit_long_tool_name_and_preserved_authorization';
+  await page.route('**/api/tools', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    ...sandboxSettings(), scope: 'global', source: 'global', tools: [
+      ...sandboxSettings().tools.filter(tool => tool.name !== 'write'),
+      { name: longName, description: 'Read fixture metadata', extensionId: 'fixture:contextual-tools', enabled: true, available: true },
+    ],
+  }) }));
+  await page.reload();
+  await expect(navigation).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /selected tool is unavailable|L’outil sélectionné/u })).toBeVisible();
+  await expect(page.locator('.tool-context-detail').getByRole('checkbox')).toHaveCount(0);
+  await navigation.getByRole('button', { name: longName, exact: true }).click();
+  await expect(detail).toContainText(longName);
+  const toolBounds = await detail.locator('.tool-settings-list > div:visible').boundingBox();
+  const detailBounds = await detail.boundingBox();
+  expect(toolBounds!.x + toolBounds!.width).toBeLessThanOrEqual(detailBounds!.x + detailBounds!.width + 0.1);
+  expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const longCapture = testInfo.outputPath(`tools-long-name-${scenario.width}-${scenario.locale}.png`);
+  await page.screenshot({ path: longCapture, animations: 'disabled', caret: 'hide' });
+  await testInfo.attach('tools-long-name', { path: longCapture, contentType: 'image/png' });
+  expect(api.requests.some(request => request.path.includes('execute') || request.path === '/api/agent/runs')).toBe(false);
+});
 
 async function accessible(page: Page, selector: string, width: number) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -37,6 +189,7 @@ for (const scenario of [
     const api = await installMockApi(page, { toolSettings: sandboxSettings() });
     await page.goto('/settings#tools');
     const tools = page.locator('#tools');
+    await selectSettingsTool(page, 'codemode');
     await expect(tools.getByRole('status')).toContainText('Sandbox self-test passed');
     await tools.getByLabel('Scope').selectOption('project');
     await tools.getByLabel('Code mode activation').selectOption('on');
@@ -48,19 +201,24 @@ for (const scenario of [
     await expect.poll(() => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').at(-1)?.body)
       .toMatchObject({ projectId: 'workspace-e2e', cwd: '/workspace', codemodeEnabled: true, codemodeMode: 'only', codemodeInlineBudget: 500 });
     await tools.getByLabel('Default tool preset').selectOption('read-only');
-    await expect(tools.locator('.tool-settings-list label').filter({ hasText: 'write' })).toContainText('Disabled by the read-only preset.');
+    await selectSettingsTool(page, 'write');
+    await expect(tools.locator('.tool-settings-list label:visible').filter({ hasText: 'write' })).toContainText('Disabled by the read-only preset.');
+    await selectSettingsTool(page, 'codemode');
+    await expect(tools.locator('.codemode-settings')).toBeVisible();
     await expect(tools).toContainText('Discovery is not authorization');
     await expect(tools).toContainText('32 MiB');
     await accessible(page, '#tools', scenario.width);
     await tools.scrollIntoViewIfNeeded();
-    const bottomRow = await tools.locator('.tool-settings-list label').last().boundingBox();
+    const bottomRow = await tools.locator('.tool-settings-list > div:visible').boundingBox();
     expect(bottomRow).not.toBeNull();
     expect(bottomRow!.y + bottomRow!.height).toBeLessThanOrEqual(1400);
     await expect(tools).toHaveScreenshot(`codemode-settings-${scenario.name}.png`, { animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02 });
     await tools.getByLabel('Scope').selectOption('global');
+    await selectSettingsTool(page, 'codemode');
     await expect(tools.getByLabel('Code mode activation')).toHaveValue('automatic');
     await expect(tools.getByLabel('Tool presentation')).toHaveValue('on');
     await tools.getByLabel('Scope').selectOption('project');
+    await selectSettingsTool(page, 'codemode');
     await expect(tools.getByLabel('Tool presentation')).toHaveValue('only');
     await expect(budget).toHaveValue('500');
     const gets = api.requests.filter(request => request.path === '/api/tools' && request.method === 'GET').length;
@@ -115,9 +273,10 @@ test('failed sandbox health is visible and cannot activate execution from Settin
   settings.tools.find(tool => tool.name === 'codemode')!.disabledReason = 'sandbox-unavailable';
   const api = await installMockApi(page, { toolSettings: settings });
   await page.goto('/settings#tools');
+  await selectSettingsTool(page, 'codemode');
   await expect(page.locator('#tools').getByRole('status')).toContainText('execution disabled');
   await expect(page.getByLabel('Code mode activation')).toBeDisabled();
-  await expect(page.locator('.tool-settings-list label').filter({ hasText: 'codemode' }).locator('input')).toBeDisabled();
+  await expect(page.locator('.tool-settings-list label:visible').filter({ hasText: 'codemode' }).locator('input')).toBeDisabled();
   expect(api.requests.some(request => request.method === 'PATCH')).toBe(false);
 });
 

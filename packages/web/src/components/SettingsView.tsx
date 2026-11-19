@@ -457,7 +457,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
           onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
       </section>
 
-      <div hidden={category !== 'tools'}><ToolSettingsPanel /></div>
+      <div hidden={category !== 'tools'}><ToolSettingsPanel presented={category === 'tools'} /></div>
 
       <div hidden={category !== 'plugins'}><Suspense fallback={(
         <section className="settings-section plugin-settings" id="plugins">
