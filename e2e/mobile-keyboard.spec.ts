@@ -137,6 +137,13 @@ for (const scenario of [
         const form = await chat.locator('.input-container').boundingBox();
         expect(form).not.toBeNull();
         expect(form!.y + form!.height).toBeLessThanOrEqual(493);
+        const terminal = page.getByRole('button', { name: 'Open workspace terminal', exact: true });
+        await expect(terminal).toBeVisible();
+        const utility = await terminal.boundingBox();
+        expect(utility!.width).toBeGreaterThanOrEqual(44); expect(utility!.height).toBeGreaterThanOrEqual(44);
+        expect(utility!.x).toBeGreaterThanOrEqual(form!.x); expect(utility!.y).toBeGreaterThanOrEqual(form!.y);
+        expect(utility!.x + utility!.width).toBeLessThanOrEqual(form!.x + form!.width);
+        expect(utility!.y + utility!.height).toBeLessThanOrEqual(form!.y + form!.height);
         expect(await composer.evaluate(element => Number.parseFloat(getComputedStyle(element.parentElement!).paddingBottom))).toBeGreaterThanOrEqual(12);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
         await capture(page, `keyboard-collapsed-${scenario.name}.png`);

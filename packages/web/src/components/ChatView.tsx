@@ -75,6 +75,7 @@ registerFeatureLocaleMessages({
 
 interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
+  terminalControl?: ReactNode;
 }
 
 function SubagentUnavailable() {
@@ -216,7 +217,7 @@ function historyGapMessageIds(session: StoredSession | undefined): Set<string> {
   return gaps;
 }
 
-function ChatView({ onStreamingUpdate }: ChatViewProps) {
+function ChatView({ onStreamingUpdate, terminalControl }: ChatViewProps) {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1815,6 +1816,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     if (id && sessionUnavailable) {
       const fallback = sessions.find(session => session.id !== id);
       return <div className="chat-empty" role="alert">
+        {terminalControl}
         <h2>{t('chat.sessionUnavailable')}</h2>
         <p>{sessionUnavailable}</p>
         <button onClick={() => fallback ? navigateToSession(fallback.id) : navigate(`/?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`)}>
@@ -1822,9 +1824,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </button>
       </div>;
     }
-    if (id) return <div className="chat-empty" role="status">{t('common.loading')}…</div>;
+    if (id) return <div className="chat-empty" role="status">{terminalControl}{t('common.loading')}…</div>;
     return (
       <div className="chat-empty">
+        {terminalControl}
         <h2>{t('chat.welcome')}</h2>
         <p>{t('chat.selectOrCreate')}</p>
       </div>
@@ -2024,6 +2027,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </aside>
       )}
 
+      <div className="messages-region">
       {minimapOpen && (
         <aside className="conversation-minimap" aria-label={t('chat.minimap')}>
           <header>
@@ -2124,6 +2128,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           </article>
         ))}
         <div ref={messagesEndRef} />
+      </div>
       </div>
 
       {selection && <Suspense fallback={null}><SelectionActions capture={selection} view={interactionView}
@@ -2267,6 +2272,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           disabled={starting || busyCompacting}
         />
         <div className="composer-controls">
+          {terminalControl}
           <input ref={imageInputRef} className="visually-hidden" type="file" accept="image/*" multiple
             aria-label={t('chat.addImage')}
             onChange={event => {

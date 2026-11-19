@@ -55,8 +55,24 @@ for (const viewport of [
 ]) {
   test(`layout ${viewport.name} sans débordement`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await installMockApi(page, { sessions: [mockSession('responsive', 'Responsive session')] });
+    const api = await installMockApi(page, { sessions: [mockSession('responsive', 'Responsive session')] });
     await page.goto('/chat/responsive');
+    await expect(page.getByPlaceholder(/Type your message/)).toBeVisible();
+    const terminal = page.getByRole('button', { name: 'Open workspace terminal', exact: true });
+    await expect(terminal).toBeInViewport({ ratio: 1 });
+    const target = await terminal.boundingBox();
+    expect(target!.width).toBeGreaterThanOrEqual(44); expect(target!.height).toBeGreaterThanOrEqual(44);
+    await expect.poll(() => page.evaluate(() => {
+      const launcher = document.querySelector<HTMLElement>('.terminal-launcher')!;
+      const box = launcher.getBoundingClientRect();
+      return [...document.querySelectorAll<HTMLElement>('.input-container input:not([type="file"]), .input-container textarea, .input-container select, .input-container button')]
+        .filter(control => {
+          if (control === launcher) return false;
+          const other = control.getBoundingClientRect();
+          return other.width > 0 && other.height > 0 && Math.min(box.right, other.right) > Math.max(box.left, other.left)
+            && Math.min(box.bottom, other.bottom) > Math.max(box.top, other.top);
+        }).map(control => control.getAttribute('aria-label') || control.getAttribute('placeholder') || control.textContent?.trim() || control.tagName);
+    })).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
 
     const explorer = page.getByRole('region', { name: 'Workspace explorer' });
@@ -70,5 +86,13 @@ for (const viewport of [
       await expect(explorer).toBeVisible();
       await expect(page.locator('.sidebar')).toBeVisible();
     }
+    const composer = page.getByPlaceholder(/Type your message/);
+    await composer.fill('Keep this draft');
+    await composer.press('Tab');
+    await expect(terminal).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('region', { name: 'Terminal', exact: true })).toBeVisible();
+    await expect(composer).toHaveValue('Keep this draft');
+    expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/agent/runs')).toHaveLength(0);
   });
 }

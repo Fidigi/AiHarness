@@ -252,6 +252,10 @@ function App() {
   if (authenticated === null) return <div className="app-loading" role="status">{t('common.loading')}…</div>;
   if (!authenticated) return <LoginView onLogin={() => setAuthenticated(true)} />;
 
+  const terminalControl = workspace && terminalWorkspaceId !== workspace.id
+    ? <button type="button" className="terminal-launcher" onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))}
+      aria-label={t('terminal.open')}><Icon name="terminal" /></button> : null;
+
   return (
     <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
       <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
@@ -267,8 +271,8 @@ function App() {
         inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} explorerHostRef={setExplorerHost} />}
       <main className="main-content" tabIndex={-1}>
         <Routes>
-          <Route path="/" element={<ChatView />} />
-          <Route path="/chat/:id" element={<ChatView />} />
+          <Route path="/" element={<ChatView terminalControl={terminalControl} />} />
+          <Route path="/chat/:id" element={<ChatView terminalControl={terminalControl} />} />
           <Route path="/settings" element={<Suspense fallback={
             <div className="app-loading" role="status">{t('common.loading')}…</div>
           }><SettingsView /></Suspense>} />
@@ -278,9 +282,6 @@ function App() {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}
-      {!location.pathname.startsWith('/settings') && terminalWorkspaceId !== workspace?.id && workspace
-        && <button className="terminal-launcher" onClick={() => setTerminalWorkspaceId(workspace.id)}
-          aria-label={t('terminal.open')}><Icon name="terminal" /></button>}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
       {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} />}

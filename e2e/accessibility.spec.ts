@@ -234,7 +234,7 @@ test.describe('Accessibilité des parcours majeurs', () => {
       await page.keyboard.press('Escape');
       await expect(reader.getByRole('dialog')).toHaveCount(0); await expect(maximize).toBeFocused();
 
-      await reader.getByRole('link', { name: locale === 'en' ? 'Download' : 'Télécharger', exact: true }).focus();
+      await page.locator('.input-container textarea').focus();
       await page.keyboard.press('Tab');
       const terminal = page.getByRole('button', { name: locale === 'en' ? 'Open workspace terminal' : 'Ouvrir le terminal du workspace', exact: true });
       await expect(terminal).toBeFocused();

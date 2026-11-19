@@ -1,17 +1,15 @@
-.terminal-launcher {
-  position: fixed;
-  z-index: 18;
-  right: max(1rem, env(safe-area-inset-right));
-  bottom: max(1rem, env(safe-area-inset-bottom));
+.terminal-launcher, .composer-controls .terminal-launcher {
   width: 44px;
   height: 44px;
   border: 1px solid var(--border-control);
-  border-radius: 50%;
+  border-radius: 4px;
   color: var(--text-primary);
   background: var(--surface-panel);
-  box-shadow: 0 8px 24px #0008;
   cursor: pointer;
 }
+.terminal-launcher:hover { background: var(--surface-hover); }
+.composer-controls .terminal-launcher { flex: 0 0 44px; margin: 0; padding: .4rem; }
+.chat-empty .terminal-launcher { margin: .75rem auto; }
 
 .app.sidebar-hidden .terminal-panel { left: 0; }
 
@@ -89,5 +87,4 @@
 @media (max-width: 850px) {
   .terminal-panel { left: 0; height: min(48dvh, 440px); padding-bottom: env(safe-area-inset-bottom); }
   .terminal-panel > header small { display: none; }
-  .terminal-launcher { bottom: max(5rem, calc(4rem + env(safe-area-inset-bottom))); }
 }

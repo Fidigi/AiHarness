@@ -241,7 +241,8 @@
 .history-page-control button:disabled, .history-gap button:disabled { opacity: .55; cursor: wait; }
 .history-gap { margin-block: .75rem 1.5rem; }
 .history-gap::before, .history-gap::after { height: 1px; flex: 1; max-width: 160px; content: ''; background: var(--border-subtle); }
-.conversation-minimap { position: absolute; z-index: 10; top: 66px; right: .6rem; bottom: 150px; width: min(220px, calc(100% - 1.2rem)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-control); border-radius: 8px; color: var(--text-primary); background: var(--surface-panel); box-shadow: 0 12px 35px #0009; backdrop-filter: blur(8px); }
+.messages-region { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; }
+.conversation-minimap { position: absolute; z-index: 10; top: 6px; right: .6rem; bottom: 6px; width: min(220px, calc(100% - 1.2rem)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border-control); border-radius: 8px; color: var(--text-primary); background: var(--surface-panel); box-shadow: 0 12px 35px #0009; backdrop-filter: blur(8px); }
 .conversation-minimap header { display: grid; grid-template-columns: 1fr auto; gap: .15rem .5rem; padding: .55rem; border-bottom: 1px solid var(--border-subtle); }
 .conversation-minimap header span { grid-column: 1 / -1; color: var(--text-secondary); font-size: .68rem; }
 .conversation-minimap header button { grid-area: 1 / 2; border: 0; color: inherit; background: none; cursor: pointer; }
@@ -313,7 +314,7 @@
   .mobile-chat-actions button { min-height: 44px; padding: .4rem; border: 0; color: var(--text-primary); background: transparent; cursor: pointer; }
   .mobile-chat-actions span { display: block; overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
   .session-info { top: 108px; max-height: calc(100vh - 220px); }
-  .conversation-minimap { top: 108px; right: .4rem; bottom: calc(210px + env(safe-area-inset-bottom, 0px)); width: min(280px, calc(100% - .8rem)); }
+  .conversation-minimap { right: .4rem; width: min(280px, calc(100% - .8rem)); }
 }
 
 @media (max-width: 700px) {
