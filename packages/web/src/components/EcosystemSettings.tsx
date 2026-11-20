@@ -593,10 +593,18 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
     if (!result.success) error(result.error);
     else {
       const current = editorState.current;
-      if (editing && result.data?.key === editing && current.editing === editing && formBaseline.current === baseline
+      if (result.data && current.editing === editing && formBaseline.current === baseline
+        && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
+          && result.data.provider === form.provider && result.data.id === form.id
+          && current.form.provider === form.provider && current.form.id === form.id)
         && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
-        formBaseline.current = customModelForm(result.data);
-        setForm({ ...current.form });
+        const saved = customModelForm(result.data);
+        let next = { ...current.form };
+        if (!editing) for (const key of Object.keys(form) as Array<keyof typeof form>) {
+          if (current.form[key] === form[key]) next = { ...next, [key]: saved[key] };
+        }
+        formBaseline.current = saved;
+        setEditing(result.data.key); setForm(next);
       } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
       await Promise.all([load(), hydrateModelCatalog(true)]);
     }

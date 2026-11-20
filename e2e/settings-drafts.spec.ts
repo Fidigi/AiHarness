@@ -633,6 +633,58 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_');
 });
 
+test('Custom model creation drafts bind to the provider-qualified reply without repeating Create', async ({ page }) => {
+  const api = await installMockApi(page, { customModels: [{ key: 'azure:created-fixture', provider: 'azure', id: 'created-fixture', name: 'Other-provider fixture',
+    capabilities: { reasoning: false, imageInput: false, toolCalls: true }, createdAt: '', updatedAt: '' }] });
+  const section = page.locator('#custom-models'), editor = section.locator('.custom-resource-editor');
+  const close = page.locator('.settings-dialog-header button');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  const writes: Array<{ method: string; path: string; body: Record<string, unknown> }> = [];
+  for (const id of ['created-fixture', 'created-reversion']) {
+    let release!: () => void, entered!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; }), pending = new Promise<void>(resolve => { entered = resolve; });
+    await page.route('**/api/provider-registry/models', async route => {
+      if (route.request().method() === 'POST') { entered(); await held; }
+      await route.fallback();
+    });
+    try {
+      await page.goto('/settings#custom-models'); await editor.locator('summary').click();
+      await editor.getByLabel('Provider', { exact: true }).fill('openai'); await editor.getByLabel('ID', { exact: true }).fill(id);
+      await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_EARLY');
+      await editor.getByRole('checkbox', { name: 'reasoning', exact: true }).check();
+      await editor.getByLabel('Context window', { exact: true }).fill('64000');
+      await editor.getByLabel('Maximum output tokens', { exact: true }).fill('4096');
+      await editor.getByRole('textbox', { name: 'Advanced compatibility (JSON)', exact: true }).fill(JSON.stringify({ fixtureMode: 'SYNTHETIC_MODEL_CREATE_MODE' }));
+      await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
+      await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_LATER');
+      await selectCustomModel(page, 'azure:created-fixture');
+      await close.click(); await expect(prompt).toBeVisible();
+      const readback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+      release(); await readback;
+      await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_MODEL_CREATE_LATER');
+      await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('openai');
+      await expect(editor.getByLabel('ID', { exact: true })).toHaveValue(id);
+      await expect(editor.locator('summary')).toHaveText('Edit custom model'); await expect(prompt).toBeVisible();
+      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      const body = { provider: 'openai', id, name: 'SYNTHETIC_MODEL_CREATE_EARLY', capabilities: { reasoning: true, imageInput: false, toolCalls: true },
+        contextWindow: 64000, maxOutputTokens: 4096, pricing: {}, compatibility: { fixtureMode: 'SYNTHETIC_MODEL_CREATE_MODE' } };
+      writes.push({ method: 'POST', path: '/api/provider-registry/models', body });
+      if (id === 'created-fixture') {
+        const secondReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+        await editor.getByRole('button', { name: 'Save', exact: true }).click(); await secondReadback;
+        await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+        writes.push({ method: 'PUT', path: '/api/provider-registry/models/openai%3Acreated-fixture', body: { ...body, name: 'SYNTHETIC_MODEL_CREATE_LATER' } });
+      } else await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_EARLY');
+      expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+        .map(({ method, path, body }) => ({ method, path, body }))).toEqual(writes);
+      await expect(section.locator('.custom-model-context-detail')).toContainText('Other-provider fixture');
+      await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+      expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
+      expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_CREATE_');
+    } finally { release(); }
+  }
+});
+
 test('Plugin install drafts guard mobile dismissal and clear only after canonical installation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: true });
