@@ -462,3 +462,75 @@ for (const width of [1280, 390]) test(`Code mode budget Escape retains draft wit
   await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); expect(writes()).toEqual([saved]);
 });
+
+for (const width of [1280, 390]) test(`Child profile local retirement confirms only its edits: ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: true });
+  const nativePrompts: string[] = [];
+  page.on('dialog', async dialog => { nativePrompts.push(dialog.message()); await dialog.dismiss(); });
+  await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+  const credential = page.locator('#providers .credential-context-detail input[type="password"]:visible');
+  const initial = await credential.inputValue(); await credential.fill('SYNTHETIC_PROFILE_OTHER_CREDENTIAL');
+  await selectSettingsCategory(page, 'subagents');
+  const section = page.locator('#subagents'), editor = section.locator('.subagent-profile-editor');
+  const scope = section.locator('.subagent-scope-control select');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  const keep = prompt.getByRole('button', { name: 'Keep editing', exact: true });
+  const discard = prompt.getByRole('button', { name: 'Discard edits', exact: true });
+  const openEditor = async () => {
+    await selectSubagentProfile(page, 'Explore');
+    await section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  };
+  await openEditor(); await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_UNSAVED');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(prompt).toBeVisible(); await keep.click();
+  await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('SYNTHETIC_PROFILE_LOCAL_UNSAVED');
+  await editor.getByLabel('Name', { exact: true }).press('Escape');
+  await expect(prompt).toBeVisible(); await keep.click(); await expect(editor.getByLabel('Name', { exact: true })).toBeFocused();
+  await scope.selectOption('global'); await expect(prompt).toBeVisible(); await expect(scope).toHaveValue('project'); await keep.click();
+  await expect(scope).toHaveValue('project'); await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('SYNTHETIC_PROFILE_LOCAL_UNSAVED');
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toEqual([]);
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible(); await discard.click();
+  await expect(editor).toHaveCount(0);
+  await expect(section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
+  await page.locator('.settings-dialog-header button').click(); await expect(prompt).toBeVisible(); await keep.click();
+  await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue('SYNTHETIC_PROFILE_OTHER_CREDENTIAL');
+  await selectSettingsCategory(page, 'subagents'); await openEditor();
+  await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_SCOPE_DRAFT');
+  await scope.selectOption('global'); await expect(prompt).toBeVisible(); await discard.click();
+  await expect(scope).toHaveValue('global'); await expect(editor).toHaveCount(0);
+  await page.locator('.settings-dialog-header button').click(); await expect(prompt).toBeVisible(); await keep.click();
+
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const pending = new Promise<void>(resolve => { entered = resolve; });
+  const saves: unknown[] = [];
+  await page.route('**/api/subagents/profiles/explore', async route => {
+    if (route.request().method() === 'PATCH') { saves.push(route.request().postDataJSON()); entered(); await held; }
+    await route.fallback();
+  });
+  try {
+    await openEditor(); await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_SAVED');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
+    release(); await expect(editor).toHaveCount(0); await expect(prompt).toHaveCount(0);
+    await expect(section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true })).toBeFocused();
+    expect(saves).toEqual([{ profile: { name: 'Explore', description: 'Explore child-agent profile', instructions: 'SYNTHETIC_PROFILE_LOCAL_SAVED',
+      kind: 'explore', enabled: true, tools: ['ls', 'read', 'grep', 'find'], skills: [], extensions: [], model: null, thinking: null,
+      maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' }]);
+  } finally { release(); }
+  await openEditor(); await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_WITHDRAWN');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
+  await page.evaluate(async path => {
+    const { useSessionStore } = await import(path);
+    const workspace = useSessionStore.getState().workspace;
+    useSessionStore.setState({ workspace: { ...workspace, trusted: false, operationTrusted: false } });
+  }, '/src/store/session-store.ts');
+  await expect(prompt).toHaveCount(0); await expect(editor).toHaveCount(0);
+  await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue(initial);
+  await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(1);
+  expect(api.requests.filter(request => request.path === '/api/config' && request.method !== 'GET')).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROFILE_');
+  expect(nativePrompts).toEqual([]);
+});

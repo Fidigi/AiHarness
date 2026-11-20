@@ -1,4 +1,4 @@
-import { createContext, useContext, useLayoutEffect } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, type RefObject } from 'react';
 import type { Locale } from '../i18n/types';
 
 /** Only dirty flags live here; draft values remain in their owning forms. */
@@ -12,6 +12,27 @@ export function useSettingsDraft(dirty: boolean): void {
     drafts.add(entry);
     return () => { drafts.delete(entry); };
   }, [dirty, drafts]);
+}
+
+export const SettingsDiscardContext = createContext<{
+  request(owner: symbol, discard: () => void, returnTarget?: HTMLElement | null): void;
+  retire(owner: symbol): void;
+} | null>(null);
+
+/** Guard an owning form's discard without exposing its values or abandoning peers. */
+export function useSettingsDraftGuard(dirty: boolean, returnFocus?: RefObject<HTMLElement | null>): (discard: () => void) => void {
+  useSettingsDraft(dirty);
+  const commands = useContext(SettingsDiscardContext);
+  const owner = useRef(Symbol());
+  useLayoutEffect(() => {
+    if (!dirty || !commands) return;
+    const entry = owner.current;
+    return () => commands.retire(entry);
+  }, [commands, dirty]);
+  return discard => {
+    if (dirty && commands) commands.request(owner.current, discard, returnFocus?.current);
+    else discard();
+  };
 }
 
 const messages = {

@@ -14,7 +14,7 @@ import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { subagentSettingsMessage } from './subagent-settings-messages';
-import { useSettingsDraft } from './settings-drafts';
+import { useSettingsDraftGuard } from './settings-drafts';
 
 interface EditorValue {
   /** Existing profile id; present means update mode. */
@@ -111,10 +111,12 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
   const editorBaseline = useRef<EditorValue | undefined>(undefined);
-  useSettingsDraft(Boolean(editor && (Object.keys(editor) as Array<keyof EditorValue>)
-    .some(key => editor[key] !== editorBaseline.current?.[key])));
+  const editorInvoker = useRef<HTMLElement>(null);
+  const guardEditorDiscard = useSettingsDraftGuard(Boolean(editor && (Object.keys(editor) as Array<keyof EditorValue>)
+    .some(key => editor[key] !== editorBaseline.current?.[key])), editorInvoker);
+  const closeEditor = () => guardEditorDiscard(() => setEditor(undefined));
   const editorRef = useRef<HTMLFormElement>(null);
-  useFocusTrap(presented && Boolean(editor), editorRef, () => setEditor(undefined));
+  useFocusTrap(presented && Boolean(editor), editorRef, closeEditor);
   const scope = [
     workspace?.cwd,
     targetScope === 'project' ? workspace?.id : undefined,
@@ -186,8 +188,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
           <label className="subagent-scope-control">
             <span>{t('subagents.targetScope')}</span>
             <select data-settings-focus="scope" value={targetScope} disabled={loading} onChange={event => {
-              setEditor(undefined);
-              setTargetScope(event.target.value as 'global' | 'project');
+              const nextScope = event.target.value as 'global' | 'project';
+              guardEditorDiscard(() => { setEditor(undefined); setTargetScope(nextScope); });
             }}>
               <option value="project" disabled={!workspace?.id}>{t('subagents.scope.project')}</option>
               <option value="global">{t('subagents.scope.global')}</option>
@@ -211,7 +213,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
           <span>{t('subagents.filter')}</span>
           <input type="search" value={filter} onChange={event => setFilter(event.target.value)} />
         </label>
-        <button type="button" disabled={loading} onClick={() => {
+        <button type="button" disabled={loading} onClick={event => {
+          editorInvoker.current = event.currentTarget;
           const next = editorValue(); editorBaseline.current = next; setEditor(next);
         }}>{t('subagents.create')}</button>
         <button type="button" disabled={loading} onClick={() => void load()}>{t('common.refresh')}</button>
@@ -265,7 +268,7 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
               onChange={event => setEditor({ ...editor, background: event.target.checked })} />{t('subagents.background')}</label>
           </div>
           <footer>
-            <button type="button" onClick={() => setEditor(undefined)}>{t('common.cancel')}</button>
+            <button type="button" onClick={closeEditor}>{t('common.cancel')}</button>
             <button className="primary" type="submit" disabled={loading}>{t('common.save')}</button>
           </footer>
         </form>
@@ -307,7 +310,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
                 aria-label={t('subagents.toggleProfile', { profile: profile.name })}
                 onChange={event => { selectProfile(profile); void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope)); }} />
                 {t('subagents.profileEnabled')}</label>
-              <button type="button" disabled={loading} onClick={() => {
+              <button type="button" disabled={loading} onClick={event => {
+                editorInvoker.current = event.currentTarget;
                 selectProfile(profile); const next = editorValue(profile); editorBaseline.current = next; setEditor(next);
               }}>{t('common.edit')}</button>
               <button type="button" disabled={loading}

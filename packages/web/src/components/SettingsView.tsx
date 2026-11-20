@@ -25,7 +25,7 @@ import { McpSettings } from './McpSettings';
 import { readPreferences, usePreferences } from '../store/preferences';
 import { isSettingsSection, readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { bindSettingsNavigation } from './settings-navigation';
-import { settingsDraftMessage, SettingsDraftContext, useSettingsDraft } from './settings-drafts';
+import { settingsDraftMessage, SettingsDiscardContext, SettingsDraftContext, useSettingsDraft } from './settings-drafts';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
 import {
@@ -1052,31 +1052,42 @@ type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) 
 function SettingsDialog({ onClose, onEscape, onModalChange, suspended }: SettingsDialogProps) {
   const root = useRef<HTMLElement>(null);
   const confirmation = useRef<HTMLElement>(null);
+  const discardReturn = useRef<HTMLElement>(null);
   const drafts = useRef(new Set<symbol>());
-  const [confirmClose, setConfirmClose] = useState(false);
+  const [pendingDiscard, setPendingDiscard] = useState<{ owner?: symbol; discard: () => void }>();
+  const confirmClose = Boolean(pendingDiscard);
+  const discardCommands = useMemo(() => ({
+    request: (owner: symbol, discard: () => void, returnTarget?: HTMLElement | null) => {
+      discardReturn.current = returnTarget ?? null;
+      setPendingDiscard({ owner, discard });
+    },
+    retire: (owner: symbol) => setPendingDiscard(pending => pending?.owner === owner ? undefined : pending),
+  }), []);
   const workspace = useSessionStore(state => state.workspace);
   const context = JSON.stringify([workspace?.id, workspace?.cwd, workspace?.trusted, workspace?.operationTrusted]);
   const { t, locale } = useI18n();
   const message = (key: Parameters<typeof settingsDraftMessage>[1]) => settingsDraftMessage(locale, key);
-  const requestClose = () => { if (drafts.current.size) setConfirmClose(true); else onClose(); };
-  useLayoutEffect(() => { setConfirmClose(false); }, [context]);
+  const requestClose = () => { discardReturn.current = null; if (drafts.current.size) setPendingDiscard({ discard: onClose }); else onClose(); };
+  useLayoutEffect(() => { discardReturn.current = null; setPendingDiscard(undefined); }, [context]);
   useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
-  useFocusTrap(!suspended && confirmClose, confirmation, () => setConfirmClose(false));
+  useFocusTrap(!suspended && confirmClose, confirmation, () => setPendingDiscard(undefined), discardReturn);
   useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
   return createPortal(<div className="modal-backdrop settings-backdrop">
     <section className="settings-dialog" ref={root} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} inert={suspended || undefined}>
       <header className="settings-dialog-header" inert={confirmClose || undefined}><h2 id="settings-title">{t('settings.title')}</h2>
         <button type="button" data-settings-entry-focus onClick={requestClose} aria-label={t('common.close')}><Icon name="close" /></button>
       </header>
-      <SettingsDraftContext.Provider value={drafts.current}><SettingsNavigationBoundary inactive={confirmClose} /></SettingsDraftContext.Provider>
-    {confirmClose && <div className="modal-backdrop settings-discard-backdrop">
+      <SettingsDiscardContext.Provider value={discardCommands}>
+        <SettingsDraftContext.Provider value={drafts.current}><SettingsNavigationBoundary inactive={confirmClose} /></SettingsDraftContext.Provider>
+      </SettingsDiscardContext.Provider>
+    {pendingDiscard && <div className="modal-backdrop settings-discard-backdrop">
       <section ref={confirmation} className="settings-discard-dialog" role="alertdialog" aria-modal="true" tabIndex={-1}
         aria-labelledby="settings-discard-title" aria-describedby="settings-discard-description" inert={suspended || undefined}>
         <h3 id="settings-discard-title">{message('title')}</h3>
         <p id="settings-discard-description">{message('description')}</p>
         <footer>
-          <button type="button" data-autofocus onClick={() => setConfirmClose(false)}>{message('keep')}</button>
-          <button type="button" onClick={() => { setConfirmClose(false); onClose(); }}>{message('discard')}</button>
+          <button type="button" data-autofocus onClick={() => setPendingDiscard(undefined)}>{message('keep')}</button>
+          <button type="button" onClick={() => { setPendingDiscard(undefined); pendingDiscard.discard(); }}>{message('discard')}</button>
         </footer>
       </section>
     </div>}
