@@ -1096,6 +1096,19 @@ test.describe('Settings and authentication', () => {
     await expect(edit).toBeFocused();
 
     await edit.click();
+    const source = section.getByLabel('Replacement MCP server text');
+    await source.fill('SYNTHETIC_MCP_CANCEL_SOURCE_NOT_SAVED');
+    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+    await section.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(source).toHaveValue('SYNTHETIC_MCP_CANCEL_SOURCE_NOT_SAVED');
+    await section.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(source).toHaveCount(0); await expect(edit).toBeFocused();
+    expect(api.requests.filter(item => item.method !== 'GET' && ['/api/mcp/preview', '/api/mcp/config'].includes(item.path))).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MCP_CANCEL_SOURCE_NOT_SAVED');
+
+    await edit.click();
     const paste = '{"mcpServers":{"docs-import":{"url":"https://docs.example.test/private?token=SOURCE-EDIT-SECRET","headers":{"Authorization":"Bearer ${DOCS_TOKEN}"}}}}';
     await section.getByLabel('Replacement MCP server text').fill(paste);
     await section.getByLabel('Treat resolved values as AiHarness syntax').check();

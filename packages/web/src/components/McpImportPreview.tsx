@@ -21,7 +21,7 @@ import {
   type McpReplaceTarget,
 } from '../services/mcp-api';
 import { mcpImportMessage, type McpImportMessageKey } from './mcp-import-messages';
-import { useSettingsDraft } from './settings-drafts';
+import { useSettingsDraftGuard } from './settings-drafts';
 
 const SOURCE_KEYS: Record<McpImportSource, McpImportMessageKey> = {
   url: 'settings.mcp.import.source.url',
@@ -272,7 +272,7 @@ export function McpImportPreview({
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState<ImportDraft>();
-  useSettingsDraft(text !== '' || Boolean(draft));
+  const guardReplacementDiscard = useSettingsDraftGuard(text !== '' || Boolean(draft));
   const draftOpen = Boolean(draft);
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -525,7 +525,7 @@ export function McpImportPreview({
             setText('');
           }}>{m('settings.mcp.import.clear')}</button>
           {replacement && <button type="button" disabled={writing}
-            onClick={() => onReplacementOutcome?.({ status: 'cancel' })}>
+            onClick={() => guardReplacementDiscard(() => onReplacementOutcome?.({ status: 'cancel' }))}>
             {m('settings.mcp.edit.cancel')}
           </button>}
         </div>
