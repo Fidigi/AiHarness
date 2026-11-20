@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { expectContrast } from './fixtures/contrast';
 import { installMockApi } from './fixtures/mock-api';
-import { selectGeneralSettings, selectProviderCredential } from './fixtures/settings-navigation';
+import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential } from './fixtures/settings-navigation';
 
 for (const scenario of [
   { locale: 'en', width: 1280 },
@@ -231,4 +231,101 @@ test('Clearing an applied Access token is an unsaved edit until explicit Apply',
   expect(await page.evaluate(() => sessionStorage.getItem('ai-harness-auth-token'))).toBeNull();
   expect(api.requests.filter(request => request.method !== 'GET'
     && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+});
+
+test('Provider editor drafts guard dismissal without retargeting the original save', async ({ page }) => {
+  const provider = { id: 'fixture-a', name: 'Fixture A', baseUrl: 'https://provider.example.test/v1', dialect: 'openai-completions',
+    headerNames: [], configured: true, modelCount: 1, createdAt: '', updatedAt: '', revision: 'a'.repeat(64) };
+  const api = await installMockApi(page, { customProviders: [provider, { ...provider, id: 'fixture-b', name: 'Fixture B' }] });
+  const section = page.locator('#provider-lifecycle'), form = section.locator('.custom-resource-editor form');
+  const close = page.locator('.settings-dialog-header button');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', 'fixture-a');
+  await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await form.getByLabel('Name', { exact: true }).fill('Temporary reverted name');
+  await form.getByLabel('Name', { exact: true }).fill(provider.name);
+  await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', 'fixture-a');
+  await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await form.getByLabel('Name', { exact: true }).fill('Edited fixture A');
+  await form.getByLabel('API key', { exact: true }).fill('SYNTHETIC_PROVIDER_EDITOR_DRAFT');
+  await selectProviderConnection(page, 'custom', 'fixture-b'); await close.click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(form.getByLabel('ID', { exact: true })).toHaveValue('fixture-a');
+  await expect(form.getByLabel('API key', { exact: true })).toHaveValue('SYNTHETIC_PROVIDER_EDITOR_DRAFT');
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toEqual([]);
+  await form.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')
+    .map(({ method, path, body }) => ({ method, path, body }))).toEqual([{ method: 'PUT', path: '/api/provider-registry/custom/fixture-a', body: {
+      id: 'fixture-a', name: 'Edited fixture A', baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: 'SYNTHETIC_PROVIDER_EDITOR_DRAFT',
+    } }]);
+  await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROVIDER_EDITOR_DRAFT');
+});
+
+test('Custom model editor drafts guard mobile dismissal without saving the browsed definition', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = await installMockApi(page, { customModels: ['openai:first', 'azure:second'].map(key => ({
+    key, provider: key.split(':')[0]!, id: key.split(':')[1]!, name: key,
+    capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096,
+    createdAt: '2025-01-01T12:00:00.000Z', updatedAt: '2025-01-01T12:00:00.000Z',
+  })) });
+  const section = page.locator('#custom-models'), editor = section.locator('.custom-resource-editor');
+  const close = page.locator('.settings-dialog-header button');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await page.goto('/settings#custom-models'); await selectCustomModel(page, 'openai:first');
+  await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.locator('summary').focus(); await editor.locator('summary').click();
+  await editor.getByRole('checkbox', { name: 'reasoning', exact: true }).uncheck();
+  await editor.getByRole('checkbox', { name: 'reasoning', exact: true }).check();
+  await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  await page.goto('/settings#custom-models'); await selectCustomModel(page, 'openai:first');
+  await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.locator('summary').focus(); await editor.locator('summary').click();
+  await editor.getByLabel('Name', { exact: true }).fill('Edited original model');
+  await selectCustomModel(page, 'azure:second'); await close.click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('first');
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Edited original model');
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toEqual([]);
+  await editor.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+    .map(({ method, path, body }) => ({ method, path, body }))).toEqual([{ method: 'PUT', path: '/api/provider-registry/models/openai%3Afirst', body: {
+      provider: 'openai', id: 'first', name: 'Edited original model', capabilities: { reasoning: true, imageInput: false, toolCalls: true },
+      contextWindow: 64000, maxOutputTokens: 4096, pricing: {}, compatibility: {},
+    } }]);
+  await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+});
+
+test('Plugin install drafts guard mobile dismissal and clear only after canonical installation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = await installMockApi(page, { workspaceTrusted: true, workspaceOperationTrusted: true });
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const requested = new Promise<void>(resolve => { entered = resolve; });
+  await page.route('**/api/plugins', async route => {
+    if (route.request().method() === 'POST' && route.request().postDataJSON().action === 'install') { entered(); await held; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#plugins');
+    const section = page.locator('#plugins'), source = section.getByLabel('Package source', { exact: true });
+    await source.fill('npm:@example/guarded-install');
+    await section.getByLabel('Install scope', { exact: true }).selectOption('project');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
+    const close = page.locator('.settings-dialog-header button'); await close.click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(source).toHaveValue('npm:@example/guarded-install');
+    expect(api.requests.filter(request => request.path.startsWith('/api/plugins') && request.method !== 'GET')).toEqual([]);
+    await section.getByRole('button', { name: 'Install', exact: true }).click(); await requested;
+    await close.click(); await expect(prompt).toBeVisible(); await expect(prompt).toContainText('Saves already started may still finish.');
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    release(); await expect(source).toHaveValue('');
+    expect(api.requests.filter(request => request.path.startsWith('/api/plugins') && request.method !== 'GET').map(request => request.body))
+      .toEqual([{ action: 'install', source: 'npm:@example/guarded-install', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' }]);
+    await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  } finally { release(); }
 });

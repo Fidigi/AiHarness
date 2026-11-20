@@ -20,6 +20,7 @@ import { useSettingsScope } from '../store/use-settings-scope';
 import { settingsAdminMessage } from './settings-admin-messages';
 import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { pluginSettingsMessage } from './plugin-settings-messages';
+import { useSettingsDraft } from './settings-drafts';
 
 function normalizedSource(value: string): string {
   return value.trim();
@@ -92,6 +93,7 @@ export function PluginSettings({ presented }: { presented: boolean }) {
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const [catalog, setCatalog] = useState<PluginCatalog>();
   const [source, setSource] = useState('');
+  useSettingsDraft(source !== '');
   const [scope, setScope] = useSettingsScope('plugins', 'global');
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState<string>();

@@ -84,7 +84,10 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
     previous?.controller.abort();
     if (previous?.flow?.state === 'pending') void cancelProviderOAuth(previous.flow.id);
   };
-  const [form, setForm] = useState({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
+  const empty = { id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' };
+  const [form, setForm] = useState(empty);
+  const formBaseline = useRef(form);
+  useSettingsDraft((Object.keys(form) as Array<keyof typeof form>).some(key => form[key] !== formBaseline.current[key]));
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [position, setPosition] = useState(() => readSettingsNavigation(origin.workspace?.cwd).positions['provider-lifecycle']);
@@ -281,7 +284,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       if (!result.success) error(result.error);
       else {
         setEditing(undefined);
-        setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
+        formBaseline.current = empty; setForm(empty);
         publishNotice(t('settings.customProviders.saved'), { level: 'success' });
         const [canonical] = await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
         if (mounted.current && generation === epoch.current && choiceGeneration === navigationEpoch.current && result.data?.id
@@ -425,7 +428,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
         <label>{t('settings.customHeaders')}<textarea rows={3} value={form.headers}
           onChange={event => setForm(current => ({ ...current, headers: event.target.value }))} /></label>
         <div><button disabled={busy}>{t('common.save')}</button>{editing && <button type="button" onClick={() => {
-          setEditing(undefined); setForm({ id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' });
+          setEditing(undefined); formBaseline.current = empty; setForm(empty);
         }}>{t('common.cancel')}</button>}</div>
       </form>
     </details>
@@ -445,7 +448,8 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
             {provider.dialect === 'anthropic' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'copy-code'); }}>{providerSettingsMessage(locale, 'copyCode')}</button>}
             <button type="button" onClick={() => {
               setEditing(provider.id);
-              setForm({ id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' });
+              const next = { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
+              formBaseline.current = next; setForm(next);
             }}>{t('common.edit')}</button>
             <button type="button" disabled={!provider.configured} onClick={async () => {
               const result = await testProviderConnection(provider.id);
@@ -518,6 +522,8 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   const [editing, setEditing] = useState<string>();
   const empty = { provider: '', id: '', name: '', reasoning: false, imageInput: false, toolCalls: true, contextWindow: '', maxOutputTokens: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', cacheWritePrice: '', compatibility: '{}' };
   const [form, setForm] = useState(empty);
+  const formBaseline = useRef(form);
+  useSettingsDraft((Object.keys(form) as Array<keyof typeof form>).some(key => form[key] !== formBaseline.current[key]));
   const load = async () => {
     const result = await getCustomModels();
     if (result.success && result.data) { setModels(result.data); setLoaded(true); }
@@ -541,7 +547,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
       }, compatibility,
     }, editing);
     if (!result.success) error(result.error);
-    else { setEditing(undefined); setForm(empty); await Promise.all([load(), hydrateModelCatalog(true)]); }
+    else { setEditing(undefined); formBaseline.current = empty; setForm(empty); await Promise.all([load(), hydrateModelCatalog(true)]); }
   };
   return <section className="settings-section" id="custom-models">
     <h3>{t('settings.customModels.title')}</h3>
@@ -561,7 +567,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         <label>{t('settings.cacheReadPrice')}<input type="number" min="0" step="any" value={form.cacheReadPrice} onChange={event => setForm(current => ({ ...current, cacheReadPrice: event.target.value }))} /></label>
         <label>{t('settings.cacheWritePrice')}<input type="number" min="0" step="any" value={form.cacheWritePrice} onChange={event => setForm(current => ({ ...current, cacheWritePrice: event.target.value }))} /></label>
         <label>{t('settings.compatibility')}<textarea rows={3} value={form.compatibility} onChange={event => setForm(current => ({ ...current, compatibility: event.target.value }))} /></label>
-        <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => { setEditing(undefined); setForm(empty); }}>{t('common.cancel')}</button>}</div>
+        <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => { setEditing(undefined); formBaseline.current = empty; setForm(empty); }}>{t('common.cancel')}</button>}</div>
       </form>
     </details>
     {loaded && selectedKey && !selected && <p role="status">{customModelMessage(locale, 'unavailable')}</p>}
@@ -580,7 +586,8 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         <div><strong>{model.name}</strong><code>{model.key}</code><small>{model.contextWindow ?? '—'} context · {model.maxOutputTokens ?? '—'} max output</small></div>
         <div>
           <button type="button" onClick={() => {
-            setEditing(model.key); setForm({
+            setEditing(model.key);
+            const next = {
               provider: model.provider, id: model.id, name: model.name,
               reasoning: model.capabilities.reasoning, imageInput: model.capabilities.imageInput, toolCalls: model.capabilities.toolCalls,
               contextWindow: model.contextWindow ? String(model.contextWindow) : '', maxOutputTokens: model.maxOutputTokens ? String(model.maxOutputTokens) : '',
@@ -589,7 +596,8 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
               cacheReadPrice: model.pricing?.cacheReadPerMillion === undefined ? '' : String(model.pricing.cacheReadPerMillion),
               cacheWritePrice: model.pricing?.cacheWritePerMillion === undefined ? '' : String(model.pricing.cacheWritePerMillion),
               compatibility: JSON.stringify(model.compatibility ?? {}, null, 2),
-            });
+            };
+            formBaseline.current = next; setForm(next);
           }}>{t('common.edit')}</button>
           <button type="button" onClick={async () => {
             const result = await testCustomModel(model.key);
