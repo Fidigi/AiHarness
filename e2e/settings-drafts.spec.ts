@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { expectContrast } from './fixtures/contrast';
 import { installMockApi } from './fixtures/mock-api';
-import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSubagentProfile } from './fixtures/settings-navigation';
+import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile } from './fixtures/settings-navigation';
 
 for (const scenario of [
   { locale: 'en', width: 1280 },
@@ -425,4 +425,40 @@ test('OAuth callback drafts guard outer dismissal without acknowledgement', asyn
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_UNSUBMITTED_OAUTH_DRAFT');
   await callback.fill(''); await page.locator('.settings-dialog-header button').click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0); expect(acknowledgements).toEqual([]);
+});
+
+for (const width of [1280, 390]) test(`Code mode budget Escape retains draft without a confirmation-triggered save: ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  const api = await installMockApi(page, { toolSettings: {
+    scope: 'project', source: 'workspace-e2e', preset: 'default', powershellAvailable: false, powershellEnabled: false,
+    codemode: { enabled: false, mode: 'on', inlineBudget: 3000, selfTest: { state: 'passed', engine: 'QuickJS' } },
+    tools: [
+      { name: 'read', description: 'Read a fixture file', extensionId: 'builtin:workspace-tools', enabled: true, available: true },
+      { name: 'codemode', description: 'Fixture code metadata', extensionId: 'builtin:codemode', enabled: true, available: true },
+    ],
+  } });
+  await page.goto('/settings#tools'); await selectSettingsTool(page, 'codemode');
+  const budget = page.locator('#tools').getByLabel('Inline declaration budget (estimated tokens)', { exact: true });
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  const writes = () => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').map(request => request.body);
+  await budget.fill('500'); await budget.press('Escape');
+  await expect(prompt).toBeVisible(); expect(writes()).toEqual([]);
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(budget).toHaveValue('500'); await expect(budget).toBeFocused(); expect(writes()).toEqual([]);
+  await budget.press('Tab');
+  const saved = { enabledTools: ['read', 'codemode'], toolPreset: 'default', powershellEnabled: false,
+    cwd: '/workspace', projectId: 'workspace-e2e', codemodeEnabled: false, codemodeMode: 'on', codemodeInlineBudget: 500 };
+  await expect.poll(writes).toEqual([saved]);
+  // Clearing is dirty even though normal blur rejects it and restores the canonical number.
+  await budget.fill(''); await budget.press('Escape');
+  await expect(prompt).toBeVisible(); expect(writes()).toEqual([saved]);
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click(); await expect(budget).toHaveValue('');
+  await budget.press('Tab'); await expect(budget).toHaveValue('500');
+  await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  await page.goto('/settings#tools'); await selectSettingsTool(page, 'codemode');
+  await expect(budget).toHaveValue('500'); await budget.fill('700'); await budget.press('Escape');
+  await expect(prompt).toBeVisible(); expect(writes()).toEqual([saved]);
+  await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); expect(writes()).toEqual([saved]);
 });

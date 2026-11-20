@@ -628,6 +628,9 @@ function ScopedToolSettings({ scope, setScope, presented }: {
   const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const [settings, setSettings] = useState<ToolSettings>();
+  const [inlineBudgetDirty, setInlineBudgetDirty] = useState(false);
+  useSettingsDraft(inlineBudgetDirty);
+  useLayoutEffect(() => { setInlineBudgetDirty(false); }, [settings?.codemode?.inlineBudget]);
   const [busy, setBusy] = useState(false);
   const epoch = useRef(0);
   const [selectedName, setSelectedName] = useState(() => {
@@ -708,11 +711,14 @@ function ScopedToolSettings({ scope, setScope, presented }: {
       <option value="on">on</option><option value="only">only</option>
     </select></label>
     <label>{t('settings.codemode.inlineBudget')}<input key={`${scope}:${settings.codemode.inlineBudget}`} type="number" min="0" max="3000" step="100" defaultValue={settings.codemode.inlineBudget} disabled={busy}
+      onChange={event => setInlineBudgetDirty(event.currentTarget.value !== String(settings.codemode!.inlineBudget))}
       onBlur={event => {
+        // Confirmation focus must not turn Escape into the ordinary blur save.
+        if (event.currentTarget.closest('.settings-layout[inert]')) return;
         const value = event.currentTarget.valueAsNumber;
         if (Number.isSafeInteger(value) && value >= 0 && value <= 3000 && value !== settings.codemode!.inlineBudget) {
           void persist({ ...settings, codemode: { ...settings.codemode!, inlineBudget: value } });
-        } else event.currentTarget.value = String(settings.codemode!.inlineBudget);
+        } else { event.currentTarget.value = String(settings.codemode!.inlineBudget); setInlineBudgetDirty(false); }
       }} /></label>
     <p className="settings-help">{t('settings.codemode.limits')}</p>
     <p className="settings-help">{t('settings.codemode.warning')}</p>
