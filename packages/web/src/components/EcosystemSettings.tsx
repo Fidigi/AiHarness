@@ -890,7 +890,7 @@ export function DefaultModelSettings() {
   const [scope, setScope] = useSettingsScope('defaults', workspace?.id ? 'project' : 'global');
   const [values, setValues] = useState({ provider: '', model: '', thinking: '', thinkingBudgets: '', toolPreset: '' });
   const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
-  useSettingsDraft(dirty.length > 0);
+  const guardScopeDiscard = useSettingsDraftGuard(dirty.length > 0);
   const [busy, setBusy] = useState(true);
   const [ready, setReady] = useState(false);
   const [overrideWarning, setOverrideWarning] = useState(false);
@@ -951,7 +951,11 @@ export function DefaultModelSettings() {
     {overrideWarning && <p role="status" className="status-warning">{t('settings.defaults.overrideWarning')}</p>}
     {feedback && <p role="alert">{settingsAdminMessage(locale, feedback)}</p>}
     {!ready && !busy && <button type="button" onClick={() => void reload()}>{settingsAdminMessage(locale, 'refresh')}</button>}
-    <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => setScope(event.target.value as typeof scope)}>
+    <label>{t('settings.scope')}<select value={scope} disabled={busy} onChange={event => {
+      const nextScope = event.target.value as typeof scope;
+      if (nextScope === scope) setScope(nextScope);
+      else guardScopeDiscard(() => setScope(nextScope));
+    }}>
       <option value="global">{t('chat.scope.global')}</option><option value="project" disabled={!workspace?.id}>{t('chat.scope.project')}</option>
     </select></label>
     <label>{t('settings.provider')}<input value={values.provider} disabled={busy || !ready || environmentLocked('provider')}

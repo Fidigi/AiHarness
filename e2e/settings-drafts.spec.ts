@@ -77,6 +77,21 @@ for (const scenario of [
     .toEqual([{ type: 'openai', apiKey: secret }]);
   await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
   await credential.fill('SYNTHETIC_DISCARDED_SETTINGS_SECRET');
+  await selectGeneralSettings(page, 'behavior');
+  const scope = defaults.getByRole('combobox', { name: scenario.locale === 'fr' ? 'Portée' : 'Scope', exact: true });
+  await expect(scope).toHaveValue('project'); await expect(model).toHaveValue('draft-model');
+  await model.fill('discarded-scope-model');
+  await scope.selectOption('project'); await expect(prompt).toHaveCount(0); await expect(model).toHaveValue('discarded-scope-model');
+  await scope.focus(); await scope.selectOption('global'); await expect(prompt).toBeVisible();
+  await keep.click(); await expect(prompt).toHaveCount(0);
+  await expect(scope).toHaveValue('project'); await expect(model).toHaveValue('discarded-scope-model');
+  await scope.selectOption('global'); await expect(prompt).toBeVisible(); await discard.click();
+  await expect(scope).toHaveValue('global'); await expect(model).toHaveValue('');
+  await expect(scope).toBeEnabled(); await scope.selectOption('project'); await expect(prompt).toHaveCount(0);
+  await expect(model).toHaveValue('draft-model');
+  await close.click(); await expect(prompt).toBeVisible(); await keep.click();
+  await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue('SYNTHETIC_DISCARDED_SETTINGS_SECRET');
+  expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toHaveLength(1);
   await close.click(); await expect(prompt).toBeVisible(); await discard.click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
   expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST')).toHaveLength(1);
@@ -84,6 +99,7 @@ for (const scenario of [
   await expect(credential).not.toHaveValue('SYNTHETIC_DISCARDED_SETTINGS_SECRET');
   const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
   expect(stored).not.toContain(secret); expect(stored).not.toContain('SYNTHETIC_DISCARDED_SETTINGS_SECRET');
+  expect(stored).not.toContain('discarded-scope-model');
   expect(nativePrompts).toEqual([]);
 });
 
