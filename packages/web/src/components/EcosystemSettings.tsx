@@ -631,9 +631,11 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         && current.form.provider.trim() && current.form.id.trim()
         && (current.form.provider.trim() !== form.provider || current.form.id.trim() !== form.id)) {
         setForm({ ...current.form });
-      } else if (editing && result.data?.key === editing && current.editing && current.editing !== editing
+      } else if (editing && result.data?.key === editing && current.editing
         && formBaseline.current !== baseline && `${formBaseline.current.provider}:${formBaseline.current.id}` === current.editing
-        && editChoices.current.filter(model => model.key === current.editing).length === 1) {
+        && editChoices.current.filter(model => model.key === current.editing).length === 1
+        && (current.editing !== editing || (Object.keys(current.form) as Array<keyof typeof form>)
+          .some(key => current.form[key] !== formBaseline.current[key]))) {
         setForm({ ...current.form });
       } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
       await Promise.all([load(), hydrateModelCatalog(true)]);
