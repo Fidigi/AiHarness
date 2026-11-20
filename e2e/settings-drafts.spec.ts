@@ -860,6 +860,46 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
         capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096, pricing: {}, compatibility: {} } },
     ]);
   } finally { releaseOther(); }
+
+  let releaseNew!: () => void, enteredNew!: () => void;
+  const heldNew = new Promise<void>(resolve => { releaseNew = resolve; });
+  const pendingNew = new Promise<void>(resolve => { enteredNew = resolve; });
+  await page.route('**/api/provider-registry/models/openai%3Afirst', async route => {
+    if (route.request().method() === 'PUT') { enteredNew(); await heldNew; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#custom-models'); await selectCustomModel(page, 'openai:first');
+    await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+    if (await editor.getAttribute('open') === null) await editor.locator('summary').click();
+    await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_NEW_CREATE_OLD_SAVE');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pendingNew;
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('');
+    await editor.getByLabel('Provider', { exact: true }).fill('azure'); await editor.getByLabel('ID', { exact: true }).fill('new-after-edit');
+    await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_NEW_CREATE_DRAFT');
+    const readback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+    releaseNew(); await readback;
+    await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('azure');
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('new-after-edit');
+    await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_MODEL_NEW_CREATE_DRAFT');
+    await expect(editor.locator('summary')).toHaveText('Create a custom model');
+    await expect(editor.getByRole('checkbox', { name: 'reasoning', exact: true })).not.toBeChecked();
+    await expect(editor.getByLabel('Context window', { exact: true })).toHaveValue('');
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(8);
+    await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    const nextReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await nextReadback;
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+      .slice(7).map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'PUT', path: '/api/provider-registry/models/openai%3Afirst', body: { provider: 'openai', id: 'first', name: 'SYNTHETIC_MODEL_NEW_CREATE_OLD_SAVE',
+        capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096, pricing: {}, compatibility: {} } },
+      { method: 'POST', path: '/api/provider-registry/models', body: { provider: 'azure', id: 'new-after-edit', name: 'SYNTHETIC_MODEL_NEW_CREATE_DRAFT',
+        capabilities: { reasoning: false, imageInput: false, toolCalls: true }, pricing: {}, compatibility: {} } },
+    ]);
+  } finally { releaseNew(); }
   await page.goto('/settings#custom-models'); await selectGeneralSettings(page, 'behavior');
   const peer = page.locator('#defaults').getByLabel('Model', { exact: true });
   await peer.fill('model-cancel-peer-default');
@@ -886,7 +926,7 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
   await selectGeneralSettings(page, 'behavior'); await expect(peer).toHaveValue('model-cancel-peer-default');
   await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
-  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(7);
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(9);
   expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_');
 });
