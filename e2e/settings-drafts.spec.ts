@@ -459,6 +459,50 @@ test('Provider editor drafts guard dismissal without retargeting the original sa
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROVIDER_');
 });
 
+test('Provider creation drafts survive the admitted reply without repeating Create', async ({ page }) => {
+  const api = await installMockApi(page), baseUrl = 'https://provider.example.test/v1';
+  const section = page.locator('#provider-lifecycle'), form = section.locator('.custom-resource-editor form');
+  const close = page.locator('.settings-dialog-header button');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  let releaseCreate!: () => void, enteredCreate!: () => void;
+  const heldCreate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  const pendingCreate = new Promise<void>(resolve => { enteredCreate = resolve; });
+  await page.route('**/api/provider-registry/custom', async route => {
+    if (route.request().method() === 'POST') { enteredCreate(); await heldCreate; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#provider-lifecycle');
+    await section.locator('.custom-resource-editor summary').click();
+    await form.getByLabel('ID', { exact: true }).fill('fixture-created');
+    await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_CREATE_EARLY');
+    await form.getByLabel('Base URL', { exact: true }).fill(baseUrl);
+    await form.getByLabel('API key', { exact: true }).fill('SYNTHETIC_PROVIDER_CREATE_ADMITTED_KEY');
+    const headers = form.getByRole('textbox', { name: 'Custom headers (encrypted JSON values)', exact: true });
+    await headers.fill(JSON.stringify({ 'X-Fixture': 'SYNTHETIC_PROVIDER_CREATE_ADMITTED_HEADER' }));
+    await form.getByRole('button', { name: 'Save', exact: true }).click(); await pendingCreate;
+    await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_CREATE_LATER');
+    await close.click(); await expect(prompt).toBeVisible();
+    releaseCreate(); await expect(form.locator('button:not([type])')).toBeEnabled();
+    await expect(form.getByLabel('ID', { exact: true })).toHaveValue('fixture-created');
+    await expect(form.getByLabel('ID', { exact: true })).toBeDisabled();
+    await expect(form.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_PROVIDER_CREATE_LATER');
+    await expect(form.getByLabel('API key', { exact: true })).toHaveValue(''); await expect(headers).toHaveValue('');
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    expect(api.requests.filter(request => request.path === '/api/provider-registry/custom' && request.method === 'POST')
+      .map(({ body }) => body)).toEqual([{ id: 'fixture-created', name: 'SYNTHETIC_PROVIDER_CREATE_EARLY', baseUrl,
+        dialect: 'openai-completions', apiKey: 'SYNTHETIC_PROVIDER_CREATE_ADMITTED_KEY', headers: { 'X-Fixture': 'SYNTHETIC_PROVIDER_CREATE_ADMITTED_HEADER' } }]);
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
+    expect(api.requests.filter(request => request.path === '/api/provider-registry/custom/fixture-created' && request.method !== 'GET')
+      .map(({ method, body }) => ({ method, body }))).toEqual([{ method: 'PUT', body: { id: 'fixture-created', name: 'SYNTHETIC_PROVIDER_CREATE_LATER', baseUrl, dialect: 'openai-completions' } }]);
+    await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toHaveLength(2);
+    expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROVIDER_CREATE_');
+  } finally { releaseCreate(); }
+});
+
 test('Custom model editor drafts guard mobile dismissal without saving the browsed definition', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const api = await installMockApi(page, { customModels: ['openai:first', 'azure:second'].map(key => ({

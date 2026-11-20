@@ -295,13 +295,13 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       if (!result.success) error(result.error);
       else {
         const current = editorState.current;
-        if (editing && result.data?.id === editing && current.editing === editing && formBaseline.current === baseline
+        if (result.data?.id === (editing || form.id) && current.editing === editing && current.form.id === form.id && formBaseline.current === baseline
           && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
           const saved = customProviderForm(result.data), next: typeof form = { ...saved };
           for (const key of Object.keys(form) as Array<keyof typeof form>) {
             if (current.form[key] !== form[key]) next[key] = current.form[key];
           }
-          formBaseline.current = saved; setForm(next);
+          formBaseline.current = saved; setEditing(saved.id); setForm(next);
         } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
         publishNotice(t('settings.customProviders.saved'), { level: 'success' });
         const [canonical] = await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
