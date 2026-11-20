@@ -1,4 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page, type Route } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { closeSettings, selectGeneralSettings, selectModelSettings } from './fixtures/settings-navigation';
@@ -27,6 +28,57 @@ async function product(page: Page, locale: 'en' | 'fr' = 'en') {
 async function open(page: Page) { await page.keyboard.press('Control+,'); }
 async function settle(page: Page) {
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
+for (const phase of ['auth', 'chrome', 'settings'] as const) {
+  test(`Settings entry failure evidence stays value-free while ${phase} is pending`, async ({ page }, testInfo) => {
+    await product(page);
+    const held: Route[] = [];
+    const target = phase === 'auth' ? '**/api/auth/status' : phase === 'chrome' ? '**/assets/Sidebar-*.js' : '**/assets/SettingsView-*.js';
+    await page.route(target, route => { held.push(route); });
+    const synthetic = 'SYNTHETIC_ENTRY_EVIDENCE_NOT_FOR_DIAGNOSTICS';
+    try {
+      await page.goto(`/settings?fixture=${synthetic}`);
+      await expect.poll(() => held.length).toBeGreaterThan(0);
+      await page.evaluate(value => {
+        const input = document.createElement('input'); input.type = 'password'; input.value = value; document.body.append(input);
+      }, synthetic);
+      let failure: unknown;
+      try { await selectGeneralSettings(page, 'appearance'); } catch (error) { failure = error; }
+      expect(failure).toBeInstanceOf(Error); expect((failure as Error).message).toContain('.settings-dialog');
+      const attachment = testInfo.attachments.find(item => item.name === 'settings-entry-state');
+      expect(attachment?.path).toBeTruthy();
+      const body = readFileSync(attachment!.path!);
+      expect(body.toString()).not.toContain(synthetic);
+      const state = JSON.parse(body.toString());
+      expect(state).toMatchObject({ dialogElements: 0, localeBoundaryElements: 0,
+        rootLoadingElements: phase === 'settings' ? 0 : 1,
+        routeLoadingElements: phase === 'settings' ? 1 : 0,
+        chromeElements: phase === 'settings' ? 1 : 0 });
+      if (phase === 'auth') expect(state.authResources).toBe(0);
+      else expect(state.authResources).toBeGreaterThan(0);
+      expect(Object.keys(state).sort()).toEqual(['authResources', 'chromeElements', 'dialogElements', 'localeBoundaryElements',
+        'readyState', 'rootLoadingElements', 'routeLoadingElements', 'settingsModules', 'sidebarModules'].sort());
+      if (phase === 'auth') {
+        const evaluate = page.evaluate;
+        page.evaluate = () => new Promise<never>(() => {});
+        try {
+          let blocked: unknown;
+          try { await selectGeneralSettings(page, 'appearance'); } catch (error) { blocked = error; }
+          expect(blocked).toBeInstanceOf(Error); expect((blocked as Error).message).toContain('.settings-dialog');
+          expect(testInfo.attachments.filter(item => item.name === 'settings-entry-state')).toHaveLength(1);
+        } finally { page.evaluate = evaluate; }
+      }
+    } finally { await Promise.all(held.map(route => route.fallback().catch(() => undefined))); }
+    if (phase === 'auth') {
+      await page.close();
+      let failure: unknown;
+      try { await selectGeneralSettings(page, 'appearance'); } catch (error) { failure = error; }
+      expect(failure).toBeInstanceOf(Error);
+      expect((failure as Error).message.replace(/\u001b\[[\d;]*m/g, '')).toContain('expect(locator).toBeVisible');
+      expect(testInfo.attachments.filter(item => item.name === 'settings-entry-state')).toHaveLength(1);
+    }
+  });
 }
 
 test('closed Settings fetches no feature copy; opening and reopening register real dictionaries once', async ({ page }) => {

@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page } from './test-budget';
+import { expect, test, type Locator, type Page } from './test-budget';
+import { writeFile } from 'node:fs/promises';
 
 export async function closeSettings(page: Page, { discardDrafts = false }: { discardDrafts?: boolean } = {}): Promise<void> {
   await page.locator('.settings-dialog-header button').click();
@@ -158,7 +159,34 @@ export async function selectPluginPackage(page: Page, scope: 'global' | 'project
 
 /** Exercise the presented desktop navigation or native mobile category picker. */
 export async function selectSettingsCategory(page: Page, category: keyof typeof names): Promise<void> {
-  await expect(page.locator('.settings-dialog')).toBeVisible();
+  try { await expect(page.locator('.settings-dialog')).toBeVisible(); }
+  catch (error) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const state = await Promise.race([page.evaluate(() => {
+        const count = (selector: string) => document.querySelectorAll(selector).length;
+        const resources = performance.getEntriesByType('resource').map(entry => new URL(entry.name, location.href).pathname);
+        return {
+          readyState: document.readyState,
+          rootLoadingElements: count('#root > .app-loading'),
+          routeLoadingElements: count('main.main-content .app-loading'),
+          chromeElements: count('.app'),
+          localeBoundaryElements: count('.settings-locale-boundary'),
+          dialogElements: count('.settings-dialog'),
+          authResources: resources.filter(path => path === '/api/auth/status').length,
+          sidebarModules: resources.filter(path => /\/(?:src\/components\/Sidebar\.tsx|assets\/Sidebar-[^/]+\.js)$/.test(path)).length,
+          settingsModules: resources.filter(path => /\/(?:src\/components\/SettingsView\.tsx|assets\/SettingsView-[^/]+\.js)$/.test(path)).length,
+        };
+      }), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 250); })]);
+      if (state) {
+        const path = test.info().outputPath('settings-entry-state.json');
+        await writeFile(path, JSON.stringify(state));
+        await test.info().attach('settings-entry-state', { path, contentType: 'application/json' });
+      }
+    } catch { /* Observation cannot replace the original readiness failure. */ }
+    finally { clearTimeout(timer); }
+    throw error;
+  }
   const picker = page.locator('.settings-category-picker select');
   if (await picker.isVisible()) {
     if (await picker.inputValue() !== category) await picker.selectOption(category);
