@@ -273,6 +273,14 @@ export function McpImportPreview({
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState<ImportDraft>();
   const guardReplacementDiscard = useSettingsDraftGuard(text !== '' || Boolean(draft));
+  const draftBaseline = useRef<ImportDraft | undefined>(undefined);
+  const baseline = draftBaseline.current;
+  const guardDraftDiscard = useSettingsDraftGuard(Boolean(draft && baseline && (
+    draft.name !== baseline.name || draft.literalConfirmed !== baseline.literalConfirmed
+    || draft.remoteConfirmed !== baseline.remoteConfirmed || draft.trustConfirmed !== baseline.trustConfirmed
+    || (['values', 'referenceModes', 'secretReferences'] as const).some(field =>
+      Object.keys(draft[field]).some(key => draft[field][key] !== baseline[field][key]))
+  )));
   const draftOpen = Boolean(draft);
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -286,7 +294,7 @@ export function McpImportPreview({
     .join('|') ?? '';
 
   const closeDraft = (): void => {
-    if (!writing) setDraft(undefined);
+    if (!writing) guardDraftDiscard(() => setDraft(undefined));
   };
   useFocusTrap(presented && Boolean(draft), dialogRef, closeDraft);
 
@@ -373,7 +381,7 @@ export function McpImportPreview({
 
   const openDraft = (entry: McpImportEntryPreview, entryIndex: number, scope: McpConfigScope): void => {
     setWriteMessage(undefined);
-    setDraft({
+    const next: ImportDraft = {
       entry,
       entryIndex,
       scope,
@@ -384,7 +392,8 @@ export function McpImportPreview({
       literalConfirmed: false,
       remoteConfirmed: false,
       trustConfirmed: false,
-    });
+    };
+    draftBaseline.current = next; setDraft(next);
   };
 
   const remoteNames = new Set<string>();
