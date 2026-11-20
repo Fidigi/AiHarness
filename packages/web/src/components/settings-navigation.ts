@@ -42,7 +42,7 @@ function visible(element: HTMLElement): boolean {
     && element.getClientRects().length > 0 && !element.matches(':disabled');
 }
 function openAncestors(element: HTMLElement, root: HTMLElement): void {
-  for (let parent = element.parentElement; parent && parent !== root; parent = parent.parentElement) {
+  for (let parent: HTMLElement | null = element; parent && parent !== root; parent = parent.parentElement) {
     if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true;
   }
 }

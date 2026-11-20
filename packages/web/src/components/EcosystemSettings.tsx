@@ -20,6 +20,7 @@ import { readSettingsNavigation, writeSettingsNavigation } from '../store/settin
 import { toolSettingsMessage } from './tool-settings-messages';
 import { providerContextMessage } from './provider-context-messages';
 import { customModelMessage } from './custom-model-messages';
+import { registryContextMessage } from './registry-context-messages';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -758,17 +759,55 @@ function ScopedToolSettings({ scope, setScope, presented }: {
   </section>;
 }
 
-export function SkillRegistryPanel() {
-  const { t } = useI18n();
+export function SkillRegistryPanel({ presented }: { presented: boolean }) {
+  const { t, locale } = useI18n();
   const workspace = useSessionStore(state => state.workspace);
   const hydrateSkills = useSessionStore(state => state.hydrateSkillCatalog);
   const [registry, setRegistry] = useState<SkillRegistry>();
+  const [loaded, setLoaded] = useState(false);
+  const [selectedId, setSelectedId] = useState(() => {
+    const position = readSettingsNavigation(workspace?.cwd).positions.skills;
+    return position?.group === 'registry' ? position.selection : undefined;
+  });
+  const [overview, setOverview] = useState(!selectedId);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const focusRef = useRef<'navigation' | 'detail' | null>(null);
+  const detailPrefix = useId();
+  const entries = registry?.entries ?? [];
+  const matches = entries.filter(entry => entry.id === selectedId);
+  const selected = selectedId ? matches.length === 1 ? matches[0] : undefined : entries[0];
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!presented || !focusRef.current) return;
+    const target = focusRef.current; focusRef.current = null;
+    if (target === 'navigation') (navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)') ?? navigationRef.current)?.focus();
+    else if (mobile && !overview) backRef.current?.focus();
+  }, [presented, mobile, overview, selected]);
+  const rememberMetadata = (selection: string) => {
+    const current = readSettingsNavigation(workspace?.cwd);
+    writeSettingsNavigation(workspace?.cwd, { ...current, section: 'skills', positions: { ...current.positions, skills: { group: 'registry', selection } } });
+  };
+  const selectMetadata = (selection: string) => {
+    setSelectedId(selection); setOverview(false); focusRef.current = mobile ? 'detail' : null;
+    rememberMetadata(selection);
+  };
   const [query, setQuery] = useState('');
   const [scope, setScope] = useSettingsScope('registry', 'project');
   const [busy, setBusy] = useState(false);
   const load = async (refresh = false) => {
     const result = await getSkillRegistry(query, workspace?.cwd, workspace?.id, refresh);
-    if (result.success && result.data) setRegistry(result.data); else error(result.error);
+    if (result.success && result.data) { setRegistry(result.data); setLoaded(true); } else error(result.error);
   };
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 200);
@@ -800,8 +839,19 @@ export function SkillRegistryPanel() {
         }}>{t('settings.skills.updateAll')}</button>
     </div>
     {registry?.error && <p role="alert" className="status-warning">{registry.error}</p>}
+    {loaded && selectedId && !selected && <p role="status">{registryContextMessage(locale, 'unavailable')}</p>}
+    <div className="skill-registry-context">
+      <nav ref={navigationRef} aria-label={t('settings.skills.registry')} tabIndex={-1} hidden={mobile && !overview && !!selected}>
+        {entries.map((entry, index) => <button key={entry.id} type="button" disabled={busy}
+          aria-current={selected === entry ? 'true' : undefined} aria-expanded={selected === entry && (!mobile || !overview)}
+          aria-controls={`${detailPrefix}-${index}`} onClick={() => selectMetadata(entry.id)}><strong>{entry.name}</strong><code>{entry.id}</code></button>)}
+      </nav>
+      <div ref={detailRef} className="skill-registry-context-detail" hidden={mobile && overview}>
+        <button ref={backRef} type="button" className="skill-registry-context-back" hidden={!mobile || overview || !selected}
+          onClick={() => { if (selected) rememberMetadata(selected.id); focusRef.current = 'navigation'; setOverview(true); }}>{registryContextMessage(locale, 'back')}</button>
     <div className="settings-resource-list">
-      {registry?.entries.map(entry => <article className="settings-resource-card" key={entry.id} data-settings-selection={entry.id}>
+      {entries.map((entry, index) => <article className="settings-resource-card" key={entry.id} id={`${detailPrefix}-${index}`}
+        data-settings-selection={entry.id} hidden={selected !== entry}>
         <div><strong>{entry.name}</strong><span>{entry.description}</span><code>v{entry.version}</code></div>
         <div>
           {entry.installed && <small>{t('settings.skills.installedVersion', { version: entry.installed.version ?? '?' })}</small>}
@@ -809,6 +859,8 @@ export function SkillRegistryPanel() {
             onClick={() => void install(entry.id)}>{entry.installed?.updateAvailable ? t('settings.skills.update') : t('settings.skills.install')}</button>
         </div>
       </article>)}
+    </div>
+      </div>
     </div>
   </details>;
 }

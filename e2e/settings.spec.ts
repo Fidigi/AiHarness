@@ -1,8 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { CustomModelDefinition, SkillCatalog } from '@ai-harness/core';
+import type { CustomModelDefinition, SkillCatalog, SkillRegistry } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectRegistryEntry, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -17,6 +17,16 @@ import {
 
 function settingsSection(page: Page, heading: string) {
   return page.getByRole('heading', { name: heading, exact: true }).locator('..');
+}
+
+function registryFixtures(): SkillRegistry {
+  return {
+    source: 'https://registry.example.test/index.json', updatedAt: '2025-01-01T12:00:00.000Z',
+    entries: ['fixture-registry-a', 'fixture-registry-b'].map(id => ({
+      id, name: id, description: `Description ${id}`, version: '2.2.1',
+      downloadUrl: `https://registry.example.test/${id}.md`, sha256: 'a'.repeat(64),
+    })),
+  };
 }
 
 function customModelFixtures(): CustomModelDefinition[] {
@@ -198,11 +208,175 @@ test.describe('Settings and authentication', () => {
 
     await selectSettingsCategory(page, 'skills');
     const skills = settingsSection(page, 'Skills');
-    await skills.getByText('Browse Agent Skills registry').click();
-    await expect(skills.getByText('security-review')).toBeVisible();
-    await skills.getByRole('button', { name: 'Install', exact: true }).click();
+    await selectRegistryEntry(page, 'security-review');
+    const registryDetail = skills.locator('.skill-registry-context-detail');
+    await expect(registryDetail.getByText('security-review', { exact: true })).toBeVisible();
+    await registryDetail.getByRole('button', { name: 'Install', exact: true }).click();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/registry/install').at(-1)?.body)
       .toMatchObject({ id: 'security-review', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' });
+  });
+
+  for (const scenario of [
+    { width: 1280, locale: 'en', theme: 'light' },
+    { width: 1280, locale: 'fr', theme: 'dark' },
+    { width: 390, locale: 'en', theme: 'light' },
+    { width: 390, locale: 'fr', theme: 'dark' },
+  ] as const) test(`Registry metadata browsing never installs or reads instructions: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.addInitScript(({ locale, theme }) => {
+      localStorage.setItem('ai-harness-locale', locale);
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+    }, scenario);
+    const registryFixture = registryFixtures();
+    const api = await installMockApi(page, { skillRegistry: registryFixture });
+    await page.goto('/settings#skills');
+    const section = page.locator('#skills'), registry = section.locator('.skill-registry');
+    await registry.locator('summary').focus(); await registry.locator('summary').click();
+    const enabled = await section.locator('.skill-catalog-row input[type="checkbox"]').evaluateAll(inputs =>
+      inputs.map(input => ({ name: input.getAttribute('aria-label'), checked: (input as HTMLInputElement).checked })));
+    const scope = registry.getByRole('combobox');
+    await expect(scope).toHaveValue('project');
+    const navigation = registry.getByRole('navigation', { name: /^(Browse Agent Skills registry|Parcourir le registre Agent Skills)$/u });
+    await expect(navigation).toBeVisible();
+    const choice = navigation.getByRole('button').filter({ has: page.getByText('fixture-registry-b', { exact: true }).and(page.locator('code')) });
+    await choice.focus(); await choice.press('Enter');
+    const detail = registry.locator('.skill-registry-context-detail');
+    await expect(detail.getByRole('article')).toHaveCount(1);
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'fixture-registry-b');
+    await expect(detail).toContainText('Description fixture-registry-b'); await expect(detail).toContainText('v2.2.1');
+    await expect(scope).toHaveValue('project');
+    const current = registry.locator('nav button').filter({ has: page.getByText('fixture-registry-b', { exact: true }).and(page.locator('code')) });
+    await expect(current).toHaveAttribute('aria-current', 'true'); await expect(current).toHaveAttribute('aria-expanded', 'true');
+    await expect(current).toHaveCSS('border-left-width', '3px');
+    const back = registry.getByRole('button', { name: /^(Back to Agent Skills registry|Retour au registre Agent Skills)$/u });
+    if (scenario.width < 960) {
+      await expect(back).toBeFocused(); await back.press('Enter');
+      for (const control of [choice, back]) {
+        await expect(control).toBeFocused(); await expect(control).toHaveCSS('outline-style', 'solid');
+        await expectContrast(control, 'outlineColor', 3);
+        expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        const clearance = await control.evaluate(element => {
+          const style = getComputedStyle(element), box = element.getBoundingClientRect();
+          const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+          return Math.min(...[element.closest('nav') ?? element.closest('.skill-registry-context-detail')!, element.closest('.settings-view')!]
+            .flatMap(owner => { const clip = owner.getBoundingClientRect(); return [box.left - clip.left, clip.right - box.right, box.top - clip.top, clip.bottom - box.bottom]; })) - extent;
+        });
+        expect(clearance).toBeGreaterThanOrEqual(-0.1);
+        if (control === choice) await choice.press('Enter');
+      }
+    } else {
+      await expect(choice).toBeFocused();
+      const list = (await navigation.boundingBox())!, content = (await detail.boundingBox())!;
+      expect(list.x + list.width).toBeLessThanOrEqual(content.x);
+    }
+    expect((await new AxeBuilder({ page }).include('.skill-registry').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const capture = testInfo.outputPath(`registry-context-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('registry-context', { path: capture, contentType: 'image/png' });
+    if (scenario.width < 960) {
+      await selectInstalledSkill(page, 'release-notes');
+      await back.focus(); await back.press('Enter');
+      await expect(choice).toBeFocused();
+      const returned = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
+      expect(returned.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.skills)
+        .toEqual({ group: 'registry', selection: 'fixture-registry-b' });
+      await choice.press('Enter');
+    }
+    await selectGeneralSettings(page, 'appearance'); await selectSettingsCategory(page, 'skills');
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'fixture-registry-b');
+    const memory = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
+    expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.skills)
+      .toEqual({ group: 'registry', selection: 'fixture-registry-b' });
+    await page.reload();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'fixture-registry-b');
+    await expect(section.getByRole('status').filter({ hasText: /selected skill is unavailable|La compétence sélectionnée/u })).toHaveCount(0);
+    const search = registry.getByRole('searchbox');
+    await search.fill('fixture-registry-a');
+    await expect(registry.getByRole('status')).toContainText(/selected registry entry is unavailable|L’entrée sélectionnée du registre n’est pas disponible/u);
+    await expect(detail.getByRole('article')).toHaveCount(0); await expect(search).toBeFocused(); await expect(search).toHaveValue('fixture-registry-a');
+    await search.fill('');
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'fixture-registry-b'); await expect(search).toBeFocused();
+    const longId = 'fixture-registry-metadata-with-a-long-name-and-preserved-explicit-install-and-update-authority';
+    const fresh = { ...registryFixture, entries: [registryFixture.entries[0]!,
+      { ...registryFixture.entries[1]!, id: 'fixture-registry-replacement' },
+      { ...registryFixture.entries[0]!, id: longId, name: longId }] };
+    await page.route('**/api/skills/registry?*', route => {
+      const query = new URL(route.request().url()).searchParams.get('query') ?? '';
+      return route.fulfill({ json: { ...fresh, entries: fresh.entries.filter(entry => entry.name.includes(query)) } });
+    });
+    await page.reload();
+    await expect(navigation).toBeVisible(); await expect(detail.getByRole('article')).toHaveCount(0);
+    await expect(registry.getByRole('status')).toContainText(/selected registry entry is unavailable|L’entrée sélectionnée du registre n’est pas disponible/u);
+    await navigation.getByRole('button').filter({ has: page.getByText('fixture-registry-replacement', { exact: true }).and(page.locator('code')) }).click();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'fixture-registry-replacement');
+    if (scenario.width < 960) await back.click();
+    await navigation.getByRole('button').filter({ has: page.getByText(longId, { exact: true }).and(page.locator('code')) }).click();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', longId);
+    await expect(detail.getByRole('article').locator('strong')).toHaveText(longId);
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const longCapture = testInfo.outputPath(`registry-context-long-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: longCapture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('registry-context-long', { path: longCapture, contentType: 'image/png' });
+    expect(await section.locator('.skill-catalog-row input[type="checkbox"]').evaluateAll(inputs =>
+      inputs.map(input => ({ name: input.getAttribute('aria-label'), checked: (input as HTMLInputElement).checked })))).toEqual(enabled);
+    expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  });
+
+  for (const width of [1280, 390]) test(`Registry detail preserves requested install scope and complete updates: ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const registryFixture = registryFixtures();
+    registryFixture.entries = [...registryFixture.entries.map(entry => ({ ...entry,
+      installed: { scope: 'project' as const, version: '1.0.0', updateAvailable: true } })),
+      { ...registryFixtures().entries[0]!, id: 'fixture-registry-global', name: 'fixture-registry-global' }];
+    const api = await installMockApi(page, { skillRegistry: registryFixture });
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/skills/registry/install', async route => {
+      if (route.request().method() === 'POST' && route.request().postDataJSON().scope === 'project') await held;
+      await route.fallback();
+    });
+    await page.goto('/settings#skills');
+    await selectRegistryEntry(page, 'fixture-registry-b');
+    const registry = page.locator('.skill-registry'), detail = registry.locator('.skill-registry-context-detail');
+    const navigation = registry.getByRole('navigation', { name: 'Browse Agent Skills registry', exact: true });
+    try {
+      const requested = page.waitForRequest(request => new URL(request.url()).pathname === '/api/skills/registry/install' && request.method() === 'POST');
+      await detail.getByRole('button', { name: 'Update', exact: true }).click();
+      expect((await requested).postDataJSON()).toEqual({ id: 'fixture-registry-b', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' });
+      for (const button of await registry.locator('nav button').all()) await expect(button).toBeDisabled();
+      if (width < 960) {
+        const back = registry.getByRole('button', { name: 'Back to Agent Skills registry', exact: true });
+        await back.focus(); await back.press('Enter');
+        await expect(navigation).toBeFocused(); await expect(navigation).toHaveCSS('outline-style', 'solid');
+        await expectContrast(navigation, 'outlineColor', 3);
+        const pendingCapture = testInfo.outputPath('registry-pending-back-390.png');
+        await page.screenshot({ path: pendingCapture, animations: 'disabled', caret: 'hide' });
+        await testInfo.attach('registry-pending-back', { path: pendingCapture, contentType: 'image/png' });
+      }
+    } finally { release(); }
+    for (const button of await registry.locator('nav button').all()) await expect(button).toBeEnabled();
+    if (width < 960) { await expect(navigation).toBeVisible(); await expect(detail.getByRole('article')).toHaveCount(0); }
+    const updateAll = registry.getByRole('button', { name: 'Update all', exact: true });
+    // Selected B is current; A still needs its update. This remains all:true, not selected-only.
+    await expect(updateAll).toBeEnabled();
+    const updated = page.waitForResponse(response => new URL(response.url()).pathname === '/api/skills/registry/update' && response.request().method() === 'POST');
+    await updateAll.click();
+    expect((await updated).request().postDataJSON()).toEqual({ all: true, scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' });
+    await registry.getByRole('combobox').selectOption('global');
+    await selectRegistryEntry(page, 'fixture-registry-global');
+    const installed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/skills/registry/install' && response.request().method() === 'POST');
+    await detail.getByRole('button', { name: 'Install', exact: true }).click();
+    expect((await installed).request().postDataJSON()).toEqual({ id: 'fixture-registry-global', scope: 'global', cwd: '/workspace', projectId: 'workspace-e2e' });
+    expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
+    expect(api.requests.filter(request => request.path.startsWith('/api/skills/registry/') && request.method !== 'GET')
+      .map(request => ({ path: request.path, body: request.body }))).toEqual([
+      { path: '/api/skills/registry/install', body: { id: 'fixture-registry-b', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' } },
+      { path: '/api/skills/registry/update', body: { all: true, scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' } },
+      { path: '/api/skills/registry/install', body: { id: 'fixture-registry-global', scope: 'global', cwd: '/workspace', projectId: 'workspace-e2e' } },
+    ]);
   });
 
   for (const width of [1280, 390]) test(`Custom model browsing never retargets a shared editor: ${width}px`, async ({ page }) => {

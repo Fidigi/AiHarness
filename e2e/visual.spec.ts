@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 import { selectMcpServer } from './fixtures/mcp-navigation';
-import { selectCatalogueModel, selectCustomModel, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectCustomModel, selectModelSettings, selectProviderConnection, selectRegistryEntry } from './fixtures/settings-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -449,7 +449,7 @@ test.describe('Régression visuelle du catalogue de skills', () => {
           filesOpen: true, sidebarVisible: true, lastSettingsSection: 'skills', keybindings: {},
         }));
       }, { theme: scenario.theme });
-      await installMockApi(page);
+      const api = await installMockApi(page);
 
       await page.goto('/settings#skills');
       await page.addStyleTag({ content: '#plugins { display: none !important; }' });
@@ -457,8 +457,10 @@ test.describe('Régression visuelle du catalogue de skills', () => {
       const navigation = section.getByRole('navigation', { name: 'Skills', exact: true });
       await expect(navigation.locator('[data-scope="project"]').getByRole('button', { name: 'review-project', exact: true })).toBeVisible();
       await expect(navigation.locator('[data-scope="global"]').getByRole('button', { name: 'release-notes', exact: true })).toBeVisible();
-      await section.getByText('Browse Agent Skills registry').click();
-      await expect(section.getByText('security-review')).toBeVisible();
+      await selectRegistryEntry(page, 'security-review');
+      await expect(section.locator('.skill-registry-context-detail').getByText('security-review', { exact: true })).toBeVisible();
+      expect(api.requests.filter(request => request.method !== 'GET'
+        && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
       await section.scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });

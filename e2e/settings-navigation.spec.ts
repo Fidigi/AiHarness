@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectSettingsCategory } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectRegistryEntry, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
@@ -317,6 +317,13 @@ test('No-project Settings retains global sections and falls back only unavailabl
     await expect(scope).toHaveValue('global');
     await expect(scope.locator('option[value="project"]')).toHaveJSProperty('disabled', true);
   }
+  await selectRegistryEntry(page, 'security-review');
+  const registry = page.locator('.skill-registry');
+  await expect(registry.getByRole('combobox')).toHaveValue('global');
+  await expect(registry.getByRole('combobox').locator('option[value="project"]')).toHaveJSProperty('disabled', true);
+  await expect(registry.locator('.skill-registry-context-detail').getByRole('article')).toHaveAttribute('data-settings-selection', 'security-review');
+  expect(api.requests.filter(request => request.path.startsWith('/api/skills/registry/') && request.method !== 'GET')).toEqual([]);
+  expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
   await selectProviderCredential(page, 'Anthropic');
   const credential = page.locator('#providers .credential-context-detail input:visible');
   await credential.fill('NO_PROJECT_CREDENTIAL_DRAFT');

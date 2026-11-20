@@ -584,7 +584,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
         {skills.loading && <p role="status">{t('common.loading')}…</p>}
         {skills.error && <p role="alert" className="status-warning">{skills.error}</p>}
         {!skills.loading && skills.catalog && visibleSkillGroups.length === 0 && <p>{t('settings.skills.empty')}</p>}
-        <SkillRegistryPanel />
+        <SkillRegistryPanel presented={category === 'skills'} />
         <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
           names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
         {!skills.loading && skills.catalog && skillPosition && !selectedSkillMetadata
@@ -991,10 +991,13 @@ function SettingsNavigationBoundary() {
       hash, entryReady,
       save: (section, position) => {
         const fresh = readSettingsNavigation(cwd);
+        // Registry navigation/toolbar focus is not a new entry selection.
+        const nextPosition = section === 'skills' && position.group === 'registry' && !position.selection
+          && fresh.positions.skills?.group === 'registry' ? { ...fresh.positions.skills, ...position } : position;
         local = { ...local, section, scopes: fresh.scopes,
           categories: { ...local.categories, ...fresh.categories, [settingsSectionCategory[section]]: section },
           positions: { ...local.positions, ...fresh.positions,
-            ...(position.group || position.selection ? { [section]: position } : {}) } };
+            ...(nextPosition.group || nextPosition.selection ? { [section]: nextPosition } : {}) } };
         writeSettingsNavigation(cwd, local);
       },
     });

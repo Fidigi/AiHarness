@@ -47,6 +47,18 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Inspect a registry entry without installing, updating or reading skill instructions. */
+export async function selectRegistryEntry(page: Page, id: string): Promise<void> {
+  await selectSettingsCategory(page, 'skills');
+  const registry = page.locator('.skill-registry');
+  if (await registry.getAttribute('open') === null) { await registry.locator('summary').focus(); await registry.locator('summary').click(); }
+  const back = registry.getByRole('button', { name: /^(Back to Agent Skills registry|Retour au registre Agent Skills)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = registry.getByRole('navigation', { name: /^(Browse Agent Skills registry|Parcourir le registre Agent Skills)$/u });
+  const code = page.getByText(id, { exact: true }).and(page.locator('code'));
+  await navigation.getByRole('button').filter({ has: code }).click();
+}
+
 /** Inspect one custom definition without changing the shared editor or active model. */
 export async function selectCustomModel(page: Page, key: string): Promise<void> {
   await selectModelSettings(page, 'custom-models');

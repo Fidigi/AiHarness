@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectRegistryEntry, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -91,6 +91,28 @@ test('built Settings assets restore project-specific group, row and scope intent
     && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
   expect(await page.evaluate(() => performance.getEntriesByType('resource')
     .some(entry => /\/assets\/SettingsView-[^/]+\.js$/u.test(entry.name)))).toBe(true);
+});
+
+test('built Settings assets restore registry entries per workspace without installation', async ({ page }) => {
+  const api = await installMockApi(page, { skillRegistry: {
+    source: 'https://registry.example.test/index.json', updatedAt: '2025-01-01T12:00:00.000Z',
+    entries: ['registry-workspace-a', 'registry-workspace-b'].map(id => ({ id, name: id,
+      description: `Description ${id}`, version: '1.0.0', downloadUrl: `https://registry.example.test/${id}.md`, sha256: 'a'.repeat(64) })),
+  } });
+  await page.goto('/settings?cwd=%2Fworkspace#skills');
+  await selectRegistryEntry(page, 'registry-workspace-b');
+  const selected = page.locator('.skill-registry-context-detail').getByRole('article');
+  await expect(selected).toHaveAttribute('data-settings-selection', 'registry-workspace-b');
+  await switchSettingsWorkspace(page, '/workspace/other');
+  await selectRegistryEntry(page, 'registry-workspace-a');
+  await expect(selected).toHaveAttribute('data-settings-selection', 'registry-workspace-a');
+  await switchSettingsWorkspace(page, '/workspace');
+  await expect(selected).toHaveAttribute('data-settings-selection', 'registry-workspace-b');
+  await page.reload();
+  await expect(selected).toHaveAttribute('data-settings-selection', 'registry-workspace-b');
+  expect(api.requests.filter(request => request.path === '/api/skills/content')).toEqual([]);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
 });
 
 test('built Settings assets refresh mounted sections and return focus after canonical MCP trust grant', async ({ page }) => {

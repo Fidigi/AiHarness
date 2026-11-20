@@ -26,7 +26,7 @@ Line counts are approximate context estimates, not completion or test-coverage c
 | Native editor schemas and installed assets | [`topics/editor-schemas.md`](./topics/editor-schemas.md) | ~85 lines |
 | QuickJS code mode and nested/model helpers | [`topics/codemode.md`](./topics/codemode.md) | ~160 lines |
 | REST, SSE, WebSocket and server lifecycle | [`topics/server-api.md`](./topics/server-api.md) | ~265 lines |
-| React application, stores and view lifetimes | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~250 lines |
+| React application, stores and view lifetimes | [`topics/web-app-architecture.md`](./topics/web-app-architecture.md) | ~280 lines |
 | Detached stream reconstruction | [`topics/detached-streams.md`](./topics/detached-streams.md) | ~95 lines |
 | Separate static demonstration and publication | [`topics/static-demo.md`](./topics/static-demo.md) | ~120 lines |
 | Linked-directory read consent | [`topics/linked-directories.md`](./topics/linked-directories.md) | ~65 lines |
