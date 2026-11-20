@@ -493,6 +493,19 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   </section>;
 }
 
+function customModelForm(model: CustomModelDefinition) {
+  return {
+    provider: model.provider, id: model.id, name: model.name,
+    reasoning: model.capabilities.reasoning, imageInput: model.capabilities.imageInput, toolCalls: model.capabilities.toolCalls,
+    contextWindow: model.contextWindow ? String(model.contextWindow) : '', maxOutputTokens: model.maxOutputTokens ? String(model.maxOutputTokens) : '',
+    inputPrice: model.pricing?.inputPerMillion === undefined ? '' : String(model.pricing.inputPerMillion),
+    outputPrice: model.pricing?.outputPerMillion === undefined ? '' : String(model.pricing.outputPerMillion),
+    cacheReadPrice: model.pricing?.cacheReadPerMillion === undefined ? '' : String(model.pricing.cacheReadPerMillion),
+    cacheWritePrice: model.pricing?.cacheWritePerMillion === undefined ? '' : String(model.pricing.cacheWritePerMillion),
+    compatibility: JSON.stringify(model.compatibility ?? {}, null, 2),
+  };
+}
+
 export function CustomModelSettings({ presented }: { presented: boolean }) {
   const { t, locale } = useI18n();
   const workspaceCwd = useSessionStore(state => state.workspace?.cwd);
@@ -534,6 +547,8 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   const [editing, setEditing] = useState<string>();
   const empty = { provider: '', id: '', name: '', reasoning: false, imageInput: false, toolCalls: true, contextWindow: '', maxOutputTokens: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', cacheWritePrice: '', compatibility: '{}' };
   const [form, setForm] = useState(empty);
+  const editorState = useRef({ editing, form });
+  useLayoutEffect(() => { editorState.current = { editing, form }; }, [editing, form]);
   const formBaseline = useRef(form);
   const editorSummary = useRef<HTMLElement>(null);
   const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
@@ -548,6 +563,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
     let compatibility: Record<string, string | number | boolean>;
     try { compatibility = JSON.parse(form.compatibility); }
     catch { error(t('settings.customModels.invalidCompatibility')); return; }
+    const baseline = formBaseline.current;
     const result = await saveCustomModel({
       provider: form.provider, id: form.id, name: form.name,
       capabilities: { reasoning: form.reasoning, imageInput: form.imageInput, toolCalls: form.toolCalls },
@@ -561,7 +577,15 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
       }, compatibility,
     }, editing);
     if (!result.success) error(result.error);
-    else { setEditing(undefined); formBaseline.current = empty; setForm(empty); await Promise.all([load(), hydrateModelCatalog(true)]); }
+    else {
+      const current = editorState.current;
+      if (editing && result.data?.key === editing && current.editing === editing && formBaseline.current === baseline
+        && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
+        formBaseline.current = customModelForm(result.data);
+        setForm({ ...current.form });
+      } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
+      await Promise.all([load(), hydrateModelCatalog(true)]);
+    }
   };
   return <section className="settings-section" id="custom-models">
     <h3>{t('settings.customModels.title')}</h3>
@@ -606,16 +630,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
               if (targets.length !== 1) return;
               const model = targets[0]!;
               setEditing(model.key);
-              const next = {
-                provider: model.provider, id: model.id, name: model.name,
-                reasoning: model.capabilities.reasoning, imageInput: model.capabilities.imageInput, toolCalls: model.capabilities.toolCalls,
-                contextWindow: model.contextWindow ? String(model.contextWindow) : '', maxOutputTokens: model.maxOutputTokens ? String(model.maxOutputTokens) : '',
-                inputPrice: model.pricing?.inputPerMillion === undefined ? '' : String(model.pricing.inputPerMillion),
-                outputPrice: model.pricing?.outputPerMillion === undefined ? '' : String(model.pricing.outputPerMillion),
-                cacheReadPrice: model.pricing?.cacheReadPerMillion === undefined ? '' : String(model.pricing.cacheReadPerMillion),
-                cacheWritePrice: model.pricing?.cacheWritePerMillion === undefined ? '' : String(model.pricing.cacheWritePerMillion),
-                compatibility: JSON.stringify(model.compatibility ?? {}, null, 2),
-              };
+              const next = customModelForm(model);
               formBaseline.current = next; setForm(next);
             });
           }}>{t('common.edit')}</button>
