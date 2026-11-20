@@ -625,8 +625,53 @@ test('Provider creation drafts survive the admitted reply without repeating Crea
     await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
     expect(api.requests.filter(request => request.path === '/api/provider-registry/custom/fixture-created' && request.method !== 'GET')
       .map(({ method, body }) => ({ method, body }))).toEqual([{ method: 'PUT', body: { id: 'fixture-created', name: 'SYNTHETIC_PROVIDER_CREATE_LATER', baseUrl, dialect: 'openai-completions' } }]);
+    await page.unroute('**/api/provider-registry/custom');
+    for (const secret of ['api-key', 'headers'] as const) {
+      let release!: () => void, entered!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const pending = new Promise<void>(resolve => { entered = resolve; });
+      await page.route('**/api/provider-registry/custom', async route => {
+        if (route.request().method() === 'POST' && route.request().postDataJSON().id === `fixture-old-${secret}`) { entered(); await held; }
+        await route.fallback();
+      });
+      const admittedKey = `SYNTHETIC_PROVIDER_CREATE_OLD_KEY_${secret}`, laterKey = `SYNTHETIC_PROVIDER_CREATE_NEW_KEY_${secret}`;
+      const admittedHeaders = { 'X-Fixture': `SYNTHETIC_PROVIDER_CREATE_OLD_HEADER_${secret}` };
+      const laterHeaders = { 'X-New-Fixture': `SYNTHETIC_PROVIDER_CREATE_NEW_HEADER_${secret}` };
+      try {
+        if (!await section.locator('.custom-resource-editor').evaluate(element => (element as HTMLDetailsElement).open)) {
+          await section.locator('.custom-resource-editor summary').click();
+        }
+        await form.getByLabel('ID', { exact: true }).fill(`fixture-old-${secret}`);
+        await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_CREATE_OLD_ID');
+        await form.getByLabel('Base URL', { exact: true }).fill(baseUrl);
+        await form.getByLabel('API key', { exact: true }).fill(admittedKey); await headers.fill(JSON.stringify(admittedHeaders));
+        await form.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
+        await form.getByLabel('ID', { exact: true }).fill(`fixture-new-${secret}`);
+        await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_CREATE_NEW_ID');
+        if (secret === 'api-key') await form.getByLabel('API key', { exact: true }).fill(laterKey);
+        else await headers.fill(JSON.stringify(laterHeaders));
+        release(); await expect(form.locator('button:not([type])')).toBeEnabled();
+        await expect(form.getByLabel('ID', { exact: true })).toHaveValue(`fixture-new-${secret}`);
+        await expect(form.getByLabel('ID', { exact: true })).toBeEditable();
+        await expect(form.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_PROVIDER_CREATE_NEW_ID');
+        await expect(form.getByLabel('API key', { exact: true })).toHaveValue(secret === 'api-key' ? laterKey : '');
+        await expect(headers).toHaveValue(secret === 'headers' ? JSON.stringify(laterHeaders) : '{}');
+        expect(api.requests.filter(request => request.path === '/api/provider-registry/custom' && request.method === 'POST'
+          && (request.body as { id?: string }).id === `fixture-new-${secret}`)).toEqual([]);
+        await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+        await form.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
+        expect(api.requests.filter(request => request.path === '/api/provider-registry/custom' && request.method === 'POST'
+          && [`fixture-old-${secret}`, `fixture-new-${secret}`].includes((request.body as { id: string }).id)).map(request => request.body))
+          .toEqual([
+            { id: `fixture-old-${secret}`, name: 'SYNTHETIC_PROVIDER_CREATE_OLD_ID', baseUrl, dialect: 'openai-completions', apiKey: admittedKey, headers: admittedHeaders },
+            { id: `fixture-new-${secret}`, name: 'SYNTHETIC_PROVIDER_CREATE_NEW_ID', baseUrl, dialect: 'openai-completions',
+              ...(secret === 'api-key' ? { apiKey: laterKey } : {}), headers: secret === 'headers' ? laterHeaders : {} },
+          ]);
+      } finally { release(); await page.unroute('**/api/provider-registry/custom'); }
+    }
     await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
-    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toHaveLength(2);
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toHaveLength(6);
     expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
     expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROVIDER_CREATE_');
   } finally { releaseCreate(); }

@@ -317,6 +317,12 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
             if (current.form[key] !== form[key]) next[key] = current.form[key];
           }
           formBaseline.current = saved; setEditing(saved.id); setForm(next);
+        } else if (!editing && !current.editing && formBaseline.current === baseline && result.data?.id === form.id
+          && current.form.id.trim() && current.form.id.trim() !== form.id) {
+          setForm({ ...current.form,
+            apiKey: current.form.apiKey === form.apiKey ? empty.apiKey : current.form.apiKey,
+            headers: current.form.headers === form.headers ? empty.headers : current.form.headers,
+          });
         } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
         publishNotice(t('settings.customProviders.saved'), { level: 'success' });
         const [canonical] = await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
