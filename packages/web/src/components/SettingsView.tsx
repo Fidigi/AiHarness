@@ -2,7 +2,7 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import '../settings.css';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -1048,8 +1048,8 @@ function SettingsNavigationBoundary({ inactive }: { inactive: boolean }) {
   </div>;
 }
 
-type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean };
-function SettingsDialog({ onClose, onEscape, onModalChange, suspended }: SettingsDialogProps) {
+type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean; leaveRef: Ref<(discard: () => void) => void> };
+function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef }: SettingsDialogProps) {
   const root = useRef<HTMLElement>(null);
   const confirmation = useRef<HTMLElement>(null);
   const discardReturn = useRef<HTMLElement>(null);
@@ -1067,7 +1067,9 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended }: Setting
   const context = JSON.stringify([workspace?.id, workspace?.cwd, workspace?.trusted, workspace?.operationTrusted]);
   const { t, locale } = useI18n();
   const message = (key: Parameters<typeof settingsDraftMessage>[1]) => settingsDraftMessage(locale, key);
-  const requestClose = () => { discardReturn.current = null; if (drafts.current.size) setPendingDiscard({ discard: onClose }); else onClose(); };
+  const requestDiscard = (discard: () => void) => { discardReturn.current = null; if (drafts.current.size) setPendingDiscard({ discard }); else discard(); };
+  useImperativeHandle(leaveRef, () => requestDiscard, [requestDiscard]);
+  const requestClose = () => requestDiscard(onClose);
   useLayoutEffect(() => { discardReturn.current = null; setPendingDiscard(undefined); }, [context]);
   useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
   useFocusTrap(!suspended && confirmClose, confirmation, () => setPendingDiscard(undefined), discardReturn);

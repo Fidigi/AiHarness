@@ -1,13 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../hooks/useI18n';
 import { publishNotice } from '../services/notices';
 
-type PaletteProps = { onClose: () => void };
+type PaletteProps = { onClose: () => void; leaveRef: RefObject<((leave: () => void) => void) | null> };
 let load: Promise<ComponentType<PaletteProps>> | undefined;
 
 /** Closed palettes fetch nothing. Pending imports never suspend the app or own focus. */
-export default function CommandPaletteBoundary({ onClose, onModalChange }: PaletteProps & { onModalChange: (active: boolean) => void }) {
+export default function CommandPaletteBoundary({ onClose, onModalChange, leaveRef }: PaletteProps & { onModalChange: (active: boolean) => void }) {
   const { locale } = useI18n();
   const close = useRef(onClose);
   close.current = onClose;
@@ -33,5 +33,5 @@ export default function CommandPaletteBoundary({ onClose, onModalChange }: Palet
     });
     return () => { current = false; };
   }, [locale]);
-  return Palette ? createPortal(<Palette onClose={onClose} />, document.body) : null;
+  return Palette ? createPortal(<Palette onClose={onClose} leaveRef={leaveRef} />, document.body) : null;
 }

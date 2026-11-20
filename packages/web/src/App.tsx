@@ -52,6 +52,7 @@ function App() {
   const [preferences, setPreferences] = usePreferences();
   const lastChatAddress = useRef('/');
   const settingsInvoker = useRef<HTMLElement | null>(null);
+  const settingsDiscard = useRef<((discard: () => void) => void) | null>(null);
   const previousSettings = useRef(false);
   useLayoutEffect(() => {
     const settings = location.pathname.startsWith('/settings');
@@ -277,7 +278,7 @@ function App() {
           <Route path="/chat/:id" element={<ChatView terminalControl={terminalControl} />} />
           <Route path="/settings" element={<Suspense fallback={
             <div className="app-loading" role="status">{t('common.loading')}…</div>
-          }><SettingsView onClose={() => navigate(lastChatAddress.current)} onEscape={close => paletteOpen ? setPaletteOpen(false) : close()} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
+          }><SettingsView leaveRef={settingsDiscard} onClose={() => navigate(lastChatAddress.current)} onEscape={close => paletteOpen ? setPaletteOpen(false) : close()} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
         </Routes>
       </main>
       {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} explorerHost={isNarrow ? null : explorerHost} onRequestClose={() => {
@@ -286,7 +287,8 @@ function App() {
       }} />}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
-      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} onModalChange={setPaletteModal} />}
+      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} onModalChange={setPaletteModal}
+        leaveRef={settingsDiscard} />}
       <SubagentMonitor />
       <StatusCenter container={settingsModal} />
       <PwaStatus />

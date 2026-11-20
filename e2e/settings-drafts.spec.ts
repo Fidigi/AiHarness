@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { expectContrast } from './fixtures/contrast';
-import { installMockApi } from './fixtures/mock-api';
+import { installMockApi, mockSession } from './fixtures/mock-api';
 import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile } from './fixtures/settings-navigation';
 
 for (const scenario of [
@@ -104,7 +104,8 @@ for (const scenario of [
 });
 
 test('Pending palette Escape does not ask to discard Settings drafts', async ({ page }) => {
-  const api = await installMockApi(page);
+  const target = mockSession('palette-draft-target', 'Saved palette target');
+  const api = await installMockApi(page, { sessions: [target] });
   let release!: () => void, entered!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const requested = new Promise<void>(resolve => { entered = resolve; });
@@ -128,6 +129,53 @@ test('Pending palette Escape does not ask to discard Settings drafts', async ({ 
     await expect(credential).toHaveValue('SYNTHETIC_PENDING_PALETTE_SECRET');
     expect(api.requests.filter(request => request.method !== 'GET'
       && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+
+    const palette = page.getByRole('dialog', { name: 'Command palette', exact: true });
+    const search = palette.getByRole('textbox', { name: /Search commands/ });
+    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+    await credential.focus(); await page.keyboard.press('Control+k');
+    await search.fill('New session');
+    await page.keyboard.press('Enter'); await expect(prompt).toBeVisible();
+    await expect(palette).toHaveCount(0); await expect(credential).toHaveValue('SYNTHETIC_PENDING_PALETTE_SECRET');
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(credential).toBeFocused(); await expect(page).toHaveURL(/\/settings#providers$/);
+    expect(await page.evaluate(async path => (await import(path)).useSessionStore.getState().sessions.map((session: { id: string }) => session.id), '/src/store/session-store.ts')).toEqual([target.id]);
+
+    await page.keyboard.press('Control+k'); await search.fill('Keyboard shortcuts'); await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/settings#shortcuts$/); await expect(prompt).toHaveCount(0);
+    await selectProviderCredential(page, 'OpenAI');
+    await expect(credential).toHaveValue('SYNTHETIC_PENDING_PALETTE_SECRET');
+    await page.keyboard.press('Control+k');
+    await search.fill('Saved palette target');
+    await page.keyboard.press('Enter'); await expect(prompt).toBeVisible();
+    api.sessions.splice(0);
+    await page.evaluate(async path => { await (await import(path)).useSessionStore.getState().hydrateSessions(); }, '/src/store/session-store.ts');
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(prompt).toHaveCount(0); await expect(page).toHaveURL(/\/settings#providers$/);
+    await expect(credential).toHaveValue('SYNTHETIC_PENDING_PALETTE_SECRET');
+    api.sessions.push(target);
+    await page.evaluate(async path => { await (await import(path)).useSessionStore.getState().hydrateSessions(); }, '/src/store/session-store.ts');
+    await page.keyboard.press('Control+k');
+    await search.fill('Saved palette target');
+    await page.keyboard.press('Enter'); await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(page).toHaveURL(/\/chat\/palette-draft-target\?cwd=/);
+    await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+    await expect(credential).toHaveValue('');
+    await page.keyboard.press('Control+k'); await search.fill('Saved palette target'); await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/chat\/palette-draft-target\?cwd=/);
+    await expect(prompt).toHaveCount(0); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+    await credential.fill('SYNTHETIC_PENDING_PALETTE_SECRET');
+    await page.keyboard.press('Control+k'); await search.fill('New session'); await page.keyboard.press('Enter');
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    expect(await page.evaluate(async path => (await import(path)).useSessionStore.getState().sessions.map((session: { id: string }) => session.id), '/src/store/session-store.ts')).toHaveLength(2);
+    await expect(page).toHaveURL(/\/chat\/(?!palette-draft-target)[^?]+\?cwd=/);
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PENDING_PALETTE_SECRET');
   } finally { release(); }
 });
 
