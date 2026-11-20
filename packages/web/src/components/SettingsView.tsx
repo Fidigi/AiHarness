@@ -73,6 +73,8 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const [providerNames, setProviderNames] = useState<Record<string, string>>({});
   const [providerReload, setProviderReload] = useState(0);
   const [providerInvalidation, setProviderInvalidation] = useState(0);
+  const providerFormDiscard = useRef<((discard: () => void) => void) | null>(null);
+  const providerChangeOrigin = { workspace: useSessionStore.getState().workspace, activeSessionId, active: providers.active };
   const { t, locale } = useI18n();
   const [authToken, updateAuthToken] = useState('');
   const authTokenBaseline = useRef('');
@@ -284,7 +286,18 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
     || authToken !== authTokenBaseline.current);
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setProvider(e.target.value as ProviderType);
+    const next = e.target.value as ProviderType;
+    const origin = providerChangeOrigin;
+    const change = () => {
+      const current = useSessionStore.getState();
+      if (current.workspace?.id !== origin.workspace?.id || current.workspace?.cwd !== origin.workspace?.cwd
+        || current.workspace?.trusted !== origin.workspace?.trusted || current.workspace?.operationTrusted !== origin.workspace?.operationTrusted
+        || current.activeSessionId !== origin.activeSessionId || current.providers.active !== origin.active
+        || !Object.hasOwn(current.providers.available, next)) return;
+      setProvider(next);
+    };
+    if (next === providers.active || !providerFormDiscard.current) change();
+    else providerFormDiscard.current(change);
   };
 
   const handleApiKeyChange = (type: string, value: string) => {
@@ -446,7 +459,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
 
       <div hidden={modelPanel !== 'provider-lifecycle'}>
         <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
-          presented={category === 'models' && modelPanel === 'provider-lifecycle'}
+          discardFormRef={providerFormDiscard} presented={category === 'models' && modelPanel === 'provider-lifecycle'}
           onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
           onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
           onCanonicalReload={() => setProviderReload(value => value + 1)} />

@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type {
   CustomModelDefinition,
   CustomProviderDefinition,
@@ -61,8 +61,9 @@ function customProviderForm(provider: CustomProviderDefinition) {
   return { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
 }
 
-export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
+export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProvidersLoaded, onSelectionInvalidated, discardFormRef }: {
   presented: boolean;
+  discardFormRef?: RefObject<((discard: () => void) => void) | null>;
   onCanonicalReload?: () => void;
   onSelectionInvalidated?: () => void;
   onProvidersLoaded?: (providers: CustomProviderDefinition[]) => void;
@@ -98,6 +99,11 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   const editorSummary = useRef<HTMLElement>(null);
   const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
     .some(key => form[key] !== formBaseline.current[key]), editorSummary);
+  useLayoutEffect(() => {
+    if (!discardFormRef) return;
+    discardFormRef.current = guardFormDiscard;
+    return () => { if (discardFormRef.current === guardFormDiscard) discardFormRef.current = null; };
+  }, [discardFormRef, guardFormDiscard]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [position, setPosition] = useState(() => readSettingsNavigation(origin.workspace?.cwd).positions['provider-lifecycle']);
