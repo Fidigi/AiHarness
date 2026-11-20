@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { CustomModelDefinition, SkillCatalog, SkillRegistry } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectRegistryEntry, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, reloadSettingsDiscardingDrafts, selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectRegistryEntry, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -465,6 +465,25 @@ test.describe('Settings and authentication', () => {
     await testInfo.attach('custom-model-context', { path: capture, contentType: 'image/png' });
     const editor = section.locator('.custom-resource-editor');
     await editor.locator('summary').focus(); await editor.locator('summary').click();
+    const toggles = editor.getByRole('checkbox'); await expect(toggles).toHaveCount(3);
+    const formCapture = testInfo.outputPath(`custom-model-form-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: formCapture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('custom-model-form', { path: formCapture, contentType: 'image/png' });
+    for (const toggle of await toggles.all()) {
+      await toggle.scrollIntoViewIfNeeded();
+      const layout = await toggle.evaluate(input => {
+        const label = input.closest('label')!, box = input.getBoundingClientRect(), target = label.getBoundingClientRect();
+        const text = [...label.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())!;
+        const range = document.createRange(); range.selectNodeContents(text); const caption = range.getBoundingClientRect();
+        return { gap: caption.left - box.right, centerDelta: Math.abs((caption.top + caption.bottom - box.top - box.bottom) / 2), targetHeight: target.height };
+      });
+      expect(layout.gap).toBeGreaterThanOrEqual(4); expect(layout.centerDelta).toBeLessThanOrEqual(2);
+      expect(layout.targetHeight).toBeGreaterThanOrEqual(44);
+      const checked = await toggle.isChecked(); await toggle.locator('..').click();
+      await expect(toggle).toBeChecked({ checked: !checked }); await expect(toggle).toBeFocused();
+      await toggle.press('Space'); await expect(toggle).toBeChecked({ checked });
+      await expect(toggle).toHaveCSS('outline-style', 'solid'); await expectContrast(toggle, 'outlineColor', 3);
+    }
     const draft = editor.getByLabel('ID', { exact: true });
     await draft.fill('SYNTHETIC_CUSTOM_MODEL_DRAFT');
     await selectGeneralSettings(page, 'appearance'); await selectModelSettings(page, 'custom-models');
@@ -475,7 +494,7 @@ test.describe('Settings and authentication', () => {
     const memory = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
     expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions['custom-models'])
       .toEqual({ selection: 'openai:shared' });
-    await page.reload();
+    await reloadSettingsDiscardingDrafts(page);
     await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'openai:shared');
     await expect(activeModel).toHaveValue(before);
     const longName = 'fixture_custom_model_metadata_with_an_explicit_long_name_and_unchanged_editor_and_enablement_authority';
