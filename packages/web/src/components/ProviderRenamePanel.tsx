@@ -3,6 +3,7 @@ import { useI18n } from '../hooks/useI18n';
 import { isRenameableProvider, renameCustomProvider, type ProviderRenameResult, type RenameableProvider } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import type { ProviderRenameCapability } from '../services/api';
+import { useSettingsDraft } from './settings-drafts';
 import './provider-lifecycle.css';
 
 export interface ProviderRenamePanelProps {
@@ -35,6 +36,7 @@ function ProviderRenameOperation({ provider, disabled = false, disabledReason, r
   }, []);
   const [open, setOpen] = useState(false);
   const [newId, setNewId] = useState(provider.id);
+  useSettingsDraft(newId !== provider.id);
   const [busy, setBusy] = useState(false);
   const [needsReload, setNeedsReload] = useState(false);
   const [feedback, setFeedback] = useState<ProviderSettingsMessage>();

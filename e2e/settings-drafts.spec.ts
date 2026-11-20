@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { expectContrast } from './fixtures/contrast';
 import { installMockApi } from './fixtures/mock-api';
-import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential } from './fixtures/settings-navigation';
+import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSubagentProfile } from './fixtures/settings-navigation';
 
 for (const scenario of [
   { locale: 'en', width: 1280 },
@@ -328,4 +328,101 @@ test('Plugin install drafts guard mobile dismissal and clear only after canonica
       .toEqual([{ action: 'install', source: 'npm:@example/guarded-install', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' }]);
     await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
   } finally { release(); }
+});
+
+test('MCP import source drafts guard outer dismissal without preview or consent', async ({ page }) => {
+  const api = await installMockApi(page);
+  await page.goto('/settings#mcp');
+  const panel = page.locator('.mcp-import-panel');
+  await panel.locator('summary').focus(); await panel.locator('summary').click();
+  const source = panel.locator('textarea');
+  const value = '{"mcpServers":{"fixture":{"command":"node","args":["noop"],"env":{"KEY":"SYNTHETIC_MCP_SOURCE_DRAFT"}}}}';
+  await source.fill(value); await page.locator('.settings-dialog-header button').click();
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(source).toHaveValue(value);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MCP_SOURCE_DRAFT');
+  await panel.getByRole('button', { name: 'Clear paste', exact: true }).click();
+  await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+});
+
+test('Child profile editor drafts survive declined outer dismissal without changing requested scope', async ({ page }) => {
+  const api = await installMockApi(page);
+  await page.goto('/settings#subagents'); await selectSubagentProfile(page, 'Explore');
+  const section = page.locator('#subagents');
+  await section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  const editor = section.locator('.subagent-profile-editor');
+  await editor.getByLabel('Name', { exact: true }).fill('Temporary profile name');
+  await editor.getByLabel('Name', { exact: true }).fill('Explore');
+  await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await page.goto('/settings#subagents'); await selectSubagentProfile(page, 'Explore');
+  await section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.getByLabel('Name', { exact: true }).fill('Edited profile draft');
+  await selectGeneralSettings(page, 'appearance'); await page.locator('.settings-dialog-header button').click();
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await selectSettingsCategory(page, 'subagents'); await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Edited profile draft');
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toEqual([]);
+  await editor.getByRole('button', { name: 'Save', exact: true }).click(); await expect(editor).toHaveCount(0);
+  expect(api.requests.filter(request => request.path === '/api/subagents/profiles/explore' && request.method === 'PATCH').map(request => request.body))
+    .toEqual([{ profile: { name: 'Edited profile draft', description: 'Explore child-agent profile', instructions: 'Explore the delegated task.',
+      kind: 'explore', enabled: true, tools: ['ls', 'read', 'grep', 'find'], skills: [], extensions: [], model: null, thinking: null,
+      maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', projectId: 'workspace-e2e', scope: 'project' }]);
+  await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+});
+
+test('Collapsed provider rename drafts still guard dismissal without renaming', async ({ page }) => {
+  const provider = { id: 'rename-fixture', name: 'Rename fixture', baseUrl: 'https://provider.example.test/v1', dialect: 'openai-completions',
+    headerNames: [], configured: true, modelCount: 1, createdAt: '', updatedAt: '', revision: 'a'.repeat(64) };
+  const api = await installMockApi(page, { customProviders: [provider] });
+  await page.route('**/api/provider-registry/custom', route => route.fulfill({ json: [provider], headers: {
+    'X-AiHarness-Provider-Rename': JSON.stringify({ supported: true, mode: 'exclusive-host-single-writer', reason: 'restricted-single-writer' }),
+  } }));
+  await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', provider.id);
+  const rename = page.locator('.provider-context-detail .provider-rename-panel');
+  await rename.getByRole('button', { name: 'Rename provider', exact: true }).click();
+  await rename.getByLabel('New provider ID', { exact: true }).fill('unsubmitted-rename');
+  await rename.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('.settings-dialog-header button').click();
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await rename.getByRole('button', { name: 'Rename provider', exact: true }).click();
+  await expect(rename.getByLabel('New provider ID', { exact: true })).toHaveValue('unsubmitted-rename');
+  await rename.getByLabel('New provider ID', { exact: true }).fill(provider.id);
+  await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry') && request.method !== 'GET')).toEqual([]);
+});
+
+test('OAuth callback drafts guard outer dismissal without acknowledgement', async ({ page }) => {
+  const provider = { id: 'oauth-fixture', name: 'OAuth fixture', baseUrl: 'https://provider.example.test/v1', dialect: 'openrouter',
+    headerNames: [], configured: false, modelCount: 0, createdAt: '', updatedAt: '', revision: 'a'.repeat(64) };
+  const api = await installMockApi(page, { customProviders: [provider] });
+  const flow = { id: 'fixture-draft-flow', provider: provider.id, state: 'pending', userCode: '', verificationUri: 'https://oauth.example.test/authorize',
+    authorizationUrl: 'https://oauth.example.test/authorize', expiresAt: '2030-01-01T00:00:00.000Z' };
+  const started: unknown[] = [], acknowledgements: unknown[] = [];
+  await page.route('**/api/provider-registry/auth/oauth-fixture/oauth', async route => {
+    started.push(route.request().postDataJSON()); await route.fulfill({ status: 201, json: flow });
+  });
+  await page.route('**/api/provider-registry/auth/oauth/fixture-draft-flow', route => route.fulfill({ json: route.request().method() === 'GET' ? flow : { state: 'cancelled' } }));
+  await page.route('**/api/provider-registry/auth/oauth/fixture-draft-flow/redirect', async route => {
+    acknowledgements.push(route.request().postDataJSON()); await route.fulfill({ status: 400, json: { error: 'Unexpected acknowledgement' } });
+  });
+  await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', provider.id);
+  await page.locator('.provider-context-detail').getByRole('button', { name: 'Browser sign-in (PKCE)', exact: true }).click();
+  const callback = page.locator('.provider-oauth-paste input');
+  const value = 'http://127.0.0.1:123/oauth/callback?code=SYNTHETIC_UNSUBMITTED_OAUTH_DRAFT&state=fixture';
+  await callback.fill(value); await page.locator('.settings-dialog-header button').click();
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(callback).toHaveValue(value); expect(started).toEqual([{ method: 'browser' }]); expect(acknowledgements).toEqual([]);
+  expect(api.requests.filter(request => request.path.includes('/redirect'))).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_UNSUBMITTED_OAUTH_DRAFT');
+  await callback.fill(''); await page.locator('.settings-dialog-header button').click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0); expect(acknowledgements).toEqual([]);
 });

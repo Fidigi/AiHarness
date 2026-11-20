@@ -14,6 +14,7 @@ import { useSessionStore } from '../store/session-store';
 import { useSettingsScope } from '../store/use-settings-scope';
 import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { subagentSettingsMessage } from './subagent-settings-messages';
+import { useSettingsDraft } from './settings-drafts';
 
 interface EditorValue {
   /** Existing profile id; present means update mode. */
@@ -109,6 +110,9 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
+  const editorBaseline = useRef<EditorValue | undefined>(undefined);
+  useSettingsDraft(Boolean(editor && (Object.keys(editor) as Array<keyof EditorValue>)
+    .some(key => editor[key] !== editorBaseline.current?.[key])));
   const editorRef = useRef<HTMLFormElement>(null);
   useFocusTrap(presented && Boolean(editor), editorRef, () => setEditor(undefined));
   const scope = [
@@ -207,7 +211,9 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
           <span>{t('subagents.filter')}</span>
           <input type="search" value={filter} onChange={event => setFilter(event.target.value)} />
         </label>
-        <button type="button" disabled={loading} onClick={() => setEditor(editorValue())}>{t('subagents.create')}</button>
+        <button type="button" disabled={loading} onClick={() => {
+          const next = editorValue(); editorBaseline.current = next; setEditor(next);
+        }}>{t('subagents.create')}</button>
         <button type="button" disabled={loading} onClick={() => void load()}>{t('common.refresh')}</button>
       </div>
       {loading && <p role="status">{t('common.loading')}…</p>}
@@ -301,7 +307,9 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
                 aria-label={t('subagents.toggleProfile', { profile: profile.name })}
                 onChange={event => { selectProfile(profile); void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope)); }} />
                 {t('subagents.profileEnabled')}</label>
-              <button type="button" disabled={loading} onClick={() => { selectProfile(profile); setEditor(editorValue(profile)); }}>{t('common.edit')}</button>
+              <button type="button" disabled={loading} onClick={() => {
+                selectProfile(profile); const next = editorValue(profile); editorBaseline.current = next; setEditor(next);
+              }}>{t('common.edit')}</button>
               <button type="button" disabled={loading}
                 onClick={() => { selectProfile(profile); void apply(duplicateSubagentProfile(profile.id, ...scope)); }}>{t('subagents.duplicate')}</button>
               {!profile.builtIn && <button type="button" disabled={loading}

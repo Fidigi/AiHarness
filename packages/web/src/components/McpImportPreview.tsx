@@ -21,6 +21,7 @@ import {
   type McpReplaceTarget,
 } from '../services/mcp-api';
 import { mcpImportMessage, type McpImportMessageKey } from './mcp-import-messages';
+import { useSettingsDraft } from './settings-drafts';
 
 const SOURCE_KEYS: Record<McpImportSource, McpImportMessageKey> = {
   url: 'settings.mcp.import.source.url',
@@ -271,6 +272,7 @@ export function McpImportPreview({
   const [loading, setLoading] = useState(false);
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState<ImportDraft>();
+  useSettingsDraft(text !== '' || Boolean(draft));
   const draftOpen = Boolean(draft);
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);

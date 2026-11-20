@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { providerSettingsMessage } from './provider-settings-messages';
+import { useSettingsDraft } from './settings-drafts';
 import './provider-lifecycle.css';
 
 export interface OAuthPastePanelProps {
@@ -38,6 +39,7 @@ export function OAuthPasteInput({ busy = false, label, placeholder, submitLabel,
 }) {
   const id = useId();
   const [redirect, setRedirect] = useState('');
+  useSettingsDraft(redirect !== '');
   const submit = () => {
     if (busy || !redirect.trim()) return;
     const value = redirect.trim();
