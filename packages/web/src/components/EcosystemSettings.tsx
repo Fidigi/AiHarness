@@ -73,6 +73,8 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const [statuses, setStatuses] = useState<ProviderAuthStatus[]>([]);
   const [providers, setProviders] = useState<CustomProviderDefinition[]>([]);
+  const editChoices = useRef(providers);
+  useLayoutEffect(() => { editChoices.current = providers; }, [providers]);
   const [editing, setEditing] = useState<string>();
   const [oauthFlow, setOauthFlow] = useState<ProviderOAuthFlow>();
   const [oauthStarting, setOauthStarting] = useState(false);
@@ -449,9 +451,15 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
             {['openrouter', 'anthropic'].includes(provider.dialect) && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'browser'); }}>{providerSettingsMessage(locale, 'browser')}</button>}
             {provider.dialect === 'anthropic' && <button type="button" disabled={oauthStarting} onClick={() => { void login(provider.id, 'copy-code'); }}>{providerSettingsMessage(locale, 'copyCode')}</button>}
             <button type="button" onClick={() => {
-              setEditing(provider.id);
-              const next = { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
-              formBaseline.current = next; setForm(next);
+              const id = provider.id;
+              guardFormDiscard(() => {
+                const targets = editChoices.current.filter(choice => choice.id === id);
+                if (targets.length !== 1) return;
+                const provider = targets[0]!;
+                setEditing(provider.id);
+                const next = { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
+                formBaseline.current = next; setForm(next);
+              });
             }}>{t('common.edit')}</button>
             <button type="button" disabled={!provider.configured} onClick={async () => {
               const result = await testProviderConnection(provider.id);
@@ -490,6 +498,8 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   const workspaceCwd = useSessionStore(state => state.workspace?.cwd);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const [models, setModels] = useState<CustomModelDefinition[]>([]);
+  const editChoices = useRef(models);
+  useLayoutEffect(() => { editChoices.current = models; }, [models]);
   const [loaded, setLoaded] = useState(false);
   const [selectedKey, setSelectedKey] = useState(() => readSettingsNavigation(workspaceCwd).positions['custom-models']?.selection);
   const [overview, setOverview] = useState(!selectedKey);
@@ -590,18 +600,24 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         <div><strong>{model.name}</strong><code>{model.key}</code><small>{model.contextWindow ?? '—'} context · {model.maxOutputTokens ?? '—'} max output</small></div>
         <div>
           <button type="button" onClick={() => {
-            setEditing(model.key);
-            const next = {
-              provider: model.provider, id: model.id, name: model.name,
-              reasoning: model.capabilities.reasoning, imageInput: model.capabilities.imageInput, toolCalls: model.capabilities.toolCalls,
-              contextWindow: model.contextWindow ? String(model.contextWindow) : '', maxOutputTokens: model.maxOutputTokens ? String(model.maxOutputTokens) : '',
-              inputPrice: model.pricing?.inputPerMillion === undefined ? '' : String(model.pricing.inputPerMillion),
-              outputPrice: model.pricing?.outputPerMillion === undefined ? '' : String(model.pricing.outputPerMillion),
-              cacheReadPrice: model.pricing?.cacheReadPerMillion === undefined ? '' : String(model.pricing.cacheReadPerMillion),
-              cacheWritePrice: model.pricing?.cacheWritePerMillion === undefined ? '' : String(model.pricing.cacheWritePerMillion),
-              compatibility: JSON.stringify(model.compatibility ?? {}, null, 2),
-            };
-            formBaseline.current = next; setForm(next);
+            const key = model.key;
+            guardFormDiscard(() => {
+              const targets = editChoices.current.filter(choice => choice.key === key);
+              if (targets.length !== 1) return;
+              const model = targets[0]!;
+              setEditing(model.key);
+              const next = {
+                provider: model.provider, id: model.id, name: model.name,
+                reasoning: model.capabilities.reasoning, imageInput: model.capabilities.imageInput, toolCalls: model.capabilities.toolCalls,
+                contextWindow: model.contextWindow ? String(model.contextWindow) : '', maxOutputTokens: model.maxOutputTokens ? String(model.maxOutputTokens) : '',
+                inputPrice: model.pricing?.inputPerMillion === undefined ? '' : String(model.pricing.inputPerMillion),
+                outputPrice: model.pricing?.outputPerMillion === undefined ? '' : String(model.pricing.outputPerMillion),
+                cacheReadPrice: model.pricing?.cacheReadPerMillion === undefined ? '' : String(model.pricing.cacheReadPerMillion),
+                cacheWritePrice: model.pricing?.cacheWritePerMillion === undefined ? '' : String(model.pricing.cacheWritePerMillion),
+                compatibility: JSON.stringify(model.compatibility ?? {}, null, 2),
+              };
+              formBaseline.current = next; setForm(next);
+            });
           }}>{t('common.edit')}</button>
           <button type="button" onClick={async () => {
             const result = await testCustomModel(model.key);

@@ -266,6 +266,10 @@ test('Provider editor drafts guard dismissal without retargeting the original sa
   await form.getByLabel('Name', { exact: true }).fill('Edited fixture A');
   await form.getByLabel('API key', { exact: true }).fill('SYNTHETIC_PROVIDER_EDITOR_DRAFT');
   await selectProviderConnection(page, 'custom', 'fixture-b');
+  await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(form.getByLabel('ID', { exact: true })).toHaveValue('fixture-a');
+  await expect(form.getByLabel('API key', { exact: true })).toHaveValue('SYNTHETIC_PROVIDER_EDITOR_DRAFT');
   await form.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(form.getByLabel('ID', { exact: true })).toHaveValue('fixture-a');
@@ -285,6 +289,17 @@ test('Provider editor drafts guard dismissal without retargeting the original sa
   await page.goto('/settings#provider-lifecycle'); await selectGeneralSettings(page, 'behavior');
   const peer = page.locator('#defaults').getByLabel('Model', { exact: true });
   await peer.fill('provider-cancel-peer-default');
+  await selectProviderConnection(page, 'custom', 'fixture-a');
+  await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_RETARGET_NOT_SAVED');
+  await selectProviderConnection(page, 'custom', 'fixture-b');
+  await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(form.getByLabel('ID', { exact: true })).toHaveValue('fixture-b');
+  await expect(form.getByLabel('Name', { exact: true })).toHaveValue('Fixture B');
+  await expect(form.getByLabel('API key', { exact: true })).toHaveValue('');
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toHaveCount(0);
+  await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
   await selectProviderConnection(page, 'custom', 'fixture-a');
   await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
   await form.getByLabel('API key', { exact: true }).fill('SYNTHETIC_PROVIDER_CANCEL_NOT_SAVED');
@@ -322,6 +337,10 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
   await editor.locator('summary').focus(); await editor.locator('summary').click();
   await editor.getByLabel('Name', { exact: true }).fill('Edited original model');
   await selectCustomModel(page, 'azure:second');
+  await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('first');
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Edited original model');
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('first');
@@ -345,6 +364,18 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
   await selectCustomModel(page, 'openai:first');
   await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
   if (await editor.getAttribute('open') === null) await editor.locator('summary').click();
+  await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_RETARGET_NOT_SAVED');
+  await selectCustomModel(page, 'azure:second');
+  await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('second');
+  await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('azure');
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('azure:second');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toHaveCount(0);
+  await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+  await selectCustomModel(page, 'openai:first');
+  await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+  if (await editor.getAttribute('open') === null) await editor.locator('summary').click();
   await editor.getByLabel('Name', { exact: true }).fill('Discard this model draft');
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
   await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
@@ -355,6 +386,7 @@ test('Custom model editor drafts guard mobile dismissal without saving the brows
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
   expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(1);
   expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_RETARGET_NOT_SAVED');
 });
 
 test('Plugin install drafts guard mobile dismissal and clear only after canonical installation', async ({ page }) => {
