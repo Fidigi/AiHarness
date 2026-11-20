@@ -1077,6 +1077,14 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef 
   useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
   useFocusTrap(!suspended && confirmClose, confirmation, () => setPendingDiscard(undefined), discardReturn);
   useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
+  useLayoutEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!drafts.current.size) return;
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, []);
   return createPortal(<div className="modal-backdrop settings-backdrop">
     <section className="settings-dialog" ref={root} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} inert={suspended || undefined}>
       <header className="settings-dialog-header" inert={confirmClose || undefined}><h2 id="settings-title">{t('settings.title')}</h2>

@@ -10,6 +10,14 @@ export async function closeSettings(page: Page, { discardDrafts = false }: { dis
   await expect(page.locator('.settings-dialog')).toHaveCount(0);
 }
 
+/** Explicitly admit a full-document reload that intentionally retires dirty Settings. */
+export async function reloadSettingsDiscardingDrafts(page: Page): Promise<void> {
+  await Promise.all([
+    page.waitForEvent('dialog').then(async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.accept(); }),
+    page.reload(),
+  ]);
+}
+
 const names = {
   general: /^(General|Général)$/u,
   models: /^(Models|Modèles)$/u,

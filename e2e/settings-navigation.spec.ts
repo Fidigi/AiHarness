@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectRegistryEntry, selectSettingsCategory } from './fixtures/settings-navigation';
+import { reloadSettingsDiscardingDrafts, selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectRegistryEntry, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
@@ -86,7 +86,7 @@ for (const scenario of [
   const memory = JSON.parse(await page.evaluate(key => localStorage.getItem(key)!, key));
   expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions.providers)
     .toEqual({ group: 'builtin', selection: 'anthropic' });
-  await page.reload();
+  await reloadSettingsDiscardingDrafts(page);
   await expect(secret).toHaveAccessibleName(/Anthropic/u);
   await expect(secret).toHaveValue('');
   await expect(active).toHaveValue(before);
@@ -211,7 +211,7 @@ for (const scenario of [
   await expect(page.locator('#model')).toBeVisible();
   await page.goForward();
   await expect(page.locator('#custom-models')).toBeVisible();
-  await page.reload();
+  await reloadSettingsDiscardingDrafts(page);
   await expect(page.locator('#custom-models')).toBeVisible();
   await expect(page.locator('#providers')).toBeHidden();
 });

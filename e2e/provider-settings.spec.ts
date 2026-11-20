@@ -4,7 +4,7 @@ import { expectContrast } from './fixtures/contrast';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { installMockApi } from './fixtures/mock-api';
-import { selectGeneralSettings, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
+import { reloadSettingsDiscardingDrafts, selectGeneralSettings, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
 
 async function fixture(page: Page) {
   await page.route('**/provider-settings-fixture', route => route.fulfill({ contentType: 'text/html', body:
@@ -231,7 +231,7 @@ for (const scenario of [
   const memory = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
   expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions['provider-lifecycle'])
     .toEqual({ group: 'custom', selection: 'acme' });
-  await page.reload();
+  await reloadSettingsDiscardingDrafts(page);
   await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'acme');
   await expect(secret).toHaveValue('');
   await expect(section.locator('.provider-oauth-paste')).toHaveCount(0);

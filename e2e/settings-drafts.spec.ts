@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget';
 import { expectContrast } from './fixtures/contrast';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { selectCustomModel, selectGeneralSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile } from './fixtures/settings-navigation';
+import { selectCustomModel, selectGeneralSettings, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile } from './fixtures/settings-navigation';
 
 for (const scenario of [
   { locale: 'en', width: 1280 },
@@ -103,6 +103,43 @@ for (const scenario of [
   expect(nativePrompts).toEqual([]);
 });
 
+test('Settings document departure protects dirty owners without saving or persisting drafts', async ({ page }) => {
+  const api = await installMockApi(page);
+  const dialogs: string[] = [];
+  let admit = false;
+  page.on('dialog', async dialog => { dialogs.push(dialog.type()); if (admit) await dialog.accept(); else await dialog.dismiss(); });
+  const reload = async () => {
+    const decision = page.waitForEvent('dialog');
+    await page.evaluate(() => location.reload()); await decision;
+  };
+  await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+  const credential = page.locator('#providers .credential-context-detail input[type="password"]:visible');
+  const credentialBaseline = await credential.inputValue();
+  await credential.fill('SYNTHETIC_DOCUMENT_DRAFT_SECRET');
+  await selectModelSettings(page, 'custom-models');
+  const editor = page.locator('#custom-models .custom-resource-editor'); await editor.locator('summary').click();
+  const model = editor.getByLabel('Name', { exact: true });
+  await expect(model).toHaveValue(''); await model.fill('SYNTHETIC_DOCUMENT_DRAFT_MODEL');
+  await reload();
+  await expect(model).toHaveValue('SYNTHETIC_DOCUMENT_DRAFT_MODEL'); expect(dialogs).toEqual(['beforeunload']);
+  const closing = page.waitForEvent('dialog'); await page.close({ runBeforeUnload: true }); await closing;
+  expect(page.isClosed()).toBe(false); expect(dialogs).toEqual(['beforeunload', 'beforeunload']);
+  await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue('SYNTHETIC_DOCUMENT_DRAFT_SECRET');
+  await credential.fill(credentialBaseline); await selectModelSettings(page, 'custom-models');
+  await reload();
+  await expect(model).toHaveValue('SYNTHETIC_DOCUMENT_DRAFT_MODEL'); expect(dialogs).toEqual(['beforeunload', 'beforeunload', 'beforeunload']);
+  await model.fill(''); await page.reload();
+  await expect(model).toHaveValue(''); expect(dialogs).toHaveLength(3);
+  await selectProviderCredential(page, 'OpenAI'); await credential.fill('SYNTHETIC_DOCUMENT_ADMITTED_DISCARD');
+  admit = true; await page.reload();
+  await expect(credential).toHaveValue(''); expect(dialogs).toEqual(['beforeunload', 'beforeunload', 'beforeunload', 'beforeunload']);
+  await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  await page.reload(); expect(dialogs).toHaveLength(4);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_DOCUMENT_');
+});
+
 test('Pending palette Escape does not ask to discard Settings drafts', async ({ page }) => {
   const target = mockSession('palette-draft-target', 'Saved palette target');
   const api = await installMockApi(page, { sessions: [target] });
@@ -201,6 +238,7 @@ test('External trust withdrawal retires dirty forms even while discard confirmat
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
   await expect(model).toHaveValue('saved-project-model');
   await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue(initial);
+  await page.reload(); await expect(credential).toHaveValue(initial);
   await page.locator('.settings-dialog-header button').click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0);
   expect(nativePrompts).toEqual([]);
