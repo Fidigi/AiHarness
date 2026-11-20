@@ -141,6 +141,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
       || profile.description.toLocaleLowerCase().includes(query)
       || profile.kind.includes(query));
   }, [configuration?.profiles, filter]);
+  const editChoices = useRef(visible);
+  useLayoutEffect(() => { editChoices.current = visible; }, [visible]);
   const matches = selectedId ? visible.filter(profile => profile.id === selectedId) : [];
   const selected = selectedId ? matches.length === 1 ? matches[0] : undefined : visible[0];
 
@@ -314,8 +316,14 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
                 onChange={event => { selectProfile(profile); void apply(updateSubagentProfile(profile.id, { enabled: event.target.checked }, ...scope)); }} />
                 {t('subagents.profileEnabled')}</label>
               <button type="button" disabled={loading} onClick={event => {
-                editorInvoker.current = event.currentTarget;
-                selectProfile(profile); const next = editorValue(profile); editorBaseline.current = next; setEditor(next);
+                const id = profile.id, invoker = event.currentTarget;
+                guardEditorDiscard(() => {
+                  const targets = editChoices.current.filter(choice => choice.id === id);
+                  if (targets.length !== 1) return;
+                  const target = targets[0]!;
+                  editorInvoker.current = invoker;
+                  selectProfile(target); const next = editorValue(target); editorBaseline.current = next; setEditor(next);
+                });
               }}>{t('common.edit')}</button>
               <button type="button" disabled={loading}
                 onClick={() => { selectProfile(profile); void apply(duplicateSubagentProfile(profile.id, ...scope)); }}>{t('subagents.duplicate')}</button>

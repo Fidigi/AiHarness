@@ -420,8 +420,13 @@ test('Child profile editor drafts survive declined outer dismissal without chang
   await page.goto('/settings#subagents'); await selectSubagentProfile(page, 'Explore');
   await section.getByRole('article', { name: 'Explore', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
   await editor.getByLabel('Name', { exact: true }).fill('Edited profile draft');
-  await selectGeneralSettings(page, 'appearance'); await page.locator('.settings-dialog-header button').click();
   const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await selectSubagentProfile(page, 'Plan');
+  await section.getByRole('article', { name: 'Plan', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(editor.getByLabel('Profile ID', { exact: true })).toHaveValue('explore');
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Edited profile draft');
+  await selectGeneralSettings(page, 'appearance'); await page.locator('.settings-dialog-header button').click();
   await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
   await selectSettingsCategory(page, 'subagents'); await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Edited profile draft');
   expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toEqual([]);
@@ -432,6 +437,20 @@ test('Child profile editor drafts survive declined outer dismissal without chang
       maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', projectId: 'workspace-e2e', scope: 'project' }]);
   await page.locator('.settings-dialog-header button').click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  await page.goto('/settings#subagents'); await selectSubagentProfile(page, 'Edited profile draft');
+  await section.getByRole('article', { name: 'Edited profile draft', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.getByLabel('Name', { exact: true }).fill('Profile draft to discard');
+  await selectSubagentProfile(page, 'Plan');
+  await section.getByRole('article', { name: 'Plan', exact: true }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(editor.getByLabel('Profile ID', { exact: true })).toHaveValue('plan');
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Plan');
+  await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('Plan the delegated task.');
+  await expect(section.locator('.subagent-scope-control select')).toHaveValue('project');
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(editor).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(1);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('Profile draft to discard');
 });
 
 test('Collapsed provider rename drafts still guard dismissal without renaming', async ({ page }) => {
