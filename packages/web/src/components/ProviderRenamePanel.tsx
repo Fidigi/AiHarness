@@ -3,12 +3,13 @@ import { useI18n } from '../hooks/useI18n';
 import { isRenameableProvider, renameCustomProvider, type ProviderRenameResult, type RenameableProvider } from '../services/provider-lifecycle';
 import { providerSettingsMessage, type ProviderSettingsMessage } from './provider-settings-messages';
 import type { ProviderRenameCapability } from '../services/api';
-import { useSettingsDraft } from './settings-drafts';
+import { useSettingsDraft, type SettingsDraftListener } from './settings-drafts';
 import './provider-lifecycle.css';
 
 export interface ProviderRenamePanelProps {
   provider: RenameableProvider;
   disabled?: boolean;
+  onDraftChange?: SettingsDraftListener;
   capability?: ProviderRenameCapability;
   disabledReason?: ProviderSettingsMessage;
   /** Reload providers, auth status, catalogue, scoped defaults and effective config. */
@@ -26,7 +27,7 @@ export function ProviderRenamePanel(props: ProviderRenamePanelProps) {
     disabled={props.disabled || !supported}
     disabledReason={props.disabledReason ?? (!supported ? 'capabilityUnknown' : undefined)} />;
 }
-function ProviderRenameOperation({ provider, disabled = false, disabledReason, reconcile, onRenamed, onOutcome }: ProviderRenamePanelProps) {
+function ProviderRenameOperation({ provider, disabled = false, disabledReason, reconcile, onRenamed, onOutcome, onDraftChange }: ProviderRenamePanelProps) {
   const { locale } = useI18n();
   const inputId = useId();
   const mounted = useRef(true);
@@ -36,7 +37,7 @@ function ProviderRenameOperation({ provider, disabled = false, disabledReason, r
   }, []);
   const [open, setOpen] = useState(false);
   const [newId, setNewId] = useState(provider.id);
-  useSettingsDraft(newId !== provider.id);
+  useSettingsDraft(newId !== provider.id, onDraftChange);
   const [busy, setBusy] = useState(false);
   const [needsReload, setNeedsReload] = useState(false);
   const [feedback, setFeedback] = useState<ProviderSettingsMessage>();

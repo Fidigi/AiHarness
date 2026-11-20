@@ -4,14 +4,16 @@ import type { Locale } from '../i18n/types';
 /** Only dirty flags live here; draft values remain in their owning forms. */
 export const SettingsDraftContext = createContext<Set<symbol> | null>(null);
 
-export function useSettingsDraft(dirty: boolean): void {
+export type SettingsDraftListener = (owner: symbol, dirty: boolean) => void;
+
+export function useSettingsDraft(dirty: boolean, onDraftChange?: SettingsDraftListener): void {
   const drafts = useContext(SettingsDraftContext);
   useLayoutEffect(() => {
-    if (!dirty || !drafts) return;
+    if (!dirty || !drafts && !onDraftChange) return;
     const entry = Symbol();
-    drafts.add(entry);
-    return () => { drafts.delete(entry); };
-  }, [dirty, drafts]);
+    drafts?.add(entry); onDraftChange?.(entry, true);
+    return () => { drafts?.delete(entry); onDraftChange?.(entry, false); };
+  }, [dirty, drafts, onDraftChange]);
 }
 
 export const SettingsDiscardContext = createContext<{

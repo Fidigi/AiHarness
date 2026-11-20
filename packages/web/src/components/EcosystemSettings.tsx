@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type {
   CustomModelDefinition,
   CustomProviderDefinition,
@@ -97,13 +97,22 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   useLayoutEffect(() => { editorState.current = { editing, form }; }, [editing, form]);
   const formBaseline = useRef(form);
   const editorSummary = useRef<HTMLElement>(null);
-  const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
-    .some(key => form[key] !== formBaseline.current[key]), editorSummary);
+  const formDirty = (Object.keys(form) as Array<keyof typeof form>).some(key => form[key] !== formBaseline.current[key]);
+  const guardFormDiscard = useSettingsDraftGuard(formDirty, editorSummary);
+  const [childDrafts, setChildDrafts] = useState<Set<symbol>>(() => new Set());
+  const reportChildDraft = useCallback((owner: symbol, dirty: boolean) => {
+    setChildDrafts(previous => {
+      const next = new Set(previous);
+      if (dirty) next.add(owner); else next.delete(owner);
+      return next;
+    });
+  }, []);
+  const guardContextDiscard = useSettingsDraftGuard(formDirty || childDrafts.size > 0, editorSummary);
   useLayoutEffect(() => {
     if (!discardFormRef) return;
-    discardFormRef.current = guardFormDiscard;
-    return () => { if (discardFormRef.current === guardFormDiscard) discardFormRef.current = null; };
-  }, [discardFormRef, guardFormDiscard]);
+    discardFormRef.current = guardContextDiscard;
+    return () => { if (discardFormRef.current === guardContextDiscard) discardFormRef.current = null; };
+  }, [discardFormRef, guardContextDiscard]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [position, setPosition] = useState(() => readSettingsNavigation(origin.workspace?.cwd).positions['provider-lifecycle']);
@@ -385,7 +394,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       {oauthFlow.state === 'pending' ? <>
         {oauthFlow.authorizationUrl ? <>
           <p className="settings-help">{providerSettingsMessage(locale, oauthOperation.current?.method === 'copy-code' ? 'copyCodeHelp' : 'browserHelp')}</p>
-          <OAuthPastePanel active operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl} inputKind={oauthOperation.current?.method === 'copy-code' ? 'code' : 'redirect'}
+          <OAuthPastePanel active onDraftChange={reportChildDraft} operationId={oauthFlow.id} authorizationUrl={oauthFlow.authorizationUrl} inputKind={oauthOperation.current?.method === 'copy-code' ? 'code' : 'redirect'}
             onPaste={completeOAuth} onCancel={() => { retireOAuth(); setOauthFlow(undefined); }} />
         </> : <>
         <p>{t('settings.oauth.code')}: <code>{oauthFlow.userCode}</code></p>
@@ -461,7 +470,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
           hidden={selected?.group !== 'custom' || selected.id !== provider.id || mobile && overview}
           onFocusCapture={() => captureProviderChoice('custom', provider.id)} onClickCapture={() => captureProviderChoice('custom', provider.id)}>
           <div><strong>{provider.name}</strong><code>{provider.id}</code><small>{provider.dialect} · {provider.baseUrl}</small></div>
-          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} reconcile={outcome => reconcile(outcome, true, provider.id, navigationGeneration)} capability={renameCapability}
+          {isRenameableProvider(provider) ? <ProviderRenamePanel provider={provider} onDraftChange={reportChildDraft} reconcile={outcome => reconcile(outcome, true, provider.id, navigationGeneration)} capability={renameCapability}
             disabled={busy || Boolean(editing) || oauthFlow?.state === 'pending' || !renameCapability.supported}
             disabledReason={!renameCapability.supported ? renameCapability.reason === 'exclusive-host-required' ? 'disabled' : 'capabilityUnknown' : undefined} />
             : null}

@@ -317,6 +317,8 @@ test('actual Settings reconcile uncertain failure without applying a late rename
   await requestEntered;
   await selectModelSettings(page, 'providers');
   await page.getByLabel('Select the AI Provider').selectOption('anthropic');
+  const discard = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await expect(discard).toBeVisible(); await discard.getByRole('button', { name: 'Discard edits', exact: true }).click();
   const canonicalRead = page.waitForResponse(response => new URL(response.url()).pathname === '/api/providers');
   release();
   await canonicalRead;

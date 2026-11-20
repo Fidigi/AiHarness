@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { providerSettingsMessage } from './provider-settings-messages';
-import { useSettingsDraft } from './settings-drafts';
+import { useSettingsDraft, type SettingsDraftListener } from './settings-drafts';
 import './provider-lifecycle.css';
 
 export interface OAuthPastePanelProps {
@@ -9,6 +9,7 @@ export interface OAuthPastePanelProps {
   active: boolean;
   operationId: string;
   busy?: boolean;
+  onDraftChange?: SettingsDraftListener;
   authorizationUrl?: string;
   inputKind?: 'redirect' | 'code';
   onPaste: (redirectUrl: string) => void | Promise<void>;
@@ -29,17 +30,18 @@ export function safeOAuthAuthorizationUrl(value: string | undefined): string | u
  * ownership. Submission is the explicit acknowledgement; no paste auto-submit,
  * focus effects, clipboard reads, storage, arbitrary HTML or raw secret fields.
  * Custom labels/fragment layout preserve the existing MCP presentation. */
-export function OAuthPasteInput({ busy = false, label, placeholder, submitLabel, onPaste, renderControls }: {
+export function OAuthPasteInput({ busy = false, label, placeholder, submitLabel, onPaste, renderControls, onDraftChange }: {
   busy?: boolean;
   label: string;
   placeholder: string;
   submitLabel: string;
   onPaste: (redirect: string) => void | Promise<void>;
+  onDraftChange?: SettingsDraftListener;
   renderControls?: (controls: { redirect: string; setRedirect(value: string): void; submit(value: string): void }) => ReactNode;
 }) {
   const id = useId();
   const [redirect, setRedirect] = useState('');
-  useSettingsDraft(redirect !== '');
+  useSettingsDraft(redirect !== '', onDraftChange);
   const submit = () => {
     if (busy || !redirect.trim()) return;
     const value = redirect.trim();
@@ -70,7 +72,7 @@ export function OAuthPastePanel(props: OAuthPastePanelProps) {
   return <ActiveOAuthPastePanel key={props.operationId} {...props} />;
 }
 
-function ActiveOAuthPastePanel({ busy = false, authorizationUrl, inputKind = 'redirect', onPaste, onCancel }: OAuthPastePanelProps) {
+function ActiveOAuthPastePanel({ busy = false, authorizationUrl, inputKind = 'redirect', onPaste, onCancel, onDraftChange }: OAuthPastePanelProps) {
   const { locale } = useI18n();
   const [pending, setPending] = useState(false);
   const [pasteGeneration, setPasteGeneration] = useState(0);
@@ -79,7 +81,7 @@ function ActiveOAuthPastePanel({ busy = false, authorizationUrl, inputKind = 're
   const link = safeOAuthAuthorizationUrl(authorizationUrl);
   return <div className="provider-oauth-paste">
     {link && <a href={link} target="_blank" rel="noopener noreferrer">{message('open')}</a>}
-    <OAuthPasteInput key={pasteGeneration} busy={busy || pending} label={message(inputKind === 'code' ? 'codePaste' : 'paste')} placeholder={message(inputKind === 'code' ? 'codePlaceholder' : 'placeholder')}
+    <OAuthPasteInput key={pasteGeneration} onDraftChange={onDraftChange} busy={busy || pending} label={message(inputKind === 'code' ? 'codePaste' : 'paste')} placeholder={message(inputKind === 'code' ? 'codePlaceholder' : 'placeholder')}
       submitLabel={message(inputKind === 'code' ? 'codeSubmit' : 'submit')} onPaste={async value => {
         setPending(true); setFailed(false);
         try { await onPaste(value); } catch { setFailed(true); } finally { setPending(false); }
