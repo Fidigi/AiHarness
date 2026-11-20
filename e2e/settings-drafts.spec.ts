@@ -1062,6 +1062,53 @@ test('Custom model creation drafts bind to the provider-qualified reply without 
     expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
     expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_CREATE_');
   } finally { releaseEditor(); }
+
+  await page.unroute('**/api/provider-registry/models');
+  let releaseReset!: () => void, enteredReset!: () => void;
+  const heldReset = new Promise<void>(resolve => { releaseReset = resolve; });
+  const pendingReset = new Promise<void>(resolve => { enteredReset = resolve; });
+  await page.route('**/api/provider-registry/models', async route => {
+    if (route.request().method() === 'POST' && route.request().postDataJSON().id === 'created-before-reset') { enteredReset(); await heldReset; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#custom-models'); await editor.locator('summary').click();
+    await editor.getByLabel('Provider', { exact: true }).fill('openai'); await editor.getByLabel('ID', { exact: true }).fill('created-before-reset');
+    await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_BEFORE_RESET');
+    await editor.getByRole('checkbox', { name: 'reasoning', exact: true }).check();
+    await editor.getByLabel('Context window', { exact: true }).fill('64000');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pendingReset;
+    await selectCustomModel(page, 'azure:created-fixture');
+    await section.locator('.custom-model-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('created-fixture');
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toHaveCount(0);
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+    await editor.getByLabel('Provider', { exact: true }).fill('azure'); await editor.getByLabel('ID', { exact: true }).fill('created-after-reset');
+    await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_AFTER_RESET');
+    const readback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+    releaseReset(); await readback;
+    await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('azure');
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('created-after-reset');
+    await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_MODEL_CREATE_AFTER_RESET');
+    await expect(editor.locator('summary')).toHaveText('Create a custom model');
+    await expect(editor.getByRole('checkbox', { name: 'reasoning', exact: true })).not.toBeChecked();
+    await expect(editor.getByLabel('Context window', { exact: true })).toHaveValue('');
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(writes.length + 1);
+    await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    const nextReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await nextReadback;
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+    writes.push({ method: 'POST', path: '/api/provider-registry/models', body: { provider: 'openai', id: 'created-before-reset', name: 'SYNTHETIC_MODEL_CREATE_BEFORE_RESET',
+      capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, pricing: {}, compatibility: {} } },
+    { method: 'POST', path: '/api/provider-registry/models', body: { provider: 'azure', id: 'created-after-reset', name: 'SYNTHETIC_MODEL_CREATE_AFTER_RESET',
+      capabilities: { reasoning: false, imageInput: false, toolCalls: true }, pricing: {}, compatibility: {} } });
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+      .map(({ method, path, body }) => ({ method, path, body }))).toEqual(writes);
+    await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+    expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_CREATE_');
+  } finally { releaseReset(); }
 });
 
 test('Plugin install drafts guard mobile dismissal and clear only after canonical installation', async ({ page }) => {
