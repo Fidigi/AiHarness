@@ -214,8 +214,11 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
           <input type="search" value={filter} onChange={event => setFilter(event.target.value)} />
         </label>
         <button type="button" disabled={loading} onClick={event => {
-          editorInvoker.current = event.currentTarget;
-          const next = editorValue(); editorBaseline.current = next; setEditor(next);
+          const invoker = event.currentTarget;
+          guardEditorDiscard(() => {
+            editorInvoker.current = invoker;
+            const next = editorValue(); editorBaseline.current = next; setEditor(next);
+          });
         }}>{t('subagents.create')}</button>
         <button type="button" disabled={loading} onClick={() => void load()}>{t('common.refresh')}</button>
       </div>
