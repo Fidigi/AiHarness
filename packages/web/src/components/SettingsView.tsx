@@ -278,6 +278,8 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   });
 
   const apiKeyBaseline = useRef(apiKeyInputs);
+  const apiKeyState = useRef(apiKeyInputs);
+  useLayoutEffect(() => { apiKeyState.current = apiKeyInputs; }, [apiKeyInputs]);
   useSettingsDraft(Object.entries(apiKeyInputs).some(([type, value]) => value !== (apiKeyBaseline.current[type] ?? ''))
     || authToken !== authTokenBaseline.current);
 
@@ -313,10 +315,11 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
     if (key && !key.includes('•')) {
       const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
       if (result.success) {
+        const current = apiKeyState.current[type] === key;
         updateApiKey(type as ProviderType, 'configured');
         apiKeyBaseline.current = { ...apiKeyBaseline.current, [type]: '••••••••' };
-        setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
-        setSaveStatus(previous => ({ ...previous, [type]: {
+        setApikeyInputs(previous => previous[type] === key ? { ...previous, [type]: '••••••••' } : { ...previous });
+        if (current) setSaveStatus(previous => ({ ...previous, [type]: {
           key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
         } }));
       } else {

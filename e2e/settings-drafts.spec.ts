@@ -259,6 +259,37 @@ test('Pending and failed credential writes never report the draft clean', async 
     expect(writes).toEqual([{ type: 'openai', apiKey: 'SYNTHETIC_FAILED_CREDENTIAL_EDIT' }]);
     expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST')).toEqual([]);
   } finally { release(); }
+  await page.unroute('**/api/config');
+  const scenarios = [
+    { saved: 'SYNTHETIC_EARLY_KEY_CLEARED', later: '' },
+    { saved: 'SYNTHETIC_EARLY_KEY_CHANGED', later: 'SYNTHETIC_LATER_KEY_NOT_SAVED' },
+  ];
+  for (const scenario of scenarios) {
+    let releaseSave!: () => void, enteredSave!: () => void;
+    const heldSave = new Promise<void>(resolve => { releaseSave = resolve; });
+    const pendingSave = new Promise<void>(resolve => { enteredSave = resolve; });
+    await page.route('**/api/config', async route => {
+      if (route.request().method() === 'POST') { enteredSave(); await heldSave; }
+      await route.fallback();
+    });
+    try {
+      await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+      const detail = page.locator('#providers .credential-context-detail'), credential = detail.locator('input[type="password"]:visible');
+      await credential.fill(scenario.saved); await detail.getByRole('button', { name: 'Save', exact: true }).click(); await pendingSave;
+      await credential.fill(scenario.later);
+      const response = page.waitForResponse(response => response.url().endsWith('/api/config') && response.request().method() === 'POST');
+      releaseSave(); expect((await response).status()).toBe(200);
+      const close = page.locator('.settings-dialog-header button'); await close.click();
+      const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+      await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      await expect(credential).toHaveValue(scenario.later); await expect(detail.getByRole('status')).toHaveCount(0);
+      await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+      await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    } finally { releaseSave(); await page.unroute('**/api/config'); }
+  }
+  expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST').map(request => request.body))
+    .toEqual(scenarios.map(scenario => ({ type: 'openai', apiKey: scenario.saved })));
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_');
 });
 
 test('Cleared and incomplete credential values remain drafts without changing save authority', async ({ page }) => {
