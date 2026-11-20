@@ -61,7 +61,7 @@ test('a retired default save cannot reread or announce into a newer Settings lif
     await expect(defaults.getByLabel('Model', { exact: true })).toHaveValue('project');
     await defaults.getByLabel('Model', { exact: true }).fill('retired-draft');
     await defaults.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
-    await closeSettings(page);
+    await closeSettings(page, { discardDrafts: true });
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
     await expect(defaults).toHaveCount(0);
     await page.getByRole('button', { name: 'Settings', exact: false }).click();

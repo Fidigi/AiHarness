@@ -21,6 +21,7 @@ import { toolSettingsMessage } from './tool-settings-messages';
 import { providerContextMessage } from './provider-context-messages';
 import { customModelMessage } from './custom-model-messages';
 import { registryContextMessage } from './registry-context-messages';
+import { useSettingsDraft } from './settings-drafts';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -871,6 +872,7 @@ export function DefaultModelSettings() {
   const [scope, setScope] = useSettingsScope('defaults', workspace?.id ? 'project' : 'global');
   const [values, setValues] = useState({ provider: '', model: '', thinking: '', thinkingBudgets: '', toolPreset: '' });
   const [dirty, setDirty] = useState<Array<keyof typeof values>>([]);
+  useSettingsDraft(dirty.length > 0);
   const [busy, setBusy] = useState(true);
   const [ready, setReady] = useState(false);
   const [overrideWarning, setOverrideWarning] = useState(false);

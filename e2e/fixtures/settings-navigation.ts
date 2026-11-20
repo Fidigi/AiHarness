@@ -1,7 +1,12 @@
 import { expect, type Locator, type Page } from './test-budget';
 
-export async function closeSettings(page: Page): Promise<void> {
+export async function closeSettings(page: Page, { discardDrafts = false }: { discardDrafts?: boolean } = {}): Promise<void> {
   await page.locator('.settings-dialog-header button').click();
+  if (discardDrafts) {
+    const confirmation = page.getByRole('alertdialog', { name: /^(Discard unsaved Settings edits\?|Abandonner les modifications non enregistrées des paramètres \?)$/u });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: /^(Discard edits|Abandonner les modifications)$/u }).click();
+  }
   await expect(page.locator('.settings-dialog')).toHaveCount(0);
 }
 

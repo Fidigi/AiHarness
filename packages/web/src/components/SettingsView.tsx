@@ -25,6 +25,7 @@ import { McpSettings } from './McpSettings';
 import { readPreferences, usePreferences } from '../store/preferences';
 import { isSettingsSection, readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { bindSettingsNavigation } from './settings-navigation';
+import { settingsDraftMessage, SettingsDraftContext, useSettingsDraft } from './settings-drafts';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
 import {
@@ -74,6 +75,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const [providerInvalidation, setProviderInvalidation] = useState(0);
   const { t, locale } = useI18n();
   const [authToken, updateAuthToken] = useState('');
+  const authTokenBaseline = useRef('');
   const [authApplied, setAuthApplied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<Partial<Record<string, SaveStatus>>>({});
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
@@ -275,6 +277,10 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
     return inputs;
   });
 
+  const apiKeyBaseline = useRef(apiKeyInputs);
+  useSettingsDraft(Object.entries(apiKeyInputs).some(([type, value]) => value !== (apiKeyBaseline.current[type] ?? ''))
+    || authToken !== authTokenBaseline.current);
+
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setProvider(e.target.value as ProviderType);
   };
@@ -308,6 +314,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
       const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
       if (result.success) {
         updateApiKey(type as ProviderType, 'configured');
+        apiKeyBaseline.current = { ...apiKeyBaseline.current, [type]: '••••••••' };
         setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
         setSaveStatus(previous => ({ ...previous, [type]: {
           key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
@@ -333,6 +340,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
           />
           <button onClick={() => {
             setAuthToken(authToken);
+            authTokenBaseline.current = authToken;
             setAuthApplied(true);
           }}>
             {t('settings.apply')}
@@ -941,7 +949,7 @@ function getModelOptions(
   }
 }
 
-function SettingsNavigationBoundary() {
+function SettingsNavigationBoundary({ inactive }: { inactive: boolean }) {
   const workspace = useSessionStore(state => state.workspace);
   const root = useRef<HTMLDivElement>(null);
   const entryRelease = useRef<(() => void) | null>(null);
@@ -1003,7 +1011,7 @@ function SettingsNavigationBoundary() {
     });
     return () => { entryRelease.current = null; dispose(); };
   }, [cwd, hash, initial]);
-  return <div className="settings-layout">
+  return <div className="settings-layout" inert={inactive || undefined}>
     <nav className="settings-categories" aria-label={t('settings.categories')}>
       {settingsCategories.map(item => <Link key={item.id} to={address(categorySection(item))} aria-current={category === item.id ? 'page' : undefined}
         onClick={event => {
@@ -1040,18 +1048,38 @@ function SettingsNavigationBoundary() {
   </div>;
 }
 
-type SettingsDialogProps = { onClose: () => void; onEscape: () => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean };
+type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean };
 function SettingsDialog({ onClose, onEscape, onModalChange, suspended }: SettingsDialogProps) {
   const root = useRef<HTMLElement>(null);
-  const { t } = useI18n();
-  useFocusTrap(!suspended, root, onEscape);
+  const confirmation = useRef<HTMLElement>(null);
+  const drafts = useRef(new Set<symbol>());
+  const [confirmClose, setConfirmClose] = useState(false);
+  const workspace = useSessionStore(state => state.workspace);
+  const context = JSON.stringify([workspace?.id, workspace?.cwd, workspace?.trusted, workspace?.operationTrusted]);
+  const { t, locale } = useI18n();
+  const message = (key: Parameters<typeof settingsDraftMessage>[1]) => settingsDraftMessage(locale, key);
+  const requestClose = () => { if (drafts.current.size) setConfirmClose(true); else onClose(); };
+  useLayoutEffect(() => { setConfirmClose(false); }, [context]);
+  useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
+  useFocusTrap(!suspended && confirmClose, confirmation, () => setConfirmClose(false));
   useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
   return createPortal(<div className="modal-backdrop settings-backdrop">
     <section className="settings-dialog" ref={root} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} inert={suspended || undefined}>
-      <header className="settings-dialog-header"><h2 id="settings-title">{t('settings.title')}</h2>
-        <button type="button" data-settings-entry-focus onClick={onClose} aria-label={t('common.close')}><Icon name="close" /></button>
+      <header className="settings-dialog-header" inert={confirmClose || undefined}><h2 id="settings-title">{t('settings.title')}</h2>
+        <button type="button" data-settings-entry-focus onClick={requestClose} aria-label={t('common.close')}><Icon name="close" /></button>
       </header>
-      <SettingsNavigationBoundary />
+      <SettingsDraftContext.Provider value={drafts.current}><SettingsNavigationBoundary inactive={confirmClose} /></SettingsDraftContext.Provider>
+    {confirmClose && <div className="modal-backdrop settings-discard-backdrop">
+      <section ref={confirmation} className="settings-discard-dialog" role="alertdialog" aria-modal="true" tabIndex={-1}
+        aria-labelledby="settings-discard-title" aria-describedby="settings-discard-description" inert={suspended || undefined}>
+        <h3 id="settings-discard-title">{message('title')}</h3>
+        <p id="settings-discard-description">{message('description')}</p>
+        <footer>
+          <button type="button" data-autofocus onClick={() => setConfirmClose(false)}>{message('keep')}</button>
+          <button type="button" onClick={() => { setConfirmClose(false); onClose(); }}>{message('discard')}</button>
+        </footer>
+      </section>
+    </div>}
     </section>
   </div>, document.body);
 }

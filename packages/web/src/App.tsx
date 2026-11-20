@@ -277,7 +277,7 @@ function App() {
           <Route path="/chat/:id" element={<ChatView terminalControl={terminalControl} />} />
           <Route path="/settings" element={<Suspense fallback={
             <div className="app-loading" role="status">{t('common.loading')}…</div>
-          }><SettingsView onClose={() => navigate(lastChatAddress.current)} onEscape={() => paletteOpen ? setPaletteOpen(false) : navigate(lastChatAddress.current)} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
+          }><SettingsView onClose={() => navigate(lastChatAddress.current)} onEscape={close => paletteOpen ? setPaletteOpen(false) : close()} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
         </Routes>
       </main>
       {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} explorerHost={isNarrow ? null : explorerHost} onRequestClose={() => {
