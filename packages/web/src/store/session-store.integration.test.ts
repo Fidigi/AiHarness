@@ -7,8 +7,9 @@ describe('useSessionStore streaming updates', () => {
   });
 
   it('keeps one assistant message while streaming content is updated', () => {
-    useSessionStore.getState().createSession('Streaming');
-    const sessionId = useSessionStore.getState().activeSessionId!;
+    const sessionId = useSessionStore.getState().createSession('Streaming');
+    expect(sessionId).toBe(useSessionStore.getState().activeSessionId);
+    expect(sessionId).toMatch(/^draft:/u);
 
     useSessionStore.getState().upsertAssistantMessage(sessionId, 'stream-1', 'Bon');
     useSessionStore.getState().upsertAssistantMessage(sessionId, 'stream-1', 'Bonjour');

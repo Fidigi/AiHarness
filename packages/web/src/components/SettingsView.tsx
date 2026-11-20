@@ -1051,7 +1051,7 @@ function SettingsNavigationBoundary({ inactive }: { inactive: boolean }) {
   </div>;
 }
 
-type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean; leaveRef: Ref<(discard: () => void) => void> };
+type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean; leaveRef: Ref<(discard?: () => void) => true> };
 function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef }: SettingsDialogProps) {
   const root = useRef<HTMLElement>(null);
   const confirmation = useRef<HTMLElement>(null);
@@ -1069,8 +1069,24 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef 
   const workspace = useSessionStore(state => state.workspace);
   const context = JSON.stringify([workspace?.id, workspace?.cwd, workspace?.trusted, workspace?.operationTrusted]);
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const message = (key: Parameters<typeof settingsDraftMessage>[1]) => settingsDraftMessage(locale, key);
-  const requestDiscard = (discard: () => void) => { discardReturn.current = null; if (drafts.current.size) setPendingDiscard({ discard }); else discard(); };
+  const requestDiscard = (discard?: () => void) => {
+    if (!discard) onEscape(() => {});
+    const action = discard ?? (() => {
+      const current = useSessionStore.getState();
+      const id = current.createSession();
+      navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(current.workspace?.cwd ?? '')}`);
+    });
+    discardReturn.current = null;
+    if (drafts.current.size) setPendingDiscard({ discard: () => {
+      const current = useSessionStore.getState().workspace;
+      if (JSON.stringify([current?.id, current?.cwd, current?.trusted, current?.operationTrusted]) !== context) return;
+      action();
+    } });
+    else action();
+    return true as const;
+  };
   useImperativeHandle(leaveRef, () => requestDiscard, [requestDiscard]);
   const requestClose = () => requestDiscard(onClose);
   useLayoutEffect(() => { discardReturn.current = null; setPendingDiscard(undefined); }, [context]);

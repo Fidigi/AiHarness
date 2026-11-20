@@ -206,7 +206,7 @@ export interface SessionState {
   runEpoch: number;
   drafts: Record<string, string>;
   attachments: Record<string, DraftAttachment[]>;
-  createSession: (title?: string) => void;
+  createSession: (title?: string) => string;
   createRemoteSession: (title?: string) => Promise<string | undefined>;
   hydrateWorkspace: (requestedCwd?: string) => Promise<void>;
   /** Revalidate the selected workspace without optimistic trust changes or fallback selection. */
@@ -764,6 +764,7 @@ export const useSessionStore = create<AppState>((set, get) => ({
       draft: true,
     };
     set(state => ({ sessions: [session, ...state.sessions], activeSessionId: id }));
+    return id;
   },
 
   createRemoteSession: async title => {

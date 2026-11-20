@@ -44,7 +44,6 @@ function App() {
   const hydrateProviders = useSessionStore(state => state.hydrateProviders);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const createSession = useSessionStore(state => state.createSession);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const workspace = useSessionStore(state => state.workspace);
   const setRun = useSessionStore(state => state.setRun);
@@ -52,7 +51,7 @@ function App() {
   const [preferences, setPreferences] = usePreferences();
   const lastChatAddress = useRef('/');
   const settingsInvoker = useRef<HTMLElement | null>(null);
-  const settingsDiscard = useRef<((discard: () => void) => void) | null>(null);
+  const settingsDiscard = useRef<((discard?: () => void) => true) | null>(null);
   const previousSettings = useRef(false);
   useLayoutEffect(() => {
     const settings = location.pathname.startsWith('/settings');
@@ -204,9 +203,10 @@ function App() {
       const binding = preferences.keybindings;
       let handled = true;
       if (matchesShortcut(event, binding.newSession)) {
-        createSession();
-        const id = useSessionStore.getState().activeSessionId;
-        if (id) navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
+        if (!settingsDiscard.current?.()) {
+          const id = useSessionStore.getState().createSession();
+          navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
+        }
       } else if (matchesShortcut(event, binding.focusPrompt)) {
         if (!currentEscapeModal(document)) window.dispatchEvent(new CustomEvent('aih-focus-prompt'));
       } else if (matchesShortcut(event, binding.toggleSidebar)) {
@@ -235,7 +235,7 @@ function App() {
       window.removeEventListener('aih-files-toggle', toggleFiles);
       window.removeEventListener('aih-show-files', showFiles);
     };
-  }, [createSession, filesOpen, isNarrow, navigate, preferences.keybindings, setPreferences, sidebarVisible, workspace?.cwd]);
+  }, [filesOpen, isNarrow, navigate, preferences.keybindings, setPreferences, sidebarVisible, workspace?.cwd]);
 
   useEffect(() => {
     setSidebarOpen(false);

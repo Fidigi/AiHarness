@@ -103,6 +103,52 @@ for (const scenario of [
   expect(nativePrompts).toEqual([]);
 });
 
+test('New-session shortcut keeps Settings drafts until admitted without creating a peer session', async ({ page }) => {
+  const api = await installMockApi(page);
+  const localDrafts = () => page.evaluate(async path => {
+    const { useSessionStore } = await import(path);
+    return useSessionStore.getState().sessions.filter((session: { draft?: boolean }) => session.draft).map((session: { id: string }) => session.id);
+  }, '/src/store/session-store.ts');
+  const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+  await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+  const credential = page.locator('#providers .credential-context-detail input[type="password"]:visible');
+  await credential.fill('SYNTHETIC_SHORTCUT_SETTINGS_DRAFT');
+  expect(await localDrafts()).toEqual([]);
+  await page.keyboard.press('Control+Shift+O');
+  await expect(prompt).toBeVisible(); await expect(credential).toHaveValue('SYNTHETIC_SHORTCUT_SETTINGS_DRAFT');
+  expect(await localDrafts()).toEqual([]);
+  await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(prompt).toHaveCount(0); await expect(credential).toHaveValue('SYNTHETIC_SHORTCUT_SETTINGS_DRAFT');
+  await page.keyboard.press('Control+Shift+O'); await expect(prompt).toBeVisible();
+  const retired = await page.evaluate(async path => {
+    const { useSessionStore } = await import(path), workspace = useSessionStore.getState().workspace;
+    const discard = [...document.querySelectorAll<HTMLButtonElement>('.settings-discard-dialog button')].find(button => button.textContent === 'Discard edits');
+    if (!workspace || !discard) throw new Error('Expected the original Settings discard command.');
+    useSessionStore.setState({ workspace: { ...workspace, id: 'retired-shortcut-workspace', cwd: '/retired-shortcut-workspace' } });
+    const connected = discard.isConnected; discard.click(); return { workspace, connected };
+  }, '/src/store/session-store.ts');
+  expect(retired.connected).toBe(true); expect(await localDrafts()).toEqual([]);
+  await expect(prompt).toHaveCount(0); await expect(page.locator('.settings-dialog')).toBeVisible();
+  await page.evaluate(async ({ path, workspace }) => {
+    const { useSessionStore } = await import(path); useSessionStore.setState({ workspace });
+  }, { path: '/src/store/session-store.ts', workspace: retired.workspace });
+  await selectProviderCredential(page, 'OpenAI'); await credential.fill('SYNTHETIC_SHORTCUT_SETTINGS_DRAFT');
+  await page.keyboard.press('Control+K'); const palette = page.getByRole('dialog', { name: 'Command palette', exact: true });
+  await expect(palette).toBeVisible(); await page.keyboard.press('Control+Shift+O');
+  await expect(palette).toHaveCount(0); await expect(prompt).toBeVisible(); expect(await localDrafts()).toEqual([]);
+  await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+  await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  expect(await localDrafts()).toHaveLength(1); await expect(page).toHaveURL(/\/chat\/draft%3A/);
+  await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+  await page.keyboard.press('Control+Shift+O'); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  expect(await localDrafts()).toHaveLength(2); await expect(prompt).toHaveCount(0);
+  await page.keyboard.press('Control+Shift+O'); expect(await localDrafts()).toHaveLength(3);
+  await expect(page).toHaveURL(/\/chat\/draft%3A/);
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_SHORTCUT_');
+});
+
 test('Settings document departure protects dirty owners without saving or persisting drafts', async ({ page }) => {
   const api = await installMockApi(page);
   const dialogs: string[] = [];
