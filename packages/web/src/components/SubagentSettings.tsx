@@ -110,6 +110,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [editor, setEditor] = useState<EditorValue>();
+  const editorState = useRef(editor);
+  useLayoutEffect(() => { editorState.current = editor; }, [editor]);
   const editorBaseline = useRef<EditorValue | undefined>(undefined);
   const editorInvoker = useRef<HTMLElement>(null);
   const guardEditorDiscard = useSettingsDraftGuard(Boolean(editor && (Object.keys(editor) as Array<keyof EditorValue>)
@@ -153,7 +155,7 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
     if (result.success && result.data) setConfiguration(result.data);
     else setError(result.error || t('subagents.saveError'));
     setLoading(false);
-    return result.success;
+    return result;
   };
 
   const saveEditor = async (event: FormEvent) => {
@@ -175,10 +177,17 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
       inheritContext: editor.inheritContext,
       background: editor.background,
     };
-    const success = editor.id
+    const result = editor.id
       ? await apply(updateSubagentProfile(editor.id, profile, ...scope))
       : await apply(createSubagentProfile(profile, ...scope));
-    if (success) setEditor(undefined);
+    if (!result.success) return;
+    const current = editorState.current;
+    const saved = editor.id ? result.data?.profiles.filter(profile => profile.id === editor.id) : undefined;
+    if (editor.id && current && current.id === editor.id && saved?.length === 1
+      && (Object.keys(editor) as Array<keyof EditorValue>).some(key => current[key] !== editor[key])) {
+      editorBaseline.current = editorValue(saved[0]);
+      setEditor({ ...current });
+    } else setEditor(undefined);
   };
 
   return (
