@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { mcpImportPreviewFixture, mcpStateInventory } from './fixtures/mcp';
 import { selectMcpServer } from './fixtures/mcp-navigation';
-import { selectCatalogueModel, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectCustomModel, selectModelSettings, selectProviderConnection } from './fixtures/settings-navigation';
 
 const scenarios = [
   { name: 'desktop-dark', width: 1440, height: 900, theme: 'dark' },
@@ -426,9 +426,11 @@ test.describe('Régression visuelle des providers et modèles personnalisés', (
       await expect(page).toHaveScreenshot(`provider-model-lifecycle-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
-      await selectModelSettings(page, 'custom-models');
+      await selectCustomModel(page, 'acme:reasoner');
       await expect(page.locator('#provider-lifecycle')).toBeHidden();
-      await expect(page.locator('#custom-models').getByText('Acme Reasoner', { exact: true })).toBeVisible();
+      await expect(page.locator('.custom-model-context-detail').getByText('Acme Reasoner', { exact: true })).toBeVisible();
+      expect(api.requests.filter(request => request.method !== 'GET'
+        && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
       await expect(page).toHaveScreenshot(`custom-models-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });

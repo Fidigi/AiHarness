@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, reserveReadBudget, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel, selectProviderConnection } from './fixtures/settings-navigation';
 
 test('explicit Moonshot is saved in Settings, imports four native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-ms-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit Moonshot is saved in Settings, imports four native chats and relo
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(4); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'ms-native:kimi-k3');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="ms-native:kimi-k3"]');
     await expect(modelCard).toContainText('Kimi K3'); await expect(modelCard).toContainText('1048576 context · 1048576 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -119,7 +120,7 @@ test('CN Moonshot Settings retains the explicit URL through import, key replacem
     expect(saved.status()).toBe(201); expect(await saved.text()).not.toContain(keys[0]);
     const card = section.locator(`[data-settings-selection="${id}"]`);
     for (let phase = 0; phase < 2; phase++) {
-      await page.reload(); await expect(card).toContainText('moonshot');
+      await page.reload(); await selectProviderConnection(page, 'custom', id); await expect(card).toContainText('moonshot');
       if (await section.locator('details.custom-resource-editor').getAttribute('open') === null)
         await section.getByText('Create or edit a compatible provider', { exact: true }).click();
       await card.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -144,6 +145,7 @@ test('CN Moonshot Settings retains the explicit URL through import, key replacem
       }
     }
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`);
+    await selectCustomModel(page, `${id}:kimi-k3`);
     await expect(page.locator('#custom-models').locator(`[data-settings-selection="${id}:kimi-k3"]`)).toContainText('Kimi K3');
     for (const file of ['providers.json', 'provider-secrets.enc']) for (const key of keys)
       expect(await readFile(path.join(dataDir, file), 'utf8')).not.toContain(key);

@@ -19,6 +19,7 @@ import { useSettingsScope } from '../store/use-settings-scope';
 import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
 import { toolSettingsMessage } from './tool-settings-messages';
 import { providerContextMessage } from './provider-context-messages';
+import { customModelMessage } from './custom-model-messages';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -476,16 +477,48 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   </section>;
 }
 
-export function CustomModelSettings() {
-  const { t } = useI18n();
+export function CustomModelSettings({ presented }: { presented: boolean }) {
+  const { t, locale } = useI18n();
+  const workspaceCwd = useSessionStore(state => state.workspace?.cwd);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const [models, setModels] = useState<CustomModelDefinition[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(() => readSettingsNavigation(workspaceCwd).positions['custom-models']?.selection);
+  const [overview, setOverview] = useState(!selectedKey);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const focusRef = useRef<'navigation' | 'detail' | null>(null);
+  const detailPrefix = useId();
+  const matches = models.filter(model => model.key === selectedKey);
+  const selected = selectedKey ? matches.length === 1 ? matches[0] : undefined : models[0];
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!presented || !focusRef.current) return;
+    const target = focusRef.current; focusRef.current = null;
+    if (target === 'navigation') (navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? navigationRef.current)?.focus();
+    else if (mobile && !overview) backRef.current?.focus();
+  }, [presented, mobile, overview, selected]);
+  const selectMetadata = (selection: string) => {
+    setSelectedKey(selection); setOverview(false); focusRef.current = mobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, { ...current, section: 'custom-models', positions: { ...current.positions, 'custom-models': { selection } } });
+  };
   const [editing, setEditing] = useState<string>();
   const empty = { provider: '', id: '', name: '', reasoning: false, imageInput: false, toolCalls: true, contextWindow: '', maxOutputTokens: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', cacheWritePrice: '', compatibility: '{}' };
   const [form, setForm] = useState(empty);
   const load = async () => {
     const result = await getCustomModels();
-    if (result.success && result.data) setModels(result.data);
+    if (result.success && result.data) { setModels(result.data); setLoaded(true); }
   };
   useEffect(() => { void load(); }, []);
   const submit = async (event: React.FormEvent) => {
@@ -529,8 +562,19 @@ export function CustomModelSettings() {
         <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => { setEditing(undefined); setForm(empty); }}>{t('common.cancel')}</button>}</div>
       </form>
     </details>
+    {loaded && selectedKey && !selected && <p role="status">{customModelMessage(locale, 'unavailable')}</p>}
+    <div className="custom-model-context">
+      <nav ref={navigationRef} aria-label={t('settings.customModels.title')} tabIndex={-1} hidden={mobile && !overview && !!selected}>
+        {models.map((model, index) => <button key={model.key} type="button" aria-current={selected === model ? 'true' : undefined}
+          aria-expanded={selected === model && (!mobile || !overview)} aria-controls={`${detailPrefix}-${index}`}
+          onClick={() => selectMetadata(model.key)}><strong>{model.name}</strong><code>{model.key}</code></button>)}
+      </nav>
+      <div ref={detailRef} className="custom-model-context-detail" hidden={mobile && overview}>
+        <button ref={backRef} type="button" className="custom-model-context-back" hidden={!mobile || overview || !selected}
+          onClick={() => { focusRef.current = 'navigation'; setOverview(true); }}>{customModelMessage(locale, 'back')}</button>
     <div className="settings-resource-list">
-      {models.map(model => <article key={model.key} className="settings-resource-card" data-settings-selection={model.key}>
+      {models.map((model, index) => <article key={model.key} id={`${detailPrefix}-${index}`} className="settings-resource-card" data-settings-selection={model.key}
+        hidden={selected !== model}>
         <div><strong>{model.name}</strong><code>{model.key}</code><small>{model.contextWindow ?? '—'} context · {model.maxOutputTokens ?? '—'} max output</small></div>
         <div>
           <button type="button" onClick={() => {
@@ -556,6 +600,8 @@ export function CustomModelSettings() {
           }}>{t('common.delete')}</button>
         </div>
       </article>)}
+    </div>
+      </div>
     </div>
   </section>;
 }

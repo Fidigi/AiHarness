@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit OpenAI R/D Settings retains the native dialect, static import and private R history for the shared ID', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-oa-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -54,6 +54,7 @@ test('explicit OpenAI R/D Settings retains the native dialect, static import and
     expect(imported.status()).toBe(200); const importedModels = await imported.json(); expect(importedModels).toHaveLength(44); expect(calls).toEqual([]);
     expect(importedModels.find((entry: { id: string }) => entry.id === model)).toMatchObject({ name: 'GPT-6 Luna', contextWindow: 272000, maxOutputTokens: 128000 });
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, `oa-native:${model}`);
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator(`[data-settings-selection="oa-native:${model}"]`);
     await expect(modelCard).toContainText('GPT-6 Luna'); await expect(modelCard).toContainText('272000 context · 128000 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit mixed OpenRouter is saved in Settings, routes native A/C and reloads private persisted history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-router-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -61,6 +61,7 @@ test('explicit mixed OpenRouter is saved in Settings, routes native A/C and relo
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(393); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'router-native:anthropic/claude-sonnet-4.6');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="router-native:anthropic/claude-sonnet-4.6"]');
     await expect(modelCard).toContainText('Anthropic: Claude Sonnet 4.6'); await expect(modelCard).toContainText('1000000 context · 128000 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

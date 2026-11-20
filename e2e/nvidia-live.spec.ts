@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit NVIDIA is saved in Settings, imports21 native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-nv-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit NVIDIA is saved in Settings, imports21 native chats and reloads p
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(21); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'nv-native:deepseek-ai/deepseek-v4.1-flash');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="nv-native:deepseek-ai/deepseek-v4.1-flash"]');
     await expect(modelCard).toContainText('DeepSeek V4.1 Flash'); await expect(modelCard).toContainText('1000000 context · 384000 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

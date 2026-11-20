@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit DeepSeek is saved in Settings, imports two native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-ds-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit DeepSeek is saved in Settings, imports two native chats and reloa
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(2); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'ds-native:deepseek-flash');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="ds-native:deepseek-flash"]');
     await expect(modelCard).toContainText('DeepSeek V4.1 Flash'); await expect(modelCard).toContainText('1000000 context · 384000 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

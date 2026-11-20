@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit Groq is saved in Settings, imports seven native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-gq-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit Groq is saved in Settings, imports seven native chats and reloads
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(7); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'gq-native:qwen/qwen3.8-27b');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="gq-native:qwen/qwen3.8-27b"]');
     await expect(modelCard).toContainText('Qwen3.8 27B'); await expect(modelCard).toContainText('131042 context · 16384 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

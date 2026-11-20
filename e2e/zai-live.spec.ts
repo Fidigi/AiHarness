@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit Z.ai is saved in Settings, imports seven native chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-za-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit Z.ai is saved in Settings, imports seven native chats and reloads
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(7); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'za-native:glm-5.3-flash');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="za-native:glm-5.3-flash"]');
     await expect(modelCard).toContainText('GLM-5.3-Flash'); await expect(modelCard).toContainText('1000000 context · 131072 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

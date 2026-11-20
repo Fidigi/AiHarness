@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { start, stop } from '../packages/server/dist/index.js';
 import { expect, test } from './fixtures/test-budget';
-import { closeSettings } from './fixtures/settings-navigation';
+import { closeSettings, selectCustomModel } from './fixtures/settings-navigation';
 
 test('explicit Cloudflare C/S is saved in Settings, imports static chats and reloads private native history', async ({ page }) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'aih-cf-web-')), cwd = path.join(root, 'work'), dataDir = path.join(root, 'data');
@@ -57,6 +57,7 @@ test('explicit Cloudflare C/S is saved in Settings, imports static chats and rel
       card.getByRole('button', { name: 'Import models', exact: true }).click()]);
     expect(imported.status()).toBe(200); expect(await imported.json()).toHaveLength(18); expect(calls).toEqual([]);
     await page.goto(`${base}/settings?cwd=${encodeURIComponent(cwd)}#custom-models`); await page.reload();
+    await selectCustomModel(page, 'cf-native:@cf/google/gemma-4-26b-a4b-it');
     const modelSection = page.locator('#custom-models'), modelCard = modelSection.locator('[data-settings-selection="cf-native:@cf/google/gemma-4-26b-a4b-it"]');
     await expect(modelCard).toContainText('Gemma 4 26B A4B IT'); await expect(modelCard).toContainText('256000 context · 16384 max output');
     await modelCard.getByRole('button', { name: 'Edit', exact: true }).click();

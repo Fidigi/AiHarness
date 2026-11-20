@@ -47,6 +47,17 @@ export async function selectModelSettings(page: Page, panel: keyof typeof modelN
   await navigation.getByRole('link', { name: modelNames[panel] }).click();
 }
 
+/** Inspect one custom definition without changing the shared editor or active model. */
+export async function selectCustomModel(page: Page, key: string): Promise<void> {
+  await selectModelSettings(page, 'custom-models');
+  const section = page.locator('#custom-models');
+  const back = section.getByRole('button', { name: /^(Back to custom models|Retour aux modèles personnalisés)$/u });
+  if (await back.isVisible()) await back.click();
+  const navigation = section.getByRole('navigation', { name: /^(Custom models|Modèles personnalisés)$/u });
+  const code = page.getByText(key, { exact: true }).and(page.locator('code'));
+  await navigation.getByRole('button').filter({ has: code }).click();
+}
+
 /** Browse catalogue metadata without selecting the active model or changing enablement. */
 export async function selectCatalogueModel(page: Page, providerName: string, modelId: string): Promise<void> {
   await selectModelSettings(page, 'model');

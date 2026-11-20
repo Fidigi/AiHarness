@@ -549,7 +549,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
       </section>
 
       <div hidden={modelPanel !== 'custom-models'}>
-        <CustomModelSettings key={`provider-models:${providerReload}`} />
+        <CustomModelSettings key={`provider-models:${providerReload}`} presented={category === 'models' && modelPanel === 'custom-models'} />
       </div>
       </div>
 

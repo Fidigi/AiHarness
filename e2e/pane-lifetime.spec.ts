@@ -1,7 +1,7 @@
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation';
-import { selectCatalogueModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
+import { selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool } from './fixtures/settings-navigation';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp';
 import { selectionAnchorControl } from './fixtures/selection-anchor';
 
@@ -17,7 +17,10 @@ async function product(page: Page) {
 }
 
 test('built Settings assets restore project-specific group, row and scope intent without submitting configuration', async ({ page }) => {
-  const api = await installMockApi(page, { providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: false }] });
+  const api = await installMockApi(page, { providers: [{ type: 'mock', configured: true }, { type: 'openai', configured: false }],
+    customModels: ['workspace-a', 'workspace-b'].map(id => ({ key: `openai:${id}`, provider: 'openai', id, name: id,
+      capabilities: { reasoning: false, imageInput: false, toolCalls: true },
+      createdAt: '2025-01-01T12:00:00.000Z', updatedAt: '2025-01-01T12:00:00.000Z' })) });
   await page.goto('/settings?cwd=%2Fworkspace#model');
   const catalog = page.locator('#model .model-catalog');
   await catalog.locator('summary').click();
@@ -31,6 +34,7 @@ test('built Settings assets restore project-specific group, row and scope intent
   await selectInstalledSkill(page, 'release-notes');
   await selectProviderCredential(page, 'Anthropic');
   await selectProviderConnection(page, 'builtin', 'openai');
+  await selectCustomModel(page, 'openai:workspace-a');
   await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await switchSettingsWorkspace(page, '/workspace/other');
@@ -51,6 +55,10 @@ test('built Settings assets restore project-specific group, row and scope intent
   const connection = page.locator('.provider-context-detail').getByRole('article');
   await expect(connection).toHaveAttribute('data-settings-selection', 'mock');
   await selectProviderConnection(page, 'builtin', 'mock');
+  await selectModelSettings(page, 'custom-models');
+  const customModel = page.locator('.custom-model-context-detail').getByRole('article');
+  await expect(customModel).toHaveAttribute('data-settings-selection', 'openai:workspace-a');
+  await selectCustomModel(page, 'openai:workspace-b');
   await selectCatalogueModel(page, 'OpenAI', 'gpt-4o');
   await expect(page.locator('.model-catalog-detail [data-settings-selection="openai:gpt-4o"]')).toBeVisible();
   await selectGeneralSettings(page, 'behavior');
@@ -69,6 +77,8 @@ test('built Settings assets restore project-specific group, row and scope intent
   await expect(page.locator('.credential-context-detail input:visible')).toHaveAccessibleName(/Anthropic/u);
   await selectModelSettings(page, 'provider-lifecycle');
   await expect(connection).toHaveAttribute('data-settings-selection', 'openai');
+  await selectModelSettings(page, 'custom-models');
+  await expect(customModel).toHaveAttribute('data-settings-selection', 'openai:workspace-a');
   await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
   await expect(row).toBeInViewport();

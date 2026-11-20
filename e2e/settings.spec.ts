@@ -1,8 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { SkillCatalog } from '@ai-harness/core';
+import type { CustomModelDefinition, SkillCatalog } from '@ai-harness/core';
 import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
-import { closeSettings, selectCatalogueModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
+import { closeSettings, selectCatalogueModel, selectCustomModel, selectGeneralSettings, selectInstalledSkill, selectModelSettings, selectPluginPackage, selectProviderConnection, selectProviderCredential, selectSettingsCategory, selectSettingsTool, selectSubagentProfile, showPluginPackages } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { selectMcpServer } from './fixtures/mcp-navigation';
 import {
@@ -17,6 +17,14 @@ import {
 
 function settingsSection(page: Page, heading: string) {
   return page.getByRole('heading', { name: heading, exact: true }).locator('..');
+}
+
+function customModelFixtures(): CustomModelDefinition[] {
+  return ['openai:first', 'openai:shared', 'azure:shared'].map(key => ({
+    key, provider: key.split(':')[0]!, id: key.split(':')[1]!, name: key,
+    capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096,
+    createdAt: '2025-01-01T12:00:00.000Z', updatedAt: '2025-01-01T12:00:00.000Z',
+  }));
 }
 
 test.describe('Settings and authentication', () => {
@@ -165,7 +173,8 @@ test.describe('Settings and authentication', () => {
     await models.getByLabel('Output price / million tokens').fill('10');
     await models.getByLabel('Advanced compatibility (JSON)').fill('{"supportsDeveloperRole":true}');
     await models.getByRole('button', { name: 'Save' }).click();
-    await expect(models.getByText('GPT E2E')).toBeVisible();
+    await selectCustomModel(page, 'openai:gpt-e2e');
+    await expect(models.locator('.custom-model-context-detail').getByText('GPT E2E')).toBeVisible();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/provider-registry/models' && request.method === 'POST').at(-1)?.body)
       .toMatchObject({ provider: 'openai', id: 'gpt-e2e', contextWindow: 64000, maxOutputTokens: 4096 });
 
@@ -194,6 +203,127 @@ test.describe('Settings and authentication', () => {
     await skills.getByRole('button', { name: 'Install', exact: true }).click();
     await expect.poll(() => api.requests.filter(request => request.path === '/api/skills/registry/install').at(-1)?.body)
       .toMatchObject({ id: 'security-review', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' });
+  });
+
+  for (const width of [1280, 390]) test(`Custom model browsing never retargets a shared editor: ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    const api = await installMockApi(page, { customModels: customModelFixtures() });
+    await page.goto('/settings#custom-models');
+    await selectCustomModel(page, 'openai:first');
+    const section = page.locator('#custom-models'), detail = section.locator('.custom-model-context-detail');
+    await detail.getByRole('button', { name: 'Edit', exact: true }).click();
+    const editor = section.locator('.custom-resource-editor');
+    await editor.locator('summary').focus(); await editor.locator('summary').click();
+    await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue('openai');
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('first');
+    await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_EDITOR_OWNER');
+    await selectCustomModel(page, 'azure:shared');
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'azure:shared');
+    await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_EDITOR_OWNER');
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toEqual([]);
+    await editor.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+      .map(request => ({ method: request.method, path: request.path, body: request.body })))
+      .toEqual([{ method: 'PUT', path: '/api/provider-registry/models/openai%3Afirst', body: {
+        provider: 'openai', id: 'first', name: 'SYNTHETIC_EDITOR_OWNER',
+        capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096,
+        pricing: {}, compatibility: {},
+      } }]);
+    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'azure:shared');
+  });
+
+  for (const scenario of [
+    { width: 1280, locale: 'en', theme: 'light' },
+    { width: 1280, locale: 'fr', theme: 'dark' },
+    { width: 390, locale: 'en', theme: 'light' },
+    { width: 390, locale: 'fr', theme: 'dark' },
+  ] as const) test(`Custom model metadata never edits or selects the active model: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.addInitScript(({ locale, theme }) => {
+      localStorage.setItem('ai-harness-locale', locale);
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme }));
+    }, scenario);
+    const customModels = customModelFixtures();
+    const api = await installMockApi(page, { customModels });
+    await page.goto('/settings#custom-models');
+    const section = page.locator('#custom-models');
+    const activeModel = page.locator('#model > select');
+    await expect(activeModel).not.toHaveValue('');
+    const before = await activeModel.inputValue();
+    const navigation = section.getByRole('navigation', { name: /^(Custom models|Modèles personnalisés)$/u });
+    await expect(navigation).toBeVisible();
+    const choice = navigation.getByRole('button').filter({ has: page.getByText('openai:shared', { exact: true }).and(page.locator('code')) });
+    await choice.focus(); await choice.press('Enter');
+    const detail = section.locator('.custom-model-context-detail');
+    await expect(detail.getByRole('article')).toHaveCount(1);
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'openai:shared');
+    await expect(detail).toContainText('64000 context · 4096 max output');
+    await expect(activeModel).toHaveValue(before);
+    const current = section.locator('nav button').filter({ has: page.getByText('openai:shared', { exact: true }).and(page.locator('code')) });
+    await expect(current).toHaveAttribute('aria-current', 'true'); await expect(current).toHaveAttribute('aria-expanded', 'true');
+    await expect(current).toHaveCSS('border-left-width', '3px');
+    const back = section.getByRole('button', { name: /^(Back to custom models|Retour aux modèles personnalisés)$/u });
+    if (scenario.width < 960) {
+      await expect(back).toBeFocused(); await back.press('Enter');
+      for (const control of [choice, back]) {
+        await expect(control).toBeFocused(); await expect(control).toHaveCSS('outline-style', 'solid');
+        await expectContrast(control, 'outlineColor', 3);
+        expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+        const clearance = await control.evaluate(element => {
+          const style = getComputedStyle(element), box = element.getBoundingClientRect();
+          const extent = Math.max(0, parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset));
+          return Math.min(...[element.closest('nav') ?? element.closest('.custom-model-context-detail')!, element.closest('.settings-view')!]
+            .flatMap(owner => { const clip = owner.getBoundingClientRect(); return [box.left - clip.left, clip.right - box.right, box.top - clip.top, clip.bottom - box.bottom]; })) - extent;
+        });
+        expect(clearance).toBeGreaterThanOrEqual(-0.1);
+        if (control === choice) await choice.press('Enter');
+      }
+    } else {
+      await expect(choice).toBeFocused();
+      const list = (await navigation.boundingBox())!, content = (await detail.boundingBox())!;
+      expect(list.x + list.width).toBeLessThanOrEqual(content.x);
+    }
+    expect((await new AxeBuilder({ page }).include('#custom-models').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze()).violations).toEqual([]);
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const capture = testInfo.outputPath(`custom-model-context-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('custom-model-context', { path: capture, contentType: 'image/png' });
+    const editor = section.locator('.custom-resource-editor');
+    await editor.locator('summary').focus(); await editor.locator('summary').click();
+    const draft = editor.getByLabel('ID', { exact: true });
+    await draft.fill('SYNTHETIC_CUSTOM_MODEL_DRAFT');
+    await selectGeneralSettings(page, 'appearance'); await selectModelSettings(page, 'custom-models');
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'openai:shared');
+    await expect(draft).toHaveValue('SYNTHETIC_CUSTOM_MODEL_DRAFT');
+    const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+    expect(storage).not.toContain('SYNTHETIC_CUSTOM_MODEL_DRAFT');
+    const memory = JSON.parse(await page.evaluate(() => localStorage.getItem('ai-harness-settings-navigation-v1')!));
+    expect(memory.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace').positions['custom-models'])
+      .toEqual({ selection: 'openai:shared' });
+    await page.reload();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'openai:shared');
+    await expect(activeModel).toHaveValue(before);
+    const longName = 'fixture_custom_model_metadata_with_an_explicit_long_name_and_unchanged_editor_and_enablement_authority';
+    const fresh = [...customModels.filter(model => model.key !== 'openai:shared'),
+      { ...customModels[0]!, key: 'openai:long-fixture', id: longName, name: longName }];
+    await page.route('**/api/provider-registry/models', route => route.fulfill({ json: fresh }));
+    await page.reload();
+    await expect(navigation).toBeVisible(); await expect(detail.getByRole('article')).toHaveCount(0);
+    await expect(section.getByRole('status')).toContainText(/selected custom model is unavailable|modèle personnalisé sélectionné n’est pas disponible/u);
+    await navigation.getByRole('button').filter({ has: page.getByText('azure:shared', { exact: true }).and(page.locator('code')) }).click();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'azure:shared');
+    if (scenario.width < 960) await back.click();
+    await navigation.getByRole('button').filter({ has: page.getByText('openai:long-fixture', { exact: true }).and(page.locator('code')) }).click();
+    await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'openai:long-fixture');
+    await expect(detail.getByRole('article').locator('strong')).toHaveText(longName);
+    await expect(activeModel).toHaveValue(before);
+    expect(await page.locator('.settings-view').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const longCapture = testInfo.outputPath(`custom-model-context-long-${scenario.width}-${scenario.locale}.png`);
+    await page.screenshot({ path: longCapture, animations: 'disabled', caret: 'hide' });
+    await testInfo.attach('custom-model-context-long', { path: longCapture, contentType: 'image/png' });
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
   });
 
   for (const scenario of [
