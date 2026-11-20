@@ -21,7 +21,7 @@ import { toolSettingsMessage } from './tool-settings-messages';
 import { providerContextMessage } from './provider-context-messages';
 import { customModelMessage } from './custom-model-messages';
 import { registryContextMessage } from './registry-context-messages';
-import { useSettingsDraft } from './settings-drafts';
+import { useSettingsDraft, useSettingsDraftGuard } from './settings-drafts';
 import { publishNotice } from '../services/notices';
 import {
   cancelProviderOAuth,
@@ -87,7 +87,9 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   const empty = { id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' };
   const [form, setForm] = useState(empty);
   const formBaseline = useRef(form);
-  useSettingsDraft((Object.keys(form) as Array<keyof typeof form>).some(key => form[key] !== formBaseline.current[key]));
+  const editorSummary = useRef<HTMLElement>(null);
+  const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
+    .some(key => form[key] !== formBaseline.current[key]), editorSummary);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [position, setPosition] = useState(() => readSettingsNavigation(origin.workspace?.cwd).positions['provider-lifecycle']);
@@ -372,7 +374,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       </>}
     </aside>}
     <details className="custom-resource-editor" open={Boolean(editing)}>
-      <summary>{t('settings.customProviders.manage')}</summary>
+      <summary ref={editorSummary}>{t('settings.customProviders.manage')}</summary>
       <p className="settings-help">{t('settings.customProviders.security')}</p>
       <form onSubmit={event => void submit(event)}>
         <label>ID<input required pattern="[a-z][a-z0-9_-]{1,63}" disabled={Boolean(editing)} value={form.id}
@@ -427,9 +429,9 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
           onChange={event => setForm(current => ({ ...current, apiKey: event.target.value }))} /></label>
         <label>{t('settings.customHeaders')}<textarea rows={3} value={form.headers}
           onChange={event => setForm(current => ({ ...current, headers: event.target.value }))} /></label>
-        <div><button disabled={busy}>{t('common.save')}</button>{editing && <button type="button" onClick={() => {
+        <div><button disabled={busy}>{t('common.save')}</button>{editing && <button type="button" onClick={() => guardFormDiscard(() => {
           setEditing(undefined); formBaseline.current = empty; setForm(empty);
-        }}>{t('common.cancel')}</button>}</div>
+        })}>{t('common.cancel')}</button>}</div>
       </form>
     </details>
       <div className="settings-resource-list" data-settings-group="custom">
@@ -523,7 +525,9 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   const empty = { provider: '', id: '', name: '', reasoning: false, imageInput: false, toolCalls: true, contextWindow: '', maxOutputTokens: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', cacheWritePrice: '', compatibility: '{}' };
   const [form, setForm] = useState(empty);
   const formBaseline = useRef(form);
-  useSettingsDraft((Object.keys(form) as Array<keyof typeof form>).some(key => form[key] !== formBaseline.current[key]));
+  const editorSummary = useRef<HTMLElement>(null);
+  const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
+    .some(key => form[key] !== formBaseline.current[key]), editorSummary);
   const load = async () => {
     const result = await getCustomModels();
     if (result.success && result.data) { setModels(result.data); setLoaded(true); }
@@ -552,7 +556,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   return <section className="settings-section" id="custom-models">
     <h3>{t('settings.customModels.title')}</h3>
     <details className="custom-resource-editor">
-      <summary>{editing ? t('settings.customModels.edit') : t('settings.customModels.create')}</summary>
+      <summary ref={editorSummary}>{editing ? t('settings.customModels.edit') : t('settings.customModels.create')}</summary>
       <form onSubmit={event => void submit(event)}>
         <label>{t('settings.provider')}<input required value={form.provider} onChange={event => setForm(current => ({ ...current, provider: event.target.value }))} /></label>
         <label>ID<input required value={form.id} onChange={event => setForm(current => ({ ...current, id: event.target.value }))} /></label>
@@ -567,7 +571,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         <label>{t('settings.cacheReadPrice')}<input type="number" min="0" step="any" value={form.cacheReadPrice} onChange={event => setForm(current => ({ ...current, cacheReadPrice: event.target.value }))} /></label>
         <label>{t('settings.cacheWritePrice')}<input type="number" min="0" step="any" value={form.cacheWritePrice} onChange={event => setForm(current => ({ ...current, cacheWritePrice: event.target.value }))} /></label>
         <label>{t('settings.compatibility')}<textarea rows={3} value={form.compatibility} onChange={event => setForm(current => ({ ...current, compatibility: event.target.value }))} /></label>
-        <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => { setEditing(undefined); formBaseline.current = empty; setForm(empty); }}>{t('common.cancel')}</button>}</div>
+        <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => guardFormDiscard(() => { setEditing(undefined); formBaseline.current = empty; setForm(empty); })}>{t('common.cancel')}</button>}</div>
       </form>
     </details>
     {loaded && selectedKey && !selected && <p role="status">{customModelMessage(locale, 'unavailable')}</p>}
