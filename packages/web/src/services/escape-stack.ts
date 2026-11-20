@@ -61,7 +61,8 @@ export function registerEscapeLayer(layer: EscapeLayer): () => void {
       const focusedModal = doc.activeElement?.closest<HTMLElement>(MODAL_SELECTOR);
       // A newer host-owned modal may use its own listener rather than this registry.
       // Yield its event; never cancel the registered dialog underneath or stop a run.
-      if (focusedModal && !eligible.some(owner => owner.kind === 'modal' && focusedModal.contains(owner.element?.() ?? null))) return;
+      if (focusedModal && !focusedModal.closest('[inert], [aria-hidden="true"]')
+        && !eligible.some(owner => owner.kind === 'modal' && focusedModal.contains(owner.element?.() ?? null))) return;
       const modal = deepest(eligible.filter(candidate => candidate.kind === 'modal'));
       const menus = eligible.filter(candidate => candidate.kind === 'menu'
         && (!modal || modal.element?.()?.contains(candidate.element?.() ?? null)));

@@ -467,6 +467,7 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
   const removalDialogRef = useRef<HTMLElement | null>(null);
   const undoButtonRef = useRef<HTMLButtonElement | null>(null);
   const editReturnFocus = useRef<HTMLButtonElement | null>(null);
+  const importDiscard = useRef<((discard: () => void) => void) | null>(null);
   const sectionRef = useRef<HTMLElement | null>(null);
   const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -892,6 +893,10 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
   const feedbackKey = feedback ? `settings.mcp.mutation.${feedback}` : undefined;
 
   const controlsDisabled = Boolean(busy) || Boolean(testing) || Boolean(oauthBusy) || importWriting || Boolean(replacement);
+  const editState = useRef({ inventory, disabled: controlsDisabled || Boolean(pendingRemoval) });
+  useLayoutEffect(() => {
+    editState.current = { inventory, disabled: controlsDisabled || Boolean(pendingRemoval) };
+  }, [inventory, controlsDisabled, pendingRemoval]);
 
   return <section ref={sectionRef} className="settings-section" id="mcp" tabIndex={-1}>
     <div className="mcp-settings-heading">
@@ -942,6 +947,7 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
       onReload={reloadCanonical}
       onWritingChange={setImportWriting}
       replacement={replacement}
+      discardGuardRef={importDiscard}
       onReplacementOutcome={finishReplacement}
     />
     {inventory && selection && !selected && <p role="status" className="settings-help">
@@ -1016,11 +1022,22 @@ function McpSettingsPanel({ presented }: { presented: boolean }) {
               onEdit={trigger => {
                 const file = fileForScope(inventory, server.scope);
                 if (!file?.revision || controlsDisabled) return;
-                selectServer(server);
-                editReturnFocus.current = trigger;
-                setFeedback(undefined);
-                setUndo(undefined);
-                setReplacement({ scope: server.scope, name: server.name, revision: file.revision });
+                const target = { scope: server.scope, name: server.name }, configKey = server.configKey;
+                const edit = () => {
+                  const current = editState.current;
+                  if (!current.inventory || current.disabled) return;
+                  const choice = selectedMcpServer(current.inventory.servers, target, configKey);
+                  if (!choice || choice.registration) return;
+                  const currentFile = fileForScope(current.inventory, choice.scope);
+                  if (!currentFile?.revision) return;
+                  selectServer(choice);
+                  editReturnFocus.current = trigger;
+                  setFeedback(undefined);
+                  setUndo(undefined);
+                  setReplacement({ scope: choice.scope, name: choice.name, revision: currentFile.revision });
+                };
+                const guard = importDiscard.current;
+                if (guard) guard(edit); else edit();
               }}
               onRemove={trigger => {
                 selectServer(server);

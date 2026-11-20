@@ -4,11 +4,12 @@ import { keyboardComposing, registerEscapeLayer, type EscapeLayer } from './esca
 class ElementStub {
   isConnected = true;
   hidden = false;
+  inert = false;
   children: ElementStub[] = [];
   modal?: ElementStub;
   contains(target: unknown): boolean { return target === this || this.children.some(child => child.contains(target)); }
   getClientRects() { return this.hidden ? [] : [{}]; }
-  closest(selector: string) { return selector.includes('inert') ? null : this.modal ?? null; }
+  closest(selector: string) { return selector.includes('inert') ? this.inert ? this : null : this.modal ?? null; }
 }
 class DocumentStub extends EventTarget {
   defaultView = null;
@@ -95,6 +96,14 @@ describe('capture Escape ownership', () => {
     doc.activeElement = registered; registered.modal = registered;
     const top = layer(doc, 'modal', new ElementStub()); escape(doc);
     expect(top.close).toHaveBeenCalledTimes(1); expect(dialog.close).not.toHaveBeenCalled();
+  });
+  it('uses the live confirmation while focus still belongs to an inert older modal', () => {
+    const doc = new DocumentStub(); const previous = new ElementStub(); previous.modal = previous;
+    previous.inert = true; doc.activeElement = previous;
+    const suspended = layer(doc, 'modal', previous); const confirmation = layer(doc, 'modal', new ElementStub());
+    const agent = layer(doc, 'agent');
+    expect(escape(doc).defaultPrevented).toBe(true); expect(confirmation.close).toHaveBeenCalledTimes(1);
+    expect(suspended.close).not.toHaveBeenCalled(); expect(agent.close).not.toHaveBeenCalled();
   });
   it('does not mistake a focused suspended parent for a newer host modal while its registered child opens', () => {
     const doc = new DocumentStub(); const parent = new ElementStub(); const child = new ElementStub();

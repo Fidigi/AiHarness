@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import type {
   McpConfigInventory,
   McpConfigScope,
@@ -251,6 +251,7 @@ export function McpImportPreview({
   onReplacementOutcome,
   onWritingChange,
   replacement,
+  discardGuardRef,
 }: {
   presented: boolean;
   cwd?: string;
@@ -261,6 +262,7 @@ export function McpImportPreview({
   onReplacementOutcome?: (outcome: McpReplacementOutcome) => void;
   onWritingChange?: (writing: boolean) => void;
   replacement?: McpReplaceTarget;
+  discardGuardRef: Ref<(discard: () => void) => void>;
 }) {
   const { locale } = useI18n();
   const m = mcpImportMessage.bind(null, locale);
@@ -273,6 +275,7 @@ export function McpImportPreview({
   const [writing, setWriting] = useState(false);
   const [draft, setDraft] = useState<ImportDraft>();
   const guardReplacementDiscard = useSettingsDraftGuard(text !== '' || Boolean(draft));
+  useImperativeHandle(discardGuardRef, () => guardReplacementDiscard, [guardReplacementDiscard]);
   const draftBaseline = useRef<ImportDraft | undefined>(undefined);
   const baseline = draftBaseline.current;
   const guardDraftDiscard = useSettingsDraftGuard(Boolean(draft && baseline && (

@@ -1088,6 +1088,7 @@ test.describe('Settings and authentication', () => {
     await page.goto('/settings#mcp');
     const section = page.locator('#mcp');
     const edit = section.getByRole('button', { name: 'Edit remote-docs', exact: true });
+    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
 
     await edit.click();
     await expect(section.getByText('Replace remote-docs', { exact: true })).toBeVisible();
@@ -1095,10 +1096,26 @@ test.describe('Settings and authentication', () => {
     await section.getByRole('button', { name: 'Cancel editing' }).click();
     await expect(edit).toBeFocused();
 
+    const importPanel = section.locator('.mcp-import-panel');
+    await importPanel.locator('summary').focus(); await importPanel.locator('summary').click();
+    const importSource = section.getByLabel('MCP server text', { exact: true });
+    await importSource.fill('SYNTHETIC_MCP_IMPORT_RETARGET_NOT_SAVED');
+    await edit.click(); await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(importSource).toHaveValue('SYNTHETIC_MCP_IMPORT_RETARGET_NOT_SAVED');
+    await expect(section.getByLabel('Replacement MCP server text')).toHaveCount(0);
+    await edit.click(); await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(section.getByLabel('Replacement MCP server text')).toHaveValue('');
+    await expect(section.getByLabel('Replacement MCP server text')).toBeFocused();
+    await section.getByRole('button', { name: 'Cancel editing', exact: true }).click();
+    await expect(prompt).toHaveCount(0); await expect(edit).toBeFocused();
+    expect(api.requests.filter(item => item.method !== 'GET' && ['/api/mcp/preview', '/api/mcp/config'].includes(item.path))).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MCP_IMPORT_RETARGET_NOT_SAVED');
+
     await edit.click();
     const source = section.getByLabel('Replacement MCP server text');
     await source.fill('SYNTHETIC_MCP_CANCEL_SOURCE_NOT_SAVED');
-    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
     await section.getByRole('button', { name: 'Cancel editing', exact: true }).click();
     await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(source).toHaveValue('SYNTHETIC_MCP_CANCEL_SOURCE_NOT_SAVED');
