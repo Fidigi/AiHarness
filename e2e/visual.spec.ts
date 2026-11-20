@@ -726,6 +726,27 @@ test.describe('Régression visuelle des profils de sous-agents', () => {
         .toEqual({ group: 'project', selection: 'plan' });
       expect(api.requests.filter(request => request.method !== 'GET' && (
         request.path.startsWith('/api/subagents/') || request.path === '/api/agent/runs'))).toEqual([]);
+      await detail.getByRole('button', { name: locale === 'fr' ? 'Modifier' : 'Edit', exact: true }).click();
+      const editor = section.locator('.subagent-profile-editor'), options = editor.locator('.subagent-editor-options');
+      await options.scrollIntoViewIfNeeded();
+      await test.info().attach(`profile-options-${scenario.name}`, {
+        body: await page.screenshot({ path: test.info().outputPath(`profile-options-${scenario.name}.png`),
+          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+      });
+      const toggles = options.getByRole('checkbox'); await expect(toggles).toHaveCount(3);
+      for (const toggle of await toggles.all()) {
+        const bounds = await toggle.boundingBox(), target = await toggle.locator('..').boundingBox();
+        expect(bounds!.width).toBeLessThanOrEqual(bounds!.height);
+        expect(target!.height).toBeGreaterThanOrEqual(44);
+        const checked = await toggle.isChecked(); await toggle.locator('..').click();
+        await expect(toggle).toBeChecked({ checked: !checked }); await expect(toggle).toBeFocused();
+        await toggle.press('Space'); await expect(toggle).toBeChecked({ checked });
+        await expect(toggle).toHaveCSS('outline-style', 'solid'); await expectContrast(toggle, 'outlineColor', 3);
+      }
+      await editor.getByRole('button', { name: locale === 'fr' ? 'Annuler' : 'Cancel', exact: true }).click();
+      await expect(editor).toBeHidden();
+      expect(api.requests.filter(request => request.method !== 'GET' && (
+        request.path.startsWith('/api/subagents/') || request.path === '/api/agent/runs'))).toEqual([]);
       await page.reload();
       await expect(detail).toBeVisible();
       await expect(choice).toHaveAttribute('aria-current', 'true');
