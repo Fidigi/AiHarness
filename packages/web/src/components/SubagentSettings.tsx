@@ -182,11 +182,14 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
       : await apply(createSubagentProfile(profile, ...scope));
     if (!result.success) return;
     const current = editorState.current;
-    const saved = editor.id ? result.data?.profiles.filter(profile => profile.id === editor.id) : undefined;
-    if (editor.id && current && current.id === editor.id && saved?.length === 1
+    const id = editor.id || editor.identifier.trim();
+    const saved = id ? result.data?.profiles.filter(profile => profile.id === id) : undefined;
+    if (current && current.id === editor.id && (editor.id || (id && current.identifier === editor.identifier)) && saved?.length === 1
       && (Object.keys(editor) as Array<keyof EditorValue>).some(key => current[key] !== editor[key])) {
-      editorBaseline.current = editorValue(saved[0]);
-      setEditor({ ...current });
+      const next = editorValue(saved[0]);
+      editorBaseline.current = next;
+      setEditor(editor.id ? { ...current } : { ...next, ...Object.fromEntries(Object.entries(current)
+        .filter(([key, value]) => value !== editor[key as keyof EditorValue])) });
     } else setEditor(undefined);
   };
 

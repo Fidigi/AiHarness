@@ -1154,6 +1154,39 @@ for (const width of [1280, 390]) test(`Child profile local retirement confirms o
       maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' }]);
     expect(saves).toHaveLength(2);
   } finally { releaseNewer(); }
+
+  let releaseCreate!: () => void, enteredCreate!: () => void;
+  const heldCreate = new Promise<void>(resolve => { releaseCreate = resolve; });
+  const pendingCreate = new Promise<void>(resolve => { enteredCreate = resolve; });
+  const creations: unknown[] = [];
+  await page.route('**/api/subagents/profiles', async route => {
+    if (route.request().method() === 'POST') { creations.push(route.request().postDataJSON()); enteredCreate(); await heldCreate; }
+    await route.fallback();
+  });
+  try {
+    await create.click();
+    await editor.getByLabel('Profile ID', { exact: true }).fill('explicit-later-profile');
+    await editor.getByLabel('Name', { exact: true }).fill('Explicit profile');
+    await editor.getByLabel('Description', { exact: true }).fill('Synthetic profile creation');
+    await editor.getByLabel('Tools', { exact: true }).fill(' read, grep, read ');
+    await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_CREATE_ADMITTED');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pendingCreate;
+    await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_CREATE_LATER');
+    releaseCreate(); await expect(editor.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('SYNTHETIC_PROFILE_CREATE_LATER');
+    await expect(editor.getByLabel('Profile ID', { exact: true })).toBeDisabled();
+    await expect(editor.getByLabel('Tools', { exact: true })).toHaveValue('read, grep');
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible(); await keep.click();
+    await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('SYNTHETIC_PROFILE_CREATE_LATER');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await expect(editor).toHaveCount(0);
+    expect(creations).toEqual([{ profile: { id: 'explicit-later-profile', name: 'Explicit profile', description: 'Synthetic profile creation',
+      instructions: 'SYNTHETIC_PROFILE_CREATE_ADMITTED', kind: 'custom', enabled: true, tools: ['read', 'grep'], skills: [], extensions: [],
+      maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' }]);
+    expect(api.requests.filter(request => request.path === '/api/subagents/profiles/explicit-later-profile' && request.method === 'PATCH')
+      .map(request => request.body)).toEqual([{ profile: { name: 'Explicit profile', description: 'Synthetic profile creation',
+        instructions: 'SYNTHETIC_PROFILE_CREATE_LATER', kind: 'custom', enabled: true, tools: ['read', 'grep'], skills: [], extensions: [], model: null,
+        thinking: null, maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' }]);
+  } finally { releaseCreate(); }
   await openEditor(); await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_WITHDRAWN');
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
   await page.evaluate(async path => {
@@ -1164,7 +1197,7 @@ for (const width of [1280, 390]) test(`Child profile local retirement confirms o
   await expect(prompt).toHaveCount(0); await expect(editor).toHaveCount(0);
   await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue(initial);
   await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
-  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(2);
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(4);
   expect(api.requests.filter(request => request.path === '/api/config' && request.method !== 'GET')).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROFILE_');
   expect(nativePrompts).toEqual([]);
