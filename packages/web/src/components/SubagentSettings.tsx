@@ -184,6 +184,8 @@ function ScopedSubagentSettings({ targetScope, setTargetScope, presented }: {
     const current = editorState.current;
     const id = editor.id || editor.identifier.trim();
     const saved = id ? result.data?.profiles.filter(profile => profile.id === id) : undefined;
+    if (!editor.id && id && current && !current.id && current.identifier.trim()
+      && current.identifier.trim() !== id && saved?.length === 1) return;
     if (current && current.id === editor.id && (editor.id || (id && current.identifier === editor.identifier)) && saved?.length === 1
       && (Object.keys(editor) as Array<keyof EditorValue>).some(key => current[key] !== editor[key])) {
       const next = editorValue(saved[0]);

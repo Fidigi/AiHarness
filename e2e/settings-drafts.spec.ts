@@ -1187,6 +1187,45 @@ for (const width of [1280, 390]) test(`Child profile local retirement confirms o
         instructions: 'SYNTHETIC_PROFILE_CREATE_LATER', kind: 'custom', enabled: true, tools: ['read', 'grep'], skills: [], extensions: [], model: null,
         thinking: null, maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' }]);
   } finally { releaseCreate(); }
+
+  await page.unroute('**/api/subagents/profiles');
+  let releaseIdentifier!: () => void, enteredIdentifier!: () => void;
+  const heldIdentifier = new Promise<void>(resolve => { releaseIdentifier = resolve; });
+  const pendingIdentifier = new Promise<void>(resolve => { enteredIdentifier = resolve; });
+  const identifierPosts: unknown[] = [];
+  await page.route('**/api/subagents/profiles', async route => {
+    if (route.request().method() === 'POST') {
+      identifierPosts.push(route.request().postDataJSON());
+      if (identifierPosts.length === 1) { enteredIdentifier(); await heldIdentifier; }
+    }
+    await route.fallback();
+  });
+  try {
+    await create.click();
+    await editor.getByLabel('Profile ID', { exact: true }).fill('first-explicit-profile');
+    await editor.getByLabel('Name', { exact: true }).fill('First explicit profile');
+    await editor.getByLabel('Description', { exact: true }).fill('Synthetic identifier change');
+    await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_IDENTIFIER_ADMITTED');
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pendingIdentifier;
+    await editor.getByLabel('Profile ID', { exact: true }).fill('second-explicit-profile');
+    await editor.getByLabel('Name', { exact: true }).fill('Second explicit profile');
+    await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_IDENTIFIER_LATER');
+    releaseIdentifier(); await expect(editor.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    await expect(editor.getByLabel('Profile ID', { exact: true })).toBeEditable();
+    await expect(editor.getByLabel('Profile ID', { exact: true })).toHaveValue('second-explicit-profile');
+    await expect(editor.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue('SYNTHETIC_PROFILE_IDENTIFIER_LATER');
+    expect(identifierPosts).toHaveLength(1);
+    await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible(); await keep.click();
+    await editor.getByRole('button', { name: 'Save', exact: true }).click(); await expect(editor).toHaveCount(0);
+    expect(identifierPosts).toEqual([
+      { profile: { id: 'first-explicit-profile', name: 'First explicit profile', description: 'Synthetic identifier change',
+        instructions: 'SYNTHETIC_PROFILE_IDENTIFIER_ADMITTED', kind: 'custom', enabled: true, tools: [], skills: [], extensions: [],
+        maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' },
+      { profile: { id: 'second-explicit-profile', name: 'Second explicit profile', description: 'Synthetic identifier change',
+        instructions: 'SYNTHETIC_PROFILE_IDENTIFIER_LATER', kind: 'custom', enabled: true, tools: [], skills: [], extensions: [],
+        maxTurns: 8, inheritContext: true, background: true }, cwd: '/workspace', scope: 'global' },
+    ]);
+  } finally { releaseIdentifier(); }
   await openEditor(); await editor.getByRole('textbox', { name: 'Instructions', exact: true }).fill('SYNTHETIC_PROFILE_LOCAL_WITHDRAWN');
   await editor.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
   await page.evaluate(async path => {
@@ -1197,7 +1236,7 @@ for (const width of [1280, 390]) test(`Child profile local retirement confirms o
   await expect(prompt).toHaveCount(0); await expect(editor).toHaveCount(0);
   await selectProviderCredential(page, 'OpenAI'); await expect(credential).toHaveValue(initial);
   await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
-  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(4);
+  expect(api.requests.filter(request => request.path.startsWith('/api/subagents') && request.method !== 'GET')).toHaveLength(6);
   expect(api.requests.filter(request => request.path === '/api/config' && request.method !== 'GET')).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROFILE_');
   expect(nativePrompts).toEqual([]);
