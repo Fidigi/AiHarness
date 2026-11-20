@@ -243,7 +243,7 @@ export function PluginSettings({ presented }: { presented: boolean }) {
     if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data);
-      setSource('');
+      setSource(current => normalizedSource(current) === normalized ? '' : current);
       setMessage(t('settings.plugins.action.install'));
       await hydrateSkillCatalog(true);
     } else await reconcileFailure(generation);

@@ -490,13 +490,42 @@ test('Plugin install drafts guard mobile dismissal and clear only after canonica
     await expect(source).toHaveValue('npm:@example/guarded-install');
     expect(api.requests.filter(request => request.path.startsWith('/api/plugins') && request.method !== 'GET')).toEqual([]);
     await section.getByRole('button', { name: 'Install', exact: true }).click(); await requested;
+    await source.fill('npm:@example/reverted-in-flight'); await source.fill('  npm:@example/guarded-install  ');
     await close.click(); await expect(prompt).toBeVisible(); await expect(prompt).toContainText('Saves already started may still finish.');
     await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await source.fill('  npm:@example/guarded-install  ');
     release(); await expect(source).toHaveValue('');
     expect(api.requests.filter(request => request.path.startsWith('/api/plugins') && request.method !== 'GET').map(request => request.body))
       .toEqual([{ action: 'install', source: 'npm:@example/guarded-install', scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' }]);
     await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
   } finally { release(); }
+
+  let releaseLater!: () => void, enteredLater!: () => void;
+  const heldLater = new Promise<void>(resolve => { releaseLater = resolve; });
+  const pendingLater = new Promise<void>(resolve => { enteredLater = resolve; });
+  await page.route('**/api/plugins', async route => {
+    if (route.request().method() === 'POST' && route.request().postDataJSON().action === 'install') { enteredLater(); await heldLater; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#plugins');
+    const section = page.locator('#plugins'), source = section.getByLabel('Package source', { exact: true });
+    await source.fill('npm:@example/guarded-second-install');
+    await section.getByLabel('Install scope', { exact: true }).selectOption('project');
+    await section.getByRole('button', { name: 'Install', exact: true }).click(); await pendingLater;
+    await source.fill('npm:@example/newer-draft-not-installed');
+    releaseLater(); await expect(section.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
+    const close = page.locator('.settings-dialog-header button'); await close.click();
+    const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+    await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(source).toHaveValue('npm:@example/newer-draft-not-installed');
+    expect(api.requests.filter(request => request.path.startsWith('/api/plugins') && request.method !== 'GET').map(request => request.body))
+      .toEqual(['npm:@example/guarded-install', 'npm:@example/guarded-second-install'].map(value => ({ action: 'install', source: value,
+        scope: 'project', cwd: '/workspace', projectId: 'workspace-e2e' })));
+    await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('newer-draft-not-installed');
+  } finally { releaseLater(); }
 });
 
 test('MCP import source drafts guard outer dismissal without preview or consent', async ({ page }) => {
