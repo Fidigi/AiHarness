@@ -176,6 +176,8 @@ Approval resolves the starting product decisions, not implementation or acceptan
 
 | 2026-11-20 | PREF-02–03; QA-01 | States unchanged | Code mode inline-budget raw dirty flag and confirmation-only blur suppression in §35; normal full-payload blur save and invalid reset preserved | Frozen build/types and Web 71/619 PASS; **287 PASS / 17 fixture failures of 304 selected cases**. Native Vite exits 139 during the campaign; seventeen subsequent quota fixtures fail before their case bodies. Nine exact earlier failures remain deferred/open (313-case bounded universe). Two sources, all 326 E2E PNGs and reviewed current runtime views reconcile; no reference change | No unchanged rerun, passing union, accepted gap or native-cause claim. Frozen native campaign remains failed; local/context/history/global retirement and complete acceptance remain open. |
 
+| 2026-11-20 | QA-01 | State unchanged | Scoped root Playwright Vite-host Node flag/cwd and one actual-config control in §36; product/runtime/preview policy unchanged | Frozen build/types, nine Docker build controls and Web 71/619 PASS; **303 PASS / 1 worker-SIGSEGV FAIL of 304 selected cases**, with nine exact earlier failures deferred/open (313-case bounded universe). Native 37/37 includes all seventeen previous fixture failures under the changed host; no Vite exit is observed in this candidate | Earlier 287/17 host-failure campaign stays failed, not filled or causally diagnosed. New mobile-light keyboard worker SIGSEGV remains open; no unchanged rerun, accepted gap or whole criterion closure. Two source/control files, all 326 E2E PNGs and four reviewed runtime views match frozen/reviewed hashes. |
+
 ## 7. Approved Direction and Delivery Order
 
 ### 7.1 Minimal does not mean low contrast
@@ -1313,3 +1315,39 @@ Read-only inspection also preserves a Chromium minidump from §34's stopped nati
 All seven current owners are stopped with `OOMKilled:false`, not a diagnosis. **2,641 exported entries / 1,989 immutable inputs / 652 separately classified regenerated inputs** have zero mismatches, including nested documentation, modes and symlinks. All **two changed sources**, **326 E2E PNGs** and **356 context-included repository PNGs** equal the freeze; twenty excluded PNGs remain unchanged against HEAD. Three frozen modal views equal pre-freeze reviewed controls. EN mobile differs at the same four Keep-focus corner pixels, equals its older reviewed hash and is individually opened/reviewed again under its frozen hash without a reference change. All four current frozen views match reviewed hashes; the pre-freeze manifest remains separate. Three root documents are Docker-excluded and separately hashed. Final lint passes **110 Markdown files / 1,621 links**; sixteen criteria, twenty-four topics/line estimates, whitespace and exact **five owned paths/index bytes** reconcile. Evidence remains under `/tmp/aih-web-design-settings-budget-draft-*`; read-only §34 dump/symbol inspection remains under `/tmp/aih-web-design-settings-nested-drafts-*`.
 
 No whole criterion closes: **11/16 DONE (68.75%)**, no accepted gap. Complete draft inventory, local editor Cancel/Escape, scope/Edit retargeting, authority/context/history/global navigation, presentation/retirement acceptance and final visual/global qualification remain open. This UI correction is not a repair or diagnosis of any retained native failure.
+
+## 36. Root Vite Test-Host Mitigation — Not a Native Diagnosis
+
+This increment starts from `10faebb711ef83e4543ed73717766bcc7c7a4eed`. Read-only source/runtime inspection after §35 finds that the root Playwright Vite dev host uses plain `vite` through its npm workspace script, without the explicit `--no-maglev` already used for Vite builds. The runner's Node CLI flag does not propagate automatically to that separately launched process; the pinned image has no `NODE_OPTIONS`, and its read-only `--v8-options` output confirms Maglev enabled by default. Node 24.15.0's allowed environment flags exclude `--no-maglev`, so setting it through `NODE_OPTIONS` is not a valid mitigation.
+
+The candidate changes only the root test-host launch: explicit Node `--no-maglev` before the existing Vite binary and an explicit Web workspace cwd. Original URL, Vite options/configuration, Express launch, health/deadlines, budgets, assertions and retry/snapshot policy remain. No package/dependency/lockfile, npm dev/preview script, product code or Server/browser runtime flag changes. This scopes an existing compiler mitigation to the failed test host; it does not establish Maglev as the cause or repair unrelated worker/Chromium failures.
+
+### Focused controls
+
+Existing `.docker/test-build.test.mjs` protects emitted inputs and compiler/build flags, not the dev host. One new control imports the actual Playwright configuration: its RED exposes the original unprotected command, rather than pretending to deterministically reproduce a native crash. The candidate then passes all **nine owning Node controls**; command/cwd/URL selection and unchanged deadline/reuse option are checked without launching a server in that control. Actual browser startup and all **nineteen draft plus five administration cases pass 24/24** (1.0m) through the changed host.
+
+Focused Docker build, workspace/parity types and Web **71 files / 619 tests PASS**, retaining **149/160 KiB gzip** entry/eager and **28 chunks**. No reference or PNG changes. Three alertdialog runtime views equal prior reviewed hashes; the differing EN desktop view is individually opened/reviewed, with four Keep-focus corner pixels and origin unassigned, without a reference update.
+
+### Frozen candidate accounting — native host survives, separate worker failure remains
+
+The single separate frozen campaign deliberately re-exercises §35's seventeen fixture failures only after this relevant owning-host launch change. The old failed campaign remains failed, not replaced by a passing union. Its nine earlier worker/Chromium failures remain deferred/open because this candidate is not a relevant repair of those cases.
+
+Image `sha256:5bb473d36a36ad40e665b39208dedfe6096fa6a529c7b2137060de7b4cea4b7a` passes Docker build and all **nine build-time Node controls**, workspace/parity types and Web **71 files / 619 tests**, retaining **149/160 KiB gzip** entry/eager and **28 chunks**. Seven separate owners retain **1 GiB shared memory**, browser `--workers=1 --retries=0 --update-snapshots=none`, and the same **304-case selection / 313-case bounded universe** as §35. No case is added or waived for this host-only increment.
+
+| Owning selection | Result | Duration |
+|---|---:|---:|
+| Fifteen standard files, excluding six retained cases | 205 PASS / 1 FAIL of 206 | 9.9m |
+| Sixteen native files, excluding two retained cases | 37/37 PASS | 6.5m |
+| Catalogue visuals, excluding the exact retained provider case | 17/17 PASS | 30.4s |
+| Pane lifetime | 19/19 PASS | 26.4s |
+| Workspace assets | 17/17 PASS | 17.0s |
+| Settings locale assets | 8/8 PASS | 14.5s |
+| **Distinct candidate selected accounting** | **303 PASS / 1 FAIL of 304** | — |
+
+The current native selection completes all thirty-seven cases, including the seventeen whose fixtures previously failed before their bodies. No Vite host exit is observed in the candidate's standard/native runs. This is bounded changed-host evidence, not an A/B causal diagnosis, a retroactive pass for §35 or a repair of the nine deferred worker/Chromium cases.
+
+The existing **`mobile-light › keyboard signals preserve chat controls and MCP settings`** case at `e2e/mobile-keyboard.spec.ts:114:5` reports **`Error: worker process exited unexpectedly (code=null, signal=SIGSEGV)`**. Its directory contains only `keyboard-expanded-mobile-light.png`, no error-context. The image is opened/reviewed and hashed without adoption; one expanded-chat frame does not locate the inner crash stage, establish the cause or qualify the remaining case. It is not rerun unchanged or filled from other passes. **`campaignPassed:false`** and **`qualificationComplete:false`** retain it, the nine deferred cases and earlier failed campaigns. All seven current owners are stopped with `OOMKilled:false`, not a diagnosis.
+
+**2,641 exported entries / 1,989 immutable inputs / 652 separately classified regenerated inputs** have zero mismatches, including nested documentation, modes and symlink targets. Both changed source/control files (`playwright.config.ts`, `.docker/test-build.test.mjs`), all **326 E2E PNGs** and **356 context-included repository PNGs** equal the freeze; the other twenty repository PNGs are excluded and unchanged against HEAD. All four frozen alertdialog runtime views equal their reviewed control hashes. No PNG/reference changes. Four root documents are Docker-excluded and hashed separately. Final lint passes **110 Markdown files / 1,621 links**; sixteen criteria, twenty-four topics/line estimates, whitespace and exact **six owned paths/index bytes** reconcile. Evidence remains under `/tmp/aih-web-design-vite-host-*`, including the actual default-JIT inspection and retained failure artifact.
+
+No whole criterion closes: **11/16 DONE (68.75%)**, no accepted gap. Native reliability, local/context/history/global draft retirement, form presentation and final visual/global qualification remain open.

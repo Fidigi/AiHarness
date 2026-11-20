@@ -89,6 +89,16 @@ test('Web build disables optimizing compiler JIT without changing bundler or bud
   assert.deepEqual(calls[2].args.slice(1), [path.join(root, 'packages/web/scripts/check-bundle-budget.mjs')]);
 });
 
+test('Vite dev owning host keeps its cwd and options while disabling Maglev', async () => {
+  const { default: config } = await import('../playwright.config.ts');
+  const host = config.webServer.find(server => server.url === 'http://localhost:3080');
+  assert.ok(host);
+  assert.equal(host.command, 'node --no-maglev ../../node_modules/vite/bin/vite.js');
+  assert.equal(host.cwd, path.join(root, 'packages/web'));
+  assert.equal(host.timeout, 120 * 1000);
+  assert.equal(host.reuseExisting, false);
+});
+
 test('Web build stops at the first failed phase without retries or lost termination evidence', () => {
   for (const failedPhase of [0, 1, 2]) {
     for (const failure of [{ status: 7 }, { status: null, signal: 'SIGSEGV' },

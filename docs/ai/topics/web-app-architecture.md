@@ -204,6 +204,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 - Settings, optional selection-action JS, file-pane and extension-form JS/CSS, terminal/xterm, Mermaid, syntax highlighting, and other heavy surfaces stay lazy where configured.
 - `packages/web/scripts/check-bundle-budget.mjs` fails eager, async, or CSS budget regressions.
+- Root Playwright's development Vite host uses explicit Node `--no-maglev` with the Web workspace cwd and original URL/deadlines. This scopes the existing Vite-build mitigation to the test host after a during-campaign exit139; npm dev/preview scripts, product/Server/browser runtime flags and budgets stay unchanged. The pinned Node does not admit this flag through `NODE_OPTIONS`. A passing candidate does not diagnose old native failures.
 - The E2E snapshot inventory contains 322 PNGs, including four dedicated built-in credential crops, six separate Custom models captures, four restored Settings navigation crops, two category-keyboard crops, four General Notifications crops and two mobile General overviews. Inventory is not a claim that every current comparison passes. The MCP inventory overview explicitly expands its scroll container for a full-content artifact; native modal/viewport geometry is checked separately by navigation scenarios. The independent static demo has separate captures.
 - Performance tests protect cache bounds, virtualization, and lazy loading.
 
@@ -213,6 +214,7 @@ The service worker caches the offline shell/static assets, never `/api` data. Up
 
 ## Associated Tests
 
+- `.docker/test-build.test.mjs` additionally imports the actual root Playwright configuration and protects the Vite host's explicit Node flag, Web cwd, URL selection and unchanged deadline/reuse option; no server is launched by that control.
 - `packages/server/src/runtime/terminal-runtime.test.ts`, `api/terminal-lifecycle-http.test.ts` and `packages/web/src/services/terminal-replay.test.ts` — byte/event bounds, Unicode/reset/exit DTOs, actual admin/Origin/trust, large input hashes, resize, expired replay, removed subscriptions and Linux foreground-process termination
 - `e2e/terminal-lifecycle-live.spec.ts`, `e2e/terminal-input-lifetime.spec.ts`, `e2e/terminal.spec.ts` and `e2e/terminal-controls.spec.ts` — genuine emitted Server/static-Web Unicode/bracketed paste/offline renewal/exit/expiry/workspace ownership, controlled uncertain-input/no-replay/reset/metadata admission, existing native touch keys and unchanged responsive Light/Dark captures; not physical-device or protocol certification
 - `packages/server/src/api/{docx-preview,file-preview-http}.test.ts`, `packages/web/src/components/delimited-preview.test.ts` and `services/document-preview.test.ts` — bounded inert parsing, native preview auth/trust/path/attachment refusal, fixed destination and streamed-byte admission

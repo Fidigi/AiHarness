@@ -86,7 +86,8 @@ export default defineConfig({
       },
     },
     {
-      command: 'npm run dev --workspace @ai-harness/web',
+      command: 'node --no-maglev ../../node_modules/vite/bin/vite.js',
+      cwd: path.join(import.meta.dirname, 'packages/web'),
       url: 'http://localhost:3080',
       reuseExisting: false,
       timeout: 120 * 1000,
