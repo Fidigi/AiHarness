@@ -857,6 +857,47 @@ test('Custom model creation drafts bind to the provider-qualified reply without 
       expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_CREATE_');
     } finally { release(); }
   }
+  await page.unroute('**/api/provider-registry/models');
+  for (const changed of ['provider', 'id'] as const) {
+    let release!: () => void, entered!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; }), pending = new Promise<void>(resolve => { entered = resolve; });
+    const id = `created-${changed}-change`, nextProvider = changed === 'provider' ? 'azure' : 'openai';
+    const nextId = changed === 'id' ? 'created-new-id' : id;
+    await page.route('**/api/provider-registry/models', async route => {
+      if (route.request().method() === 'POST' && route.request().postDataJSON().id === id
+        && route.request().postDataJSON().provider === 'openai') { entered(); await held; }
+      await route.fallback();
+    });
+    try {
+      await page.goto('/settings#custom-models'); await editor.locator('summary').click();
+      await editor.getByLabel('Provider', { exact: true }).fill('openai'); await editor.getByLabel('ID', { exact: true }).fill(id);
+      await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_OLD_TUPLE');
+      await editor.getByRole('button', { name: 'Save', exact: true }).click(); await pending;
+      await editor.getByLabel('Provider', { exact: true }).fill(nextProvider); await editor.getByLabel('ID', { exact: true }).fill(nextId);
+      await editor.getByLabel('Name', { exact: true }).fill('SYNTHETIC_MODEL_CREATE_NEW_TUPLE');
+      const readback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+      release(); await readback;
+      await expect(editor.getByLabel('Provider', { exact: true })).toHaveValue(nextProvider);
+      await expect(editor.getByLabel('ID', { exact: true })).toHaveValue(nextId);
+      await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_MODEL_CREATE_NEW_TUPLE');
+      await expect(editor.locator('summary')).toHaveText('Create a custom model');
+      expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toHaveLength(writes.length + 1);
+      await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      const nextReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+      await editor.getByRole('button', { name: 'Save', exact: true }).click(); await nextReadback;
+      await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+      const body = { provider: 'openai', id, name: 'SYNTHETIC_MODEL_CREATE_OLD_TUPLE',
+        capabilities: { reasoning: false, imageInput: false, toolCalls: true }, pricing: {}, compatibility: {} };
+      writes.push({ method: 'POST', path: '/api/provider-registry/models', body },
+        { method: 'POST', path: '/api/provider-registry/models', body: { ...body, provider: nextProvider, id: nextId, name: 'SYNTHETIC_MODEL_CREATE_NEW_TUPLE' } });
+      expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+        .map(({ method, path, body }) => ({ method, path, body }))).toEqual(writes);
+      await selectCustomModel(page, 'azure:created-fixture'); await expect(section.locator('.custom-model-context-detail')).toContainText('Other-provider fixture');
+      await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+      expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
+      expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_MODEL_CREATE_');
+    } finally { release(); }
+  }
 });
 
 test('Plugin install drafts guard mobile dismissal and clear only after canonical installation', async ({ page }) => {

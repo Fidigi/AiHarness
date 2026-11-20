@@ -626,6 +626,11 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         }
         formBaseline.current = saved;
         setEditing(result.data.key); setForm(next);
+      } else if (!editing && !current.editing && formBaseline.current === baseline
+        && result.data?.key === `${form.provider}:${form.id}` && result.data.provider === form.provider && result.data.id === form.id
+        && current.form.provider.trim() && current.form.id.trim()
+        && (current.form.provider.trim() !== form.provider || current.form.id.trim() !== form.id)) {
+        setForm({ ...current.form });
       } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
       await Promise.all([load(), hydrateModelCatalog(true)]);
     }
