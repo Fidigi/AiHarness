@@ -57,6 +57,10 @@ function error(message?: string): void {
   publishNotice(message || 'Operation failed.', { level: 'error' });
 }
 
+function customProviderForm(provider: CustomProviderDefinition) {
+  return { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
+}
+
 export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProvidersLoaded, onSelectionInvalidated }: {
   presented: boolean;
   onCanonicalReload?: () => void;
@@ -88,6 +92,8 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
   };
   const empty = { id: '', name: '', baseUrl: '', dialect: 'openai-completions', apiKey: '', headers: '{}' };
   const [form, setForm] = useState(empty);
+  const editorState = useRef({ editing, form });
+  useLayoutEffect(() => { editorState.current = { editing, form }; }, [editing, form]);
   const formBaseline = useRef(form);
   const editorSummary = useRef<HTMLElement>(null);
   const guardFormDiscard = useSettingsDraftGuard((Object.keys(form) as Array<keyof typeof form>)
@@ -280,6 +286,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       let headers: Record<string, string> | undefined;
       try { if (form.headers.trim()) headers = JSON.parse(form.headers) as Record<string, string>; }
       catch { error(t('settings.customProviders.invalidHeaders')); return; }
+      const baseline = formBaseline.current;
       const result = await saveCustomProvider({
         id: form.id, name: form.name, baseUrl: form.baseUrl, dialect: form.dialect,
         ...(headers ? { headers } : {}),
@@ -287,8 +294,15 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
       }, editing);
       if (!result.success) error(result.error);
       else {
-        setEditing(undefined);
-        formBaseline.current = empty; setForm(empty);
+        const current = editorState.current;
+        if (editing && result.data?.id === editing && current.editing === editing && formBaseline.current === baseline
+          && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
+          const saved = customProviderForm(result.data), next: typeof form = { ...saved };
+          for (const key of Object.keys(form) as Array<keyof typeof form>) {
+            if (current.form[key] !== form[key]) next[key] = current.form[key];
+          }
+          formBaseline.current = saved; setForm(next);
+        } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
         publishNotice(t('settings.customProviders.saved'), { level: 'success' });
         const [canonical] = await Promise.all([load(), hydrateProviders(), hydrateModelCatalog(true)]);
         if (mounted.current && generation === epoch.current && choiceGeneration === navigationEpoch.current && result.data?.id
@@ -457,7 +471,7 @@ export function ProviderLifecycleSettings({ presented, onCanonicalReload, onProv
                 if (targets.length !== 1) return;
                 const provider = targets[0]!;
                 setEditing(provider.id);
-                const next = { id: provider.id, name: provider.name, baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: '', headers: '' };
+                const next = customProviderForm(provider);
                 formBaseline.current = next; setForm(next);
               });
             }}>{t('common.edit')}</button>

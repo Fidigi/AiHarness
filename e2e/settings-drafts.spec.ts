@@ -365,6 +365,70 @@ test('Provider editor drafts guard dismissal without retargeting the original sa
       id: 'fixture-a', name: 'Edited fixture A', baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: 'SYNTHETIC_PROVIDER_EDITOR_DRAFT',
     } }]);
   await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  const laterCases = [
+    { name: 'SYNTHETIC_PROVIDER_EARLY_NAME', key: 'SYNTHETIC_PROVIDER_ADMITTED_KEY', headers: { 'X-Fixture': 'SYNTHETIC_PROVIDER_ADMITTED_HEADER' }, field: 'name', later: 'SYNTHETIC_PROVIDER_LATER_NAME' },
+    { name: 'SYNTHETIC_PROVIDER_EARLY_SECRET', key: 'SYNTHETIC_PROVIDER_SECOND_KEY', headers: undefined, field: 'key', later: 'SYNTHETIC_PROVIDER_LATER_KEY_NOT_SAVED' },
+  ];
+  for (const scenario of laterCases) {
+    let releaseSave!: () => void, enteredSave!: () => void;
+    const heldSave = new Promise<void>(resolve => { releaseSave = resolve; });
+    const pendingSave = new Promise<void>(resolve => { enteredSave = resolve; });
+    await page.route('**/api/provider-registry/custom/fixture-a', async route => {
+      if (route.request().method() === 'PUT') { enteredSave(); await heldSave; }
+      await route.fallback();
+    });
+    try {
+      await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', 'fixture-a');
+      await section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true }).click();
+      await form.getByLabel('Name', { exact: true }).fill(scenario.name);
+      await form.getByLabel('API key', { exact: true }).fill(scenario.key);
+      const headers = form.getByLabel('Custom headers (encrypted JSON values)', { exact: true });
+      await headers.fill(scenario.headers ? JSON.stringify(scenario.headers) : '');
+      await selectProviderConnection(page, 'custom', 'fixture-b');
+      await form.getByRole('button', { name: 'Save', exact: true }).click(); await pendingSave;
+      await form.getByLabel(scenario.field === 'name' ? 'Name' : 'API key', { exact: true }).fill(scenario.later);
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
+      releaseSave(); await expect(form.locator('button:not([type])')).toBeEnabled();
+      await expect(form.getByLabel('Name', { exact: true })).toHaveValue(scenario.field === 'name' ? scenario.later : scenario.name);
+      await expect(form.getByLabel('API key', { exact: true })).toHaveValue(scenario.field === 'key' ? scenario.later : '');
+      await expect(headers).toHaveValue(''); await expect(prompt).toBeVisible();
+      await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();
+      if (scenario.field === 'name') await form.getByLabel('Name', { exact: true }).fill(scenario.name);
+      await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+      if (scenario.field === 'key') {
+        await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+      }
+      await expect(form.getByLabel('ID', { exact: true })).toHaveValue(''); await expect(prompt).toHaveCount(0);
+      await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    } finally { releaseSave(); }
+  }
+  let releaseLease!: () => void, enteredLease!: () => void;
+  const heldLease = new Promise<void>(resolve => { releaseLease = resolve; });
+  const pendingLease = new Promise<void>(resolve => { enteredLease = resolve; });
+  await page.route('**/api/provider-registry/custom/fixture-a', async route => {
+    if (route.request().method() === 'PUT') { enteredLease(); await heldLease; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/settings#provider-lifecycle'); await selectProviderConnection(page, 'custom', 'fixture-a');
+    const edit = section.locator('.provider-context-detail').getByRole('button', { name: 'Edit', exact: true });
+    await edit.click(); await form.getByLabel('Name', { exact: true }).fill('SYNTHETIC_PROVIDER_REOPEN_SAVE');
+    await form.getByRole('button', { name: 'Save', exact: true }).click(); await pendingLease;
+    await form.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click(); await expect(prompt).toHaveCount(0);
+    await edit.click(); await expect(form.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_PROVIDER_EARLY_SECRET');
+    releaseLease(); await expect(form.locator('button:not([type])')).toBeEnabled();
+    await expect(form.getByLabel('ID', { exact: true })).toHaveValue('');
+    await close.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
+  } finally { releaseLease(); }
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')
+    .map(({ method, path, body }) => ({ method, path, body }))).toEqual([
+      { method: 'PUT', path: '/api/provider-registry/custom/fixture-a', body: { id: 'fixture-a', name: 'Edited fixture A', baseUrl: provider.baseUrl,
+        dialect: provider.dialect, apiKey: 'SYNTHETIC_PROVIDER_EDITOR_DRAFT' } },
+      ...laterCases.map(scenario => ({ method: 'PUT', path: '/api/provider-registry/custom/fixture-a', body: { id: 'fixture-a', name: scenario.name,
+        baseUrl: provider.baseUrl, dialect: provider.dialect, apiKey: scenario.key, ...(scenario.headers ? { headers: scenario.headers } : {}) } })),
+      { method: 'PUT', path: '/api/provider-registry/custom/fixture-a', body: { id: 'fixture-a', name: 'SYNTHETIC_PROVIDER_REOPEN_SAVE', baseUrl: provider.baseUrl, dialect: provider.dialect } },
+    ]);
   await page.goto('/settings#provider-lifecycle'); await selectGeneralSettings(page, 'behavior');
   const peer = page.locator('#defaults').getByLabel('Model', { exact: true });
   await peer.fill('provider-cancel-peer-default');
@@ -390,7 +454,7 @@ test('Provider editor drafts guard dismissal without retargeting the original sa
   await selectGeneralSettings(page, 'behavior'); await expect(peer).toHaveValue('provider-cancel-peer-default');
   await close.click(); await expect(prompt).toBeVisible(); await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0);
-  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toHaveLength(1);
+  expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/custom') && request.method !== 'GET')).toHaveLength(4);
   expect(api.requests.filter(request => request.path === '/api/configuration/scope' && request.method === 'PATCH')).toEqual([]);
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_PROVIDER_');
 });
