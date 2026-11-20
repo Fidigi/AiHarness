@@ -260,8 +260,7 @@ function App() {
       aria-label={t('terminal.open')}><Icon name="terminal" /></button> : null;
 
   return (
-    <Suspense fallback={<div className="app-loading" role="status">{t('common.loading')}…</div>}>
-      <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`} inert={!!settingsModal || undefined}>
+    <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`} inert={!!settingsModal || undefined}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
         aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><Icon name="menu" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
@@ -270,8 +269,10 @@ function App() {
       }}
         aria-expanded={filesOpen} aria-label={t('files.explorer')}><Icon name="folder" /></button>}
       {sidebarOpen && <button className="mobile-backdrop" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
-      {(isNarrow || sidebarVisible) && <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
-        inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} explorerHostRef={setExplorerHost} />}
+      {(isNarrow || sidebarVisible) && <Suspense fallback={<p className={`sidebar ${sidebarOpen ? 'open' : ''}`} role="status">{t('common.loading')}…</p>}>
+        <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
+          inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} explorerHostRef={setExplorerHost} />
+      </Suspense>}
       <main className="main-content" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<ChatView terminalControl={terminalControl} />} />
@@ -293,8 +294,7 @@ function App() {
       <StatusCenter container={settingsModal} />
       <PwaStatus />
       <IconControlHints />
-      </div>
-    </Suspense>
+    </div>
   );
 }
 

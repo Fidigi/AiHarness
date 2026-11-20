@@ -31,15 +31,54 @@ async function settle(page: Page) {
 }
 
 for (const phase of ['auth', 'chrome', 'settings'] as const) {
-  test(`Settings entry failure evidence stays value-free while ${phase} is pending`, async ({ page }, testInfo) => {
-    await product(page);
+  test(phase === 'chrome' ? 'Pending Sidebar leaves chat Stop and Settings drafts usable'
+    : `Settings entry failure evidence stays value-free while ${phase} is pending`, async ({ page }, testInfo) => {
+    const api = await product(page);
     const held: Route[] = [];
     const target = phase === 'auth' ? '**/api/auth/status' : phase === 'chrome' ? '**/assets/Sidebar-*.js' : '**/assets/SettingsView-*.js';
     await page.route(target, route => { held.push(route); });
     const synthetic = 'SYNTHETIC_ENTRY_EVIDENCE_NOT_FOR_DIAGNOSTICS';
     try {
-      await page.goto(`/settings?fixture=${synthetic}`);
+      await page.goto(phase === 'chrome' ? chat : `/settings?fixture=${synthetic}`);
       await expect.poll(() => held.length).toBeGreaterThan(0);
+      if (phase === 'chrome') {
+        for (const width of [1280, 390]) {
+          await page.setViewportSize({ width, height: 844 });
+          await expect(composer(page)).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+          const capture = testInfo.outputPath(`sidebar-pending-${width}.png`);
+          await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
+          await testInfo.attach(`sidebar-pending-${width}`, { path: capture, contentType: 'image/png' });
+          if (width === 390) {
+            const menu = page.locator('.mobile-menu'), loading = page.locator('p.sidebar[role="status"]');
+            await expect(loading).not.toBeInViewport();
+            await menu.click(); await expect(menu).toHaveAttribute('aria-expanded', 'true');
+            await expect(loading).toBeInViewport({ ratio: 1 });
+            await page.keyboard.press('Escape'); await expect(menu).toHaveAttribute('aria-expanded', 'false');
+            await expect(loading).not.toBeInViewport();
+          }
+        }
+        await composer(page).fill('Continue while Sidebar loads'); await composer(page).press('Enter');
+        await expect(page.locator('.stop-button')).toBeEnabled();
+        await open(page); await selectGeneralSettings(page, 'authentication');
+        const token = page.locator('#authentication input[type="password"]');
+        await token.fill(synthetic);
+        await selectGeneralSettings(page, 'appearance'); await selectGeneralSettings(page, 'authentication');
+        await expect(token).toHaveValue(synthetic); await token.focus();
+        const address = page.url();
+        await expect(page.locator('aside.sidebar')).toHaveCount(0);
+        await Promise.all(held.splice(0).map(route => route.fallback()));
+        await expect(page.locator('aside.sidebar')).toHaveCount(1);
+        await expect.poll(() => page.locator('aside.sidebar').evaluate(element => Boolean(element.closest('[inert]')))).toBe(true);
+        await expect(token).toHaveValue(synthetic); await expect(token).toBeFocused(); await expect(page).toHaveURL(address);
+        expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain(synthetic);
+        await closeSettings(page, { discardDrafts: true });
+        await expect(page.locator('.stop-button')).toBeEnabled(); await page.locator('.stop-button').click();
+        expect(api.requests.filter(request => request.path === '/api/config' || request.path === '/api/configuration/scope')
+          .filter(request => request.method !== 'GET')).toEqual([]);
+        expect(testInfo.attachments.filter(item => item.name === 'settings-entry-state')).toHaveLength(0);
+        return;
+      }
       await page.evaluate(value => {
         const input = document.createElement('input'); input.type = 'password'; input.value = value; document.body.append(input);
       }, synthetic);
