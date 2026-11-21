@@ -179,6 +179,16 @@ for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 39
     await page.goBack(); await expect(prompt).toBeVisible(); await discard.click();
     await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
     await page.goForward(); await expect(token).toBeVisible(); await expect(token).toHaveValue('');
+    await page.locator('.settings-dialog-header button').click(); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+    await expect(page).toHaveURL(chatAddress); await page.goBack(); await expect(token).toBeVisible();
+    await token.fill('SYNTHETIC_HISTORY_FORWARD_TOKEN');
+    const forwardAddress = page.url(), forwardInput = await token.elementHandle();
+    await page.goForward(); await expect(prompt).toBeVisible(); await expect(page).toHaveURL(forwardAddress);
+    await expect(keep).toBeFocused(); await keep.click(); await expect(prompt).toHaveCount(0);
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_FORWARD_TOKEN'); expect(await forwardInput!.evaluate(node => node.isConnected)).toBe(true);
+    await page.goForward(); await expect(prompt).toBeVisible(); await discard.click();
+    await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
+    await page.goBack(); await expect(token).toBeVisible(); await expect(token).toHaveValue('');
     await token.fill('SYNTHETIC_HISTORY_CATEGORY_TOKEN'); await selectGeneralSettings(page, 'appearance');
     await page.goBack(); await expect(prompt).toHaveCount(0); await expect(token).toBeVisible();
     await expect(token).toHaveValue('SYNTHETIC_HISTORY_CATEGORY_TOKEN');
