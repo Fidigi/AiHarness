@@ -412,16 +412,30 @@ test('Pending and failed credential writes never report the draft clean', async 
   let release!: () => void, entered!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const requested = new Promise<void>(resolve => { entered = resolve; });
+  let releasePeer!: () => void, enteredPeer!: () => void;
+  const heldPeer = new Promise<void>(resolve => { releasePeer = resolve; });
+  const requestedPeer = new Promise<void>(resolve => { enteredPeer = resolve; });
   const writes: unknown[] = [];
   await page.route('**/api/config', async route => {
     writes.push(route.request().postDataJSON());
-    entered(); await held; await route.fulfill({ status: 500, json: { error: 'Synthetic credential write failure' } });
+    if (writes.length === 1) { entered(); await held; }
+    else { enteredPeer(); await heldPeer; }
+    await route.fulfill({ status: 500, json: { error: 'Synthetic credential write failure' } });
   });
   try {
     await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
     const detail = page.locator('#providers .credential-context-detail'), credential = detail.locator('input[type="password"]:visible');
     await credential.fill('SYNTHETIC_FAILED_CREDENTIAL_EDIT');
     await detail.getByRole('button', { name: 'Save', exact: true }).click(); await requested;
+    await test.info().attach('credential-write-pending', {
+      body: await page.screenshot({ path: test.info().outputPath('credential-write-pending.png'),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
+    const pendingStatus = detail.getByRole('status').filter({ hasText: 'Saving submitted API key…' });
+    await expect(pendingStatus).toBeVisible();
+    await expect(credential).toBeEnabled();
+    await detail.getByRole('button', { name: 'Save', exact: true }).click(); await requestedPeer;
+    await expect(pendingStatus).toHaveCount(1);
     const close = page.locator('.settings-dialog-header button'); await close.click();
     const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
     await expect(prompt).toBeVisible(); await expect(prompt).toContainText('Saves already started may still finish.');
@@ -429,14 +443,22 @@ test('Pending and failed credential writes never report the draft clean', async 
     const response = page.waitForResponse(response => response.url().endsWith('/api/config') && response.request().method() === 'POST');
     release(); expect((await response).status()).toBe(500);
     await expect(detail.getByRole('alert')).toHaveText('HTTP 500');
+    await expect(pendingStatus).toBeVisible();
+    const peerResponse = page.waitForResponse(response => response.url().endsWith('/api/config') && response.request().method() === 'POST');
+    releasePeer(); expect((await peerResponse).status()).toBe(500);
+    await expect(pendingStatus).toHaveCount(0);
     await expect(detail).not.toContainText('Synthetic credential write failure');
     await expect(credential).toHaveValue('SYNTHETIC_FAILED_CREDENTIAL_EDIT');
+    await test.info().attach('credential-write-failed', {
+      body: await page.screenshot({ path: test.info().outputPath('credential-write-failed.png'),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
     await close.click(); await expect(prompt).toBeVisible();
     await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
     await expect(page.locator('.settings-dialog')).toHaveCount(0);
-    expect(writes).toEqual([{ type: 'openai', apiKey: 'SYNTHETIC_FAILED_CREDENTIAL_EDIT' }]);
+    expect(writes).toEqual(Array.from({ length: 2 }, () => ({ type: 'openai', apiKey: 'SYNTHETIC_FAILED_CREDENTIAL_EDIT' })));
     expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST')).toEqual([]);
-  } finally { release(); }
+  } finally { release(); releasePeer(); }
   await page.unroute('**/api/config');
   const scenarios = [
     { saved: 'SYNTHETIC_EARLY_KEY_CLEARED', later: '' },

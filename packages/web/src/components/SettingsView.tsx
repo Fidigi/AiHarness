@@ -80,6 +80,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const authTokenBaseline = useRef('');
   const [authApplied, setAuthApplied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<Partial<Record<string, SaveStatus>>>({});
+  const [pendingApiKeys, setPendingApiKeys] = useState<Record<string, number>>({});
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
@@ -326,18 +327,23 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
   const saveApiKey = async (type: string) => {
     const key = apiKeyInputs[type];
     if (key && !key.includes('•')) {
-      const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
-      if (result.success) {
-        const current = apiKeyState.current[type] === key;
-        updateApiKey(type as ProviderType, 'configured');
-        apiKeyBaseline.current = { ...apiKeyBaseline.current, [type]: '••••••••' };
-        setApikeyInputs(previous => previous[type] === key ? { ...previous, [type]: '••••••••' } : { ...previous });
-        if (current) setSaveStatus(previous => ({ ...previous, [type]: {
-          key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
-        } }));
-      } else {
-        setSaveStatus(previous => ({ ...previous, [type]: result.error
-          ? { detail: result.error } : { key: 'settings.configurationFailed' } }));
+      setPendingApiKeys(previous => ({ ...previous, [type]: (previous[type] ?? 0) + 1 }));
+      try {
+        const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
+        if (result.success) {
+          const current = apiKeyState.current[type] === key;
+          updateApiKey(type as ProviderType, 'configured');
+          apiKeyBaseline.current = { ...apiKeyBaseline.current, [type]: '••••••••' };
+          setApikeyInputs(previous => previous[type] === key ? { ...previous, [type]: '••••••••' } : { ...previous });
+          if (current) setSaveStatus(previous => ({ ...previous, [type]: {
+            key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
+          } }));
+        } else {
+          setSaveStatus(previous => ({ ...previous, [type]: result.error
+            ? { detail: result.error } : { key: 'settings.configurationFailed' } }));
+        }
+      } finally {
+        setPendingApiKeys(previous => ({ ...previous, [type]: previous[type]! - 1 }));
       }
     }
   };
@@ -427,6 +433,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
                   />
                   <button onClick={() => void saveApiKey(type)}>{t('common.save')}</button>
                 </div>
+                {(pendingApiKeys[type] ?? 0) > 0 && <p role="status" className="settings-help">{providerCredentialsMessage(locale, 'saving')}</p>}
                 {status && <p role={'detail' in status || !status.provider ? 'alert' : 'status'}>
                   {'detail' in status ? status.detail : t(status.key, status.provider
                     ? { provider: getTypeLabel(status.provider, t) } : undefined)}
