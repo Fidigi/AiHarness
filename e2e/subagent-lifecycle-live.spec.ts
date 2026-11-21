@@ -146,7 +146,7 @@ test('a refused real child-panel asset stays local and preserves the composer', 
     await reserveReadBudget(page.request, f.base());
     await page.addInitScript(() => localStorage.setItem('ai-harness-locale', 'en'));
     let refused = 0;
-    await page.route('**/assets/SubagentPanel-*.js', route => { refused++; return route.abort(); });
+    await page.context().route('**/assets/SubagentPanel-*.js', route => { refused++; return route.abort(); });
     const response = await f.request('/api/sessions', 'POST', { cwd: f.cwd, title: 'Panel asset owner' });
     const parent = await response.json(); expect(response.status).toBe(201);
     await page.goto(`${f.base()}/chat/${parent.id}?cwd=${encodeURIComponent(f.cwd)}`);

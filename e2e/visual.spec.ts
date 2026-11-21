@@ -239,6 +239,7 @@ test.describe('Régression visuelle des informations de session', () => {
       await installMockApi(page, { sessions: [session] });
 
       await page.goto('/chat/visual-info');
+      if (scenario.width > 959) await expect(page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' })).toBeVisible();
       const actions = scenario.width <= 959
         ? page.getByRole('navigation', { name: 'Conversation actions' })
         : page.locator('.chat-toolbar-actions');
@@ -912,6 +913,7 @@ test.describe('Régression visuelle des métadonnées de message', () => {
       await installMockApi(page, { sessions: [session], providers: [{ type: 'openai', configured: true }] });
 
       await page.goto('/chat/visual-message-meta');
+      if (scenario.width > 959) await expect(page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' })).toBeVisible();
       await page.locator('input[type=file][accept="image/*"]').setInputFiles({
         name: 'visual-attachment.svg', mimeType: 'image/svg+xml',
         buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="50"><rect width="80" height="50" fill="#6aa6ff"/></svg>'),

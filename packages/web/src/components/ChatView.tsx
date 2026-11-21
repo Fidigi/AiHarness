@@ -710,7 +710,7 @@ function ChatView({ onStreamingUpdate, terminalControl }: ChatViewProps) {
   }, [currentSession?.messages, interactionView, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
 
   useEffect(() => {
-    if (!id || id.startsWith('draft:') || !targetMessageId || targetMessageLoaded) return;
+    if (!id || id.startsWith('draft:') || !currentSession || !targetMessageId || targetMessageLoaded) return;
     const requestKey = `${interactionView}:${targetMessageId}`;
     if (requestedHistoryTarget.current === requestKey) return;
     requestedHistoryTarget.current = requestKey;
@@ -726,7 +726,7 @@ function ChatView({ onStreamingUpdate, terminalControl }: ChatViewProps) {
       setLoadingHistory(false);
     });
     return () => controller.abort();
-  }, [id, interactionView, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
+  }, [currentSession?.id, id, interactionView, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
 
   useEffect(() => {
     const saved = pendingSessionScroll.current;

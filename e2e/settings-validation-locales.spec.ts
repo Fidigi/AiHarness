@@ -2,6 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { mcpStateInventory } from './fixtures/mcp.js';
+import { selectMcpServer } from './fixtures/mcp-navigation';
+import { closeSettings } from './fixtures/settings-navigation';
 import { describeMcpConfigEntry, type McpEntryProblemReason } from '../packages/core/src/mcp/config-inventory.js';
 
 const cases: Array<[McpEntryProblemReason, string, unknown, string]> = [
@@ -52,23 +54,24 @@ for (const locale of ['en', 'fr'] as const) for (const mobile of [false, true]) 
     for (const [reason, name, , french] of cases) {
       const descriptor = inventory.servers.find(server => server.name === (name.includes('\u202e') ? 'bad\\u202ename' : name))!;
       const button = section.getByRole('button', { name: `${prefix} ${label} / ${descriptor.name}`, exact: true });
-      await button.click();
+      await selectMcpServer(page, 'global', descriptor.name);
       const detail = section.getByRole('region', { name: `${region} ${label} / ${descriptor.name}`, exact: true });
       await expect(detail).toBeVisible();
       const index = descriptor.problemReasons!.indexOf(reason);
       await expect(detail.locator('.mcp-diagnostics')).toContainText(locale === 'fr' ? french : descriptor.problems[index]!);
       if (locale === 'fr') await expect(detail.locator('.mcp-diagnostics')).not.toContainText(descriptor.problems[index]!);
-      await expect(button).toBeFocused();
+      if (mobile) await expect(page.getByRole('button', { name: locale === 'fr' ? 'Retour aux serveurs MCP' : 'Back to MCP servers', exact: true })).toBeFocused();
+      else await expect(button).toBeFocused();
     }
     const selected = section.getByRole('region', { name: `${region} ${label} / oauth`, exact: true });
     await expect(selected).toHaveScreenshot(`typed-mcp-validation-${locale}-${mobile ? 'mobile' : 'desktop'}-${theme}.png`);
-    await section.getByRole('button', { name: `${prefix} ${label} / future-code`, exact: true }).click();
+    await selectMcpServer(page, 'global', 'future-code');
     const future = section.getByRole('region', { name: `${region} ${label} / future-code`, exact: true });
     await expect(future).toContainText(locale === 'fr'
       ? 'L’entrée du serveur ne respecte pas le schéma MCP pris en charge.' : 'The server entry does not match the supported MCP schema.');
     await expect(future).not.toContainText('Unrecognized source detail');
     for (const name of ['legacy-technical', 'legacy-empty-codes', 'legacy-malformed-codes']) {
-      await section.getByRole('button', { name: `${prefix} ${label} / ${name}`, exact: true }).click();
+      await selectMcpServer(page, 'global', name);
       await expect(section.getByRole('region', { name: `${region} ${label} / ${name}`, exact: true }))
         .toContainText('Remote/custom technical detail remains verbatim 012345');
     }
@@ -76,14 +79,14 @@ for (const locale of ['en', 'fr'] as const) for (const mobile of [false, true]) 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect((await new AxeBuilder({ page }).include('#mcp').analyze()).violations).toEqual([]);
     if (!mobile) {
+      await closeSettings(page);
       const language = page.getByRole('combobox', { name: locale === 'fr' ? 'Langue' : 'Language', exact: true });
       await language.focus();
       await language.selectOption(locale === 'fr' ? 'en' : 'fr');
       await expect(page.locator('html')).toHaveAttribute('lang', locale === 'fr' ? 'en' : 'fr');
       await expect(page.getByRole('combobox', { name: locale === 'fr' ? 'Language' : 'Langue', exact: true })).toBeFocused();
-      const switchedPrefix = locale === 'fr' ? 'Show details for' : 'Afficher les détails de';
-      const switchedLabel = locale === 'fr' ? 'Global configuration' : 'Configuration globale';
-      await section.getByRole('button', { name: `${switchedPrefix} ${switchedLabel} / enabled`, exact: true }).click();
+      await page.getByRole('button', { name: /^(Settings|Réglages)$/u }).click();
+      await selectMcpServer(page, 'global', 'enabled');
       await expect(section.locator('.mcp-server-detail:not([hidden]) .mcp-diagnostics'))
         .toContainText(locale === 'fr' ? 'Enabled must be a boolean.' : 'L’état d’activation doit être un booléen.');
     }

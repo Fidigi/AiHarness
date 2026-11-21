@@ -124,6 +124,7 @@ for (const scenario of [
         mcpConfig: mcpStateInventory(), holdAgentRun: true,
       });
       await page.goto('/chat/mobile-keyboard?cwd=%2Fworkspace');
+      if (!scenario.mobile) await expect(page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' })).toBeVisible();
       const chat = page.locator('.chat-view');
       const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
       await composer.fill('Keyboard layout check');
