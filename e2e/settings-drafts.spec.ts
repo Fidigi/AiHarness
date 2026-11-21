@@ -150,7 +150,7 @@ test('New-session shortcut keeps Settings drafts until admitted without creating
 });
 
 for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 390 }] as const) {
-  test(`Settings history departure keeps drafts until admitted: ${scenario.width}px ${scenario.locale}`, async ({ page }) => {
+  test(`Settings history departure keeps drafts until admitted: ${scenario.width}px ${scenario.locale}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: scenario.width, height: 844 });
     await page.addInitScript(locale => {
       localStorage.setItem('ai-harness-locale', locale);
@@ -169,6 +169,14 @@ for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 39
     await expect(page.locator('.chat-view')).toBeVisible();
     const chatAddress = page.url();
     await page.keyboard.press('Control+,'); await expect(token).toBeVisible();
+    const access = page.locator('#authentication');
+    await testInfo.attach('settings-access', {
+      body: await access.screenshot({ path: testInfo.outputPath(`settings-access-${scenario.width}-${scenario.locale}.png`),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
+    const inset = await access.getByRole('button', { name: scenario.locale === 'fr' ? 'Appliquer' : 'Apply', exact: true })
+      .evaluate(element => getComputedStyle(element).paddingInlineStart);
+    await expect(token).toHaveCSS('padding-inline-start', inset); await expect(token).toHaveCSS('padding-inline-end', inset);
     await token.fill('SYNTHETIC_HISTORY_SETTINGS_TOKEN');
     const settingsAddress = page.url(), input = await token.elementHandle();
     await page.goBack(); await expect(prompt).toBeVisible(); await expect(page).toHaveURL(settingsAddress);
@@ -1465,7 +1473,7 @@ test('OAuth callback drafts guard outer dismissal without acknowledgement', asyn
   await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(prompt).toHaveCount(0); expect(acknowledgements).toEqual([]);
 });
 
-for (const width of [1280, 390]) test(`Code mode budget Escape retains draft without a confirmation-triggered save: ${width}px`, async ({ page }) => {
+for (const width of [1280, 390]) test(`Code mode budget Escape retains draft without a confirmation-triggered save: ${width}px`, async ({ page }, testInfo) => {
   await page.setViewportSize({ width, height: 844 });
   const api = await installMockApi(page, { toolSettings: {
     scope: 'project', source: 'workspace-e2e', preset: 'default', powershellAvailable: false, powershellEnabled: false,
@@ -1479,6 +1487,13 @@ for (const width of [1280, 390]) test(`Code mode budget Escape retains draft wit
   const budget = page.locator('#tools').getByLabel('Inline declaration budget (estimated tokens)', { exact: true });
   const prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
   const writes = () => api.requests.filter(request => request.path === '/api/tools' && request.method === 'PATCH').map(request => request.body);
+  const controls = page.locator('.codemode-settings');
+  await testInfo.attach('codemode-budget', {
+    body: await controls.screenshot({ path: testInfo.outputPath(`codemode-budget-${width}.png`),
+      animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+  });
+  const inset = await controls.getByRole('combobox').first().evaluate(element => getComputedStyle(element).paddingInlineStart);
+  await expect(budget).toHaveCSS('padding-inline-start', inset); await expect(budget).toHaveCSS('padding-inline-end', inset);
   await budget.fill('500'); await budget.press('Escape');
   await expect(prompt).toBeVisible(); expect(writes()).toEqual([]);
   await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click();

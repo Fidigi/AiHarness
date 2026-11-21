@@ -227,6 +227,7 @@
 .codemode-settings > label { min-width: 0; display: grid; gap: .3rem; }
 .codemode-settings p { margin: 0; overflow-wrap: anywhere; }
 .codemode-settings input { width: 100%; min-height: 2.2rem; }
+.codemode-settings input, #authentication input { padding: .5rem 1rem; }
 .mcp-per-tool-exposure { width: 100%; min-width: 0; text-align: left; overflow-wrap: anywhere; }
 .mcp-per-tool-exposure > summary { cursor: pointer; margin: .35rem 0; }
 .mcp-per-tool-exposure > label { margin-top: .4rem; }
