@@ -138,6 +138,7 @@ for (const scenario of [
   const modelEditor = page.locator('#custom-models .custom-resource-editor');
   const drafts = [secret, providerEditor.getByLabel('ID', { exact: true }), catalog.getByRole('searchbox'), modelEditor.getByLabel('ID', { exact: true })];
   const values = ['MODEL_NAV_SECRET_MUST_NOT_PERSIST', 'draft-provider-not-saved', 'mock', 'draft-model-not-saved'];
+  const editorInsets: Array<{ start: string; end: string }> = [];
   for (let index = 0; index < sections.length; index++) {
     const section = sections[index]!;
     await selectModelSettings(page, section);
@@ -148,12 +149,22 @@ for (const scenario of [
     if (section === 'providers') await selectProviderCredential(page, 'OpenAI');
     if (index > 0) await [providerEditor, catalog, modelEditor][index - 1]!.locator(':scope > summary').click();
     await drafts[index]!.fill(values[index]!);
+    if (section === 'provider-lifecycle' || section === 'custom-models') {
+      const fields = page.locator(`#${section} .custom-resource-editor form`).locator('input:not([type="checkbox"]), textarea');
+      await expect(fields).toHaveCount(section === 'provider-lifecycle' ? 5 : 10);
+      editorInsets.push(...await fields.evaluateAll(elements => elements.map(element => {
+        const style = getComputedStyle(element);
+        return { start: style.paddingInlineStart, end: style.paddingInlineEnd };
+      })));
+    }
     const capture = testInfo.outputPath(`model-panel-${section}-${scenario.width}-${scenario.locale}.png`);
     await page.screenshot({ path: capture, animations: 'disabled', caret: 'hide' });
     await testInfo.attach(`model-panel-${section}-${scenario.width}-${scenario.locale}`, {
       path: capture, contentType: 'image/png',
     });
   }
+  const inset = await providerEditor.locator('form select').evaluate(element => getComputedStyle(element).paddingInlineStart);
+  expect(editorInsets).toEqual(Array.from({ length: 15 }, () => ({ start: inset, end: inset })));
   await selectGeneralSettings(page, 'appearance');
   for (let index = 0; index < sections.length; index++) {
     await selectModelSettings(page, sections[index]!);
