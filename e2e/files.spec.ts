@@ -131,7 +131,7 @@ test('nested disclosures refresh canonical rows and retire older expansion respo
     deliveredOld();
   });
   await page.goto('/chat/nested-files');
-  const panel = page.getByRole('region', { name: 'Workspace explorer' });
+  const panel = page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' });
   const reader = page.getByRole('complementary', { name: 'File reader' });
   const root = panel.getByRole('button', { name: 'src', exact: true });
   await root.focus();

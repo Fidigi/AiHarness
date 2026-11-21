@@ -65,9 +65,11 @@ for (const scene of [
   await page.goto('/chat/file-reading');
   const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
   await composer.fill('Keep my draft');
-  const explorer = page.getByRole('region', { name: 'Workspace explorer' });
+  const explorer = scene.width > 959
+    ? page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' })
+    : page.getByRole('region', { name: 'Workspace explorer' });
   const panel = page.getByRole('complementary', { name: 'File reader' });
-  if (!await explorer.isVisible()) await page.keyboard.press('Control+Shift+F');
+  if (!await page.getByRole('region', { name: 'Workspace explorer' }).isVisible()) await page.keyboard.press('Control+Shift+F');
   for (const file of ['second.md', 'first.md']) {
     await explorer.locator('.file-name').filter({ hasText: file }).click();
     await expect(panel.locator('.file-viewer > header')).toContainText(file);
