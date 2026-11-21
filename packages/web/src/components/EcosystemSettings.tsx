@@ -582,6 +582,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
   const [editing, setEditing] = useState<string>();
   const empty = { provider: '', id: '', name: '', reasoning: false, imageInput: false, toolCalls: true, contextWindow: '', maxOutputTokens: '', inputPrice: '', outputPrice: '', cacheReadPrice: '', cacheWritePrice: '', compatibility: '{}' };
   const [form, setForm] = useState(empty);
+  const [pendingSaves, setPendingSaves] = useState(0);
   const editorState = useRef({ editing, form });
   useLayoutEffect(() => { editorState.current = { editing, form }; }, [editing, form]);
   const formBaseline = useRef(form);
@@ -599,52 +600,55 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
     try { compatibility = JSON.parse(form.compatibility); }
     catch { error(t('settings.customModels.invalidCompatibility')); return; }
     const baseline = formBaseline.current;
-    const result = await saveCustomModel({
-      provider: form.provider, id: form.id, name: form.name,
-      capabilities: { reasoning: form.reasoning, imageInput: form.imageInput, toolCalls: form.toolCalls },
-      ...(form.contextWindow ? { contextWindow: Number(form.contextWindow) } : {}),
-      ...(form.maxOutputTokens ? { maxOutputTokens: Number(form.maxOutputTokens) } : {}),
-      pricing: {
-        ...(form.inputPrice ? { inputPerMillion: Number(form.inputPrice) } : {}),
-        ...(form.outputPrice ? { outputPerMillion: Number(form.outputPrice) } : {}),
-        ...(form.cacheReadPrice ? { cacheReadPerMillion: Number(form.cacheReadPrice) } : {}),
-        ...(form.cacheWritePrice ? { cacheWritePerMillion: Number(form.cacheWritePrice) } : {}),
-      }, compatibility,
-    }, editing);
-    if (!result.success) error(result.error);
-    else {
-      const current = editorState.current;
-      if (result.data && current.editing === editing && formBaseline.current === baseline
-        && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
-          && result.data.provider === form.provider && result.data.id === form.id
-          && current.form.provider === form.provider && current.form.id === form.id)
-        && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
-        const saved = customModelForm(result.data);
-        let next = { ...current.form };
-        if (!editing) for (const key of Object.keys(form) as Array<keyof typeof form>) {
-          if (current.form[key] === form[key]) next = { ...next, [key]: saved[key] };
-        }
-        formBaseline.current = saved;
-        setEditing(result.data.key); setForm(next);
-      } else if (!editing && !current.editing && formBaseline.current === baseline
-        && result.data?.key === `${form.provider}:${form.id}` && result.data.provider === form.provider && result.data.id === form.id
-        && current.form.provider.trim() && current.form.id.trim()
-        && (current.form.provider.trim() !== form.provider || current.form.id.trim() !== form.id)) {
-        setForm({ ...current.form });
-      } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
-        && result.data.provider === form.provider && result.data.id === form.id) && !current.editing && formBaseline.current !== baseline
-        && !formBaseline.current.provider && !formBaseline.current.id && current.form.provider.trim() && current.form.id.trim()) {
-        setForm({ ...current.form });
-      } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
-        && result.data.provider === form.provider && result.data.id === form.id) && current.editing
-        && formBaseline.current !== baseline && `${formBaseline.current.provider}:${formBaseline.current.id}` === current.editing
-        && editChoices.current.filter(model => model.key === current.editing).length === 1
-        && (current.editing !== (editing || `${form.provider}:${form.id}`) || (Object.keys(current.form) as Array<keyof typeof form>)
-          .some(key => current.form[key] !== formBaseline.current[key]))) {
-        setForm({ ...current.form });
-      } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
-      await Promise.all([load(), hydrateModelCatalog(true)]);
-    }
+    setPendingSaves(pending => pending + 1);
+    try {
+      const result = await saveCustomModel({
+        provider: form.provider, id: form.id, name: form.name,
+        capabilities: { reasoning: form.reasoning, imageInput: form.imageInput, toolCalls: form.toolCalls },
+        ...(form.contextWindow ? { contextWindow: Number(form.contextWindow) } : {}),
+        ...(form.maxOutputTokens ? { maxOutputTokens: Number(form.maxOutputTokens) } : {}),
+        pricing: {
+          ...(form.inputPrice ? { inputPerMillion: Number(form.inputPrice) } : {}),
+          ...(form.outputPrice ? { outputPerMillion: Number(form.outputPrice) } : {}),
+          ...(form.cacheReadPrice ? { cacheReadPerMillion: Number(form.cacheReadPrice) } : {}),
+          ...(form.cacheWritePrice ? { cacheWritePerMillion: Number(form.cacheWritePrice) } : {}),
+        }, compatibility,
+      }, editing);
+      if (!result.success) error(result.error);
+      else {
+        const current = editorState.current;
+        if (result.data && current.editing === editing && formBaseline.current === baseline
+          && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
+            && result.data.provider === form.provider && result.data.id === form.id
+            && current.form.provider === form.provider && current.form.id === form.id)
+          && (Object.keys(form) as Array<keyof typeof form>).some(key => current.form[key] !== form[key])) {
+          const saved = customModelForm(result.data);
+          let next = { ...current.form };
+          if (!editing) for (const key of Object.keys(form) as Array<keyof typeof form>) {
+            if (current.form[key] === form[key]) next = { ...next, [key]: saved[key] };
+          }
+          formBaseline.current = saved;
+          setEditing(result.data.key); setForm(next);
+        } else if (!editing && !current.editing && formBaseline.current === baseline
+          && result.data?.key === `${form.provider}:${form.id}` && result.data.provider === form.provider && result.data.id === form.id
+          && current.form.provider.trim() && current.form.id.trim()
+          && (current.form.provider.trim() !== form.provider || current.form.id.trim() !== form.id)) {
+          setForm({ ...current.form });
+        } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
+          && result.data.provider === form.provider && result.data.id === form.id) && !current.editing && formBaseline.current !== baseline
+          && !formBaseline.current.provider && !formBaseline.current.id && current.form.provider.trim() && current.form.id.trim()) {
+          setForm({ ...current.form });
+        } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
+          && result.data.provider === form.provider && result.data.id === form.id) && current.editing
+          && formBaseline.current !== baseline && `${formBaseline.current.provider}:${formBaseline.current.id}` === current.editing
+          && editChoices.current.filter(model => model.key === current.editing).length === 1
+          && (current.editing !== (editing || `${form.provider}:${form.id}`) || (Object.keys(current.form) as Array<keyof typeof form>)
+            .some(key => current.form[key] !== formBaseline.current[key]))) {
+          setForm({ ...current.form });
+        } else { setEditing(undefined); formBaseline.current = empty; setForm(empty); }
+        await Promise.all([load(), hydrateModelCatalog(true)]);
+      }
+    } finally { setPendingSaves(pending => pending - 1); }
   };
   return <section className="settings-section" id="custom-models">
     <h3>{t('settings.customModels.title')}</h3>
@@ -665,6 +669,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         <label>{t('settings.cacheWritePrice')}<input type="number" min="0" step="any" value={form.cacheWritePrice} onChange={event => setForm(current => ({ ...current, cacheWritePrice: event.target.value }))} /></label>
         <label>{t('settings.compatibility')}<textarea rows={3} value={form.compatibility} onChange={event => setForm(current => ({ ...current, compatibility: event.target.value }))} /></label>
         <div><button>{t('common.save')}</button>{editing && <button type="button" onClick={() => guardFormDiscard(() => { setEditing(undefined); formBaseline.current = empty; setForm(empty); })}>{t('common.cancel')}</button>}</div>
+        {pendingSaves > 0 && <p role="status" className="settings-help">{customModelMessage(locale, 'saving')}</p>}
       </form>
     </details>
     {loaded && selectedKey && !selected && <p role="status">{customModelMessage(locale, 'unavailable')}</p>}

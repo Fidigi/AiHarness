@@ -395,15 +395,44 @@ test.describe('Settings and authentication', () => {
     await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'azure:shared');
     await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('SYNTHETIC_EDITOR_OWNER');
     expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')).toEqual([]);
-    await editor.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect.poll(() => api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
+    const releases: Array<() => void> = [];
+    const held = Array.from({ length: 2 }, () => new Promise<void>(resolve => { releases.push(resolve); }));
+    let admitted = 0;
+    await page.route('**/api/provider-registry/models/openai%3Afirst', async route => {
+      if (route.request().method() !== 'PUT') return route.fallback();
+      const index = admitted++;
+      if (index < held.length) await held[index];
+      await route.fallback();
+    });
+    const pending = editor.getByRole('status');
+    const save = editor.getByRole('button', { name: 'Save', exact: true });
+    try {
+      await save.click(); await save.click();
+      await expect.poll(() => admitted).toBe(2);
+      await test.info().attach('custom-model-pending', {
+        body: await page.screenshot({ path: test.info().outputPath(`custom-model-pending-${width}.png`),
+          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+      });
+      await expect(pending).toHaveText('Saving submitted custom model…');
+      await expect(save).toBeEnabled();
+      await expect(editor.getByLabel('Name', { exact: true })).toBeEnabled();
+      const firstReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+      releases[0]!(); await firstReadback;
+      await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+      await expect(section.locator('.custom-model-context > nav').getByRole('button', { name: /SYNTHETIC_EDITOR_OWNER/u, includeHidden: true })).toHaveText(/SYNTHETIC_EDITOR_OWNER/u);
+      await expect(pending).toHaveText('Saving submitted custom model…');
+      const finalReadback = page.waitForResponse(response => response.url().endsWith('/api/provider-registry/models') && response.request().method() === 'GET');
+      releases[1]!(); await finalReadback;
+      await expect(pending).toHaveCount(0);
+      await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+    } finally { releases.forEach(release => release()); }
+    expect(api.requests.filter(request => request.path.startsWith('/api/provider-registry/models') && request.method !== 'GET')
       .map(request => ({ method: request.method, path: request.path, body: request.body })))
-      .toEqual([{ method: 'PUT', path: '/api/provider-registry/models/openai%3Afirst', body: {
+      .toEqual(Array.from({ length: 2 }, () => ({ method: 'PUT', path: '/api/provider-registry/models/openai%3Afirst', body: {
         provider: 'openai', id: 'first', name: 'SYNTHETIC_EDITOR_OWNER',
         capabilities: { reasoning: true, imageInput: false, toolCalls: true }, contextWindow: 64000, maxOutputTokens: 4096,
         pricing: {}, compatibility: {},
-      } }]);
-    await expect(editor.getByLabel('ID', { exact: true })).toHaveValue('');
+      } })));
     await expect(detail.getByRole('article')).toHaveAttribute('data-settings-selection', 'azure:shared');
   });
 
@@ -1704,8 +1733,13 @@ test.describe('Settings and authentication', () => {
       body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`general-appearance-${scenario.name}.png`),
         animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
     });
+    const browserScope = scenario.locale === 'fr'
+      ? 'Ces préférences s’appliquent immédiatement dans ce navigateur, sans modifier la configuration du projet ou du serveur.'
+      : 'These preferences apply immediately in this browser, not to project or server configuration.';
+    await expect(appearance.getByText(browserScope, { exact: true })).toBeVisible();
     await selectGeneralSettings(page, 'behavior');
     const behavior = page.locator('#behavior');
+    await expect(behavior.getByText(browserScope, { exact: true })).toBeVisible();
     await expect(appearance).toBeHidden();
     await behavior.getByRole('checkbox').first().check();
     await selectGeneralSettings(page, 'notifications');

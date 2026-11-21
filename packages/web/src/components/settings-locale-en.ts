@@ -15,6 +15,7 @@ export const settingsEnMessages: Readonly<Record<string, string>> = {
     'settings.behavior': 'Behavior',
     'settings.notificationPreferences': 'Notifications',
     'settings.access': 'Access',
+    'settings.browserPreferences': 'These preferences apply immediately in this browser, not to project or server configuration.',
     'settings.serverAuthentication': 'Server authentication',
     'settings.logout': 'Sign out of the Web session',
     'settings.bearerToken': 'Bearer token',

@@ -711,6 +711,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
       {/* Appearance */}
       <section className="settings-section" id="appearance" hidden={category !== 'general' || generalPanel !== 'appearance'}>
         <h3>{t('settings.appearance')}</h3>
+        <p className="settings-help">{t('settings.browserPreferences')}</p>
         <div className="preference-grid">
           <label>{t('settings.theme')}
             <select value={preferences.theme} onChange={event => setPreferences({ theme: event.target.value as typeof preferences.theme })}>
@@ -732,6 +733,7 @@ function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelP
 
       <section className="settings-section" id="behavior" hidden={category !== 'general' || generalPanel !== 'behavior'}>
         <h3>{t('settings.behavior')}</h3>
+        <p className="settings-help">{t('settings.browserPreferences')}</p>
         <div className="preference-grid">
           <label>{t('settings.sendMode')}
             <select value={preferences.sendMode}

@@ -75,7 +75,7 @@ describe('Settings locale allocation', () => {
       // inventory still verifies every existing literal without regeneration.
       const additions = ['settings.categories', ...settingsCategories.map(category => `settings.category.${category.id}`),
         'settings.generalNavigation', 'settings.generalBack', 'settings.modelsNavigation', 'settings.modelsBack',
-        'settings.behavior', 'settings.notificationPreferences', 'settings.access'].map(key => {
+        'settings.behavior', 'settings.notificationPreferences', 'settings.access', 'settings.browserPreferences'].map(key => {
         const lines = lazy.filter(line => line.startsWith(`    '${key}':`));
         expect(lines).toHaveLength(1); return lines[0]!;
       });

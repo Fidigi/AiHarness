@@ -4,10 +4,12 @@ const messages = {
   en: {
     back: 'Back to custom models',
     unavailable: 'The selected custom model is unavailable.',
+    saving: 'Saving submitted custom model…',
   },
   fr: {
     back: 'Retour aux modèles personnalisés',
     unavailable: 'Le modèle personnalisé sélectionné n’est pas disponible.',
+    saving: 'Enregistrement du modèle personnalisé envoyé…',
   },
 } as const;
 
