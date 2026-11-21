@@ -2,7 +2,7 @@
 
 > **Status: IN PROGRESS** (2026-11-21)
 >
-> Six implementation decisions approved. VIS-01–04, FILE-01–05 and ACT-01–02 are verified: semantic palette/contrast and reviewed visual baseline, left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category-modal Settings, five General subpanels, four Models section destinations and contextual credential/connection/model-catalogue/custom-model/installed-skill/registry/tool/MCP/child-profile/package list/detail navigation are implemented; PREF-04 is verified. Complete Settings presentation/navigation/context/save acceptance, manual navigation review and global qualification remain open; §87 distinguishes the completed visual criterion from these unqualified boundaries.
+> Six implementation decisions approved. VIS-01–04, FILE-01–05 and ACT-01–02 are verified: semantic palette/contrast and reviewed visual baseline, left explorer/right reader, compact accessible controls and non-overlapping conversation utilities. Category-modal Settings, five General subpanels, four Models section destinations and contextual credential/connection/model-catalogue/custom-model/installed-skill/registry/tool/MCP/child-profile/package list/detail navigation are implemented; PREF-04 is verified. Complete Settings acceptance, manual navigation review and unresolved functional observations remain open. The user accepts the known execution-instability limits as a nonblocking qualification reservation with undetermined cause (§88); full canonical/native/global qualification is not claimed.
 
 ## 1. Audit Reference
 
@@ -13,7 +13,7 @@
 | Audit date | 2026-11-18 |
 | Pinned source | `https://github.com/Fidigi/AiHarness.git`, commit `b98572c6354ec4996cd4121f33c1ac8697a68047`; Web source and E2E files have no local diff against that commit at inspection |
 | Detailed references | Source inventory in §8, inspected versioned images in §9, calculated color pairs in §8.1 and existing coverage in §10 |
-| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence is journaled in §6 and §11–87 |
+| Method | AiHarness source/test inspection, eight existing baseline images and standalone sRGB contrast arithmetic; user screenshot U1 (§9.1) followed by bounded live browsing of the preferred external UX reference U2 (§9.2). No AiHarness application/browser test executed in the initial assessment; subsequent implementation evidence and qualification decisions are journaled in §6 and §11–88 |
 
 **Objective:** Identify concrete causes of weak color separation, excessive textual chrome, awkward file navigation and long-page Settings; propose a minimal, accessible redesign with independently verifiable completion criteria. The six implementation decisions in §5 are user-approved; this report does not authorize removing features or changing unrelated product contracts.
 
@@ -29,7 +29,7 @@
 
 ## 2. Result
 
-These states describe **redesign acceptance criteria**, not whether the assessment document has been written. All four visual-system criteria, five explorer criteria, both action/input criteria and General preference separation are verified; four criteria remain open and no gap is accepted.
+These states describe **redesign acceptance criteria**, not whether the assessment document has been written. All four visual-system criteria, five explorer criteria, both action/input criteria and General preference separation are verified; four criteria remain open. One bounded runtime qualification reservation is user-accepted (§5/§88); no whole criterion is waived.
 
 | Status | Count | Details |
 |---|---:|---|
@@ -39,7 +39,7 @@ These states describe **redesign acceptance criteria**, not whether the assessme
 | `TO BE DEFINED` | 0 | Six starting decisions approved; visual refinement follows the first render |
 | `BLOCKED` | 0 | No audit-wide external blocker |
 | `IN PROGRESS` | 1 | QA-01: final global qualification |
-| `GAP ACCEPTED` | 0 | No waiver requested or granted |
+| `GAP ACCEPTED` | 0 | No whole criterion waived; one accepted runtime-subset qualification reservation does not close QA-01 or add a criterion |
 | **Total** | **16** | **75% closed: (12 + 0) / 16 × 100** |
 
 ### Summary by Surface
@@ -98,7 +98,7 @@ FILE-01–05 are verified by §14–15. The findings below retain the pinned bas
 
 | ID | Status | Priority | Finding and criterion for DONE |
 |---|---|---|---|
-| QA-01 | IN PROGRESS | P1 | Existing coverage protects Light/Dark, file tabs, preview, Settings restoration and some focus/axe behavior (T1–T6); it does not establish all-theme design quality or the new tree/category contracts. Extend only the owning scenarios for the gaps in §10. DONE requires Docker validation, fresh reviewed artifacts and reconciled criterion evidence. Neither historical baseline presence nor an axe pass alone proves usable navigation or a successful redesign. The separate Node baseline-compiler probe in §40 still retains a worker failure and establishes no permanent runtime repair. §61 adds value-free readiness-failure artifacts to distinguish controlled loading topologies without changing product behavior or resolving prior Loading/crash failures. |
+| QA-01 | IN PROGRESS | P1 | Existing coverage protects Light/Dark, file tabs, preview, Settings restoration and some focus/axe behavior (T1–T6); it does not establish all-theme design quality or the new tree/category contracts. Extend only the owning scenarios for the gaps in §10. DONE requires Docker validation, fresh reviewed artifacts and reconciled criterion evidence. Neither historical baseline presence nor an axe pass alone proves usable navigation or a successful redesign. The separate Node baseline-compiler probe in §40 still retains a worker failure and establishes no permanent runtime repair. §61 adds value-free readiness-failure artifacts to distinguish controlled loading topologies without changing product behavior or resolving prior Loading/crash failures. §88 records the user's nonblocking runtime qualification reservation, with undetermined cause; manual review and unresolved functional observations are not waived. |
 
 ## 4. Convention for Future Audits
 
@@ -118,7 +118,7 @@ Closure is `(DONE + GAP ACCEPTED) / total`. A completed assessment does not clos
 
 | ID | Dated decision | Justification | Re-examination trigger |
 |---|---|---|---|
-| None | 2026-11-18: no accepted gaps | Design approval is not a waiver of remediation or validation | Explicit user decision or an evidence-backed remediation batch |
+| QA-01 runtime subset; affected PREF-01–03 evidence limits | 2026-11-21: user accepts the known execution-instability limits as a nonblocking qualification reservation, with undetermined cause; exact scope and decision source in §88 | Delivery need not wait for complete root/native/host execution at the recorded crash boundaries. This is not a hardware diagnosis, successful test result or waiver of an entire criterion, manual review or functional anomaly | A reproducible incident on a qualified reference environment, a relevant runtime repair or an explicit request for full requalification. New failures require their own assessment |
 
 The user explicitly favors better theme separation, a minimal icon-led interface, improved file-tree UX and category tabs for Settings. On 2026-11-18 the user clarified that direction with U1 (§9.1): horizontal icon-and-label tabs above a contextual list and main content, inside a wide Settings panel. The user subsequently supplied the local Pi Web URL and explicitly preferred its UX (U2, §9.2). Use that interface as the primary layout/interaction reference, with U1 as its visual illustration, instead of the initial vertical-tab proposal. Preserve AiHarness capabilities while rearranging them; the reference is not a request for additional provider/account integrations. On 2026-11-18 the user accepted all six proposed arbitrations and deferred refinement until after the first render. The following decisions supersede earlier provisional wording in this report. Keep explicit labels for consent, Save, Stop, deletion and authentication where an icon alone is ambiguous. This is compatible with reducing routine textual chrome.
 
@@ -281,6 +281,8 @@ Approval resolves the starting product decisions, not implementation or acceptan
 | 2026-11-21 | VIS-04; PREF-01–03; QA-01 | VIS-04 PARTIAL → DONE; other states unchanged | §87 completes the written visual-baseline criterion and reconciles the four remaining acceptance boundaries | Thirteen existing actuals reopened/hashed: eight §86 Settings views, four §82 shell/explorer/reader views and one separately labeled §83 diagnostic. Source typography/token/SVG inspection and twelve relevant workspace-render-input hash/mode equalities support the review. Documentation lint/count/whitespace/ownership checks PASS | Documentation only; no new capture/test/build/type/unit execution, reference/tolerance change, new requirement or waiver. 12/16 DONE75%; PREF-01–03/QA-01 still open. Original desktop image/DOM discrepancy and all prior failed/unstarted/native/host/manual boundaries remain; no passing union/global qualification or goal completion. |
 
 | 2026-11-21 | PREF-01–03; QA-01 | States unchanged | §87 supplies a bounded operator handoff for the already-required screen-reader/real-200%-zoom navigation review | Read-only current boundary/auth/locale/mock source and the two existing natural Loading error contexts inspected; documentation lint/count/whitespace checks PASS | No confirmed Loading repair follows from a common “Chargement…” snapshot. No product/test/runtime/reference change or deferred-case replay; the manual actions below remain unperformed, not fabricated passes or new acceptance requirements. |
+
+| 2026-11-21 | PREF-01–03; QA-01 | Criterion states unchanged; runtime reservation accepted | Explicit user decision quoted and scoped in §88; current report summary, QA-01 and audit navigation updated | `make lint-docs`, criterion/count/reservation checks and `git diff --check` PASS | Known execution-instability limits no longer block delivery by themselves. Cause remains undetermined; original failed/unstarted outcomes, denominators and full-qualification limits remain. Manual review, both natural Loading failures and §82's image/DOM discrepancy are not waived. Documentation only; no rerun or product/reference change. |
 
 ## 7. Approved Direction and Delivery Order
 
@@ -2974,6 +2976,8 @@ Source and future unchanged accounting remain **341 = 247 eligible (standard192 
 
 ## 87. Finite Acceptance Audit — Visual Baseline Verified, Four Criteria Still Open
 
+**Pre-reservation snapshot:** §88 supersedes this section's runtime release-blocking disposition following the user's later decision. Its recorded results, functional/manual limits and operator handoff remain applicable; no historical outcome is rewritten.
+
 This documentation-only reconciliation starts from `99fc8362f4588ad474566175d660263a7368dd6e`. It applies the existing §3 criteria literally: VIS-04 requires reviewed desktop/mobile Light/Dark **surface separation, typography and icon weight**. It is not synonymous with QA-01's complete native/manual/global qualification, nor permission to invent another owner×theme×viewport matrix. Conversely, a passing screenshot threshold or source definition alone is not visual review. The review below opens existing actual pixels and checks their owning source without changing the original acceptance requirements.
 
 ### VIS-04 Requirement-to-Evidence Audit
@@ -3014,4 +3018,22 @@ Use a disposable/synthetic workspace and no real credentials. Record the tested 
 
 For each action actually performed, report the observed outcome and any blocked/unperformed part. Keep credentials, private storage contents and unrelated workspace data out of shared notes. These observations cannot replace the separately deferred native/real-storage/parity qualifications. A new runtime repair lead needs its own relevant log or repair evidence; replaying all unchanged known failures is not requested.
 
-Only this report and its audit navigation status change. No product/test/build/type/unit/browser command, new capture/reference, guard, payload, UI policy, accepted gap or global qualification is added. Documentation lint, criterion/category/count consistency, whitespace, reviewed-image/source-hash and staged/committed ownership checks pass. Current acceptance is **12/16 DONE (75%)**, **PREF-01–03 PARTIAL / QA-01 IN PROGRESS**, zero accepted gaps. Canonical/native/global qualification remains **false**, and the overall goal remains active.
+Only this report and its audit navigation status change. No product/test/build/type/unit/browser command, new capture/reference, guard, payload, UI policy, accepted gap or global qualification is added. Documentation lint, criterion/category/count consistency, whitespace, reviewed-image/source-hash and staged/committed ownership checks pass. At this pre-reservation boundary, acceptance is **12/16 DONE (75%)**, **PREF-01–03 PARTIAL / QA-01 IN PROGRESS**, zero accepted gaps. Canonical/native/global qualification remains **false**, and the overall goal remains active. §88 records the later runtime-subset reservation without rewriting these results.
+
+## 88. User-Accepted Runtime Qualification Reservation — Undetermined Cause
+
+On **2026-11-21**, the user explicitly accepts the proposed disposition: **“oui j'accepte comme réserve de qualification, avec une cause indéterminée, plutôt que bloquer la livraison dessus”**. The decision owner/source is the user in this conversation. It applies only to this Web-design audit's already documented execution-instability limits through `171f0a182a15f37c590fb4d961f7091a00f27f1e`, not to every unverified requirement, future failure or qualification decision in another audit.
+
+### Accepted Scope and Preserved Evidence
+
+- **No longer a delivery blocker by itself:** the known Node/Chromium native crashes, startup/host/control signal exits and interrupted root/parity compiler validation. This includes the **38 exact native**, **37 native-host prelisting** and **19 Pane-host prelisting** boundaries, plus the separately recorded old startup/control and compiler/following-unit UNSTARTED limits. Missing execution/readback evidence caused solely by those boundaries is accepted as a qualification reservation, not as proof of the unexecuted behavior.
+- **Not delivered/certified:** complete canonical/root/native/host qualification, including the real-Server/durable-storage bodies stopped before execution. Mocked readback remains mocked; unstarted bodies remain unstarted. Source accounting stays **341 = 247 selected + 38 exact native + 37 native-host + 19 Pane-host**, not 341 successes. The latest §86 selected **247/247 PASS** and all earlier failed/unstarted campaigns retain their exact source, outcomes and denominators.
+- **Cause undetermined:** host instability is a possible explanation, not an established diagnosis. This decision proves neither a hardware fault nor a product/runtime repair, and does not assign a common cause to the distinct signals.
+- **Not covered:** the two historical natural Loading assertion failures, §82's selected-row image/DOM discrepancy, actual screen-reader/real-browser-UI **200% zoom** review, and any remaining criterion requirement not limited solely by the accepted execution incidents. They are not silently attributed to the host, accepted as gaps or certified by this decision.
+- **Re-examination:** a reproducible incident in a qualified reference environment, a relevant runtime repair, or a user request for full requalification. New functional/security failures or new runtime incidents require their own assessment; this is not a blanket future waiver. No unchanged replay is needed merely to repeat an already accepted reservation.
+
+### Current Acceptance After the Decision
+
+The known execution-instability limits must no longer be presented as a prerequisite that blocks delivery by itself. This is a **partial qualification reservation**, not `GAP ACCEPTED` for all of QA-01 and not a seventeenth criterion. **12/16 DONE (75%)**, **PREF-01–03 PARTIAL / QA-01 IN PROGRESS**, **zero whole-criterion GAP ACCEPTED**, **one accepted runtime reservation**. The report and overall implementation goal remain open for the unwaived acceptance boundaries; full canonical/native/global qualification remains **false**.
+
+Only this report and its audit navigation summary change. Documentation lint, criterion/count/reservation consistency, whitespace and exact changed-file ownership/byte checks pass. No product, dependency, test, launcher policy, snapshot, quota, deadline, tolerance or manual result changes; no new build/type/unit/browser execution or capture is claimed.
