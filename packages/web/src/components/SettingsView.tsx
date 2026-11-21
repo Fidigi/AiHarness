@@ -5,7 +5,7 @@
 import { lazy, Suspense, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import '../settings.css';
 import { createPortal } from 'react-dom';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { generalSettingsPanel, generalSettingsPanels, modelSettingsPanel, modelSettingsPanels, settingsCategories, settingsSectionCategory, type GeneralSettingsPanel, type ModelSettingsPanel, type SettingsCategory } from './settings-categories';
 import { useSessionStore } from '../store/session-store';
@@ -1071,7 +1071,10 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef 
   const discardReturn = useRef<HTMLElement>(null);
   const drafts = useRef(new Set<symbol>());
   const [pendingDiscard, setPendingDiscard] = useState<{ owner?: symbol; discard: () => void }>();
-  const confirmClose = Boolean(pendingDiscard);
+  const blocker = useBlocker(({ currentLocation, nextLocation, historyAction }) => historyAction === 'POP'
+    && currentLocation.pathname !== nextLocation.pathname && drafts.current.size > 0);
+  const historyBlocked = blocker.state === 'blocked';
+  const confirmClose = Boolean(pendingDiscard) || historyBlocked;
   const discardCommands = useMemo(() => ({
     request: (owner: symbol, discard: () => void, returnTarget?: HTMLElement | null) => {
       discardReturn.current = returnTarget ?? null;
@@ -1102,9 +1105,21 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef 
   };
   useImperativeHandle(leaveRef, () => requestDiscard, [requestDiscard]);
   const requestClose = () => requestDiscard(onClose);
-  useLayoutEffect(() => { discardReturn.current = null; setPendingDiscard(undefined); }, [context]);
+  const keepEditing = () => { setPendingDiscard(undefined); if (blocker.state === 'blocked') blocker.reset(); };
+  const discard = () => {
+    if (blocker.state === 'blocked') {
+      const current = useSessionStore.getState().workspace;
+      if (JSON.stringify([current?.id, current?.cwd, current?.trusted, current?.operationTrusted]) !== context) { keepEditing(); return; }
+      blocker.proceed();
+    } else pendingDiscard?.discard();
+    setPendingDiscard(undefined);
+  };
+  useLayoutEffect(() => { discardReturn.current = null; keepEditing(); }, [context]);
+  useLayoutEffect(() => {
+    if (historyBlocked) { discardReturn.current = null; setPendingDiscard(undefined); }
+  }, [historyBlocked]);
   useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
-  useFocusTrap(!suspended && confirmClose, confirmation, () => setPendingDiscard(undefined), discardReturn);
+  useFocusTrap(!suspended && confirmClose, confirmation, keepEditing, discardReturn);
   useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
   useLayoutEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -1122,14 +1137,14 @@ function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef 
       <SettingsDiscardContext.Provider value={discardCommands}>
         <SettingsDraftContext.Provider value={drafts.current}><SettingsNavigationBoundary inactive={confirmClose} /></SettingsDraftContext.Provider>
       </SettingsDiscardContext.Provider>
-    {pendingDiscard && <div className="modal-backdrop settings-discard-backdrop">
+    {confirmClose && <div className="modal-backdrop settings-discard-backdrop">
       <section ref={confirmation} className="settings-discard-dialog" role="alertdialog" aria-modal="true" tabIndex={-1}
         aria-labelledby="settings-discard-title" aria-describedby="settings-discard-description" inert={suspended || undefined}>
         <h3 id="settings-discard-title">{message('title')}</h3>
         <p id="settings-discard-description">{message('description')}</p>
         <footer>
-          <button type="button" data-autofocus onClick={() => setPendingDiscard(undefined)}>{message('keep')}</button>
-          <button type="button" onClick={() => { setPendingDiscard(undefined); pendingDiscard.discard(); }}>{message('discard')}</button>
+          <button type="button" data-autofocus onClick={keepEditing}>{message('keep')}</button>
+          <button type="button" onClick={discard}>{message('discard')}</button>
         </footer>
       </section>
     </div>}

@@ -149,6 +149,59 @@ test('New-session shortcut keeps Settings drafts until admitted without creating
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_SHORTCUT_');
 });
 
+for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 390 }] as const) {
+  test(`Settings history departure keeps drafts until admitted: ${scenario.width}px ${scenario.locale}`, async ({ page }) => {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.addInitScript(locale => {
+      localStorage.setItem('ai-harness-locale', locale);
+      localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, lastSettingsSection: 'authentication' }));
+    }, scenario.locale);
+    const api = await installMockApi(page, { sessions: [mockSession('history-draft-source', 'History draft source')] });
+    const native: string[] = [];
+    page.on('dialog', async dialog => { native.push(dialog.type()); await dialog.dismiss(); });
+    const prompt = page.getByRole('alertdialog', { name: scenario.locale === 'fr'
+      ? 'Abandonner les modifications non enregistrées des paramètres ?' : 'Discard unsaved Settings edits?', exact: true });
+    const keep = prompt.getByRole('button', { name: scenario.locale === 'fr' ? 'Continuer la modification' : 'Keep editing', exact: true });
+    const discard = prompt.getByRole('button', { name: scenario.locale === 'fr' ? 'Abandonner les modifications' : 'Discard edits', exact: true });
+    const token = page.locator('#authentication input[type="password"]');
+    await page.goto('/chat/history-draft-source');
+    await expect(page.locator('.chat-view')).toBeVisible();
+    const chatAddress = page.url();
+    await page.keyboard.press('Control+,'); await expect(token).toBeVisible();
+    await token.fill('SYNTHETIC_HISTORY_SETTINGS_TOKEN');
+    const settingsAddress = page.url(), input = await token.elementHandle();
+    await page.goBack(); await expect(prompt).toBeVisible(); await expect(page).toHaveURL(settingsAddress);
+    await expect(keep).toBeFocused(); await keep.click(); await expect(prompt).toHaveCount(0);
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_SETTINGS_TOKEN'); expect(await input!.evaluate(node => node.isConnected)).toBe(true);
+    await page.goBack(); await expect(prompt).toBeVisible(); await page.keyboard.press('Escape');
+    await expect(prompt).toHaveCount(0); await expect(page).toHaveURL(settingsAddress);
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_SETTINGS_TOKEN');
+    await page.goBack(); await expect(prompt).toBeVisible(); await discard.click();
+    await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
+    await page.goForward(); await expect(token).toBeVisible(); await expect(token).toHaveValue('');
+    await token.fill('SYNTHETIC_HISTORY_CATEGORY_TOKEN'); await selectGeneralSettings(page, 'appearance');
+    await page.goBack(); await expect(prompt).toHaveCount(0); await expect(token).toBeVisible();
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_CATEGORY_TOKEN');
+    await token.fill(''); await page.goBack(); await expect(page).toHaveURL(chatAddress); await expect(prompt).toHaveCount(0);
+    await page.goForward(); await expect(token).toBeVisible(); await token.fill('SYNTHETIC_HISTORY_RETIRED_TOKEN');
+    const retiredAddress = page.url();
+    await page.goBack(); await expect(prompt).toBeVisible();
+    const connected = await page.evaluate(async path => {
+      const { useSessionStore } = await import(path), workspace = useSessionStore.getState().workspace;
+      const button = document.querySelector<HTMLButtonElement>('.settings-discard-dialog button:last-child');
+      if (!workspace || !button) throw new Error('Expected the blocked history decision.');
+      useSessionStore.setState({ workspace: { ...workspace, trusted: false, operationTrusted: false } });
+      const connected = button.isConnected; button.click(); return connected;
+    }, '/src/store/session-store.ts');
+    expect(connected).toBe(true); await expect(prompt).toHaveCount(0); await expect(page).toHaveURL(retiredAddress);
+    await expect(token).toHaveValue(''); await page.goBack(); await expect(page).toHaveURL(chatAddress);
+    expect(native).toEqual([]);
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+    expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_HISTORY_');
+  });
+}
+
 test('Settings document departure protects dirty owners without saving or persisting drafts', async ({ page }) => {
   const api = await installMockApi(page);
   const dialogs: string[] = [];

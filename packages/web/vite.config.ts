@@ -14,6 +14,10 @@ export default defineConfig({
   build: {
     // Large Markdown diagrams are isolated in an on-demand chunk and governed by check-bundle-budget.mjs.
     chunkSizeWarningLimit: 1_600,
+    // The data router stays eager; its static chunk also counts toward the eager budget.
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [{ name: 'router', test: /node_modules\/react-router(?:-dom)?\// }] } },
+    },
   },
   server: {
     port: 3080,

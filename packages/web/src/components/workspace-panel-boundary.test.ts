@@ -42,7 +42,7 @@ describe('workspace pane load boundary', () => {
   });
   it('commits router identity urgently alongside the external workspace/session store', () => {
     const entry = source('../index.tsx');
-    expect(entry).toContain('<BrowserRouter useTransitions={false}>');
+    expect(entry).toContain('<RouterProvider router={router} useTransitions={false} />');
   });
   it('retires real navigation even when browser history entries reuse a fallback key', () => {
     const app = source('../App.tsx');
