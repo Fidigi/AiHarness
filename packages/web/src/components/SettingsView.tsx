@@ -1065,7 +1065,7 @@ function SettingsNavigationBoundary({ inactive }: { inactive: boolean }) {
       <div className="settings-detail">
         <button type="button" className="settings-context-back" ref={contextBack} hidden={!panels.length}
           onClick={() => { contextFocus.current = true; setOverview(true); }}>{t(category === 'models' ? 'settings.modelsBack' : 'settings.generalBack')}</button>
-        <div className="settings-view" ref={root}><SettingsView key={context} category={category}
+        <div className="settings-view" ref={root} onFocusCapture={() => setOverview(false)}><SettingsView key={context} category={category}
           generalPanel={generalSettingsPanel(activeSection)} modelPanel={modelSettingsPanel(activeSection)}
           entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
       </div>

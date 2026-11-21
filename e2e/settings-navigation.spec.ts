@@ -211,6 +211,27 @@ for (const scenario of [
     await testInfo.attach('model-panel-back-focus', { path: capture, contentType: 'image/png' });
     await expect(modelEditor.getByLabel('ID', { exact: true })).toHaveValue(values[3]!);
   }
+  // Resizing retains the context list until focus deliberately returns to a form.
+  const categoryBack = page.getByRole('button', { name: /^(Back to Model settings|Retour aux paramètres des modèles)$/u });
+  const draftField = modelEditor.getByLabel('ID', { exact: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await categoryBack.click();
+  const currentPanel = navigation.locator('[aria-current="page"]');
+  await expect(currentPanel).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(navigation).toBeVisible();
+  await expect(currentPanel).toBeFocused();
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await draftField.focus();
+  await expect(draftField).toBeFocused();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(draftField).toBeVisible();
+  await expect(draftField).toBeFocused();
+  await expect(draftField).toHaveValue(values[3]!);
+  await expect(categoryBack).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('settings-responsive-retained-draft.png'), animations: 'disabled', caret: 'hide' });
+  await page.setViewportSize({ width: scenario.width, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
   const stored = await page.evaluate(() => JSON.stringify(localStorage));
   for (const value of [values[0], values[1], values[3]]) expect(stored).not.toContain(value);
