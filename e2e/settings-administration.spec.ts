@@ -52,10 +52,30 @@ test('packages withdraw stale controls after failed canonical readback and recov
   await plugins.getByLabel('Package source').fill('npm:must-not-install');
   await expect(plugins.getByRole('button', { name: 'Install', exact: true })).toBeDisabled();
   await expect(plugins.getByRole('button', { name: 'Reload resources', exact: true })).toBeDisabled();
+  await test.info().attach('packages-readback-uncertain', {
+    body: await page.screenshot({ path: test.info().outputPath('packages-readback-uncertain.png'),
+      animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+  });
+  const refresh = plugins.getByRole('button', { name: 'Refresh', exact: true });
+  const actions = ['Install', 'Check all', 'Reload resources'].map(name => plugins.getByRole('button', { name, exact: true }));
+  for (const action of actions) {
+    await expect(action).toBeDisabled();
+    expect(Number(await action.evaluate(element => getComputedStyle(element).opacity)))
+      .toBeLessThan(Number(await refresh.evaluate(element => getComputedStyle(element).opacity)));
+    await expect(action).toHaveCSS('cursor', 'not-allowed');
+  }
   await page.unroute('**/api/plugins?**', failure);
-  await plugins.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await refresh.click();
   await expect(checkbox).toBeChecked();
   await expect(plugins.getByRole('alert')).toHaveCount(0);
+  for (const action of actions) {
+    await expect(action).toBeEnabled();
+    await expect(action).toHaveCSS('opacity', await refresh.evaluate(element => getComputedStyle(element).opacity));
+  }
+  await test.info().attach('packages-readback-recovered', {
+    body: await page.screenshot({ path: test.info().outputPath('packages-readback-recovered.png'),
+      animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+  });
 });
 
 test('a retired default save cannot reread or announce into a newer Settings lifetime', async ({ page }) => {

@@ -635,6 +635,10 @@ test.describe('Régression visuelle du catalogue de plugins', () => {
       await expect(page).toHaveScreenshot(`plugin-catalog-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
+      await test.info().attach('plugin-catalog-state', {
+        body: await page.screenshot({ path: test.info().outputPath(`plugin-catalog-state-${scenario.name}.png`),
+          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+      });
     });
   }
 });

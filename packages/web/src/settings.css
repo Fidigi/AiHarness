@@ -287,6 +287,7 @@
 .plugin-context-choice small { color: var(--text-secondary); }
 .plugin-context .plugin-context-choice:hover { background: var(--surface-hover); }
 .plugin-context .plugin-context-choice:disabled { opacity: .5; cursor: not-allowed; }
+.plugin-install-panel button:disabled, .plugin-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
 .plugin-context .plugin-context-choice[aria-current="true"] { border-left-color: var(--text-link); background: var(--surface-selected); }
 .plugin-context button:focus-visible, .plugin-context > nav:focus-visible { outline-offset: -3px; }
 .plugin-context input { scroll-margin-block: 8px; }
