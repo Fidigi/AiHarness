@@ -377,7 +377,7 @@ test('Access drafts stop guarding after explicit Apply; browser preferences rema
 });
 
 test('Pending and failed credential writes never report the draft clean', async ({ page }) => {
-  const api = await installMockApi(page);
+  const api = await installMockApi(page, { sessions: [mockSession('credential-history', 'Credential history')] });
   let release!: () => void, entered!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const requested = new Promise<void>(resolve => { entered = resolve; });
@@ -434,8 +434,44 @@ test('Pending and failed credential writes never report the draft clean', async 
       await expect(page.locator('.settings-dialog')).toHaveCount(0);
     } finally { releaseSave(); await page.unroute('**/api/config'); }
   }
+  let releaseHistory!: () => void, enteredHistory!: () => void;
+  const heldHistory = new Promise<void>(resolve => { releaseHistory = resolve; });
+  const pendingHistory = new Promise<void>(resolve => { enteredHistory = resolve; });
+  await page.route('**/api/config', async route => {
+    if (route.request().method() === 'POST') { enteredHistory(); await heldHistory; }
+    await route.fallback();
+  });
+  try {
+    await page.goto('/chat/credential-history'); await expect(page.locator('.chat-view')).toBeVisible();
+    const chatAddress = page.url();
+    await page.keyboard.press('Control+,');
+    const detail = page.locator('#providers .credential-context-detail'), credential = detail.locator('input[type="password"]:visible');
+    const published = () => page.evaluate(async path => {
+      const { useSessionStore } = await import(path);
+      return useSessionStore.getState().providers.available.openai?.apiKey === 'configured';
+    }, '/src/store/session-store.ts');
+    await expect(credential).toBeVisible(); expect(await published()).toBe(false);
+    await credential.fill('SYNTHETIC_HISTORY_ADMITTED_KEY');
+    await detail.getByRole('button', { name: 'Save', exact: true }).click(); await pendingHistory;
+    await credential.fill('SYNTHETIC_HISTORY_LATER_KEY');
+    const address = page.url(), prompt = page.getByRole('alertdialog', { name: 'Discard unsaved Settings edits?', exact: true });
+    await page.goBack(); await expect(prompt).toBeVisible(); await expect(page).toHaveURL(address);
+    await prompt.getByRole('button', { name: 'Keep editing', exact: true }).click(); await expect(prompt).toHaveCount(0);
+    await expect(credential).toHaveValue('SYNTHETIC_HISTORY_LATER_KEY');
+    await page.goBack(); await expect(prompt).toBeVisible();
+    const response = page.waitForResponse(response => response.url().endsWith('/api/config') && response.request().method() === 'POST');
+    releaseHistory(); expect((await response).status()).toBe(200); await expect.poll(published).toBe(true);
+    await expect(prompt).toBeVisible(); await expect(page).toHaveURL(address);
+    await expect(credential).toHaveValue('SYNTHETIC_HISTORY_LATER_KEY'); await expect(detail.getByRole('status')).toHaveCount(0);
+    expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST')).toHaveLength(3);
+    await prompt.getByRole('button', { name: 'Discard edits', exact: true }).click();
+    await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
+    await page.goto('/settings#providers'); await selectProviderCredential(page, 'OpenAI');
+    await expect(credential).toHaveValue(''); await page.locator('.settings-dialog-header button').click();
+    await expect(prompt).toHaveCount(0); await expect(page.locator('.settings-dialog')).toHaveCount(0);
+  } finally { releaseHistory(); await page.unroute('**/api/config'); }
   expect(api.requests.filter(request => request.path === '/api/config' && request.method === 'POST').map(request => request.body))
-    .toEqual(scenarios.map(scenario => ({ type: 'openai', apiKey: scenario.saved })));
+    .toEqual([...scenarios.map(scenario => ({ type: 'openai', apiKey: scenario.saved })), { type: 'openai', apiKey: 'SYNTHETIC_HISTORY_ADMITTED_KEY' }]);
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }))).not.toContain('SYNTHETIC_');
 });
 
