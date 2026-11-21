@@ -6,6 +6,7 @@ import { OpenAiProvider } from '../packages/core/dist/index.js';
 import { start, stop, getProxy } from '../packages/server/dist/index.js';
 import { resourceProvider } from '../packages/core/src/mcp/fixtures/resource-provider.mjs';
 import { expect, test, reserveReadBudget } from './fixtures/test-budget';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 
 for (const registered of [false, true]) for (const locale of ['en', 'fr'] as const) test(`native ${locale} MCP resources${registered ? ' registered by extension' : ''}, structured/images and session-bound binary download`, async ({ page }) => {
   const previous = { AI_HARNESS_AUTH_TOKEN: process.env.AI_HARNESS_AUTH_TOKEN, AI_HARNESS_ADMIN_TOKEN: process.env.AI_HARNESS_ADMIN_TOKEN };
@@ -46,8 +47,8 @@ for (const registered of [false, true]) for (const locale of ['en', 'fr'] as con
     if (locale === 'fr') await page.setViewportSize({ width: 390, height: 844 });
     if (registered) {
       await page.goto(base + '/settings#mcp');
+      await selectMcpServer(page, 'global', 'docs');
       const card = page.locator('#mcp .mcp-server-card'); await expect(card).toHaveCount(1);
-      await card.locator('.mcp-detail-toggle').click();
       await expect(card.locator('.mcp-server-detail')).toContainText(locale === 'en' ? 'Temporary server registered by' : 'Serveur temporaire inscrit par');
       await expect(card.locator('.mcp-exposure-control select').first()).toBeDisabled();
       const buttons = card.locator('.mcp-row-actions button');

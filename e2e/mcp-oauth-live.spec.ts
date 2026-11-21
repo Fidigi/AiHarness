@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, test } from './fixtures/test-budget';
 import { nativeMcpInheritance } from './fixtures/mcp-inheritance';
+import { selectMcpServer } from './fixtures/mcp-navigation';
 
 // Disposable real issuer/MCP peer. No route interception or external credentials.
 async function issuer() {
@@ -83,8 +84,9 @@ test('native MCP HTTP Test stays passive; explicit browser OAuth persists encryp
       localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, theme: 'light', filesOpen: false, lastSettingsSection: 'mcp' }));
     });
     await page.goto(f.base + '/settings#mcp');
-    const card = page.locator('#mcp .mcp-server-card').filter({ has: page.getByRole('button', { name: 'Show details for Global configuration / protected', exact: true }) });
-    await expect(card).toHaveCount(1); await card.locator('.mcp-detail-toggle').click();
+    await selectMcpServer(page, 'global', 'protected');
+    const card = page.locator('#mcp .mcp-server-card').filter({ has: page.getByRole('region', { name: 'Server details: Global configuration / protected', exact: true }) });
+    await expect(card).toHaveCount(1);
     await expect(card.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
     expect(peer.calls).toEqual([]);
     await card.getByRole('button', { name: 'Test protected', exact: true }).click();
