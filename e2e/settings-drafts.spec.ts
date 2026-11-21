@@ -156,7 +156,8 @@ for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 39
       localStorage.setItem('ai-harness-locale', locale);
       localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({ version: 4, lastSettingsSection: 'authentication' }));
     }, scenario.locale);
-    const api = await installMockApi(page, { sessions: [mockSession('history-draft-source', 'History draft source')] });
+    const api = await installMockApi(page, { sessions: [mockSession('history-draft-source', 'History draft source')],
+      configurationScopes: { global: { model: 'history-global-saved' }, project: { model: 'history-project-saved' } } });
     const native: string[] = [];
     page.on('dialog', async dialog => { native.push(dialog.type()); await dialog.dismiss(); });
     const prompt = page.getByRole('alertdialog', { name: scenario.locale === 'fr'
@@ -189,6 +190,28 @@ for (const scenario of [{ locale: 'en', width: 1280 }, { locale: 'fr', width: 39
     await page.goForward(); await expect(prompt).toBeVisible(); await discard.click();
     await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
     await page.goBack(); await expect(token).toBeVisible(); await expect(token).toHaveValue('');
+    await token.fill('SYNTHETIC_HISTORY_PRIORITY_TOKEN');
+    const priorityInput = await token.elementHandle();
+    await selectGeneralSettings(page, 'behavior');
+    const defaults = page.locator('#defaults'), scope = defaults.getByRole('combobox', { name: scenario.locale === 'fr' ? 'Portée' : 'Scope', exact: true, includeHidden: true });
+    const model = defaults.getByLabel(scenario.locale === 'fr' ? 'Modèle' : 'Model', { exact: true });
+    await expect(scope).toHaveValue('project'); await expect(model).toHaveValue('history-project-saved');
+    await model.fill('SYNTHETIC_HISTORY_LOCAL_DEFAULT'); await scope.selectOption('global'); await expect(prompt).toBeVisible();
+    await page.goBack(); await expect(page).toHaveURL(/\/settings#authentication$/); await expect(prompt).toBeVisible();
+    await page.goBack(); await expect(page).toHaveURL(/\/settings#authentication$/); await expect(prompt).toBeVisible();
+    await keep.click(); await expect(prompt).toHaveCount(0);
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_PRIORITY_TOKEN'); expect(await priorityInput!.evaluate(node => node.isConnected)).toBe(true);
+    await selectGeneralSettings(page, 'behavior'); await expect(scope).toHaveValue('project');
+    await expect(model).toHaveValue('SYNTHETIC_HISTORY_LOCAL_DEFAULT');
+    await scope.selectOption('global'); await expect(prompt).toBeVisible(); await discard.click();
+    await expect(prompt).toHaveCount(0); await expect(scope).toHaveValue('global'); await expect(model).toHaveValue('history-global-saved');
+    await expect(token).toHaveValue('SYNTHETIC_HISTORY_PRIORITY_TOKEN');
+    await model.fill('SYNTHETIC_HISTORY_GLOBAL_DEFAULT'); await scope.selectOption('project'); await expect(prompt).toBeVisible();
+    await page.goBack(); await expect(page).toHaveURL(/\/settings#authentication$/); await expect(prompt).toBeVisible();
+    await page.goBack(); await expect(page).toHaveURL(/\/settings#authentication$/); await expect(prompt).toBeVisible();
+    await discard.click(); await expect(page.locator('.settings-dialog')).toHaveCount(0); await expect(page).toHaveURL(chatAddress);
+    await page.goForward(); await expect(token).toBeVisible(); await expect(token).toHaveValue('');
+    await expect(scope).toHaveValue('global'); await expect(model).toHaveValue('history-global-saved');
     await token.fill('SYNTHETIC_HISTORY_CATEGORY_TOKEN'); await selectGeneralSettings(page, 'appearance');
     await page.goBack(); await expect(prompt).toHaveCount(0); await expect(token).toBeVisible();
     await expect(token).toHaveValue('SYNTHETIC_HISTORY_CATEGORY_TOKEN');
