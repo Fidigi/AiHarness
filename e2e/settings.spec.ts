@@ -994,12 +994,26 @@ test.describe('Settings and authentication', () => {
     await expect(configure).toBeFocused();
     await configure.click();
     await expect(dialog.getByLabel('Server name')).toBeFocused();
+    await test.info().attach('mcp-import-completion-open', {
+      body: await page.screenshot({ path: test.info().outputPath('mcp-import-completion-open.png'),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
     const tenant = dialog.getByRole('group', { name: 'headers.X-Tenant' });
     await tenant.getByLabel('Use a host-variable reference').check();
     await tenant.getByLabel('Host variable name').fill('TENANT_TOKEN');
     await dialog.getByLabel('I confirm storing the remaining literal secret values in global configuration.').check();
     await dialog.getByLabel(/I confirm that these host variables may be sent/u).check();
-    await dialog.getByRole('button', { name: 'Save atomically' }).click();
+    const save = dialog.getByRole('button', { name: 'Save atomically' });
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(save).toBeFocused();
+    await expect(save).toBeInViewport({ ratio: 1 });
+    await test.info().attach('mcp-import-completion-save', {
+      body: await page.screenshot({ path: test.info().outputPath('mcp-import-completion-save.png'),
+        animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+    });
+    await save.click();
 
     await expect(section).toContainText('The MCP server was imported.');
     await expect(section.getByRole('article', { name: 'docs-import: Configured', exact: true })).toBeVisible();
