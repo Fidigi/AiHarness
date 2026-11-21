@@ -1,8 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from './fixtures/test-budget.js';
+import { expect, test, type Route } from './fixtures/test-budget.js';
 import { installMockApi } from './fixtures/mock-api.js';
 import { switchSettingsWorkspace } from './fixtures/mcp-navigation.js';
-import { reloadSettingsDiscardingDrafts, selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectRegistryEntry, selectSettingsCategory } from './fixtures/settings-navigation';
+import { closeSettings, reloadSettingsDiscardingDrafts, selectCatalogueModel, selectGeneralSettings, selectModelSettings, selectProviderCredential, selectRegistryEntry, selectSettingsCategory } from './fixtures/settings-navigation';
 import { expectContrast, expectThemeRoles } from './fixtures/contrast';
 import { mcpFreshProjectInventory, mcpFreshProjectPreviewFixture } from './fixtures/mcp.js';
 
@@ -247,7 +247,7 @@ for (const scenario of [
   await expect(page.locator('#custom-models')).toBeVisible();
   await expect(page.locator('#providers')).toBeHidden();
 });
-test('Settings restores separate section, group, row and scope intent through real project switches and reload', async ({ page }) => {
+test('Settings restores separate section, group, row and scope intent through real project switches and reload', async ({ page }, testInfo) => {
   const api = await installMockApi(page);
   await page.goto('/settings?cwd=%2Fworkspace#model');
   const catalog = page.locator('#model .model-catalog');
@@ -262,18 +262,33 @@ test('Settings restores separate section, group, row and scope intent through re
   const scope = page.locator('#tools').getByRole('combobox', { name: 'Scope', exact: true });
   await selectSettingsCategory(page, 'tools');
   await scope.selectOption('global');
-  await selectSettingsCategory(page, 'models');
+  await selectProviderCredential(page, 'Anthropic');
+  const credential = page.locator('#providers .credential-context-detail input:visible');
+  const baseline = await credential.inputValue();
+  await credential.fill('SYNTHETIC_WORKSPACE_A_CREDENTIAL');
+  await selectGeneralSettings(page, 'behavior');
+  const model = page.locator('#defaults').getByLabel('Model', { exact: true });
+  await expect(model).toHaveValue('mock-model');
+  const savedModel = await model.inputValue();
+  await model.fill('SYNTHETIC_WORKSPACE_A_MODEL');
+  await selectModelSettings(page, 'model');
   await row.getByRole('checkbox').focus();
+  await closeSettings(page, { discardDrafts: true });
   await switchSettingsWorkspace(page, '/workspace/other');
+  await selectProviderCredential(page, 'Anthropic'); await expect(credential).toHaveValue(baseline);
+  await selectGeneralSettings(page, 'behavior'); await expect(model).toHaveValue(savedModel);
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('project');
   await selectGeneralSettings(page, 'behavior');
   await page.locator('#shortcuts input').first().focus();
   await switchSettingsWorkspace(page, '/workspace');
   await expect(row).toBeInViewport();
+  await selectProviderCredential(page, 'Anthropic'); await expect(credential).toHaveValue(baseline);
+  await selectGeneralSettings(page, 'behavior'); await expect(model).toHaveValue(savedModel);
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain('SYNTHETIC_WORKSPACE_A_');
   await selectSettingsCategory(page, 'tools');
   await expect(scope).toHaveValue('global');
-  await selectSettingsCategory(page, 'models');
+  await selectModelSettings(page, 'model');
   await expect(row).toBeInViewport();
   await row.getByRole('checkbox').focus();
   await page.reload();
@@ -282,6 +297,7 @@ test('Settings restores separate section, group, row and scope intent through re
   expect(saved.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace')).toMatchObject({
     section: 'model', positions: { model: { selection: identity } }, scopes: { tools: 'global' },
   });
+  await testInfo.attach('workspace-a-restored-metadata', { body: await page.screenshot({ animations: 'disabled', caret: 'hide' }), contentType: 'image/png' });
   expect(saved.entries.find((entry: { cwd: string }) => entry.cwd === '/workspace/other').section).toBe('shortcuts');
   expect(api.requests.filter(request => request.method !== 'GET' && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
   // An explicit section address is an intent even without control focus.
@@ -335,7 +351,7 @@ test('Settings focus conserves another tab’s fresh other-section position with
   } finally { await peer.close(); }
 });
 
-test('No-project Settings retains global sections and falls back only unavailable project scope; forms never enter navigation storage', async ({ page }) => {
+test('No-project Settings retains global sections and falls back only unavailable project scope; forms never enter navigation storage', async ({ page }, testInfo) => {
   const api = await installMockApi(page);
   await page.route('**/api/workspaces/default', route => route.fulfill({ status: 404, json: { error: 'No workspace' } }));
   await page.addInitScript(key => localStorage.setItem(key, JSON.stringify({ version: 1, entries: [
@@ -378,6 +394,76 @@ test('No-project Settings retains global sections and falls back only unavailabl
   expect(saved).not.toContain('DRAFT_MODEL_NOT_SAVED');
   expect(saved).not.toContain('NO_PROJECT_CREDENTIAL_DRAFT');
   expect(JSON.parse(saved!).entries[0].section).toBe('mcp');
+  await expect(page).toHaveURL(/\/settings#mcp$/u);
+  await closeSettings(page, { discardDrafts: true });
+  await page.keyboard.press('Control+,');
+  await expect(page.locator('#mcp')).toBeVisible();
+  await selectProviderCredential(page, 'Anthropic'); await expect(credential).toHaveValue('');
+  await selectGeneralSettings(page, 'authentication'); await expect(page.locator('#authentication input')).toHaveValue('');
+  await selectGeneralSettings(page, 'behavior');
+  await expect(page.locator('#defaults').getByLabel('Model', { exact: true })).not.toHaveValue('DRAFT_MODEL_NOT_SAVED');
+  await expect(page.locator('#defaults select').first()).toHaveValue('global');
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+  const persisted = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }));
+  for (const value of ['NO_PROJECT_CREDENTIAL_DRAFT', 'NAVIGATION_SECRET_MUST_NOT_PERSIST', 'DRAFT_MODEL_NOT_SAVED']) expect(persisted).not.toContain(value);
+  await testInfo.attach('no-project-global-after-discard', { body: await page.screenshot({ animations: 'disabled', caret: 'hide' }), contentType: 'image/png' });
+});
+
+test('Retired workspace reads cannot replace fresh Settings scope, drafts or focus', async ({ page }, testInfo) => {
+  const api = await installMockApi(page);
+  const held: Route[] = [];
+  await page.route('**/api/configuration/scope?*', async route => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.searchParams.get('scope') !== 'project') { await route.fallback(); return; }
+    if (url.searchParams.get('scopeId') === 'workspace-e2e') { held.push(route); return; }
+    if (url.searchParams.get('scopeId') === 'workspace-retirement-b') {
+      await route.fulfill({ json: { scope: 'project', scopeId: 'workspace-retirement-b', values: { model: 'fresh-b-model' } } });
+    } else await route.fallback();
+  });
+  try {
+    await page.goto('/settings?cwd=%2Fworkspace#providers');
+    await expect.poll(() => held.length).toBeGreaterThan(0);
+    await selectProviderCredential(page, 'Anthropic');
+    const credential = page.locator('#providers .credential-context-detail input:visible');
+    await credential.fill('SYNTHETIC_RETIRED_WORKSPACE_DRAFT');
+    const oldInput = await credential.elementHandle();
+    await page.locator('.settings-dialog-header button').click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    // Model an external authority update, not an implicit user navigation save.
+    // A connected old Discard event in the same task cannot act on the new owner.
+    expect(await page.evaluate(async modulePath => {
+      const { useSessionStore } = await import(modulePath), workspace = useSessionStore.getState().workspace;
+      const discard = document.querySelector<HTMLButtonElement>('.settings-discard-dialog button:last-child');
+      if (!workspace || !discard) throw new Error('Expected the original workspace decision.');
+      useSessionStore.setState({ workspace: { ...workspace, id: 'workspace-retirement-b', cwd: '/workspace/other' } });
+      const connected = discard.isConnected; discard.click(); return connected;
+    }, '/src/store/session-store.ts')).toBe(true);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(page.locator('.settings-dialog')).toBeVisible();
+    expect(await oldInput!.evaluate(element => element.isConnected)).toBe(false);
+    await expect(credential).toHaveValue('');
+    await selectGeneralSettings(page, 'behavior');
+    const model = page.locator('#defaults').getByLabel('Model', { exact: true });
+    await expect(model).toHaveValue('fresh-b-model');
+    await model.fill('SYNTHETIC_FRESH_B_DRAFT'); await model.focus();
+    const heldReads = held.length;
+    const oldResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/configuration/scope'
+      && new URL(response.url()).searchParams.get('scopeId') === 'workspace-e2e');
+    await Promise.all(held.splice(0).map(route => route.fulfill({ json: {
+      scope: 'project', scopeId: 'workspace-e2e', values: { model: 'OLD_A_READ_MUST_NOT_PUBLISH' },
+    } })));
+    await (await oldResponse).finished();
+    await testInfo.attach('retired-read-delivery', { contentType: 'application/json', body: JSON.stringify({ heldReads, oldStatus: (await oldResponse).status() }) });
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(model).toHaveValue('SYNTHETIC_FRESH_B_DRAFT'); await expect(model).toBeFocused();
+    await testInfo.attach('fresh-workspace-after-late-read', { body: await page.screenshot({ animations: 'disabled', caret: 'hide' }), contentType: 'image/png' });
+    await closeSettings(page, { discardDrafts: true });
+    expect(api.requests.filter(request => request.method !== 'GET'
+      && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+    const stored = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }));
+    for (const value of ['SYNTHETIC_RETIRED_WORKSPACE_DRAFT', 'SYNTHETIC_FRESH_B_DRAFT', 'OLD_A_READ_MUST_NOT_PUBLISH']) expect(stored).not.toContain(value);
+  } finally { await Promise.all(held.splice(0).map(route => route.abort().catch(() => undefined))); }
 });
 
 test('Trust granted through the real MCP import UI rereads all mounted resource sections without leaving Settings', async ({ page }) => {
