@@ -1031,17 +1031,34 @@ test.describe('Régression visuelle de l’explorer et du viewer', () => {
       await expect(panel.locator('.viewer-path')).toHaveText(longPath);
       await panel.getByRole('button', { name: 'Preview' }).click();
       await expect(panel.locator('.markdown-preview h1')).toHaveText('Workspace viewer');
-      await expect(page.getByRole('region', { name: 'Workspace explorer' }).locator('.file-name[aria-current="true"]')).toBeInViewport({ ratio: 1 });
+      // Desktop evidence belongs to the Sidebar host, not the transient inline explorer.
+      const explorer = scenario.name.startsWith('desktop')
+        ? page.locator('.sidebar-files-slot').getByRole('region', { name: 'Workspace explorer' })
+        : page.getByRole('region', { name: 'Workspace explorer' });
+      await expect(explorer.locator('.file-name[aria-current="true"]')).toBeInViewport({ ratio: 1 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(scenario.width);
       await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }' });
       await page.evaluate(() => document.fonts.ready);
       await expect(page).toHaveScreenshot(`workspace-files-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
-      await test.info().attach('design-workspace', {
-        body: await page.screenshot({ path: test.info().outputPath(`design-workspace-${scenario.name}.png`),
-          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
-      });
+      const frame = await page.screenshot({ path: test.info().outputPath(`design-workspace-${scenario.name}.png`),
+        animations: 'disabled', caret: 'hide' });
+      await test.info().attach('design-workspace', { body: frame, contentType: 'image/png' });
+      if (scenario.name.startsWith('desktop')) {
+        const bounds = await explorer.locator('.file-name[aria-current="true"]').boundingBox();
+        expect(bounds).not.toBeNull();
+        // Inspect pixels from that same frame, not a locator screenshot that may scroll again.
+        const pixels = await page.evaluate(async ({ image, bounds }) => {
+          const source = new Image(); source.src = `data:image/png;base64,${image}`; await source.decode();
+          const x = Math.floor(bounds.x), y = Math.floor(bounds.y);
+          const width = Math.ceil(bounds.x + bounds.width) - x, height = Math.ceil(bounds.y + bounds.height) - y;
+          const canvas = new OffscreenCanvas(width, height);
+          canvas.getContext('2d')!.drawImage(source, x, y, width, height, 0, 0, width, height);
+          return Array.from(new Uint8Array(await (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer()));
+        }, { image: frame.toString('base64'), bounds: bounds! });
+        expect(Buffer.from(pixels)).toMatchSnapshot(`workspace-selected-row-${scenario.name}.png`, { maxDiffPixelRatio: 0.02 });
+      }
     });
   }
 });
