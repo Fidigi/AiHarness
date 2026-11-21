@@ -39,6 +39,9 @@ test-results/
 .docker/*
 # Required by the test image's E2E entry point and build-time packaging controls.
 !.docker/Dockerfile.test
+!.docker/Dockerfile.accessibility
+!.docker/accessibility/
+!.docker/accessibility/**
 !.docker/e2e-suites.mjs
 !.docker/e2e-suites.d.mts
 !.docker/e2e-suites.test.mjs

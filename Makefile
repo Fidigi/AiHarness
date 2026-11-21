@@ -43,6 +43,7 @@ help: ## Afficher cette aide
 	@echo "    make test-parity       Lancer les contrats CLI/JSON/RPC/session/extension/SDK"
 	@echo "    make test-architecture Vérifier couches, cycles et exports internes"
 	@echo "    make test-e2e          Lancer les tests e2e (Playwright)"
+	@echo "    make test-accessibility  Tester Chromium fenêtré, zoom natif et Orca"
 	@echo "    make typecheck         Vérifier les types TypeScript"
 	@echo ""
 	@echo "  $(GREEN)Images Docker$(NC)"
@@ -198,7 +199,10 @@ test-parity: ## Lancer le harnais de parité fonctionnelle dans Docker
 # TESTS E2E (Playwright)
 # =============================================================================
 
-.PHONY: test-e2e
+.PHONY: test-e2e test-accessibility
+
+test-accessibility: ## Tester le bureau/lecteur d'écran isolé, hors suite headless
+	bash .docker/accessibility/run-docker.sh
 
 test-e2e: ## Lancer les tests e2e Playwright dans Docker (rebuild inclus)
 	@printf "$(GREEN)[TEST] Exécution des tests e2e...$(NC)\n"
