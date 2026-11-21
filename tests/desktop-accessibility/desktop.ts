@@ -53,7 +53,9 @@ export class Desktop {
     // for pointer coordinates; native chrome/AT-SPI independently proves zoom.
     const window = await this.page.evaluate(() => ({ x: screenX, y: screenY,
       chrome: outerHeight - innerHeight * devicePixelRatio, scale: devicePixelRatio }));
-    await execute('xdotool', ['mousemove', '--sync', String(Math.round(window.x + (box!.x + box!.width / 2) * window.scale)),
+    // The move/click requests share X's ordered stream. --sync would wait for
+    // motion forever when a reload leaves the pointer at the same coordinates.
+    await execute('xdotool', ['mousemove', String(Math.round(window.x + (box!.x + box!.width / 2) * window.scale)),
       String(Math.round(window.y + window.chrome + (box!.y + box!.height / 2) * window.scale)), 'click', '1'], { timeout: 5000 });
   }
   async capture(name: string): Promise<void> {

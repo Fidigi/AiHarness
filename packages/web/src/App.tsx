@@ -71,7 +71,7 @@ function App() {
       if (newer || document.activeElement !== document.body
         || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       const coarse = window.matchMedia?.('(pointer: coarse)').matches;
-      const available = invoker?.isConnected && invoker.getClientRects().length > 0
+      const available = invoker !== document.body && invoker?.isConnected && invoker.getClientRects().length > 0
         && !invoker.closest('[inert], [aria-hidden="true"]') && !invoker.matches(':disabled')
         && !(coarse && invoker.matches('input, textarea, [contenteditable="true"]'));
       const target = available ? invoker : document.querySelector<HTMLElement>('main.main-content');

@@ -1,4 +1,4 @@
-import { expect, test } from './desktop';
+import { expect, test, type Desktop } from './desktop';
 import { installMockApi, mockSession } from '../../e2e/fixtures/mock-api';
 
 test('environment: native 200% zoom and real Orca synthesis', async ({ desktop }) => {
@@ -17,6 +17,67 @@ test('environment: native 200% zoom and real Orca synthesis', async ({ desktop }
   await desktop.zoom200();
 });
 
+async function focusAppearanceClose(desktop: Desktop): Promise<void> {
+  const { page } = desktop;
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(page.getByRole('combobox', { name: 'Theme', exact: true })).toBeVisible();
+  await desktop.clickContent(dialog.getByRole('heading', { name: 'Settings', exact: true }));
+  await desktop.key('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await desktop.queryButton('Close');
+}
+
+test('Settings desktop: native reader navigation, history, reload and clean dismissal', async ({ desktop }) => {
+  const { page } = desktop;
+  const api = await installMockApi(page, { sessions: [mockSession('desktop-navigation', 'Desktop navigation')] });
+  await page.addInitScript(() => localStorage.setItem('ai-harness-preferences-v4', JSON.stringify({
+    version: 4, theme: 'dark', lastSettingsSection: 'appearance',
+  })));
+  await page.goto('/chat/desktop-navigation');
+  await desktop.clickContent(page.getByPlaceholder(/Type your message/));
+  await desktop.key('ctrl+comma');
+  await focusAppearanceClose(desktop);
+  const headingMark = desktop.mark();
+  await desktop.key('ctrl+Home', 'h'); // Orca structural navigation to the dialog heading.
+  await desktop.spoken(headingMark, 'Settings heading level 2');
+  await focusAppearanceClose(desktop);
+  const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  const categories = dialog.getByRole('navigation', { name: 'Settings categories', exact: true });
+  await expect(categories.getByRole('link')).toHaveText(['General', 'Models', 'Skills', 'Tools', 'Plugins', 'Child agents', 'MCP']);
+  let mark = desktop.mark();
+  await desktop.key('Tab');
+  const general = categories.getByRole('link', { name: 'General', exact: true });
+  await expect(general).toBeFocused(); await expect(general).toHaveAttribute('aria-current', 'page');
+  await desktop.spoken(mark, 'General');
+  mark = desktop.mark(); await desktop.key('Tab');
+  const models = categories.getByRole('link', { name: 'Models', exact: true });
+  await expect(models).toBeFocused(); await desktop.spoken(mark, 'Models');
+  await desktop.key('Return');
+  await expect(page).toHaveURL(/\/settings#providers$/u);
+  await expect(models).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#providers')).toBeVisible(); await expect(page.locator('#appearance')).toBeHidden();
+  await desktop.capture('desktop-categories-current');
+  await desktop.key('alt+Left'); await expect(page).toHaveURL(/#appearance$/u);
+  await expect(general).toHaveAttribute('aria-current', 'page');
+  await desktop.key('alt+Right'); await expect(page).toHaveURL(/#providers$/u);
+  await expect(models).toHaveAttribute('aria-current', 'page');
+  await desktop.key('alt+Left'); await expect(page).toHaveURL(/#appearance$/u);
+  await desktop.key('ctrl+r');
+  await focusAppearanceClose(desktop);
+  await expect(general).toHaveAttribute('aria-current', 'page');
+  await desktop.key('Return'); await expect(dialog).toHaveCount(0);
+  // A full-document Settings entry has no retained chat address: '/' resolves
+  // the selected session, whose newer desktop autofocus must not be stolen.
+  await expect(page).toHaveURL('http://127.0.0.1:3080/chat/desktop-navigation?cwd=%2Fworkspace');
+  await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeFocused();
+  await desktop.key('ctrl+comma'); await focusAppearanceClose(desktop);
+  await desktop.key('Escape'); await expect(dialog).toHaveCount(0);
+  await expect(page.locator('main.main-content')).toBeFocused();
+  expect(api.requests.filter(request => request.method !== 'GET'
+    && !['/api/workspaces/validate', '/api/mcp/oauth/status'].includes(request.path))).toEqual([]);
+});
+
 test('Settings: native-zoom category/context navigation, Keep/Discard and focus return', async ({ desktop }) => {
   const { page } = desktop;
   const api = await installMockApi(page, {
@@ -33,13 +94,7 @@ test('Settings: native-zoom category/context navigation, Keep/Discard and focus 
   await desktop.key('ctrl+comma');
   const dialog = page.getByRole('dialog', { name: 'Settings', exact: true });
   const close = dialog.getByRole('button', { name: 'Close', exact: true });
-  // Calibrate the native content owner after lazy entry. Orca's documented
-  // Where Am I command reports the focused control, not the dialog title.
-  await expect(page.getByRole('combobox', { name: 'Theme', exact: true })).toBeVisible();
-  await desktop.clickContent(dialog.getByRole('heading', { name: 'Settings', exact: true }));
-  await desktop.key('Tab');
-  await expect(close).toBeFocused();
-  await desktop.queryButton('Close');
+  await focusAppearanceClose(desktop);
   await desktop.zoom200();
   let mark = desktop.mark();
   await desktop.key('Tab');
@@ -118,9 +173,7 @@ test('Settings: native-zoom category/context navigation, Keep/Discard and focus 
   // Route navigation unmounts the old composer; its replacement is not the
   // invoker. App's existing focus contract returns to the retained main region.
   expect(await invoker!.evaluate(element => element.isConnected)).toBe(false);
-  // Keep the focus failure as a failed case while still checking the independent
-  // no-write/storage/readback assertions below. Never turn it into a skip/pass.
-  await expect.soft(page.locator('main.main-content')).toBeFocused();
+  await expect(page.locator('main.main-content')).toBeFocused();
   await desktop.info.attach('post-discard-focus', { contentType: 'application/json', body: JSON.stringify(await page.evaluate(() => ({
     tag: document.activeElement?.tagName, role: document.activeElement?.getAttribute('role'),
     mainFocused: document.activeElement === document.querySelector('main.main-content'),
@@ -131,4 +184,7 @@ test('Settings: native-zoom category/context navigation, Keep/Discard and focus 
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain('DESKTOP_AT_UNSAVED_MODEL');
   await desktop.key('ctrl+comma');
   await expect(model).toHaveValue('saved-model');
+  await desktop.clickContent(close); await expect(dialog).toHaveCount(0);
+  await expect(prompt).toHaveCount(0);
+  await expect(page.locator('main.main-content')).toBeFocused();
 });
