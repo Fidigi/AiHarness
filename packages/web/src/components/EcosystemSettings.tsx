@@ -633,8 +633,7 @@ export function CustomModelSettings({ presented }: { presented: boolean }) {
         setForm({ ...current.form });
       } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
         && result.data.provider === form.provider && result.data.id === form.id) && !current.editing && formBaseline.current !== baseline
-        && !formBaseline.current.provider && !formBaseline.current.id && current.form.provider.trim() && current.form.id.trim()
-        && `${current.form.provider.trim()}:${current.form.id.trim()}` !== (editing || `${form.provider}:${form.id}`)) {
+        && !formBaseline.current.provider && !formBaseline.current.id && current.form.provider.trim() && current.form.id.trim()) {
         setForm({ ...current.form });
       } else if (result.data && (editing ? result.data.key === editing : result.data.key === `${form.provider}:${form.id}`
         && result.data.provider === form.provider && result.data.id === form.id) && current.editing

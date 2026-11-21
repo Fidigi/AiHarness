@@ -767,7 +767,7 @@ export async function installMockApi(page: Page, options: MockApiOptions = {}): 
         ...(input.compatibility ? { compatibility: input.compatibility } : {}),
         createdAt: DEFAULT_DATE, updatedAt: DEFAULT_DATE,
       };
-      customModels.push(model);
+      customModels = [...customModels.filter(saved => saved.key !== key), model];
       await fulfillJson(route, model, 201); return;
     }
     const customModelAction = url.pathname.match(/^\/api\/provider-registry\/models\/(.+?)(?:\/(test))?$/);
