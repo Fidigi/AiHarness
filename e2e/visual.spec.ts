@@ -1034,6 +1034,10 @@ test.describe('Régression visuelle de l’explorer et du viewer', () => {
       await expect(page).toHaveScreenshot(`workspace-files-${scenario.name}.png`, {
         animations: 'disabled', caret: 'hide', maxDiffPixelRatio: 0.02,
       });
+      await test.info().attach('design-workspace', {
+        body: await page.screenshot({ path: test.info().outputPath(`design-workspace-${scenario.name}.png`),
+          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+      });
     });
   }
 });
