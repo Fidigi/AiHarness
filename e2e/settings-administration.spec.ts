@@ -13,10 +13,24 @@ for (const locale of ['en', 'fr'] as const) test(`defaults ${locale} recover an 
   await expect(defaults.getByRole('alert')).toContainText(locale === 'fr' ? 'La lecture sûre' : 'could not be read safely');
   await expect(defaults.getByRole('button', { name: locale === 'fr' ? 'Enregistrer' : 'Save', exact: true })).toBeDisabled();
   await expect(page.locator('body')).not.toContainText('private-server-detail');
+  await test.info().attach('defaults-read-failed', {
+    body: await page.screenshot({ path: test.info().outputPath(`defaults-read-failed-${locale}.png`),
+      animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+  });
+  const reload = defaults.getByRole('button', { name: locale === 'fr' ? 'Recharger les paramètres sauvegardés' : 'Reload saved settings' });
+  const reloadBounds = await reload.boundingBox();
+  const scopeTop = await defaults.getByRole('combobox', { name: locale === 'fr' ? 'Portée' : 'Scope', exact: true })
+    .evaluate(element => element.closest('label')!.getBoundingClientRect().top);
+  expect(reloadBounds).not.toBeNull();
+  expect(scopeTop).toBeGreaterThanOrEqual(reloadBounds!.y + reloadBounds!.height);
   await page.unroute('**/api/configuration/scope?**', fail);
-  await defaults.getByRole('button', { name: locale === 'fr' ? 'Recharger les paramètres sauvegardés' : 'Reload saved settings' }).click();
+  await reload.click();
   await expect(defaults.getByRole('alert')).toHaveCount(0);
   await expect(defaults.getByLabel(locale === 'fr' ? 'Modèle' : 'Model', { exact: true })).toBeEnabled();
+  await test.info().attach('defaults-read-recovered', {
+    body: await page.screenshot({ path: test.info().outputPath(`defaults-read-recovered-${locale}.png`),
+      animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+  });
 });
 
 test('packages withdraw stale controls after failed canonical readback and recover by explicit refresh', async ({ page }) => {
