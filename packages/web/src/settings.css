@@ -220,6 +220,7 @@
 .custom-resource-editor form input[type="checkbox"] { flex: 0 0 auto; width: auto; min-height: 0; margin: 0; }
 #defaults button:not(:disabled) { background: var(--accent); color: var(--on-accent); }
 #defaults input, #defaults select, #tools select { width: 100%; min-height: 2.2rem; }
+#defaults input { padding: .5rem 1rem; }
 .custom-resource-editor form > div { grid-column: 1 / -1; display: flex; gap: .4rem; }
 .codemode-settings { min-width: 0; display: grid; gap: .65rem; margin-top: 1rem; padding: .75rem; border: 1px solid var(--border-subtle); border-radius: 6px; }
 .codemode-settings > label { min-width: 0; display: grid; gap: .3rem; }

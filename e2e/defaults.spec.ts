@@ -52,6 +52,10 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       const dismiss = notices.getByRole('button', { name: 'Close', exact: true });
       for (let remaining = await dismiss.count(); remaining > 0; remaining -= 1) await dismiss.first().click();
       await expect(defaults).toHaveScreenshot(`settings-defaults-${viewport.name}-${theme}.png`);
+      await test.info().attach('settings-defaults', {
+        body: await defaults.screenshot({ path: test.info().outputPath(`settings-defaults-${viewport.name}-${theme}.png`),
+          animations: 'disabled', caret: 'hide' }), contentType: 'image/png',
+      });
       expect((await new AxeBuilder({ page }).include('#defaults').analyze()).violations).toEqual([]);
     });
   }

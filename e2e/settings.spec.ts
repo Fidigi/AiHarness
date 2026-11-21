@@ -1728,6 +1728,15 @@ test.describe('Settings and authentication', () => {
         expect(label.height).toBeGreaterThanOrEqual(scenario.width < 960 ? 44 : 24);
       }
       if (panel === 'behavior') {
+        const defaults = page.locator('#defaults');
+        const inset = await defaults.getByRole('combobox', { name: /^(Scope|Portée)$/u, exact: true })
+          .evaluate(element => getComputedStyle(element).paddingInlineStart);
+        const inputs = defaults.getByRole('textbox');
+        await expect(inputs).toHaveCount(3);
+        for (const input of await inputs.all()) {
+          await expect(input).toHaveCSS('padding-inline-start', inset);
+          await expect(input).toHaveCSS('padding-inline-end', inset);
+        }
         await page.locator('.settings-view').evaluate(element => element.scrollTo(0, 0));
         await test.info().attach(`general-behavior-${scenario.name}`, {
           body: await page.locator('.settings-dialog').screenshot({ path: test.info().outputPath(`general-behavior-${scenario.name}.png`),
