@@ -1,4 +1,4 @@
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, request as httpRequest, type Server, type ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
@@ -90,6 +90,7 @@ function stream(response: ServerResponse, values: unknown[]): void {
 async function fixture(reply?: (body: Record<string, unknown>, response: ServerResponse) => void) {
   const calls: Array<{ url?: string; headers: import('node:http').IncomingHttpHeaders; body: Record<string, unknown> }> = [];
   const server = createServer(async (request, response) => {
+    request.setEncoding('utf8');
     let text = ''; for await (const chunk of request) text += chunk;
     const body = JSON.parse(text); calls.push({ url: request.url, headers: request.headers, body });
     if (reply) { reply(body, response); return; }
@@ -100,6 +101,29 @@ async function fixture(reply?: (body: Record<string, unknown>, response: ServerR
   servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   return { calls, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/owned%2Fminimax/anthropic` };
 }
+
+describe('MiniMax loopback request capture', () => {
+  it.each(['é', '漢', '🐈'])('preserves UTF-8 characters split across request chunks: %s', async character => {
+    const { calls, baseUrl } = await fixture();
+    const body = { model: first, stream: false, messages: [{ role: 'user', content: `before ${character} after` }] };
+    const bytes = Buffer.from(JSON.stringify(body)), split = bytes.indexOf(Buffer.from(character)) + 1;
+    const received = new Promise<void>(resolve => servers.at(-1)!.once('request', request => {
+      request.once('data', () => resolve());
+    }));
+    const request = httpRequest(baseUrl, { method: 'POST', headers: { 'content-type': 'application/json' } });
+    const completed = new Promise<void>((resolve, reject) => {
+      request.once('error', reject);
+      request.once('response', response => {
+        response.once('error', reject); response.once('end', resolve); response.resume();
+      });
+    });
+    request.write(bytes.subarray(0, split));
+    await received; // Do not send the remaining UTF-8 bytes until the first chunk was read.
+    request.end(bytes.subarray(split));
+    await completed;
+    expect(calls.map(call => call.body)).toEqual([body]);
+  });
+});
 
 describe('native MiniMax private continuation', () => {
   it.each((['minimax', 'minimax-cn'] as const).flatMap(scope => (['chat', 'stream'] as const).map(facade => ({ scope, facade }))))(
