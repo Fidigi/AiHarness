@@ -411,6 +411,7 @@ test('legacy tools leave progress JS/CSS unloaded; a genuine delayed leaf has no
   const probe = await begin(page, 'success');
   const region = page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true });
   await expect(region.getByRole('status')).toHaveText('Loading tool progress…');
+  await expect(region).toHaveCSS('position', 'static');
   await expect(region).toContainText('Preparing custom work');
   const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
   await composer.focus(); release();
@@ -427,6 +428,7 @@ test('failed genuine leaf import shows progress/error text while product Stop re
   const probe = await begin(page, 'stop');
   const region = page.getByRole('region', { name: 'Tool progress: arbitrary_custom', exact: true });
   await expect(region.getByRole('status')).toHaveText('Progress display could not load. Tool execution is unaffected.');
+  await expect(region).toHaveCSS('position', 'static');
   await expect(region).toContainText('Preparing custom work');
   await expect(page.getByRole('textbox', { name: 'Message composer', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Stop tool', exact: true }).click();

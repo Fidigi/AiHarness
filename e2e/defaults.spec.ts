@@ -17,6 +17,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       await page.getByRole('textbox', { name: 'Message composer' }).fill('Keep this run active');
       await page.getByRole('button', { name: 'Send', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Queue', exact: true })).toBeVisible();
       const mutationsBefore = api.requests.filter(request => request.method === 'PATCH' && request.path.startsWith('/api/sessions/')).length;
       await page.getByLabel('New-session reasoning defaults').click();
       await page.getByRole('button', { name: 'Save current reasoning as global default' }).click();

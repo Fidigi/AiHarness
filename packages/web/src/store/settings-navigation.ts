@@ -5,7 +5,7 @@ export const settingsSections = [
   'sessions', 'mcp', 'about', 'behavior', 'notifications',
 ] as const;
 export type SettingsSection = typeof settingsSections[number];
-export const settingsCategoryIds = ['general', 'models', 'skills', 'tools', 'plugins', 'subagents', 'mcp'] as const;
+const settingsCategoryIds = ['general', 'models', 'skills', 'tools', 'plugins', 'subagents', 'mcp'] as const;
 export type SettingsCategory = typeof settingsCategoryIds[number];
 export const settingsSectionCategory: Record<SettingsSection, SettingsCategory> = {
   authentication: 'general', appearance: 'general', shortcuts: 'general',

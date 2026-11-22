@@ -9,7 +9,7 @@ const Card = lazy(() => import('./ToolProgressCard'));
 function Fallback({ progress, failed = false }: { progress: ToolProgressSnapshot; failed?: boolean }) {
   const { locale } = useI18n();
   const copy = toolProgressMessages(locale);
-  return <section className="session-info" aria-label={`${copy.label}: ${progress.toolName}`} aria-busy={!failed}>
+  return <section className="tool-progress-fallback" aria-label={`${copy.label}: ${progress.toolName}`} aria-busy={!failed}>
     <strong>{progress.toolName} · {copy.status[progress.status]}</strong>
     <p>{copy.duration}: {(progress.durationMs / 1_000).toFixed(2)}s</p>
     <p role="status">{failed ? copy.failedLoad : copy.loading}</p>

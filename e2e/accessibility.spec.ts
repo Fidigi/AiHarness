@@ -59,7 +59,7 @@ test.describe('Accessibilité des parcours majeurs', () => {
     await expect(page.getByText('Protected accessible session', { exact: true }).first()).toBeVisible();
   });
 
-  test('chat, explorer et réglages ne présentent aucune violation WCAG automatisable', async ({ page }) => {
+  test('chat et explorer ne présentent aucune violation WCAG automatisable', async ({ page }) => {
     const session = mockSession('accessible', 'Accessible session', [
       { role: 'user', content: 'Inspect the project' },
       { role: 'assistant', content: '# Result\n\nA safe [external link](https://example.com).\n\n- Item one\n- Item two' },
@@ -82,13 +82,17 @@ test.describe('Accessibilité des parcours majeurs', () => {
     await expectAccessible(page, 'fullscreen reader (dark)');
     await page.keyboard.press('Escape');
 
-    await page.goto('/settings#appearance');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-    // Each category must actually be presented for axe and control geometry checks.
-    for (const [category, filter] of [
-      ['general', null], ['models', 'Filter models or providers'], ['skills', 'Filter skills or sources'],
-      ['tools', null], ['plugins', 'Filter packages'], ['mcp', null], ['subagents', 'Filter profiles'],
-    ] as const) {
+  });
+
+  // Keep each category's axe and geometry checks within its own unchanged test deadline.
+  for (const [category, filter] of [
+    ['general', null], ['models', 'Filter models or providers'], ['skills', 'Filter skills or sources'],
+    ['tools', null], ['plugins', 'Filter packages'], ['mcp', null], ['subagents', 'Filter profiles'],
+  ] as const) {
+    test(`réglages ${category} sans violation WCAG automatisable en clair/sombre`, async ({ page }) => {
+      await installMockApi(page, { sessions: [mockSession('accessible', 'Accessible session')] });
+      await page.goto('/settings#appearance');
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
       await selectSettingsCategory(page, category);
       if (filter && category !== 'models') await expect(page.getByLabel(filter)).toBeVisible();
       const panels = category === 'general' ? ['appearance', 'behavior', 'notifications', 'authentication', 'about'] as const
@@ -106,15 +110,17 @@ test.describe('Accessibilité des parcours majeurs', () => {
           await expectAccessible(page, `settings ${panel ?? category} (${theme})`);
         }
       }
-    }
-    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-    await page.getByRole('button', { name: 'Create profile' }).click();
-    await expect(page.getByRole('dialog', { name: 'Create profile' })).toBeVisible();
-    await expectAccessible(page, 'child-agent profile dialog (dark)');
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-    await expectAccessible(page, 'settings (light)');
-  });
+      if (category === 'subagents') {
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+        await page.getByRole('button', { name: 'Create profile' }).click();
+        await expect(page.getByRole('dialog', { name: 'Create profile' })).toBeVisible();
+        await expectAccessible(page, 'child-agent profile dialog (dark)');
+        await page.getByRole('button', { name: 'Cancel' }).click();
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await expectAccessible(page, 'settings (light)');
+      }
+    });
+  }
 
   test('le suivi des agents enfants reste accessible en clair et sombre', async ({ page }) => {
     const parent = mockSession('accessible-parent', 'Accessible parent');

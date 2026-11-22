@@ -128,6 +128,8 @@
 .session-info dd { min-width: 0; overflow-wrap: anywhere; }
 .session-info dd button { border: 0; color: var(--text-link); background: none; cursor: pointer; }
 .session-info a { color: var(--text-link); }
+.tool-progress-fallback { flex-shrink: 0; min-width: 0; max-height: min(36vh, 420px); overflow: auto; margin: .5rem 0; padding: .75rem; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-panel); overflow-wrap: anywhere; }
+.tool-progress-fallback pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .notice { display: flex; justify-content: space-between; gap: 1rem; margin: .5rem 1.5rem 0; padding: .65rem .8rem; border: 1px solid var(--status-danger); border-radius: 6px; color: var(--status-danger); background: var(--surface-danger); }
 .notice button { border: 0; background: none; color: inherit; cursor: pointer; }
 .message .reply-evidence { display: block; margin: .5rem 0; color: var(--status-warning); background: var(--surface-warning); text-align: left; overflow-wrap: anywhere; }

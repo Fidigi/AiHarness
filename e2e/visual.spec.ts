@@ -58,6 +58,8 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
       expectThemeRoles(page.locator(selector), surface, text);
     await page.goto('/chat/theme-shell');
     await expect(page.locator('.message.assistant')).toContainText('Readable content');
+    await expect(page.getByRole('complementary', { name: 'Main navigation', exact: true })).toBeVisible();
+    await expect(page.locator('.code-container')).toBeVisible();
     // Chat syntax must be themed before the lazy explorer has ever opened.
     await expect(page.locator('.workspace-panel')).toHaveCount(0);
     await expectRoles('body, .main-content', '--surface-canvas');
