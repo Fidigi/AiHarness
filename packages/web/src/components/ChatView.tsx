@@ -1518,8 +1518,10 @@ function ChatView({ onStreamingUpdate, terminalControl }: ChatViewProps) {
       setDraft(localId, content);
       setNotice(error instanceof Error ? error.message : t('chat.unexpectedError'));
     } finally {
+      // Readiness may admit the run before HTTP settles. Release this view's
+      // local busy state even when the reply no longer owns the run epoch.
       if (originMount && interactionMount.current === originMount
-        && (ownsStart() || completedView === interactionAddressRef.current)) setStarting(false);
+        && (interactionAddressRef.current === interactionView || ownsStart() || completedView === interactionAddressRef.current)) setStarting(false);
     }
   };
 

@@ -60,6 +60,26 @@ async function fixture(page: Page, id: string, withHead = false, initiallyEmpty 
   };
 }
 
+test('run readiness before the start reply releases the current composer without admitting a stale reply', async ({ page }) => {
+  const id = 'start-readiness';
+  const api = await fixture(page, id, false, true);
+  let heldStart: Route | undefined;
+  await page.route('**/api/agent/runs', route => { heldStart = route; });
+  const composer = page.getByRole('textbox', { name: 'Message composer', exact: true });
+  await composer.fill('Start'); await composer.press('Enter');
+  await expect.poll(() => Boolean(heldStart)).toBe(true);
+  await expect(composer).toBeDisabled();
+  const run = { ...api.initial, phase: 'streaming' as const, lastSequence: 2 };
+  api.replace(run, 2);
+  await api.ready();
+  await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+  await api.json(heldStart!, { run: { ...api.initial, phase: 'queued', lastSequence: 1 },
+    session: mockSession(id, 'Admission lifetime'), workspace: { id: 'workspace-e2e', cwd: '/workspace', trusted: true } }, 202);
+  await expect(composer).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Queue', exact: true })).toBeVisible();
+  await expect(page.locator('.agent-phase')).toHaveText('Model is responding');
+});
+
 for (const response of ['success', 'failure'] as const) {
   test(`unchanged duplicate admission keeps a held interaction ${response} eligible`, async ({ page }) => {
     const api = await fixture(page, 'duplicate-' + response, true);
