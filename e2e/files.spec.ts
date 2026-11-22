@@ -433,6 +433,29 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   });
 }
 
+test('contrast sampling reselects an element replaced during style measurement', async ({ page }) => {
+  await page.setContent('<main style="background: white"><button id="contrast-sample" style="color: black; background: white">Readable</button></main>');
+  await page.evaluate(() => {
+    const computedStyle = window.getComputedStyle.bind(window);
+    let replaced = false;
+    window.getComputedStyle = (element, pseudo) => {
+      if (!replaced && element.id === 'contrast-sample') {
+        replaced = true;
+        element.replaceWith(element.cloneNode(true));
+      }
+      return computedStyle(element, pseudo);
+    };
+  });
+  await expectReaderContrast(page.locator('#contrast-sample'));
+});
+
+for (const sample of ['missing', 'low-contrast'] as const) {
+  test(`contrast sampling still rejects ${sample} targets`, async ({ page }) => {
+    await page.setContent('<main style="background: white"><button id="contrast-sample" style="color: white; background: white">Unreadable</button></main>');
+    await expect(expectReaderContrast(page.locator(sample === 'missing' ? '#missing' : '#contrast-sample'))).rejects.toThrow();
+  });
+}
+
 for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 'system-dark']) {
   test(`reader semantic colors and text contrast: ${theme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme.endsWith('dark') ? 'dark' : 'light' });
@@ -447,7 +470,8 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
       { path: 'README.md', language: 'markdown', gitStatus: 'modified', content: '---\ntitle: Reader\n---\n# Reader' },
     ] });
     await page.goto('/chat/reader-colors');
-    const panel = page.getByRole('region', { name: 'Workspace explorer' });
+    const panel = page.getByRole('complementary', { name: 'Main navigation', exact: true })
+      .getByRole('region', { name: 'Workspace explorer' });
     const reader = page.getByRole('complementary', { name: 'File reader' });
     await panel.locator('.file-name').filter({ hasText: 'example.ts' }).click();
     await expect(reader.locator('.syntax-string')).toBeVisible();
@@ -460,6 +484,7 @@ for (const theme of ['light', 'dark', 'mist', 'rose', 'pine', 'system-light', 's
     await expectReaderContrast(reader.locator('.target-line .syntax-string, .target-line .syntax-keyword, .target-line .syntax-comment'));
     const search = panel.locator('input[type=search]');
     await search.focus();
+    await expect(search).toBeFocused();
     await expectReaderContrast(search, 'borderTopColor', 3);
     await expectReaderContrast(search, 'outlineColor', 3);
     await panel.locator('.file-name').filter({ hasText: 'example.ts' }).hover();

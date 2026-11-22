@@ -245,6 +245,7 @@ test('native large stream stays responsive and converges without duplicate outpu
   const commits = await page.evaluate(() => Reflect.get(window, '__readingCommits') as number);
   await testInfo.attach('native-stream-performance', { body: JSON.stringify({ chunks: 2000, elapsedMs: Date.now() - started, longTasks: durations, commits }), contentType: 'application/json' });
   expect(Math.max(0, ...durations)).toBeLessThan(2_000); expect(commits).toBeLessThan(100);
+  await expect.poll(async () => (await state(page, id)).run.phase).toBe('completed');
   const snapshot = await state(page, id); expect(snapshot.run.phase).toBe('completed');
   expect(snapshot.session.messages.filter(message => message.role === 'assistant')).toHaveLength(1);
   await expect(page.locator('.message.assistant')).toHaveCount(1);

@@ -21,10 +21,15 @@ async function expectAccessible(page: Page, context?: string): Promise<void> {
   for (const control of await controls.all()) {
     if (await control.evaluate(element => Boolean(element.closest('[inert], [aria-hidden="true"]')))) continue;
     await expect(control).toHaveAccessibleName(/\S/);
-    const bounds = await control.boundingBox();
-    expect(bounds?.width).toBeGreaterThanOrEqual(24);
-    expect(bounds?.height).toBeGreaterThanOrEqual(24);
   }
+  // Measure one fresh set in the browser, not indexed locators across lazy mounts.
+  await expect.poll(() => controls.evaluateAll(elements => elements
+    .filter(element => !element.closest('[inert], [aria-hidden="true"]'))
+    .map(element => {
+      const { width, height } = element.getBoundingClientRect();
+      return { name: element.getAttribute('aria-label') || element.textContent?.trim(), width, height };
+    }).filter(bounds => bounds.width < 24 || bounds.height < 24)))
+    .toEqual([]);
 }
 
 async function expectChatControlsToFit(page: Page): Promise<void> {
@@ -67,10 +72,12 @@ test.describe('Accessibilité des parcours majeurs', () => {
     await installMockApi(page, { sessions: [session], workspaceFiles: [{ path: 'accessible.md', content: '# Accessible reader' }] });
     await page.goto('/chat/accessible');
     await expect(page.getByPlaceholder(/Type your message/)).toBeVisible();
+    const explorer = page.getByRole('complementary', { name: 'Main navigation', exact: true })
+      .getByRole('region', { name: 'Workspace explorer' });
+    await expect(explorer.getByRole('button', { name: 'accessible.md', exact: true })).toBeVisible();
     await expectAccessible(page, 'chat and workspace explorer (light)');
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
     await expectAccessible(page, 'chat and workspace explorer (dark)');
-    const explorer = page.getByRole('region', { name: 'Workspace explorer' });
     await explorer.getByRole('button', { name: 'File options', exact: true }).click();
     await expectAccessible(page, 'file options (dark)');
     await page.keyboard.press('Escape');
