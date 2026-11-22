@@ -3,7 +3,7 @@
 AiHarness fournit deux interfaces sur les mêmes providers et le même stockage de sessions :
 
 - **CLI** : agent interactif dans un terminal, avec sessions, branches, outils, skills et extensions ;
-- **Web** : espace de travail React à trois panneaux, connecté à un agent serveur détaché avec reprise SSE séquencée.
+- **Web** : espace de travail React adaptatif, avec navigation et explorateur à gauche, conversation au centre et lecteur de fichiers à droite, connecté à un agent serveur détaché avec reprise SSE séquencée.
 
 Ce guide décrit l’installation depuis les sources, la configuration des providers et l’usage quotidien des deux interfaces.
 
@@ -661,6 +661,8 @@ npm run dev:web
 
 Dans ces deux modes de développement, l’API écoute en interne sur `127.0.0.1:3099` et Vite relaie `/api` et les WebSockets depuis le port 3080.
 
+Les captures de ce guide montrent l’interface actuelle avec des données synthétiques, principalement en anglais et en thème clair. Les libellés suivent la langue choisie dans l’application ; consultez l’[inventaire des captures](../../screenshots/README.md) pour leur provenance et leur mise à jour.
+
 Pour découvrir l’interface sans clé :
 
 ![Dialogue d’approbation du workspace, thème clair](../../screenshots/01-workspace/trust-dialog-light.png)
@@ -668,7 +670,7 @@ Pour découvrir l’interface sans clé :
 1. choisissez ou confirmez le workspace dans la barre latérale ;
 2. approuvez explicitement le projet après avoir vérifié son chemin ;
 3. cliquez sur **+** pour ouvrir un brouillon local ;
-4. conservez le provider **Mock** dans **Settings** ;
+4. conservez le provider **Mock** dans **Réglages → Modèles → Provider IA** ;
 5. envoyez `Hello` : la session n’est créée sur le serveur qu’à cet instant.
 
 ### Workspace par défaut et récupération
@@ -679,7 +681,21 @@ Si la sélection enregistrée et le défaut sont indisponibles, la barre latéra
 
 ### Configurer le Web
 
-La page **Settings** permet de :
+Ouvrez **Réglages** en bas de la barre latérale ou avec `Ctrl+,` (`⌘,` sur macOS). Les réglages s’affichent dans une boîte de dialogue au-dessus du chat, avec sept catégories : **Général**, **Modèles**, **Compétences**, **Outils**, **Plugins**, **Agents enfants** et **MCP**. Sur petit écran, choisissez la catégorie dans la liste déroulante ; les boutons **Retour…** permettent de revenir à la liste des sections ou ressources.
+
+| Parcours | Usage |
+|---|---|
+| **Général → Apparence** | Thème, largeur, police et touche d’envoi |
+| **Général → Comportement** | Valeurs par défaut globales/projet et raccourcis |
+| **Général → Notifications / Accès / À propos** | Alertes, session Web et versions |
+| **Modèles → Provider IA** | Provider actif et clés des fournisseurs intégrés |
+| **Modèles → Connexions fournisseur et fournisseurs personnalisés** | État, connexion, test et fournisseurs compatibles |
+| **Modèles → Modèle** | Sélection et catalogue des modèles |
+| **Modèles → Modèles personnalisés** | Déclarations de modèles personnalisés |
+
+Sélectionnez une ressource dans sa liste pour consulter son détail : les fiches ne sont plus toutes présentées simultanément. **Fermer** ou `Escape` revient au chat ; des modifications non enregistrées peuvent demander confirmation. Les positions sont mémorisées par dossier, sans enregistrer les champs non soumis ; voir la [navigation des Paramètres](./settings-navigation.md).
+
+Les réglages permettent de :
 
 - sélectionner le provider actif, enregistrer une clé auprès du serveur et suivre connexion/usage ;
 - lancer un OAuth Device Flow configuré, puis reconnecter ou déconnecter le provider sans exposer son token ;
@@ -698,7 +714,7 @@ La page **Settings** permet de :
 - appliquer un Bearer token à l’onglet courant ou se déconnecter de la session Web ;
 - consulter les versions Web/agent, vérifier explicitement la dernière release et ouvrir ses notes sans installation automatique.
 
-Dépliez **Manage model catalogue** dans la section **Model** pour rechercher un modèle ou un provider, voir ses capacités de raisonnement, d’image et d’outils, puis activer une entrée ou utiliser **Activer les éléments affichés**/**Désactiver les éléments affichés** pour un provider ou tous les groupes affichés. Seules les lignes visibles modifiées sont envoyées dans un lot ; les lignes masquées et réglages hérités/non ciblés restent intacts. Filtrez un groupe dépassant 500 changements. Les résultats ordonnés indiquent les entrées modifiées, inchangées ou en échec. Après un échec ou une navigation pendant la sauvegarde, actualisez l’état canonique sans présumer de retour arrière ; voir les [contrôles par groupe](./resource-batches.md). **Refresh catalogue** relance la découverte côté serveur : les serveurs locaux compatibles OpenAI/Ollama sont interrogés via leur endpoint de modèles, puis fusionnés avec un catalogue publié minimal et le modèle configuré. Une panne de découverte conserve le dernier résultat valide et le catalogue publié reste disponible.
+Dans **Modèles → Modèle**, dépliez **Gérer le catalogue de modèles**, filtrez puis sélectionnez une ligne pour voir ses capacités de raisonnement, d’image et d’outils. Vous pouvez ensuite activer cette entrée ou utiliser **Activer les éléments affichés**/**Désactiver les éléments affichés** pour un provider ou tous les groupes affichés. Seules les lignes visibles modifiées sont envoyées dans un lot ; les lignes masquées et réglages hérités/non ciblés restent intacts. Filtrez un groupe dépassant 500 changements. Les résultats ordonnés indiquent les entrées modifiées, inchangées ou en échec. Après un échec ou une navigation pendant la sauvegarde, actualisez l’état canonique sans présumer de retour arrière ; voir les [contrôles par groupe](./resource-batches.md). **Actualiser le catalogue** relance la découverte côté serveur : les serveurs locaux compatibles OpenAI/Ollama sont interrogés via leur endpoint de modèles, puis fusionnés avec un catalogue publié minimal et le modèle configuré. Une panne de découverte conserve le dernier résultat valide et le catalogue publié reste disponible.
 
 ![Catalogue de modèles publiés et découverts, thème clair](../../screenshots/05-settings/model-catalog-light.png)
 
@@ -708,7 +724,7 @@ Pour un provider local, Azure, Vertex ou Bedrock, préférez les variables d’e
 
 #### Authentification, providers et modèles personnalisés
 
-**Provider lifecycle** affiche la méthode effective (`environment`, clé, OAuth ou aucune), l’usage cumulé et les actions disponibles. Selon le provider, la connexion utilise un flux device ou un flux navigateur/PKCE natif. Les instructions utilisateur apparaissent dans les réglages ; tokens, codes device privés et vérificateurs restent côté serveur. Les intégrations natives personnalisées comprennent la connexion navigateur Anthropic/OpenRouter, device Kimi/Meta/xAI et des flux Copilot/Codex distincts et protégés ; leur disponibilité dépend du dialecte configuré, pas du nom affiché. Pour un flux device opérateur générique, configurez avant le démarrage :
+**Modèles → Connexions fournisseur et fournisseurs personnalisés** permet de sélectionner un fournisseur intégré ou personnalisé, puis affiche sa méthode effective (`environment`, clé, OAuth ou aucune), l’usage cumulé et les actions disponibles. Selon le provider, la connexion utilise un flux device ou un flux navigateur/PKCE natif. Les instructions utilisateur apparaissent dans les réglages ; tokens, codes device privés et vérificateurs restent côté serveur. Les intégrations natives personnalisées comprennent la connexion navigateur Anthropic/OpenRouter, device Kimi/Meta/xAI et des flux Copilot/Codex distincts et protégés ; leur disponibilité dépend du dialecte configuré, pas du nom affiché. Pour un flux device opérateur générique, configurez avant le démarrage :
 
 ```bash
 export AI_HARNESS_OAUTH_OPENAI_DEVICE_URL='https://.../device'
@@ -719,11 +735,11 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # facultatif
 
 Remplacez `OPENAI` par le nom du provider en majuscules. Les endpoints OAuth doivent être HTTPS, sans credentials intégrés. L’annulation invalide le Device Flow local ; reconnecter remplace le token précédent.
 
-**Manage compatible providers** accepte un identifiant stable, un nom, une URL HTTP(S) sans userinfo/query/fragment, un dialecte pris en charge (notamment OpenAI Chat Completions, OpenAI Responses, Anthropic Messages et Google Generative Language), une clé facultative et des headers JSON. Vous pouvez tester la connexion, importer les modèles annoncés, déconnecter ou supprimer l’entrée. Ce formulaire navigateur ne fournit ni ne lance aucune commande de credential ; seul un réglage `providerApiKeyCommands` de confiance, détenu par l’opérateur, peut en exécuter une sur l’hôte.
+Dans cette même section, **Créer ou modifier un fournisseur compatible** accepte un identifiant stable, un nom, une URL HTTP(S) sans userinfo/query/fragment, un dialecte pris en charge (notamment OpenAI Chat Completions, OpenAI Responses, Anthropic Messages et Google Generative Language), une clé facultative et des headers JSON. Vous pouvez tester la connexion, importer les modèles annoncés, déconnecter ou supprimer l’entrée. Ce formulaire navigateur ne fournit ni ne lance aucune commande de credential ; seul un réglage `providerApiKeyCommands` de confiance, détenu par l’opérateur, peut en exécuter une sur l’hôte.
 
-**Custom models** permet d’ajouter à n’importe quel provider un ID et un nom, les capacités raisonnement/images/outils, fenêtre de contexte, sortie maximale, prix par million de tokens entrée/sortie/cache et paramètres de compatibilité JSON. Les métadonnées personnalisées prévalent sur le catalogue publié. Un test de connexion vérifie explicitement l’entrée ; un modèle sans tool calls désactive les outils pour le run.
+**Modèles → Modèles personnalisés → Créer un modèle personnalisé** permet d’ajouter à n’importe quel provider un ID et un nom, les capacités raisonnement/images/outils, fenêtre de contexte, sortie maximale, prix par million de tokens entrée/sortie/cache et paramètres de compatibilité JSON. Les métadonnées personnalisées prévalent sur le catalogue publié. Un test de connexion vérifie explicitement l’entrée ; un modèle sans tool calls désactive les outils pour le run.
 
-**Defaults and scope** règle provider, modèle, raisonnement et preset d’outils au niveau global ou projet. Seuls les champs modifiés sont enregistrés : changer le raisonnement n’écrase pas un modèle enregistré séparément. Dépliez le libellé de portée Modèle ou Raisonnement sous le composeur pour enregistrer le choix courant comme valeur globale des nouvelles sessions, même pendant un run. Un avertissement signale la priorité du projet ou de l’environnement ; l’historique et les requêtes actives restent inchangés. Les nouveaux brouillons héritent des valeurs effectives. Un raisonnement invalide ou des réglages illisibles sont refusés sans remplacement. Une valeur vide signifie « hériter » ; la valeur effective et sa provenance restent visibles. Une valeur imposée par l’environnement est verrouillée. **Tools** suit les mêmes portées, liste les outils réellement enregistrés et propose les presets `configured`, `chat-only`, `read-only`, `default` et `full`. PowerShell est indisponible hors Windows et désactivé par défaut même sous Windows.
+Dans **Général → Comportement**, **Valeurs par défaut fournisseur et modèle** règle provider, modèle, raisonnement et preset d’outils au niveau global ou projet. Seuls les champs modifiés sont enregistrés : changer le raisonnement n’écrase pas un modèle enregistré séparément. Dépliez le libellé de portée Modèle ou Raisonnement sous le composeur pour enregistrer le choix courant comme valeur globale des nouvelles sessions, même pendant un run. Un avertissement signale la priorité du projet ou de l’environnement ; l’historique et les requêtes actives restent inchangés. Les nouveaux brouillons héritent des valeurs effectives. Un raisonnement invalide ou des réglages illisibles sont refusés sans remplacement. Une valeur vide signifie « hériter » ; la valeur effective et sa provenance restent visibles. Une valeur imposée par l’environnement est verrouillée. **Tools** suit les mêmes portées, liste les outils réellement enregistrés et propose les presets `configured`, `chat-only`, `read-only`, `default` et `full`. PowerShell est indisponible hors Windows et désactivé par défaut même sous Windows.
 
 Les métriques agrègent tous les tours provider, y compris les tours intermédiaires d’outils, compactions, titres et résumés. Elles distinguent entrée, sortie, lecture/écriture de cache et coût calculé avec les prix personnalisés ou publiés. Le serveur les restaure depuis `usage-metrics.json` au redémarrage.
 
@@ -756,7 +772,7 @@ La carte Web du mode Code affiche script, progression/statut imbriqué, durée, 
 
 ### Configuration MCP
 
-Ouvrez **Réglages → Serveurs MCP**, ou utilisez le `/mcp` Web intégré, même sans projet sélectionné. **Détails** ouvre le détail expurgé d’un seul serveur, son rapport de Test et son éventuel panneau de connexion. Les réglages retrouvent leur dernière section ciblée ; les choix explicites de serveur sont mémorisés séparément pour chaque workspace canonique et pour la vue sans projet. Cette préférence navigateur facultative et bornée ne conserve que les métadonnées workspace/portée/nom, jamais la configuration, la confiance, les rapports ou les données OAuth. Une entrée mémorisée absente, verrouillée ou ambiguë ne bascule pas vers une entrée homonyme d’une autre portée : sélectionnez explicitement une ligne de l’inventaire courant. Les actions de ligne sélectionnent leur serveur ; un ajout ou renommage réussi et non ambigu sélectionne son résultat canonique. Un changement de workspace/confiance retire les anciens panneaux et réponses, et les requêtes Test/connexion en cours excluent les mutations concurrentes.
+Ouvrez **Réglages → MCP**, section **Serveurs MCP**, ou utilisez le `/mcp` Web intégré, même sans projet sélectionné. **Détails** ouvre le détail expurgé d’un seul serveur, son rapport de Test et son éventuel panneau de connexion. Les réglages retrouvent leur dernière section ciblée ; les choix explicites de serveur sont mémorisés séparément pour chaque workspace canonique et pour la vue sans projet. Cette préférence navigateur facultative et bornée ne conserve que les métadonnées workspace/portée/nom, jamais la configuration, la confiance, les rapports ou les données OAuth. Une entrée mémorisée absente, verrouillée ou ambiguë ne bascule pas vers une entrée homonyme d’une autre portée : sélectionnez explicitement une ligne de l’inventaire courant. Les actions de ligne sélectionnent leur serveur ; un ajout ou renommage réussi et non ambigu sélectionne son résultat canonique. Un changement de workspace/confiance retire les anciens panneaux et réponses, et les requêtes Test/connexion en cours excluent les mutations concurrentes.
 
 La section **Serveurs MCP** des réglages est un inventaire expurgé avec un Test de connexion ponctuel explicite, modification intégrale, activation, désactivation, exposition des outils, suppression et restauration locales. L’inventaire lui-même ne démarre aucune connexion ; un hôte séparé par session connecte les serveurs actifs éligibles juste avant un prompt agent. Elle lit le fichier global `<répertoire-de-données>/mcp.json` (par défaut `~/.ai-harness/mcp.json`) et, uniquement après une autorisation enregistrée exacte ou héritée, `<workspace>/.ai-harness/mcp.json`. Le statut implicitement sûr d’un workspace vide ne suffit pas, à lui seul, à ouvrir, tester ou modifier normalement un fichier projet. Avant approbation, le panneau signale seulement l’existence du fichier : il ne lit ni noms de serveurs ni valeurs. Un refus explicite ou un registre de confiance indisponible le maintient également verrouillé.
 
@@ -878,7 +894,7 @@ Les interactions sont présentées dans l’ordre serveur, une tête à la fois,
 
 ### Profils et agents enfants
 
-La section **Sub-agents** active ou désactive le moteur intégré et fixe le nombre d’enfants simultanés (1 à 16, quatre par défaut). Choisissez **Project workspace** pour créer une surcharge du workspace courant ou **Global defaults** pour modifier la base commune. Les profils intégrés sont :
+La catégorie **Agents enfants**, section **Sous-agents**, active ou désactive le moteur intégré et fixe le nombre d’enfants simultanés (1 à 16, quatre par défaut). Choisissez **Project workspace** pour créer une surcharge du workspace courant ou **Global defaults** pour modifier la base commune. Les profils intégrés sont :
 
 - **Explore** : inspection en lecture seule, contexte hérité, arrière-plan par défaut ;
 - **General purpose** : tâche générale avec la politique d’outils du parent ;
@@ -938,6 +954,8 @@ export AI_HARNESS_DATA_DIR="$HOME/.ai-harness"
 
 ### Conversations et agent détaché
 
+Dans la barre latérale, **Organiser la navigation** permet de sélectionner des familles de conversations pour les épingler, archiver ou désarchiver, et de renommer ou réordonner l’affichage des projets. L’archivage ne supprime aucune session et n’arrête aucun agent ; la conversation active et les familles ayant du travail en cours ou demandant une attention restent visibles. **Inclure les archives** retrouve les autres familles masquées.
+
 - **+** crée un brouillon local lié au workspace ; il n’est persisté qu’au premier envoi ;
 - le texte, les images et les réglages du brouillon survivent à une navigation interne et à un rechargement complet dans la limite du cache borné de l’onglet ;
 - la recherche de la barre latérale interroge titres et contenu, affiche un extrait et ouvre le message ciblé, même s’il faut charger une fenêtre d’historique plus ancienne ;
@@ -950,6 +968,9 @@ export AI_HARNESS_DATA_DIR="$HOME/.ai-harness"
 - l’agent continue côté serveur si l’onglet navigue ou perd sa connexion ; l’interface recharge le snapshot puis reprend les événements manquants ;
 - le bouton d’arrêt précise la phase concernée : attente/réponse modèle, outil, commande shell ou compaction. L’annulation est propagée au provider ou à l’outil actif ;
 - un échec avant le premier delta peut être retenté automatiquement sans créer de réponse assistant dupliquée. La tentative, le maximum et la dernière erreur restent visibles et sont restaurés par le snapshot après reconnexion.
+
+![Cycle de vie et branches d’une session, thème clair](../../screenshots/03-sessions/session-lifecycle-light.png)
+![Cycle de vie et branches d’une session, thème sombre](../../screenshots/03-sessions/session-lifecycle-dark.png)
 
 La dernière vue est mise en cache dans le `sessionStorage` de l’onglet pour s’afficher avant la réconciliation réseau. Son schéma v2 migre les snapshots v1, expire après 24 h et reste borné à 2 Mio, trois sessions distantes et trois brouillons locaux par workspace. Il restaure la conversation ou le brouillon actif, le texte, les réglages, les petites pièces jointes et le choix provider/modèle ; les aperçus binaires sont évincés avant le texte si le budget est atteint. Aucune clé API n’y est écrite. Le serveur reste la source de vérité et remplace toute fenêtre distante dont la révision a changé. Le registre séparé des positions de lecture expire lui aussi après 24 h, conserve au plus 24 conversations par workspace et écrit de façon différée. Les préférences navigateur utilisent le schéma v4 et migrent automatiquement v1/v2/v3 ; les onglets PTY restent isolés par workspace et tous ces stockages ont un repli sûr s’ils sont indisponibles.
 
@@ -1016,7 +1037,7 @@ Le **Thinking level** du composer peut être modifié pendant l’exécution. Le
 
 ### Images et rendu des messages
 
-Ajoutez jusqu’à huit images par le bouton appareil photo, collage ou glisser-déposer. Le navigateur tente de réduire les images trop grandes ; la taille totale est limitée. Un avertissement apparaît si le provider choisi n’annonce pas de support multimodal. Les blocs image sont persistés avec le message et envoyés nativement à OpenAI/Azure, Anthropic et Gemini/Vertex.
+Ajoutez jusqu’à huit images par le bouton à icône d’image, collage ou glisser-déposer. Le navigateur tente de réduire les images trop grandes ; la taille totale est limitée. Un avertissement apparaît si le provider choisi n’annonce pas de support multimodal. Les blocs image sont persistés avec le message et envoyés nativement à OpenAI/Azure, Anthropic et Gemini/Vertex.
 
 Les réponses prennent en charge titres avec ancres, listes, tableaux, citations, liens, code coloré et copiable, math KaTeX, raisonnement et détails d’outils. Leur pied affiche l’horodatage, le modèle, les tokens/coût disponibles et une copie avec confirmation visuelle ; les fichiers produits par un outil sont des boutons qui ouvrent directement le viewer. Les blocs Mermaid sont chargés à la demande et disposent d’un aperçu SVG assaini, de leur source, d’un zoom accessible et d’un téléchargement ; une syntaxe non prise en charge produit une erreur locale sans injecter de contenu actif. Le HTML brut reste non exécutable, les sorties KaTeX sont assainies avec le mode de confiance désactivé et les liens externes utilisent une ouverture isolée.
 
@@ -1030,11 +1051,13 @@ Lorsque l’option **actions sur la sélection** est active, sélectionner du te
 
 ### Explorer, Git et fichiers
 
-Le panneau droit propose :
+Sur grand écran (à partir de 960 px), l’explorateur est intégré à la barre latérale gauche, sous les conversations. Ses onglets **Fichiers** et **Changements** servent à parcourir le workspace et Git. Ouvrir un fichier affiche un lecteur séparé à droite du chat ; fermer le lecteur ne supprime pas l’explorateur.
+
+Ces surfaces proposent :
 
 - un arbre chargé paresseusement, les fichiers cachés optionnels, une recherche d’index et les badges Git `M/A/D/U` ;
 - les changements Git regroupés par dossier, avec total d’additions/suppressions et ouverture directe du diff ;
-- un viewer Source/Preview/Diff redimensionnable ou plein écran, avec métadonnées, numéros de ligne, coloration, copie et téléchargement ;
+- un lecteur **Source / Aperçu / Diff**, redimensionnable ou plein écran, avec jusqu’à huit onglets de fichiers ouverts, chemin complet, métadonnées, numéros de ligne, coloration, copie et téléchargement ;
 - un aperçu Markdown assaini avec frontmatter et ancres, ainsi que les images, fichiers audio et vidéos ;
 - les diffs suivis, indexés, non suivis, supprimés ou binaires, rafraîchis lorsque le fichier ouvert change ;
 - l’upload multiple annulable avec progression réseau par fichier, erreur détaillée et stratégie de collision explicite : refuser, renommer ou écraser ;
@@ -1046,7 +1069,7 @@ Un lien Markdown `file:src/app.ts#L20`, ou un chemin reconnu dans une sortie d�
 
 ### Terminal du workspace
 
-Le bouton `⌘` ou le raccourci `Ctrl+Maj+T` charge puis ouvre un vrai terminal PTY dans le cwd approuvé ; xterm n’est pas téléchargé avant cette première demande. Chaque onglet possède son propre shell et affiche son état, ses dimensions et son code de sortie. Le bouton `+` crée un autre terminal ; fermer un onglet actif demande confirmation puis tue son processus.
+Le bouton à icône de terminal près du composeur (**Ouvrir le terminal du workspace**) ou le raccourci `Ctrl+Maj+T` charge puis ouvre un vrai terminal PTY dans le cwd approuvé ; xterm n’est pas téléchargé avant cette première demande. Chaque onglet possède son propre shell et affiche son état, ses dimensions et son code de sortie. Le bouton `+` crée un autre terminal ; fermer un onglet actif demande confirmation puis tue son processus.
 
 La taille suit le panneau. `Ctrl+Maj+C` copie la sélection xterm et `Ctrl+Maj+V` colle le presse-papiers lorsque le navigateur l’autorise. Les onglets et le terminal actif sont mémorisés dans `sessionStorage` par workspace pour l’onglet navigateur courant. Après un rechargement ou une coupure réseau, le client reprend le journal ANSI à son dernier offset ; il signale explicitement si la partie la plus ancienne a été évincée du journal borné.
 
@@ -1075,9 +1098,6 @@ node packages/server/dist/web-cli.js --no-open
 ```
 
 Le bundle `packages/web/dist/` est servi automatiquement avec l’API. Aucun second serveur HTTP n’est nécessaire. En production publique, placez néanmoins `ai-harness-web` derrière un reverse proxy HTTPS.
-
-![Cycle de vie et branches d’une session, thème clair](../../screenshots/03-sessions/session-lifecycle-light.png)
-![Cycle de vie et branches d’une session, thème sombre](../../screenshots/03-sessions/session-lifecycle-dark.png)
 
 ## Sessions et fichiers
 

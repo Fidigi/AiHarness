@@ -10,11 +10,12 @@
 | [Containerization](./containerization.md) | Running the CLI and Web launcher with Docker |
 | [Package command policy](./npm-command.md) | Literal npm argv, declaring-source trust and CLI/Web failure rules |
 | [Standalone authentication/export](./standalone-operations.md) | Passive credential metadata, explicit native/device/browser login and selected trusted session files |
-| [Settings navigation](./settings-navigation.md) | Per-folder section/group/row and scope memory, fresh trust reload, safe focus and privacy |
+| [Settings navigation](./settings-navigation.md) | Categories, responsive lists/details, per-folder navigation and scope memory, focus and privacy |
 | [Settings text loading](./settings-loading.md) | Translated loading, Close, explicit reload/retry and unsent-text warning |
 | [File-pane loading](./workspace-loading.md) | Optional explorer assets, retained file intent, local Close and honest reload/retry |
 | [Linked directories](./linked-directories.md) | Exact consent, independent source trust, bounded read-only browsing and revocation |
 | [Resource group controls](./resource-batches.md) | Filtered model/skill batches, valid Markdown edits and failure reconciliation |
 | [Mobile keyboard layout](./mobile-keyboard.md) | Conservative viewport detection, chat-only styles, retry and device limits |
+| [Static demonstration](./static-demo.md) | Synthetic offline demo, separate from the connected interface |
 
 The same documents are available in [French](../fr/). See the [user documentation index](../README.md) for screenshot themes and project links.

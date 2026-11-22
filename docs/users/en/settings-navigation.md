@@ -2,6 +2,14 @@
 
 AiHarness remembers Settings navigation separately for each server-validated project folder, with a separate context when no project is selected. This is browser presentation memory, not project configuration.
 
+## Finding your way around
+
+**Settings** opens as a dialog over chat, not a long page of stacked sections. Choose **General**, **Models**, **Skills**, **Tools**, **Plugins**, **Child agents** or **MCP**. General and Models then provide a section list; catalogues show a resource list and the selected entry’s detail.
+
+On smaller screens, use the category selector, then **Back…** buttons to return to section or resource lists. **Close** or `Escape` returns to chat; affected unsaved edits require confirmation. Selecting a detail alone never tests, installs or activates a resource.
+
+The [catalogue screenshot](../../screenshots/05-settings/model-catalog-light.png) shows **Models → Model → Manage model catalogue** in English. The [user guide](./user-guide.md#configuring-web-ui) lists other paths and scope rules.
+
 ## What returns
 
 - The last Settings section and the last focused group or resource row in that section.

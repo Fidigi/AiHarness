@@ -2,7 +2,9 @@
 
 ## English
 
-This directory contains deterministic product screenshots used by the human-facing documentation. They are copied from the Playwright visual baselines in `e2e/visual.spec.ts-snapshots/`; the scenarios use bounded mock data and contain no credentials.
+This directory contains deterministic product screenshots used by the human-facing documentation. They are copied from the Playwright visual baselines in `e2e/visual.spec.ts-snapshots/`; the scenarios use bounded mock data and contain no credentials. The 11 documented states were checked against the Web source at commit `6e16a33d` before synchronization. Fixture dates, model names and counts are synthetic, not a live account or catalogue inventory.
+
+They illustrate the [English user guide](../users/en/user-guide.md) and [French user guide](../users/fr/user-guide.md). Most captures use English labels. The current desktop layout has the explorer below conversations in the left sidebar and a separate file reader on the right; Settings is a categorized dialog with resource lists/details. These are product screenshots, not captures of the separate static demo.
 
 ### Formats and viewports
 
@@ -36,20 +38,22 @@ Four reviewed selector crops stay beside their owning `e2e/workspace-defaults.sp
 
 ### Refresh procedure
 
-1. Regenerate the visual baselines in Docker:
+1. Check the baselines against the current interface in Docker:
    ```bash
-   make test-e2e E2E_ARGS='e2e/visual.spec.ts --update-snapshots=all'
+   make test-e2e E2E_ARGS='e2e/visual.spec.ts --retries=0'
    ```
-2. Review the changed baselines and confirm that mock content contains no secrets.
-3. Run `make sync-doc-screenshots` to copy the documented states.
-4. Update this inventory and all guide references when adding or renaming a capture.
+2. If an intentional interface change requires new baselines, regenerate the affected scenarios with `--update-snapshots=all`. Review the images for layout, readable content and absence of secrets, then rerun those scenarios **without** snapshot updates. Updating a baseline alone is not validation.
+3. Run `make sync-doc-screenshots` to copy the 11 documented states. This command copies existing PNGs; it does not run the application or check freshness.
+4. Check the corresponding passages in both user guides. Update this inventory and all references when adding or renaming a capture.
 5. Run `make lint-docs` and `git diff --check`.
 
 ---
 
 ## Français
 
-Ce dossier contient les captures déterministes du produit utilisées par la documentation humaine. Elles sont copiées depuis les références visuelles Playwright de `e2e/visual.spec.ts-snapshots/` ; les scénarios utilisent des données mockées et bornées, sans credential.
+Ce dossier contient les captures déterministes du produit utilisées par la documentation humaine. Elles sont copiées depuis les références visuelles Playwright de `e2e/visual.spec.ts-snapshots/` ; les scénarios utilisent des données mockées et bornées, sans credential. Les 11 états documentés ont été vérifiés contre le code Web du commit `6e16a33d` avant synchronisation. Dates, noms de modèles et compteurs sont synthétiques, pas un compte réel ni un inventaire de catalogue en production.
+
+Elles illustrent le [guide français](../users/fr/user-guide.md) et le [guide anglais](../users/en/user-guide.md). La plupart utilisent des libellés anglais. Sur ordinateur, l’interface actuelle place l’explorateur sous les conversations dans la barre latérale gauche et le lecteur de fichiers séparément à droite ; les réglages sont une boîte de dialogue par catégories avec listes et détails. Il s’agit du produit, pas de la démonstration statique distincte.
 
 ### Formats et viewports
 
@@ -83,11 +87,11 @@ Quatre recadrages examinés du sélecteur restent à côté de leur scénario `e
 
 ### Procédure de mise à jour
 
-1. Régénérez les références visuelles dans Docker :
+1. Vérifiez les références contre l’interface actuelle dans Docker :
    ```bash
-   make test-e2e E2E_ARGS='e2e/visual.spec.ts --update-snapshots=all'
+   make test-e2e E2E_ARGS='e2e/visual.spec.ts --retries=0'
    ```
-2. Examinez les références modifiées et vérifiez que les données mockées ne contiennent aucun secret.
-3. Lancez `make sync-doc-screenshots` pour copier les états documentés.
-4. Mettez à jour cet inventaire et les références des guides lors de tout ajout ou renommage.
+2. Si une évolution volontaire de l’interface impose de nouvelles références, régénérez les scénarios concernés avec `--update-snapshots=all`. Examinez disposition, lisibilité et absence de secrets, puis rejouez ces scénarios **sans** mise à jour des références. La régénération seule n’est pas une validation.
+3. Lancez `make sync-doc-screenshots` pour copier les 11 états documentés. Cette commande copie les PNG existants ; elle ne lance pas l’application et ne vérifie pas leur fraîcheur.
+4. Vérifiez les passages correspondants des deux guides utilisateur. Mettez à jour cet inventaire et toutes les références lors de tout ajout ou renommage.
 5. Lancez `make lint-docs` et `git diff --check`.

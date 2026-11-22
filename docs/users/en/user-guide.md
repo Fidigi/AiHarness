@@ -3,7 +3,7 @@
 AiHarness provides two interfaces on top of the same providers and session storage:
 
 - **CLI**: interactive agent in a terminal, with sessions, branches, tools, skills, and extensions;
-- **Web**: three-panel React workspace connected to a detached server agent with sequenced SSE recovery.
+- **Web**: responsive React workspace with navigation and explorer on the left, chat in the center and a file reader on the right, connected to a detached server agent with sequenced SSE recovery.
 
 This guide covers installation from sources, provider configuration, and daily use of both interfaces.
 
@@ -661,6 +661,8 @@ npm run dev:web
 
 In both development modes, the API listens internally on `127.0.0.1:3099` and Vite proxies `/api` and WebSockets from port 3080.
 
+Screenshots in this guide show the current interface with synthetic data, mostly in English and the light theme. Labels follow the language selected in the application; see the [screenshot inventory](../../screenshots/README.md) for provenance and refresh instructions.
+
 To explore the interface without a key:
 
 ![Workspace trust dialog, light theme](../../screenshots/01-workspace/trust-dialog-light.png)
@@ -668,7 +670,7 @@ To explore the interface without a key:
 1. choose or confirm the workspace in the sidebar;
 2. explicitly approve the project after verifying its path;
 3. click **+** to open a local draft;
-4. keep **Mock** provider in **Settings**;
+4. keep **Mock** provider in **Settings → Models → AI Provider**;
 5. send `Hello`: the session is only created on the server at this point.
 
 ### Default Workspace and Recovery
@@ -679,7 +681,21 @@ If the saved choice and default are unavailable, the sidebar explains the failur
 
 ### Configuring Web UI
 
-The **Settings** page allows:
+Open **Settings** at the bottom of the sidebar or with `Ctrl+,` (`⌘,` on macOS). Settings opens as a dialog over chat with seven categories: **General**, **Models**, **Skills**, **Tools**, **Plugins**, **Child agents** and **MCP**. On smaller screens, use the category dropdown; **Back…** buttons return to the section or resource list.
+
+| Path | Purpose |
+|---|---|
+| **General → Appearance** | Theme, content width, font and send key |
+| **General → Behavior** | Global/project defaults and keyboard shortcuts |
+| **General → Notifications / Access / About** | Alerts, Web session and versions |
+| **Models → AI Provider** | Active provider and built-in provider keys |
+| **Models → Provider connections and custom providers** | Status, sign-in, testing and compatible providers |
+| **Models → Model** | Model selection and catalogue |
+| **Models → Custom models** | Custom model declarations |
+
+Select a resource in its list to inspect its detail: cards are no longer all shown simultaneously. **Close** or `Escape` returns to chat; unsaved changes may require confirmation. Positions are remembered per folder, not unsubmitted fields; see [Settings navigation](./settings-navigation.md).
+
+Settings allows:
 
 - selecting the active provider, registering a key with the server and tracking connection/usage;
 - launching a configured OAuth Device Flow, then reconnecting or disconnecting the provider without exposing its token;
@@ -698,7 +714,7 @@ The **Settings** page allows:
 - applying a Bearer token to the current tab or logging out of the Web session;
 - viewing Web/agent versions, explicitly checking the latest release and opening its notes without auto-installation.
 
-Expand **Manage model catalogue** in the **Model** section to search for a model or provider, view its reasoning/image/tool capabilities, then activate an entry or use **Enable displayed**/**Disable displayed** for one provider or all displayed groups. Only changed visible rows are submitted in one batch; hidden rows and inherited/unrelated settings remain intact. Filter a group exceeding 500 changes. Ordered outcomes report changed, unchanged and failed entries. After a failure or navigating away during a save, refresh canonical state rather than assuming rollback; see [resource group controls](./resource-batches.md). **Refresh catalogue** re-triggers server-side discovery: local OpenAI/Ollama-compatible servers are queried via their models endpoint, then merged with a minimal published catalog and configured model. Discovery failure keeps the last valid result and the published catalog remains available.
+In **Models → Model**, expand **Manage model catalogue**, filter and select a row to inspect its reasoning/image/tool capabilities. You can then activate that entry or use **Enable displayed**/**Disable displayed** for one provider or all displayed groups. Only changed visible rows are submitted in one batch; hidden rows and inherited/unrelated settings remain intact. Filter a group exceeding 500 changes. Ordered outcomes report changed, unchanged and failed entries. After a failure or navigating away during a save, refresh canonical state rather than assuming rollback; see [resource group controls](./resource-batches.md). **Refresh catalogue** re-triggers server-side discovery: local OpenAI/Ollama-compatible servers are queried via their models endpoint, then merged with a minimal published catalog and configured model. Discovery failure keeps the last valid result and the published catalog remains available.
 
 ![Published and discovered model catalogue, light theme](../../screenshots/05-settings/model-catalog-light.png)
 
@@ -708,7 +724,7 @@ For local, Azure, Vertex or Bedrock providers, prefer server environment variabl
 
 #### Authentication, Custom Providers and Models
 
-**Provider lifecycle** shows the effective method (environment, key, OAuth or none), cumulative usage and available actions. Depending on the provider, sign-in uses a device flow or a native browser/PKCE flow. Human instructions appear in Settings; tokens, private device codes and verifiers stay server-side. Native custom integrations include Anthropic/OpenRouter browser login, Kimi/Meta/xAI device login, and separate guarded Copilot/Codex flows; availability depends on the configured dialect, not its display name. For generic operator device integration, configure before startup:
+**Models → Provider connections and custom providers** lets you select a built-in or custom provider, then shows its effective method (environment, key, OAuth or none), cumulative usage and available actions. Depending on the provider, sign-in uses a device flow or a native browser/PKCE flow. Human instructions appear in Settings; tokens, private device codes and verifiers stay server-side. Native custom integrations include Anthropic/OpenRouter browser login, Kimi/Meta/xAI device login, and separate guarded Copilot/Codex flows; availability depends on the configured dialect, not its display name. For generic operator device integration, configure before startup:
 
 ```bash
 export AI_HARNESS_OAUTH_OPENAI_DEVICE_URL='https://.../device'
@@ -719,11 +735,11 @@ export AI_HARNESS_OAUTH_OPENAI_SCOPE='...' # optional
 
 Replace OPENAI with the provider name in uppercase. OAuth endpoints must be HTTPS, without embedded credentials. Cancellation invalidates the local Device Flow; reconnecting replaces the previous token.
 
-**Manage compatible providers** accepts a stable identifier, name, HTTP(S) URL without userinfo/query/fragment, a supported dialect (including OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative Language), optional key and JSON headers. You can test connectivity, import announced models, disconnect or delete entries. This browser form never supplies or starts a credential command; only an operator-owned trusted `providerApiKeyCommands` setting can do so on the host.
+In that same section, **Create or edit a compatible provider** accepts a stable identifier, name, HTTP(S) URL without userinfo/query/fragment, a supported dialect (including OpenAI Chat Completions, OpenAI Responses, Anthropic Messages and Google Generative Language), optional key and JSON headers. You can test connectivity, import announced models, disconnect or delete entries. This browser form never supplies or starts a credential command; only an operator-owned trusted `providerApiKeyCommands` setting can do so on the host.
 
-**Custom models** lets you add any provider an ID and name, reasoning/image/tool capabilities, context window, max output, per-million-token input/output/cache prices and JSON compatibility settings. Custom metadata takes precedence over the published catalog. A connectivity test explicitly validates the entry; a model without tool calls disables tools for the run.
+**Models → Custom models → Create a custom model** lets you add any provider an ID and name, reasoning/image/tool capabilities, context window, max output, per-million-token input/output/cache prices and JSON compatibility settings. Custom metadata takes precedence over the published catalog. A connectivity test explicitly validates the entry; a model without tool calls disables tools for the run.
 
-**Defaults and scope** sets provider, model, thinking level and tool preset at global or project level. Only edited fields are saved, so changing reasoning does not overwrite a separately saved model. Open the Model or Thinking scope label below the composer to save the current choice as a global new-session default, including during a run. Project/environment overrides produce a warning; current history and active requests are unchanged. New drafts inherit the effective defaults. Invalid thinking levels and unreadable settings are refused without replacement. An empty value means "inherit"; effective value and provenance remain visible. A value imposed by environment is locked. **Tools** follows same scopes, lists actually registered tools and offers `configured`, `chat-only`, `read-only`, `default` and `full` presets. PowerShell is unavailable outside Windows and disabled by default even on Windows.
+In **General → Behavior**, **Provider and model defaults** sets provider, model, thinking level and tool preset at global or project level. Only edited fields are saved, so changing reasoning does not overwrite a separately saved model. Open the Model or Thinking scope label below the composer to save the current choice as a global new-session default, including during a run. Project/environment overrides produce a warning; current history and active requests are unchanged. New drafts inherit the effective defaults. Invalid thinking levels and unreadable settings are refused without replacement. An empty value means "inherit"; effective value and provenance remain visible. A value imposed by environment is locked. **Tools** follows same scopes, lists actually registered tools and offers `configured`, `chat-only`, `read-only`, `default` and `full` presets. PowerShell is unavailable outside Windows and disabled by default even on Windows.
 
 Metrics aggregate all provider turns including intermediate tool turns, compactions, titles and summaries. They distinguish input, output, cache read/write and cost calculated with custom or published prices. The server restores them from `usage-metrics.json` at restart.
 
@@ -756,7 +772,7 @@ The Web Code mode card shows the script, nested progress/status, duration, outpu
 
 ### MCP Configuration
 
-Open **Settings → MCP servers**, or use the built-in Web `/mcp`, even without a selected project. **Details** opens one server’s redacted detail, Test report and optional sign-in panel. Settings restores its last focused section; explicit server choices are remembered separately for each canonical workspace and for the no-project view. This optional, bounded browser preference stores only workspace/scope/name metadata—not configuration, trust, reports or OAuth data. A saved entry that is missing, locked or ambiguous never falls back to a same-named entry in another scope: select a current row explicitly. Row actions select their server; an unambiguous successful addition or rename selects its canonical result. Workspace/trust replacement retires old panels and replies, and pending Test/sign-in requests exclude competing mutations.
+Open **Settings → MCP**, **MCP servers** section, or use the built-in Web `/mcp`, even without a selected project. **Details** opens one server’s redacted detail, Test report and optional sign-in panel. Settings restores its last focused section; explicit server choices are remembered separately for each canonical workspace and for the no-project view. This optional, bounded browser preference stores only workspace/scope/name metadata—not configuration, trust, reports or OAuth data. A saved entry that is missing, locked or ambiguous never falls back to a same-named entry in another scope: select a current row explicitly. Row actions select their server; an unambiguous successful addition or rename selects its canonical result. Workspace/trust replacement retires old panels and replies, and pending Test/sign-in requests exclude competing mutations.
 
 **MCP servers** in Settings is a redacted configuration inventory with an explicit one-shot connection Test and local whole-entry edit, enable, disable, tool-exposure, remove and restore controls. The inventory itself never starts a connection; a separate per-session host connects eligible enabled servers immediately before an agent prompt. It reads the global `<data-directory>/mcp.json` (by default `~/.ai-harness/mcp.json`) and, only after an exact or inherited saved allow, `<workspace>/.ai-harness/mcp.json`. A fresh empty workspace's implicit safe status alone is not enough to open, test or ordinarily change a project file. Before approval, the panel reports only that the file exists; it does not read server names or values. An explicit refusal or unavailable trust store also keeps it locked.
 
@@ -878,7 +894,7 @@ Interactions are presented in server order, one head at a time, with a waiting c
 
 ### Profiles and Child Agents
 
-The **Sub-agents** section enables or disables the integrated engine and sets the number of simultaneous children (1 to 16, four by default). Choose **Project workspace** to create an override for the current workspace or **Global defaults** to change the shared base. Built-in profiles are:
+The **Child agents** category, **Sub-agents** section, enables or disables the integrated engine and sets the number of simultaneous children (1 to 16, four by default). Choose **Project workspace** to create an override for the current workspace or **Global defaults** to change the shared base. Built-in profiles are:
 
 - **Explore**: read-only inspection, inherited context, background by default;
 - **General purpose**: a general task using the parent tool policy;
@@ -933,6 +949,8 @@ export AI_HARNESS_DATA_DIR="$HOME/.ai-harness"
 
 ### Conversations and Detached Agent
 
+In the sidebar, **Organise navigation** lets you select conversation families to pin, archive or unarchive them, and rename or reorder project display entries. Archiving never deletes a session or stops an agent; the selected conversation and families with active work or attention remain visible. **Include archived** reveals the other hidden families.
+
 - **+** creates a workspace-bound local draft; it is persisted only on first send;
 - draft text, images and settings survive internal navigation and a full reload within the bounded per-tab cache;
 - sidebar search queries titles and content, displays a snippet and opens the target message, loading an older history window when necessary;
@@ -945,6 +963,9 @@ export AI_HARNESS_DATA_DIR="$HOME/.ai-harness"
 - the agent continues on the server if the tab navigates or disconnects; the UI reloads the snapshot and resumes missing events;
 - the stop button identifies the active phase: model wait/response, tool, shell command or compaction. Cancellation propagates to the active provider or tool;
 - a failure before the first delta can retry automatically without duplicating an assistant response. Attempt number, limit and latest error remain visible and survive snapshot reconnection.
+
+![Session lifecycle and branches, light theme](../../screenshots/03-sessions/session-lifecycle-light.png)
+![Session lifecycle and branches, dark theme](../../screenshots/03-sessions/session-lifecycle-dark.png)
 
 The latest view is cached in per-tab `sessionStorage` for display before network reconciliation. Schema v2 migrates v1 snapshots, expires after 24 hours, and is bounded to 2 MiB, three remote sessions and three local drafts per workspace. It restores the active conversation or draft, text, settings, small attachments and provider/model selection; binary previews are evicted before text when the budget is reached. No API key is written there. The server remains authoritative and replaces a remote window when its revision changes. A separate scroll registry also expires after 24 hours, keeps at most 24 conversations per workspace and writes on a delay. Browser preferences use schema v4 with v1/v2/v3 migration; PTY tabs remain isolated by workspace, and every storage path has a safe fallback.
 
@@ -1011,7 +1032,7 @@ The composer's **Thinking level** can be changed while the agent runs. The saved
 
 ### Images and Message Rendering
 
-Add up to eight images via camera button, paste or drag-and-drop. Browser attempts to reduce oversized images; total size is limited. A warning appears if chosen provider does not announce multimodal support. Image blocks persist with message and send natively to OpenAI/Azure, Anthropic and Gemini/Vertex.
+Add up to eight images via the image-icon button, paste or drag-and-drop. Browser attempts to reduce oversized images; total size is limited. A warning appears if chosen provider does not announce multimodal support. Image blocks persist with message and send natively to OpenAI/Azure, Anthropic and Gemini/Vertex.
 
 Responses support titles with anchors, lists, tables, quotes, links, colored and copyable code, KaTeX math, reasoning and tool details. Their footer shows timestamp, model, available tokens/cost and a copy button with visual confirmation; files produced by tools are buttons that open viewer directly. Mermaid blocks load on demand and have sanitized SVG preview, source, accessible zoom and download; unsupported syntax produces local error without injecting active content. Raw HTML remains non-executable, KaTeX outputs are sanitized with trust mode disabled and external links use isolated opening.
 
@@ -1025,11 +1046,13 @@ When **selection actions** option is active, selecting text in conversation open
 
 ### Explorer, Git and Files
 
-Right panel offers:
+On desktop (960 px and wider), the explorer is integrated into the left sidebar below conversations. Its **Files** and **Changes** tabs browse the workspace and Git. Opening a file shows a separate reader to the right of chat; closing the reader does not remove the explorer.
+
+These surfaces offer:
 
 - lazily loaded tree, optional hidden files, index search and M/A/D/U Git badges;
 - Git changes grouped by folder, with add/delete totals and direct diff opening;
-- resizable or fullscreen Source/Preview/Diff viewer with metadata, line numbers, coloring, copy and download;
+- a resizable or fullscreen **Source / Preview / Diff** reader with up to eight open file tabs, full path, metadata, line numbers, coloring, copy and download;
 - sanitized Markdown preview with frontmatter and anchors, plus images, audio and video files;
 - followed, indexed, untracked, deleted or binary diffs, refreshed when open file changes;
 - cancellable multiple upload with per-file network progress, detailed error and explicit collision strategy: reject, rename or overwrite;
@@ -1041,7 +1064,7 @@ A Markdown `file:src/app.ts#L20` link or recognized path in tool output opens vi
 
 ### Workspace Terminal
 
-The Cmd button or shortcut Ctrl+Shift+T loads then opens a real PTY terminal in approved cwd; xterm does not download before first request. Each tab has its own shell and displays status, dimensions and exit code. **+** button creates another terminal; closing active tab asks confirmation then kills process.
+The terminal-icon button near the composer (**Open workspace terminal**) or shortcut Ctrl+Shift+T loads then opens a real PTY terminal in approved cwd; xterm does not download before first request. Each tab has its own shell and displays status, dimensions and exit code. **+** button creates another terminal; closing active tab asks confirmation then kills process.
 
 Size follows panel. Ctrl+Shift+C copies xterm selection and Ctrl+Shift+V pastes clipboard when browser allows it. Tabs and active terminal are remembered in `sessionStorage` by workspace for current browser tab. After reload or network cut, client resumes ANSI journal at last offset; explicitly signals if oldest part evicted from bounded journal.
 
@@ -1070,9 +1093,6 @@ node packages/server/dist/web-cli.js --no-open
 ```
 
 The `packages/web/dist/` bundle is served automatically with API. No second HTTP server needed. For public production, still place `ai-harness-web` behind an HTTPS reverse proxy.
-
-![Session lifecycle and branches, light theme](../../screenshots/03-sessions/session-lifecycle-light.png)
-![Session lifecycle and branches, dark theme](../../screenshots/03-sessions/session-lifecycle-dark.png)
 
 ## Sessions and Files
 

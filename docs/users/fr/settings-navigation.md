@@ -2,6 +2,14 @@
 
 AiHarness mémorise la navigation des Paramètres séparément pour chaque dossier de projet validé par le serveur, avec un contexte distinct lorsqu’aucun projet n’est sélectionné. Cette mémoire décrit la présentation du navigateur, pas la configuration du projet.
 
+## Se repérer dans l’interface
+
+Les **Réglages** s’ouvrent dans une boîte de dialogue au-dessus du chat, pas dans une longue page de sections empilées. Choisissez **Général**, **Modèles**, **Compétences**, **Outils**, **Plugins**, **Agents enfants** ou **MCP**. Général et Modèles proposent ensuite une liste de sections ; les catalogues présentent une liste de ressources et le détail de l’élément sélectionné.
+
+Sur petit écran, utilisez le sélecteur de catégorie, puis les boutons **Retour…** pour retrouver la liste des sections ou ressources. **Fermer** ou `Escape` revient au chat ; une confirmation protège les modifications non enregistrées concernées. Choisir une fiche ne teste, n’installe et n’active rien à lui seul.
+
+Le [catalogue illustré](../../screenshots/05-settings/model-catalog-light.png) montre **Modèles → Modèle → Gérer le catalogue de modèles** en anglais. Le [guide utilisateur](./user-guide.md#configurer-le-web) donne les autres parcours et les règles de portée.
+
 ## Ce qui est retrouvé
 
 - La dernière section des Paramètres et le dernier groupe ou élément de ressource ayant reçu le focus dans cette section.
