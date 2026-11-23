@@ -1,0 +1,20 @@
+# Build TEST_IMAGE from this checkout with Dockerfile.test first (make test-accessibility).
+# Never depend on the historical, locally prepared desktop image.
+ARG TEST_IMAGE
+FROM ${TEST_IMAGE}
+USER root
+RUN chromium --version > /tmp/chromium-before-accessibility \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends --no-upgrade \
+       xvfb xauth dbus-x11 at-spi2-core orca python3-pyatspi \
+       speech-dispatcher speech-dispatcher-espeak-ng python3-speechd \
+       pulseaudio pulseaudio-utils xdotool x11-utils scrot openbox gsettings-desktop-schemas \
+    && chromium --version > /tmp/chromium-after-accessibility \
+    && cmp /tmp/chromium-before-accessibility /tmp/chromium-after-accessibility \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1201 reviewer
+ENV DISPLAY=:99 XDG_RUNTIME_DIR=/tmp/accessibility-runtime NO_AT_BRIDGE=0
+USER reviewer
+WORKDIR /app
+ENTRYPOINT ["bash", ".docker/accessibility/entrypoint.sh"]
+CMD ["node", "--no-maglev", ".docker/accessibility/run.mjs"]

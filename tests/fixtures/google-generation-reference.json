@@ -1,0 +1,4112 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "9aef98c62dee5c6993b55ca2415c2ea46af69ed364812e1014becf5d505280cd",
+  "catalogueSha256": {
+    "google": "64bdd2563cee0e3598aec4d93a6735c189b6d7d14b9c03f061cc2824f3730528",
+    "google-vertex": "96ecc19bf20a706f99ae658b021a0ee5438146119e1e99de5fd824a01fcfd81b"
+  },
+  "modelProjections": 35,
+  "requestsCaptured": 315,
+  "projectedSimpleVectors": 210,
+  "projectedRawDefaultControls": 35,
+  "rows": [
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64000,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64000,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 64000,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": -1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 512
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 32768,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 24576
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingBudget": 0
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 1
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingBudget": 32768
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 4096,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-default",
+      "options": {},
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-high",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-minimal-answer64",
+      "options": {
+        "reasoning": "minimal",
+        "maxTokens": 64
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-high-answer1",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 1
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 1,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-high-budget1-answer64",
+      "options": {
+        "reasoning": "high",
+        "maxTokens": 64,
+        "thinkingBudgets": {
+          "high": 1
+        }
+      },
+      "inputCharacters": 5,
+      "inputSha256": "ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095",
+      "generationConfig": {
+        "maxOutputTokens": 64,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "case": "simple-high-longer-context",
+      "options": {
+        "reasoning": "high"
+      },
+      "inputCharacters": 12000,
+      "inputSha256": "5fdaa3e62da5c77e84e5160e6c2c4cf28dd9b2f0b85ecb779b9652a9ca9b5489",
+      "generationConfig": {
+        "maxOutputTokens": 65536,
+        "thinkingConfig": {
+          "includeThoughts": true,
+          "thinkingLevel": "HIGH"
+        }
+      }
+    }
+  ],
+  "rawDefaults": [
+    {
+      "scope": "google",
+      "model": "deep-research-max-preview-04-2026",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "deep-research-preview-04-2026",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-computer-use-preview-10-2025",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-2.5-pro",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3-flash-preview",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-lite-preview",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-flash-live-preview",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.6-flash",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.7-flash",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-3.8-flash",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-latest",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemini-flash-lite-latest",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google",
+      "model": "gemma-4-31b-it",
+      "api": "google-generative-ai",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-flash-lite",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-2.5-pro",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3-flash-preview",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-flash-lite-image",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.1-pro-preview-customtools",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.5-flash-lite",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.6-flash",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.7-flash",
+      "api": "google-vertex",
+      "generationConfig": {}
+    },
+    {
+      "scope": "google-vertex",
+      "model": "gemini-3.8-flash",
+      "api": "google-vertex",
+      "generationConfig": {}
+    }
+  ],
+  "limits": "Actual pinned streamSimple generationConfig observations plus raw omitted-output contrast only. Core retains its existing Gemini2.5Pro minimum128 instead of SDK override1 in two projections; no safety/oracle decision or full-chain equivalence. 12000-character input is not a full context-boundary/tokenization test. No raw API exposure, service/cap/answer/reasoning feasibility, account/invoice/TLS/media/tool/replay/host or SDK Vertex API-key/Core Bearer resolution certificate."
+}

@@ -1,0 +1,126 @@
+npm notice run ai-harness@0.1.0 typecheck
+npm notice run npm run build --workspace @ai-harness/core && npm run typecheck --workspaces --if-present && npm run typecheck:parity
+npm notice run @ai-harness/core@0.1.0 build
+npm notice run node ../../scripts/run-typescript.mjs
+npm notice run @ai-harness/cli@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run @ai-harness/core@0.1.0 typecheck
+npm notice run @ai-harness/server@0.1.0 typecheck
+npm notice run @ai-harness/web@0.1.0 typecheck
+npm notice run ai-harness@0.1.0 typecheck:parity
+npm notice run node scripts/run-typescript.mjs --noEmit -p tests/functional-parity/tsconfig.json
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/agent packages/core/src/providers/model-metadata.test.ts packages/core/src/providers/openrouter-user-models.test.ts packages/core/src/extensions/module-loader.test.ts packages/web/src/services packages/web/src/store/session-store.test.ts packages/web/src/store/preferences.test.ts packages/cli/src/rpc
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/rpc-controller.test.ts (36 tests) 1324ms
+ ✓ packages/core/src/agent/runtime.test.ts (18 tests) 1042ms
+   ✓ AgentRuntime (18)
+     ✓ retries only failures that happen before a delta and does not duplicate assistant messages 538ms
+ ✓ packages/web/src/services/api.test.ts (26 tests) 43ms
+ ✓ packages/core/src/agent/tool-results.test.ts (23 tests) 299ms
+ ✓ packages/cli/src/rpc/session-compaction-lifecycle.test.ts (79 tests) 46011ms
+   ✓ RPC summary retry admission (memory) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2009ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2032ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2067ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2060ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2024ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2007ms
+   ✓ RPC summary retry admission (native) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2095ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2051ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2143ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2097ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2071ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2128ms
+   ✓ RPC summary retry admission (structural) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2111ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2053ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2076ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2144ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2116ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2095ms
+   ✓ RPC summary listener lifetime (memory) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2016ms
+   ✓ RPC summary listener lifetime (native) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2094ms
+   ✓ RPC summary listener lifetime (structural) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2111ms
+ ✓ packages/core/src/agent/tool-progress.test.ts (14 tests) 20ms
+ ✓ packages/core/src/agent/runtime-interaction-queue.test.ts (11 tests) 647ms
+   ✓ queue churn releases request storage while exposing inherited completed-run retention 477ms
+ ✓ packages/web/src/store/session-store.test.ts (17 tests) 5ms
+ ✓ packages/core/src/agent/image-append.test.ts (8 tests) 1018ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-state.test.ts (19 tests) 26ms
+ ✓ packages/core/src/agent/provider-request-budget.test.ts (36 tests) 159ms
+ ✓ packages/core/src/providers/openrouter-user-models.test.ts (11 tests) 94ms
+ ✓ packages/core/src/agent/reply-checkpoints.test.ts (9 tests) 382ms
+ ✓ packages/core/src/providers/model-metadata.test.ts (11 tests) 19ms
+ ✓ packages/cli/src/rpc/context-settings-reload.test.ts (12 tests) 29ms
+ ✓ packages/core/src/agent/provider-request-payload.test.ts (18 tests) 10ms
+ ✓ packages/core/src/agent/provider-request-options-flow.test.ts (27 tests) 368ms
+ ✓ packages/cli/src/rpc/session-branch-lifecycle.test.ts (18 tests) 45ms
+ ✓ packages/core/src/agent/runtime-prestart.test.ts (11 tests) 26ms
+ ✓ packages/core/src/agent/tool-loop-progress.test.ts (8 tests) 19ms
+ ✓ packages/core/src/agent/runtime-settlement.test.ts (7 tests) 21ms
+ ✓ packages/cli/src/rpc/session-clone-position.test.ts (12 tests) 208ms
+ ✓ packages/web/src/services/interaction-queue.test.ts (19 tests) 34ms
+ ✓ packages/cli/src/rpc/session-summary-hooks.test.ts (16 tests) 354ms
+ ✓ packages/web/src/services/escape-stack.test.ts (16 tests) 7ms
+ ✓ packages/core/src/agent/provider-request-options.test.ts (62 tests) 9ms
+ ✓ packages/cli/src/rpc/session-branch-ui.test.ts (7 tests) 450ms
+ ✓ packages/core/src/agent/provider-request-estimate.test.ts (29 tests) 23ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-process.test.ts (1 test) 322ms
+   ✓ exposes replay, presentation, updates, abort, and EOF through the emitted RPC executable 321ms
+ ✓ packages/cli/src/rpc/compaction-context-boundary.test.ts (5 tests) 78ms
+ ✓ packages/cli/src/rpc/session-navigation.test.ts (11 tests) 131ms
+ ✓ packages/cli/src/rpc/session-statistics.test.ts (8 tests) 105ms
+ ✓ packages/cli/src/rpc/run-lifetime.test.ts (13 tests) 242ms
+ ✓ packages/core/src/agent/runtime-queue-delivery.test.ts (6 tests) 588ms
+   ✓ does not dequeue during a held transient recovery after a tool boundary 533ms
+ ✓ packages/core/src/agent/runtime-progress.test.ts (2 tests) 23ms
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 145ms
+ ✓ packages/web/src/services/provider-lifecycle.test.ts (11 tests) 21ms
+ ✓ packages/cli/src/rpc/context-settings-lifecycle.test.ts (3 tests) 17ms
+ ✓ packages/core/src/agent/runtime-interaction-process.test.ts (2 tests) 729ms
+   ✓ public built Core interaction queue in disposable Node process (2)
+     ✓ settles concurrent requests and durable results (stop=false) 419ms
+     ✓ settles concurrent requests and durable results (stop=true) 309ms
+ ✓ packages/core/src/agent/context-recovery.test.ts (8 tests) 17ms
+ ✓ packages/web/src/store/preferences.test.ts (4 tests) 5ms
+ ✓ packages/cli/src/rpc/rpc-input.test.ts (12 tests) 525ms
+ ✓ packages/web/src/services/linked-directories.test.ts (6 tests) 28ms
+ ✓ packages/core/src/agent/provider-loadout.test.ts (2 tests) 14ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui.test.ts (4 tests) 12ms
+ ✓ packages/web/src/services/push.test.ts (2 tests) 4ms
+ ✓ packages/web/src/services/skill-content-api.test.ts (9 tests) 19ms
+ ✓ packages/core/src/agent/prestart-admission.test.ts (5 tests) 5ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-public.test.ts (1 test) 647ms
+   ✓ exports optional RPC UI declarations through the genuine emitted Core entry 646ms
+ ✓ packages/core/src/agent/work-retention-process.test.ts (1 test) 303ms
+   ✓ physical run ownership without other Node handles (1)
+     ✓ keeps an aborted provider promise owned until real completion instead of naturally exiting with success 302ms
+ ✓ packages/web/src/services/interaction-scope.test.ts (5 tests) 3ms
+ ✓ packages/core/src/agent/prestart-process.test.ts (2 tests) 520ms
+ ✓ packages/web/src/services/session-row-copy.test.ts (9 tests) 18ms
+ ✓ packages/web/src/services/document-preview.test.ts (3 tests) 20ms
+ ✓ packages/core/src/agent/message-queue.test.ts (3 tests) 3ms
+ ✓ packages/web/src/services/terminal-replay.test.ts (15 tests) 5ms
+ ✓ packages/web/src/services/resource-batches.test.ts (2 tests) 18ms
+ ✓ packages/web/src/services/sidebar-state.test.ts (2 tests) 16ms
+ ✓ packages/web/src/services/navigation-root.test.ts (3 tests) 60ms
+ ✓ packages/web/src/services/pwa.test.ts (2 tests) 5ms
+ ✓ packages/core/src/agent/events.test.ts (2 tests) 3ms
+ ✓ packages/web/src/services/notices.test.ts (2 tests) 5ms
+ ✓ packages/web/src/services/keyboard.test.ts (3 tests) 2ms
+ ✓ packages/web/src/services/navigation-base.test.ts (13 tests) 3ms
+
+ Test Files  64 passed (64)
+      Tests  769 passed (769)
+   Start at  15:27:18
+   Duration  70.61s (tests 86%, import 11%, transform 2%)
+
+    Isolate  64 workers spawned · ~56ms startup each (spawn + environment, per file)
+             at least ~3.55s faster with isolate: false — reuses workers across files instead of one per file

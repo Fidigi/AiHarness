@@ -1,0 +1,39 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/summary-public-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/summary-public-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ❯ packages/server/src/api/summary-public-http.test.ts (2 tests | 1 failed) 372ms
+   ✓ the owning manual agent summary preserves public tool traces and rich text, never private replay 91ms
+   × retains the canonical two-million-byte ceiling before stripping oversized private reasoning 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/server/src/api/summary-public-http.test.ts > retains the canonical two-million-byte ceiling before stripping oversized private reasoning
+AssertionError: expected 200 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 200
+
+ ❯ packages/server/src/api/summary-public-http.test.ts:56:27
+     54|   const chat = vi.spyOn(MockProvider.prototype, 'chat');
+     55|   const response = await compact(messages);
+     56|   expect(response.status).toBe(500); expect(await response.json()).toE…
+       |                           ^
+     57| });
+     58|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  13:35:18
+   Duration  2.18s (transform 63%, import 19%, tests 18%)

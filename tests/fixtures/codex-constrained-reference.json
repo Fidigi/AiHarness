@@ -1,0 +1,1554 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "hashes": {
+    "api/openai-codex-responses": "41a0095ce395f6ddf50ce3adbe7d03960bf183fb0f2f94412c88923adaa013b0",
+    "api/openai-responses-shared": "09100e0bfe8fa4ad212312956930f4a9e70cd29ca823d2e1f1c97f87b4541afe",
+    "api/transform-messages": "6d82d11a49213a4193e0d074f36d7af76e8a911b003104c0aa2c22569b2fe669",
+    "api/constrained-sampling": "f795db4afbbdf2918b346a7f260841ca477c29b26bcdb1084e039697a715a22a"
+  },
+  "scope": "Two representative pinned CX profiles, synthetic SSE only. No vendor/account/host/grammar-fulfilment certificate.",
+  "capabilities": [
+    {
+      "model": "gpt-5.3-codex-spark",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-5.5",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-6-astra",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-6-luna",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-6-sol",
+      "strict": true,
+      "grammar": true
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "strict": true,
+      "grammar": true
+    }
+  ],
+  "requests": 24,
+  "refusals": 6,
+  "events": [
+    {
+      "type": "response.output_item.added",
+      "output_index": 0,
+      "item": {
+        "type": "custom_tool_call",
+        "id": "ctc_native",
+        "call_id": "call_native",
+        "name": "echo",
+        "input": "",
+        "status": "completed"
+      }
+    },
+    {
+      "type": "response.custom_tool_call_input.delta",
+      "output_index": 0,
+      "delta": "raw "
+    },
+    {
+      "type": "response.custom_tool_call_input.delta",
+      "output_index": 0,
+      "delta": "\"source\"\n\\tail"
+    },
+    {
+      "type": "response.custom_tool_call_input.done",
+      "output_index": 0,
+      "input": "raw \"source\"\n\\tail"
+    },
+    {
+      "type": "response.output_item.done",
+      "output_index": 0,
+      "item": {
+        "type": "custom_tool_call",
+        "id": "ctc_native",
+        "call_id": "call_native",
+        "name": "echo",
+        "input": "raw \"source\"\n\\tail",
+        "status": "completed"
+      }
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_grammar",
+        "status": "completed",
+        "output": [
+          {
+            "type": "custom_tool_call",
+            "id": "ctc_native",
+            "call_id": "call_native",
+            "name": "echo",
+            "input": "raw \"source\"\n\\tail",
+            "status": "completed"
+          }
+        ],
+        "usage": {
+          "input_tokens": 1,
+          "output_tokens": 1,
+          "total_tokens": 2
+        }
+      }
+    }
+  ],
+  "raw": "raw \"source\"\n\\tail",
+  "rows": [
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "ordinary",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "strict": null
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "disabled",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": false
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "strict": null
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "strict-prefer",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "optional"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "strict-require",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "require"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "optional"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "unsupported-prefer",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": true
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": true
+            },
+            "strict": null
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "unsupported-require",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": true
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "require"
+        }
+      },
+      "refused": true
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "lark",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_lark": "start: /[a-z]+/",
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "custom",
+            "name": "echo",
+            "description": "Echo",
+            "format": {
+              "type": "grammar",
+              "syntax": "lark",
+              "definition": "start: /[a-z]+/"
+            }
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "regex",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-5.3-codex-spark",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "custom",
+            "name": "echo",
+            "description": "Echo",
+            "format": {
+              "type": "grammar",
+              "syntax": "regex",
+              "definition": "[a-z]+"
+            }
+          }
+        ],
+        "reasoning": {
+          "effort": "none"
+        }
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "missing-grammar",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {}
+        }
+      },
+      "refused": true
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "invalid-property",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_lark": "start: /[a-z]+/",
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": true
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "ordinary",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "strict": null
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "disabled",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": false
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ]
+            },
+            "strict": null
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "strict-prefer",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "optional"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "strict-require",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "require"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "optional"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "unsupported-prefer",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": true
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "prefer"
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "function",
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "optional": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": true
+            },
+            "strict": null
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "unsupported-require",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "additionalProperties": true
+        },
+        "constrainedSampling": {
+          "type": "json_schema",
+          "strict": "require"
+        }
+      },
+      "refused": true
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "lark",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_lark": "start: /[a-z]+/",
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "custom",
+            "name": "echo",
+            "description": "Echo",
+            "format": {
+              "type": "grammar",
+              "syntax": "lark",
+              "definition": "start: /[a-z]+/"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "regex",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": false,
+      "body": {
+        "model": "gpt-6.1-sol",
+        "store": false,
+        "stream": true,
+        "instructions": "You are a helpful assistant.",
+        "input": [
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "probe"
+              }
+            ]
+          }
+        ],
+        "text": {
+          "verbosity": "low"
+        },
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": true,
+        "tools": [
+          {
+            "type": "custom",
+            "name": "echo",
+            "description": "Echo",
+            "format": {
+              "type": "grammar",
+              "syntax": "regex",
+              "definition": "[a-z]+"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "missing-grammar",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string"
+            },
+            "optional": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {}
+        }
+      },
+      "refused": true
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "invalid-property",
+      "tool": {
+        "name": "echo",
+        "description": "Echo",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "source"
+          ]
+        },
+        "constrainedSampling": {
+          "type": "grammar",
+          "variants": {
+            "openai_lark": "start: /[a-z]+/",
+            "openai_regex": "[a-z]+"
+          }
+        }
+      },
+      "refused": true
+    }
+  ],
+  "replays": [
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "exact",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "id": "ctc_native",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "foreign-provider",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "foreign-model",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "function",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "arguments": "{\"source\":\"raw \\\"source\\\"\\n\\\\tail\"}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "exact",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "id": "ctc_native",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "foreign-provider",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "foreign-model",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "custom_tool_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "input": "raw \"source\"\n\\tail"
+        },
+        {
+          "type": "custom_tool_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "function",
+      "expected": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "probe"
+            }
+          ]
+        },
+        {
+          "type": "function_call",
+          "call_id": "call_native",
+          "name": "echo",
+          "arguments": "{\"source\":\"raw \\\"source\\\"\\n\\\\tail\"}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call_native",
+          "output": "result"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1187 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc packages/cli/src/cli/rpc-input-process.test.ts packages/cli/src/cli/summary-transcript-process.test.ts packages/server/src/api packages/server/src/security/request-security.test.ts packages/web/src/services/api.test.ts packages/web/src/store/preferences.test.ts packages/web/src/store/session-store.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/rpc-controller.test.ts (36 tests) 1435ms
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on logout without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on shutdown without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] Request failed.
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/github-copilot-http.test.ts > retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/github-copilot-http.test.ts (8 tests) 19250ms
+   ✓ logs in through HTTP, refreshes private A/C/R across tiers and observes remote/local withdrawal 6866ms
+   ✓ retires held HTTP credential or detached inference work on logout without a late encrypted publication 1924ms
+   ✓ retires held HTTP credential or detached inference work on shutdown without a late encrypted publication 1284ms
+   ✓ retires held HTTP credential or detached inference work on request-cancel without a late encrypted publication 4283ms
+   ✓ retires held HTTP credential or detached inference work on refresh-exchange-cancel without a late encrypted publication 1302ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-cancel without a late encrypted publication 1330ms
+   ✓ retires held HTTP credential or detached inference work on refresh-catalogue-body-cancel without a late encrypted publication 1289ms
+   ✓ retires held HTTP credential or detached inference work on inference-body-cancel without a late encrypted publication 969ms
+stdout | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/openai-codex-http.test.ts > routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect
+[Server] Request failed.
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held token without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held catalogue without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held catalogue-body without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-codex-http.test.ts > retires Codex HTTP credential or detached inference work at held inference-body without undoing committed credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/openai-codex-http.test.ts (7 tests) 15869ms
+   ✓ routes detached HTTP chat through explicit Codex WebSocket and refuses traffic after Disconnect 1236ms
+   ✓ owns native Codex HTTP login, encrypted restart/refresh, CX private replay and remote/local account withdrawal 4434ms
+   ✓ retires Codex HTTP credential or detached inference work at held token without undoing committed credentials 1463ms
+   ✓ retires Codex HTTP credential or detached inference work at held catalogue without undoing committed credentials 1471ms
+   ✓ retires Codex HTTP credential or detached inference work at held catalogue-body without undoing committed credentials 1413ms
+   ✓ retires Codex HTTP credential or detached inference work at held discovery-shutdown without undoing committed credentials 4671ms
+   ✓ retires Codex HTTP credential or detached inference work at held inference-body without undoing committed credentials 1179ms
+ ✓ packages/web/src/services/api.test.ts (26 tests) 43ms
+stdout | packages/server/src/api/resource-batches.test.ts > resource batch routes
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/resource-batches.test.ts (23 tests) 2448ms
+   ✓ resource batch routes (23)
+     ✓ disposes both publication and rollback receipts across repeated per-entry failures 896ms
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on pending intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on malformed intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on linked intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on pending intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on malformed intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on linked intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > never activates restricted mode over a still-owned previous generation with bounded asynchronous cleanup
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > permanently refuses unleased legacy, PTY, model and resource/file mutations and upgrades
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > holds exclusive ownership after disconnect; excludes inline sessions, profiles and references; settles and restarts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > holds exclusive ownership after disconnect; excludes inline sessions, profiles and references; settles and restarts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > leases the real inline create handler, child tool admission and extension-triggered reload for their awaited lifetimes
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > quarantines a real HTTP rename after same-byte external registry replacement refuses rollback, including restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > quarantines a real HTTP rename after same-byte external registry replacement refuses rollback, including restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > keeps ordinary session create/update/append/fork/clone and profile/ref changes available outside rename
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses credential command configuration rather than executing it outside the root boundary
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > does not execute workspace shell tools or administrator/project extensions in this mode
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > captures command interaction authority before provider admission awaits
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > refuses mixed-case scoped provider references before rename publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/provider-host-integration.test.ts (18 tests) 1134ms
+   ✓ real restricted provider host composition (16)
+     ✓ leases the real inline create handler, child tool admission and extension-triggered reload for their awaited lifetimes 368ms
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > uses source-relative literal global/project argv, fresh trust/settings, filtered env and scoped check/update-all
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > clean project replacement supersedes rejected global; absence selects PATH; untrusted body is never opened
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses global string without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses global null without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses global empty without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses global invalid JSON without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project string without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project null without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project empty without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project invalid item without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project invalid JSON without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project root without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project unknown diagnostic without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project unrelated diagnostic without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project nonregular without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project linked without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project invalid UTF8 without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project oversized without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project process-invalid executable without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses project process-invalid argv without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses invalid project over default without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > refuses saturation over clean replacement without fallback, staging, state publication or eager passive npm validation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > concurrent source workspaces retain operation-local commands and share the existing Core state lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > captures immutable options at admission without mutating the passive singleton
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > admitted project policy refuses global install/check/update after independent persisted revocation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > missing selected executable never falls back and leaves existing package/state intact
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > missing selected executable never falls back and leaves existing package/state intact
+[Server] Request failed.
+
+stderr | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > missing selected executable never falls back and leaves existing package/state intact
+[Server] Request failed.
+
+stdout | packages/server/src/api/npm-settings-http.test.ts > real HTTP npm settings admission (disposable executables, no network) > restricted provider administration still refuses every package/executable operation and import
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/npm-settings-http.test.ts (27 tests) 5674ms
+   ✓ real HTTP npm settings admission (disposable executables, no network) (27)
+     ✓ uses source-relative literal global/project argv, fresh trust/settings, filtered env and scoped check/update-all 649ms
+ ✓ packages/cli/src/rpc/session-compaction-lifecycle.test.ts (79 tests) 45719ms
+   ✓ RPC summary retry admission (memory) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2071ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2005ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2037ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2012ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2024ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2026ms
+   ✓ RPC summary retry admission (native) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2099ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2046ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2079ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2080ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2094ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2078ms
+   ✓ RPC summary retry admission (structural) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2109ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2063ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2083ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2085ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2102ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2095ms
+   ✓ RPC summary listener lifetime (memory) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2008ms
+   ✓ RPC summary listener lifetime (native) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2092ms
+   ✓ RPC summary listener lifetime (structural) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2078ms
+ ✓ packages/server/src/api/provider-lifecycle-routes.test.ts (12 tests) 1006ms
+stdout | packages/server/src/api/session-row-copy-http.test.ts > real HTTP exact saved-entry copies, not generic clone tightening
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/session-row-copy-http.test.ts (26 tests) 1215ms
+stdout | packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/configuration-defaults.test.ts (11 tests) 16104ms
+   ✓ independent new-session defaults (11)
+     ✓ transmits scoped numeric reasoning budgets to detached runs without accepting prompt-body overrides 773ms
+     ✓ owns detached numeric budgets for claude-haiku-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2459ms
+     ✓ owns detached numeric budgets for claude-haiku-4-5-20251001 in the validated workspace, never in prompt maps or opaque cache IDs 2436ms
+     ✓ owns detached numeric budgets for claude-opus-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2450ms
+     ✓ owns detached numeric budgets for claude-opus-4-5-20251101 in the validated workspace, never in prompt maps or opaque cache IDs 2451ms
+     ✓ owns detached numeric budgets for claude-sonnet-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2506ms
+     ✓ owns detached numeric budgets for claude-sonnet-4-5-20250929 in the validated workspace, never in prompt maps or opaque cache IDs 2527ms
+ ✓ packages/server/src/api/proxy.test.ts (28 tests) 75ms
+stdout | packages/server/src/api/session-live-mutations.test.ts > live session snapshots
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/session-live-mutations.test.ts (15 tests) 8925ms
+   ✓ live session snapshots (15)
+     ✓ bounds Stop acknowledgements without publishing terminal state before an uncooperative tool settles 5110ms
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (static)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (static)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (process)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (process)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (sso)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (sso)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > retires a held profile inference on key-replacement without waiting for hostile cancellation or accepting a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > retires a held profile inference on shutdown without waiting for hostile cancellation or accepting a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > retires a held profile inference on trusted-remove without waiting for hostile cancellation or accepting a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > preserves stored-key startup priority instead of mounting the environment profile
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > preserves command startup priority instead of mounting the environment profile
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > preserves preconfigured-proxy startup priority instead of mounting the environment profile
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗
+
+stdout | packages/server/src/api/bedrock-profile-http.test.ts > preserves environment-bearer startup priority instead of mounting the environment profile
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/bedrock-profile-http.test.ts (10 tests) 3235ms
+   ✓ binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (static) 690ms
+   ✓ binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (process) 656ms
+   ✓ binds actual HTTP profile metadata/read-only admission, native signed restart/file rotation/privacy and once-only usage (sso) 554ms
+   ✓ preserves stored-key startup priority instead of mounting the environment profile 627ms
+stdout | packages/server/src/api/moonshot-http.test.ts > reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/moonshot-http.test.ts > keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/moonshot-http.test.ts (2 tests) 2718ms
+   ✓ reloads encrypted explicit Moonshot hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1339ms
+   ✓ keeps the explicit CN endpoint across authenticated HTTP key rotation and server restart 1378ms
+ ✓ packages/web/src/store/session-store.test.ts (17 tests) 6ms
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP explicit-user ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP explicit-user ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP default-service ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP default-service ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP executable ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > binds real HTTP executable ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > retires a held ADC body on key-replacement without hostile waits, late mount or inference
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > retires a held ADC body on shutdown without hostile waits, late mount or inference
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > retires a held ADC body on trusted-remove without hostile waits, late mount or inference
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > does not let ADC bypass stored-key startup authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > does not let ADC bypass command startup authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > does not let ADC bypass foreign-native startup authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > does not let ADC bypass incomplete startup authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-adc-http.test.ts > does not let ADC bypass preconfigured-proxy startup authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✓, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗
+
+ ✓ packages/server/src/api/vertex-adc-http.test.ts (11 tests) 3853ms
+   ✓ binds real HTTP explicit-user ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock 667ms
+   ✓ binds real HTTP default-service ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock 590ms
+   ✓ binds real HTTP executable ADC passive metadata, quota/native G/cache/signed restart/rotation/privacy and environment lock 597ms
+   ✓ does not let ADC bypass stored-key startup authority 640ms
+   ✓ does not let ADC bypass foreign-native startup authority 630ms
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > binds passive readonly environment web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > binds passive readonly environment web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > binds passive readonly profile web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > binds passive readonly profile web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > retires held web-identity XML acquisition on key-replacement, preserving prior source on aborted replacement
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > retires held web-identity XML acquisition on shutdown, preserving prior source on aborted replacement
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > retires held web-identity XML acquisition on trusted-remove, preserving prior source on aborted replacement
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > refuses explicit web-token intent missing its role instead of falling back to another available container identity
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-web-identity-http.test.ts > preserves a trusted injected web-identity owner and its actual readonly provenance over ambient keys
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗
+
+ ✓ packages/server/src/api/bedrock-web-identity-http.test.ts (7 tests) 1851ms
+   ✓ binds passive readonly environment web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication 686ms
+   ✓ binds passive readonly profile web-identity provenance, real cached STS/native private restart/rotation and once-only usage without credential publication 548ms
+stdout | packages/server/src/api/http-compaction-lifecycle.test.ts > real HTTP compaction, exclusive=false
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/http-compaction-lifecycle.test.ts > real HTTP compaction, exclusive=true
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/http-compaction-lifecycle.test.ts (24 tests) 1299ms
+stdout | packages/server/src/api/queue-generation-http.test.ts > managed tool generation interaction authority HTTP > agent/reload preserves same-workspace failed candidates, then commits a genuine managed TOOL generation and clears once
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/queue-generation-http.test.ts > managed tool generation interaction authority HTTP > plugins/reload preserves same-workspace failed candidates, then commits a genuine managed TOOL generation and clears once
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/queue-generation-http.test.ts > managed tool generation interaction authority HTTP > agent/reload failed candidate in a canonical allowed, saved-trusted next cwd successfully safety-clears the old tool generation once
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/queue-generation-http.test.ts > managed tool generation interaction authority HTTP > plugins/reload failed candidate in a canonical allowed, saved-trusted next cwd successfully safety-clears the old tool generation once
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/queue-generation-http.test.ts (4 tests) 1393ms
+   ✓ managed tool generation interaction authority HTTP (4)
+     ✓ agent/reload preserves same-workspace failed candidates, then commits a genuine managed TOOL generation and clears once 509ms
+     ✓ plugins/reload preserves same-workspace failed candidates, then commits a genuine managed TOOL generation and clears once 427ms
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > mounts passive readonly HTTP provenance, native cached acquisition/private signed restart/rotation, privacy and once-only usage without storing credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > mounts passive readonly HTTP provenance, native cached acquisition/private signed restart/rotation, privacy and once-only usage without storing credentials
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > retires held container metadata on key-replacement, rejects aborted replacement and never accepts a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > retires held container metadata on shutdown, rejects aborted replacement and never accepts a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > retires held container metadata on trusted-remove, rejects aborted replacement and never accepts a late completion
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > does not silently change a selected absent AWS_PROFILE identity into an available container source
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-ecs-http.test.ts > preserves an explicitly injected container source and reports its actual readonly provenance over ambient keys
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗
+
+ ✓ packages/server/src/api/bedrock-ecs-http.test.ts (6 tests) 1296ms
+   ✓ mounts passive readonly HTTP provenance, native cached acquisition/private signed restart/rotation, privacy and once-only usage without storing credentials 671ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-state.test.ts (19 tests) 23ms
+stdout | packages/server/src/api/model-batches.test.ts > model batch routes
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/model-batches.test.ts (10 tests) 432ms
+stdout | packages/server/src/api/openai-http.test.ts > reloads encrypted native OpenAI hosts with operation-owned R/D guests and no static connection certificate
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openai-http.test.ts > reloads encrypted native OpenAI hosts with operation-owned R/D guests and no static connection certificate
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/openai-http.test.ts (1 test) 1734ms
+   ✓ reloads encrypted native OpenAI hosts with operation-owned R/D guests and no static connection certificate 1733ms
+stdout | packages/server/src/api/typesafe-http.test.ts > executes native auxiliary classifiers/images across guarded configuration, rotation, encrypted restart and disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/typesafe-http.test.ts > executes native auxiliary classifiers/images across guarded configuration, rotation, encrypted restart and disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/typesafe-http.test.ts (1 test) 2451ms
+   ✓ executes native auxiliary classifiers/images across guarded configuration, rotation, encrypted restart and disconnect 2450ms
+stdout | packages/server/src/api/queue-reconciliation-http.test.ts > real HTTP command interaction generation authority
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/queue-reconciliation-http.test.ts (4 tests) 800ms
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > binds actual Server WIF HTTP to passive auth/models, cached signed A/restart JWT rotation, secret privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > binds actual Server WIF HTTP to passive auth/models, cached signed A/restart JWT rotation, secret privacy and environment lock
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > retires held WIF credentials on actual HTTP key replacement without hostile waits or late publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > does not let WIF bypass stored-key startup authority or read its nonexistent file
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > does not let WIF bypass foreign-native startup authority or read its nonexistent file
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > does not let WIF bypass incomplete startup authority or read its nonexistent file
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-wif-http.test.ts > does not let WIF bypass preconfigured-proxy startup authority or read its nonexistent file
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✓, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗
+
+ ✓ packages/server/src/api/anthropic-wif-http.test.ts (6 tests) 2315ms
+   ✓ binds actual Server WIF HTTP to passive auth/models, cached signed A/restart JWT rotation, secret privacy and environment lock 669ms
+   ✓ does not let WIF bypass stored-key startup authority or read its nonexistent file 634ms
+   ✓ does not let WIF bypass foreign-native startup authority or read its nonexistent file 649ms
+stdout | packages/server/src/api/openrouter-http.test.ts > reloads encrypted mixed OpenRouter configuration and executes native A/C plus guest T/I without metadata connection claims
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openrouter-http.test.ts > reloads encrypted mixed OpenRouter configuration and executes native A/C plus guest T/I without metadata connection claims
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/openrouter-http.test.ts (1 test) 4350ms
+   ✓ reloads encrypted mixed OpenRouter configuration and executes native A/C plus guest T/I without metadata connection claims 4349ms
+stdout | packages/server/src/api/nvidia-http.test.ts > reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/nvidia-http.test.ts > reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/nvidia-http.test.ts (1 test) 1407ms
+   ✓ reloads encrypted explicit NVIDIA hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1406ms
+stdout | packages/server/src/api/vertex-auth-http.test.ts > preserves builtin Vertex cloud-key provenance/base/model through real HTTP without discovery credential leakage
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✓, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-auth-http.test.ts > preserves builtin Vertex legacy-bearer provenance/base/model through real HTTP without discovery credential leakage
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✓, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-auth-http.test.ts > preserves builtin Vertex stored-bearer provenance/base/model through real HTTP without discovery credential leakage
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-auth-http.test.ts > persists only explicitly selected Vertex Cloud-key mode through HTTP restart, keeps old Bearer defaults and rejects invalid mode before mutation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/vertex-auth-http.test.ts > persists only explicitly selected Vertex Cloud-key mode through HTTP restart, keeps old Bearer defaults and rejects invalid mode before mutation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/vertex-auth-http.test.ts (4 tests) 2525ms
+   ✓ preserves builtin Vertex stored-bearer provenance/base/model through real HTTP without discovery credential leakage 753ms
+   ✓ persists only explicitly selected Vertex Cloud-key mode through HTTP restart, keeps old Bearer defaults and rejects invalid mode before mutation 1293ms
+stdout | packages/server/src/api/anthropic-oauth-http.test.ts > binds native custom Anthropic browser/copy-code through HTTP to signed tools, passive restart/refresh and held-body disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-oauth-http.test.ts > binds native custom Anthropic browser/copy-code through HTTP to signed tools, passive restart/refresh and held-body disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/anthropic-oauth-http.test.ts > binds native custom Anthropic browser/copy-code through HTTP to signed tools, passive restart/refresh and held-body disconnect
+[Server] Request failed.
+
+ ✓ packages/server/src/api/anthropic-oauth-http.test.ts (1 test) 2451ms
+   ✓ binds native custom Anthropic browser/copy-code through HTTP to signed tools, passive restart/refresh and held-body disconnect 2450ms
+ ✓ packages/server/src/api/queue-generation-process.test.ts (1 test) 1187ms
+   ✓ public package managed generation composition in a disposable Node process (1)
+     ✓ commits a managed tool, preserves rejected same-cwd candidates and safety-clears a failed workspace replacement 1186ms
+stdout | packages/server/src/api/kimi-oauth-http.test.ts > binds native custom Kimi OAuth through real HTTP to signed tools, passive restart/refresh and held-token disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/kimi-oauth-http.test.ts > binds native custom Kimi OAuth through real HTTP to signed tools, passive restart/refresh and held-token disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/kimi-oauth-http.test.ts > binds native custom Kimi OAuth through real HTTP to signed tools, passive restart/refresh and held-token disconnect
+[Server] Request failed.
+
+ ✓ packages/server/src/api/kimi-oauth-http.test.ts (1 test) 2578ms
+   ✓ binds native custom Kimi OAuth through real HTTP to signed tools, passive restart/refresh and held-token disconnect 2577ms
+stdout | packages/server/src/api/zai-http.test.ts > reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/zai-http.test.ts > reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/zai-http.test.ts (1 test) 1349ms
+   ✓ reloads encrypted explicit Z.ai hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1348ms
+ ✓ packages/cli/src/rpc/context-settings-reload.test.ts (12 tests) 23ms
+stdout | packages/server/src/api/cloudflare-http.test.ts > reloads encrypted explicit Cloudflare hosts and executes native C with S guests without static connection claims
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/cloudflare-http.test.ts > reloads encrypted explicit Cloudflare hosts and executes native C with S guests without static connection claims
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/cloudflare-http.test.ts (1 test) 1399ms
+   ✓ reloads encrypted explicit Cloudflare hosts and executes native C with S guests without static connection claims 1398ms
+stdout | packages/server/src/api/groq-http.test.ts > reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/groq-http.test.ts > reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/groq-http.test.ts (1 test) 1355ms
+   ✓ reloads encrypted explicit Groq hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1354ms
+stdout | packages/server/src/api/deepseek-http.test.ts > reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/deepseek-http.test.ts > reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/deepseek-http.test.ts (1 test) 1332ms
+   ✓ reloads encrypted explicit DeepSeek hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1331ms
+stdout | packages/server/src/api/cerebras-http.test.ts > reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/cerebras-http.test.ts > reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/cerebras-http.test.ts (1 test) 1335ms
+   ✓ reloads encrypted explicit Cerebras hosts and preserves native C policy across retired-chat rejection, agent and virtual guests 1334ms
+stdout | packages/server/src/api/meta-oauth-http.test.ts > binds custom Meta HTTP Device identity/mint to native R tools, encrypted restart/remint and held-mint disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/meta-oauth-http.test.ts > binds custom Meta HTTP Device identity/mint to native R tools, encrypted restart/remint and held-mint disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/meta-oauth-http.test.ts > binds custom Meta HTTP Device identity/mint to native R tools, encrypted restart/remint and held-mint disconnect
+[Server] Request failed.
+
+ ✓ packages/server/src/api/meta-oauth-http.test.ts (1 test) 4544ms
+   ✓ binds custom Meta HTTP Device identity/mint to native R tools, encrypted restart/remint and held-mint disconnect 4543ms
+stdout | packages/server/src/api/xai-oauth-http.test.ts > binds custom Xai HTTP Device/refresh to native R tools, encrypted restart/refresh and held-token disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/xai-oauth-http.test.ts > binds custom Xai HTTP Device/refresh to native R tools, encrypted restart/refresh and held-token disconnect
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/xai-oauth-http.test.ts > binds custom Xai HTTP Device/refresh to native R tools, encrypted restart/refresh and held-token disconnect
+[Server] Request failed.
+
+ ✓ packages/server/src/api/xai-oauth-http.test.ts (1 test) 4509ms
+   ✓ binds custom Xai HTTP Device/refresh to native R tools, encrypted restart/refresh and held-token disconnect 4508ms
+stdout | packages/server/src/api/interaction-queue-http.test.ts > ordered interaction queue HTTP
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/interaction-queue-http.test.ts (3 tests) 568ms
+ ✓ packages/server/src/api/mcp-oauth-routes.test.ts (4 tests) 54ms
+stdout | packages/server/src/api/openrouter-oauth-http.test.ts > binds custom OpenRouter browser PKCE through real HTTP to permanent-key tools/restart and held-key withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/openrouter-oauth-http.test.ts > binds custom OpenRouter browser PKCE through real HTTP to permanent-key tools/restart and held-key withdrawal
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/openrouter-oauth-http.test.ts > binds custom OpenRouter browser PKCE through real HTTP to permanent-key tools/restart and held-key withdrawal
+[Server] Request failed.
+
+ ✓ packages/server/src/api/openrouter-oauth-http.test.ts (1 test) 4607ms
+   ✓ binds custom OpenRouter browser PKCE through real HTTP to permanent-key tools/restart and held-key withdrawal 4606ms
+stdout | packages/server/src/api/credential-privacy-http.test.ts > scrubs a genuinely configured provider credential through streaming, children, journals, shares and exports
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/credential-privacy-http.test.ts (1 test) 488ms
+   ✓ scrubs a genuinely configured provider credential through streaming, children, journals, shares and exports 487ms
+ ✓ packages/cli/src/rpc/session-branch-lifecycle.test.ts (18 tests) 35ms
+stdout | packages/server/src/api/skill-content-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/skill-content-http.test.ts (20 tests) 463ms
+stdout | packages/server/src/api/native-dialects-http.test.ts > uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/native-dialects-http.test.ts > uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/native-dialects-http.test.ts (1 test) 8743ms
+   ✓ uses newly composed A/G/C/R dialects through authenticated HTTP, rotation and encrypted restart 8742ms
+ ✓ packages/cli/src/rpc/session-clone-position.test.ts (12 tests) 208ms
+stdout | packages/server/src/api/mcp-inheritance-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/mcp-inheritance-http.test.ts (3 tests) 288ms
+ ✓ packages/cli/src/rpc/session-summary-hooks.test.ts (16 tests) 345ms
+stdout | packages/server/src/api/bedrock-profile-role-http.test.ts > uses real HTTP named-role admission, passive readonly metadata, signed STS/current cache/native private restart and source rotation with once-only usage
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-profile-role-http.test.ts > uses real HTTP named-role admission, passive readonly metadata, signed STS/current cache/native private restart and source rotation with once-only usage
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/bedrock-profile-role-http.test.ts (1 test) 663ms
+   ✓ uses real HTTP named-role admission, passive readonly metadata, signed STS/current cache/native private restart and source rotation with once-only usage 662ms
+stdout | packages/server/src/api/mcp-content-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/mcp-content-http.test.ts (2 tests) 433ms
+ ✓ packages/server/src/api/linked-directories-routes.test.ts (5 tests) 254ms
+ ✓ packages/cli/src/rpc/session-branch-ui.test.ts (7 tests) 396ms
+ ✓ packages/server/src/api/agent-event-backpressure.test.ts (7 tests) 27ms
+stdout | packages/server/src/api/image-preparation-http.test.ts > prepares actual Server prompt/tool history autoResize=true and preserves saved data on restart without processing old history again
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, images=✓
+
+stdout | packages/server/src/api/image-preparation-http.test.ts > prepares actual Server prompt/tool history autoResize=true and preserves saved data on restart without processing old history again
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, images=✓
+
+stdout | packages/server/src/api/image-preparation-http.test.ts > prepares actual Server prompt/tool history autoResize=false and preserves saved data on restart without processing old history again
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, images=✓
+
+stdout | packages/server/src/api/image-preparation-http.test.ts > prepares actual Server prompt/tool history autoResize=false and preserves saved data on restart without processing old history again
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, images=✓
+
+ ✓ packages/server/src/api/image-preparation-http.test.ts (2 tests) 1285ms
+   ✓ prepares actual Server prompt/tool history autoResize=true and preserves saved data on restart without processing old history again 752ms
+   ✓ prepares actual Server prompt/tool history autoResize=false and preserves saved data on restart without processing old history again 532ms
+ ✓ packages/server/src/security/request-security.test.ts (8 tests) 9ms
+stdout | packages/server/src/api/mistral-conversations-http.test.ts > saves/reloads a native Mistral custom dialect, uses encrypted replacement credentials and persists authentic streamed output
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/mistral-conversations-http.test.ts > saves/reloads a native Mistral custom dialect, uses encrypted replacement credentials and persists authentic streamed output
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/mistral-conversations-http.test.ts (1 test) 1514ms
+   ✓ saves/reloads a native Mistral custom dialect, uses encrypted replacement credentials and persists authentic streamed output 1513ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-process.test.ts (1 test) 333ms
+   ✓ exposes replay, presentation, updates, abort, and EOF through the emitted RPC executable 332ms
+stdout | packages/server/src/api/terminal-lifecycle-http.test.ts > real PTY UTF-8 replay, expiry and physical lifecycle
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✓, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/terminal-lifecycle-http.test.ts (2 tests) 441ms
+stdout | packages/server/src/api/tool-settings.test.ts > scoped sandbox and disabled-tool settings
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/tool-settings.test.ts (4 tests) 225ms
+stdout | packages/server/src/api/bedrock-converse-stream-http.test.ts > routes built-in Bedrock sigv4 settings through actual binary HTTP and reloads encrypted credentials and native history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-converse-stream-http.test.ts > routes built-in Bedrock sigv4 settings through actual binary HTTP and reloads encrypted credentials and native history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-converse-stream-http.test.ts > routes built-in Bedrock bearer settings through actual binary HTTP and reloads encrypted credentials and native history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/bedrock-converse-stream-http.test.ts > routes built-in Bedrock bearer settings through actual binary HTTP and reloads encrypted credentials and native history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/bedrock-converse-stream-http.test.ts (2 tests) 2471ms
+   ✓ routes built-in Bedrock sigv4 settings through actual binary HTTP and reloads encrypted credentials and native history 1395ms
+   ✓ routes built-in Bedrock bearer settings through actual binary HTTP and reloads encrypted credentials and native history 1075ms
+ ✓ packages/cli/src/rpc/compaction-context-boundary.test.ts (5 tests) 109ms
+ ✓ packages/cli/src/rpc/session-navigation.test.ts (11 tests) 133ms
+ ✓ packages/server/src/api/typescript-extensions-process.test.ts (2 tests) 1822ms
+   ✓ emitted Server direct discovery, trust, HTTP reload, real tools and workspace retirement share TypeScript admission 871ms
+   ✓ emitted Server manifest discovery, trust, HTTP reload, real tools and workspace retirement share TypeScript admission 949ms
+ ✓ packages/cli/src/rpc/session-statistics.test.ts (8 tests) 128ms
+ ✓ packages/cli/src/rpc/run-lifetime.test.ts (13 tests) 243ms
+stdout | packages/server/src/api/subagent-lifecycle-http.test.ts > native authenticated child runtime, policy and journal HTTP > requires auth, Origin and fresh trust; preserves native scoped profiles and durable history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/subagent-lifecycle-http.test.ts > native authenticated child runtime, policy and journal HTTP > requires auth, Origin and fresh trust; preserves native scoped profiles and durable history
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/subagent-lifecycle-http.test.ts > native authenticated child runtime, policy and journal HTTP > applies real MCP read-only/empty-tool policy, refuses undeclared writes, and stops background work
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/subagent-lifecycle-http.test.ts (2 tests) 1093ms
+   ✓ native authenticated child runtime, policy and journal HTTP (2)
+     ✓ requires auth, Origin and fresh trust; preserves native scoped profiles and durable history 374ms
+     ✓ applies real MCP read-only/empty-tool policy, refuses undeclared writes, and stops background work 718ms
+stdout | packages/server/src/api/virtual-model-http.test.ts > rejects retired routes, retains direct embedding/isolated children and resumes an unloaded router with physical accounting
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/virtual-model-http.test.ts (1 test) 311ms
+   ✓ rejects retired routes, retains direct embedding/isolated children and resumes an unloaded router with physical accounting 310ms
+ ✓ packages/server/src/api/session-notice-process.test.ts (1 test) 628ms
+   ✓ public Core and built Server preserve active correlation and separate terminal session notices from captured tool notices 627ms
+ ✓ packages/server/src/api/module-entry-process.test.ts (1 test) 847ms
+   ✓ emitted Server owns main/suffix selection, trust and rollback without expanding automatic directory authority 846ms
+stdout | packages/server/src/api/run-admission-http.test.ts > real HTTP run admission ownership
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/run-admission-http.test.ts > real HTTP run admission ownership > withdraws disconnected trust admission without a late prompt or provider call
+[Server] Request failed.
+
+stderr | packages/server/src/api/run-admission-http.test.ts > real HTTP run admission ownership > withdraws disconnected hook admission without a late prompt or provider call
+[Server] Request failed.
+
+stderr | packages/server/src/api/run-admission-http.test.ts > real HTTP run admission ownership > withdraws disconnected storage admission without a late prompt or provider call
+[Server] Request failed.
+
+ ✓ packages/server/src/api/run-admission-http.test.ts (4 tests) 276ms
+stdout | packages/server/src/api/provider-credential-recovery-http.test.ts > keeps failed cold credential admission observable but allows a later explicit authorized request to recover without restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/provider-credential-recovery-http.test.ts > keeps failed cold credential admission observable but allows a later explicit authorized request to recover without restart
+[Server] Request failed.
+
+stdout | packages/server/src/api/provider-credential-recovery-http.test.ts > retires a held cold refresh with the host and refuses its late encrypted publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/provider-credential-recovery-http.test.ts > retires a held cold refresh with the host and refuses its late encrypted publication
+[Server] Request failed.
+
+ ✓ packages/server/src/api/provider-credential-recovery-http.test.ts (2 tests) 4451ms
+   ✓ keeps failed cold credential admission observable but allows a later explicit authorized request to recover without restart 1095ms
+   ✓ retires a held cold refresh with the host and refuses its late encrypted publication 3355ms
+stdout | packages/server/src/api/bedrock-profile-environment-http.test.ts > uses a trusted explicit Environment-role source through real HTTP, preserving passive metadata, final-key cache/usage and shutdown ownership
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✓, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/bedrock-profile-environment-http.test.ts (1 test) 449ms
+   ✓ uses a trusted explicit Environment-role source through real HTTP, preserving passive metadata, final-key cache/usage and shutdown ownership 448ms
+stdout | packages/server/src/api/cache-notices-http.test.ts > projects branch-relative historical cache notices through bounded authenticated pages, never private receipts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/cache-notices-http.test.ts (1 test) 270ms
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 143ms
+stdout | packages/server/src/api/model-editor-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/model-editor-http.test.ts (5 tests) 145ms
+stdout | packages/server/src/api/sidebar-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/sidebar-http.test.ts > real HTTP sidebar state, distinct from session journals > supports user-role bulk families, two-client conflicts, undo, readback and restart without advancing a leaf
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/sidebar-http.test.ts (2 tests) 233ms
+stdout | packages/server/src/api/azure-responses-http.test.ts > preserves Azure Responses environment metadata through credential initialization and rotation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✓, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/azure-responses-http.test.ts (1 test) 487ms
+   ✓ preserves Azure Responses environment metadata through credential initialization and rotation 487ms
+stdout | packages/server/src/api/extension-execution-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/extension-execution-http.test.ts (1 test) 285ms
+ ✓ packages/cli/src/rpc/context-settings-lifecycle.test.ts (3 tests) 17ms
+stdout | packages/server/src/api/file-preview-http.test.ts > native authenticated document reads
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/file-preview-http.test.ts (3 tests) 170ms
+ ✓ packages/server/src/api/proxy-compaction-generation.test.ts (11 tests) 14ms
+stdout | packages/server/src/api/anthropic-credentials-http.test.ts > preserves builtin Anthropic ANTHROPIC_API_KEY provenance/endpoint through hydration and real agent HTTP
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✓, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-credentials-http.test.ts > preserves builtin Anthropic ANTHROPIC_AUTH_TOKEN provenance/endpoint through hydration and real agent HTTP
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✓, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/anthropic-credentials-http.test.ts > preserves builtin Anthropic ANTHROPIC_OAUTH_TOKEN provenance/endpoint through hydration and real agent HTTP
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✓, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/anthropic-credentials-http.test.ts (3 tests) 658ms
+stdout | packages/server/src/api/summary-public-http.test.ts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stderr | packages/server/src/api/summary-public-http.test.ts > retains the canonical two-million-byte ceiling before stripping oversized private metadata
+[Server] Request failed.
+
+ ✓ packages/server/src/api/summary-public-http.test.ts (2 tests) 907ms
+   ✓ retains the canonical two-million-byte ceiling before stripping oversized private metadata 721ms
+ ✓ packages/server/src/api/workspace-default.test.ts (5 tests) 108ms
+stdout | packages/server/src/api/mcp-entry-diagnostics.test.ts > HTTP typed MCP entry diagnostics
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/mcp-entry-diagnostics.test.ts (2 tests) 147ms
+ ✓ packages/web/src/store/preferences.test.ts (4 tests) 5ms
+ ✓ packages/cli/src/rpc/rpc-input.test.ts (12 tests) 490ms
+ ✓ packages/server/src/api/native-module-alias-process.test.ts (1 test) 506ms
+   ✓ actual emitted Server native extensions use the host Core root during HTTP-driven tools and disposal 505ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui.test.ts (4 tests) 11ms
+stdout | packages/server/src/api/websocket.test.ts > rejects retired HTTP and WebSocket chat without dispatch, retaining authentication and Origin checks
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/websocket.test.ts (1 test) 113ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-public.test.ts (1 test) 749ms
+   ✓ exports optional RPC UI declarations through the genuine emitted Core entry 748ms
+ ✓ packages/server/src/api/session-pagination.test.ts (3 tests) 4ms
+ ✓ packages/server/src/api/sse-channel.test.ts (2 tests) 8ms
+ ✓ packages/server/src/api/docx-preview.test.ts (12 tests) 19ms
+ ✓ packages/server/src/api/workspace-file-manager.test.ts (3 tests) 5ms
+ ✓ packages/server/src/api/workspace-routes-linked-disabled.test.ts (1 test) 30ms
+ ✓ packages/server/src/api/session-copy-request.test.ts (5 tests) 2ms
+ ✓ packages/cli/src/cli/summary-transcript-process.test.ts (22 tests) 16444ms
+   ✓ core-branch/private preserves useful summary context, not reasoning/replay/private data 313ms
+   ✓ core-branch/ordinary preserves useful summary context, not reasoning/replay/private data 340ms
+   ✓ sdk-auto/private preserves useful summary context, not reasoning/replay/private data 445ms
+   ✓ sdk-auto/ordinary preserves useful summary context, not reasoning/replay/private data 497ms
+   ✓ print-auto/private preserves useful summary context, not reasoning/replay/private data 747ms
+   ✓ print-auto/ordinary preserves useful summary context, not reasoning/replay/private data 803ms
+   ✓ json-auto/private preserves useful summary context, not reasoning/replay/private data 748ms
+   ✓ json-auto/ordinary preserves useful summary context, not reasoning/replay/private data 746ms
+   ✓ rpc-manual/private preserves useful summary context, not reasoning/replay/private data 630ms
+   ✓ rpc-manual/ordinary preserves useful summary context, not reasoning/replay/private data 668ms
+   ✓ rpc-auto/private preserves useful summary context, not reasoning/replay/private data 693ms
+   ✓ rpc-auto/ordinary preserves useful summary context, not reasoning/replay/private data 711ms
+   ✓ rpc-branch/private preserves useful summary context, not reasoning/replay/private data 588ms
+   ✓ rpc-branch/ordinary preserves useful summary context, not reasoning/replay/private data 602ms
+   ✓ regular/private preserves useful summary context, not reasoning/replay/private data 725ms
+   ✓ regular/ordinary preserves useful summary context, not reasoning/replay/private data 704ms
+   ✓ fullscreen/private preserves useful summary context, not reasoning/replay/private data 1954ms
+   ✓ fullscreen/ordinary preserves useful summary context, not reasoning/replay/private data 2077ms
+   ✓ server-agent/private preserves useful summary context, not reasoning/replay/private data 548ms
+   ✓ server-agent/ordinary preserves useful summary context, not reasoning/replay/private data 585ms
+   ✓ server-auto/private preserves useful summary context, not reasoning/replay/private data 665ms
+   ✓ server-auto/ordinary preserves useful summary context, not reasoning/replay/private data 654ms
+ ✓ packages/server/src/api/session-provider-redaction-process.test.ts (2 tests) 831ms
+   ✓ emitted public Server preserves provider metadata at the cold credential boundary 403ms
+   ✓ emitted public Server preserves provider metadata at the boundary credential boundary 427ms
+ ✓ packages/cli/src/cli/rpc-input-process.test.ts (2 tests) 831ms
+   ✓ emitted CLI RPC input contract (2)
+     ✓ boundary preserves framing, privacy and admitted-write cleanup 413ms
+     ✓ held-overflow preserves framing, privacy and admitted-write cleanup 417ms
+ ✓ packages/server/src/api/workspace-default-process.test.ts (1 test) 478ms
+   ✓ public emitted Core and Server recover an unavailable default without selecting a workspace or loading its extensions 477ms
+
+ Test Files  104 passed (104)
+      Tests  760 passed (760)
+   Start at  14:12:33
+   Duration  269.19s (tests 88%, import 11%, transform 1%)

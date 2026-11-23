@@ -1,0 +1,92 @@
+[LOCKFILE] Synchronisation de package-lock.json...
+rm -rf .lockfile-output
+docker build -f .docker/Dockerfile.lockfile \
+	--target export \
+	--output type=local,dest=.lockfile-output \
+	.
+#1 [internal] load build definition from Dockerfile.lockfile
+#1 sha256:07485cb7730d2ab2b4b4da5baeb125feda5068a69870673c29d965bc57484099
+#1 transferring dockerfile: 600B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:26-bookworm-slim
+#2 sha256:a061323f35f2d0fc275510aae458a278599392c59b89fbd1a2ea39d31f27ce44
+#2 DONE 0.7s
+
+#3 [internal] load .dockerignore
+#3 sha256:95e29dd8c49eaf20040ef6259170ae1d14a8d6ad2f71a5cee3ea6d4ca40f109b
+#3 transferring context: 1.27kB done
+#3 DONE 0.0s
+
+#14 [generator 1/9] FROM docker.io/library/node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1
+#14 sha256:84e9b3cef48d66eacf7fd9b69c89592f328147a7ca8f66372918ba8d5b9c134a
+#14 resolve docker.io/library/node:26-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 0.0s done
+#14 DONE 0.0s
+
+#13 [generator 2/9] RUN npm install --global npm@12.1.0
+#13 sha256:eb9ac540e535201aaa98c377628ba1ff84b18b6579b5463d7fd456c54e655638
+#13 CACHED
+
+#12 [generator 3/9] WORKDIR /app
+#12 sha256:8535a4f386a75abaf7342d443baf8c6a8fd4749792c28f2c967506369f2d3425
+#12 CACHED
+
+#11 [internal] load build context
+#11 sha256:2ad78a1b8040103c78d49ba6d97af704a23660d6e373c6e684715b4cd2082989
+#11 transferring context: 442B 0.0s done
+#11 DONE 0.1s
+
+#10 [generator 4/9] COPY package.json package-lock.json .npmrc ./
+#10 sha256:d7b931150345d32404b4c5f640d0017d3927ecb97a126ead933360d32aacd1b7
+#10 DONE 0.0s
+
+#9 [generator 5/9] COPY packages/core/package.json packages/core/
+#9 sha256:e76701d0fd29b0e41f3e8b1456d27bc161c4f8dddad27cb5dbfdb35bc12f608a
+#9 DONE 0.0s
+
+#8 [generator 6/9] COPY packages/cli/package.json packages/cli/
+#8 sha256:1bd81381939e8c62a3a36847933cbebb6f53db6e2a2668856747db825a5c584a
+#8 DONE 0.0s
+
+#7 [generator 7/9] COPY packages/web/package.json packages/web/
+#7 sha256:cecc15c739c147c1dbe73f6fc2858fe840fb2074f2e011648efbe6effaa1d380
+#7 DONE 0.0s
+
+#6 [generator 8/9] COPY packages/server/package.json packages/server/
+#6 sha256:239b771c172d3e880dab3f9841a38031b30dc5e280471f0b2981e9bdc0134169
+#6 DONE 0.0s
+
+#5 [generator 9/9] RUN npm install --package-lock-only --ignore-scripts
+#5 sha256:ffc904e245664d725add05c23ca413e7f842b50df267e5fe4bd28d4892dca5f0
+#5 22.44
+#5 22.44 up to date, audited 542 packages in 22s
+#5 22.44
+#5 22.44 223 packages are looking for funding
+#5 22.44   run `npm fund` for details
+#5 22.54
+#5 22.54 23 vulnerabilities (4 low, 11 moderate, 5 high, 3 critical)
+#5 22.54
+#5 22.54 To address issues that do not require attention, run:
+#5 22.54   npm audit fix
+#5 22.54
+#5 22.54 To address all issues (including breaking changes), run:
+#5 22.54   npm audit fix --force
+#5 22.54
+#5 22.54 Run `npm audit` for details.
+#5 22.55 npm notice
+#5 22.55 npm notice New minor version of npm available! 12.1.0 -> 12.2.2
+#5 22.55 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+#5 22.55 npm notice To update run: npm install -g npm@12.2.2
+#5 22.55 npm notice
+#5 DONE 22.6s
+
+#4 [export 1/1] COPY --from=generator /app/package-lock.json /package-lock.json
+#4 sha256:cfbe05f62a7c6fad464c284582bf60a23e182d1a187ab0d9e860b27fa637f8b3
+#4 DONE 0.0s
+
+#15 exporting to client directory
+#15 sha256:670d864810499bd9376c1b95bf289c31a07832b1727c0ff6f78d89657439ff35
+#15 copying files 316.80kB done
+#15 DONE 0.0s
+mv .lockfile-output/package-lock.json package-lock.json
+rm -rf .lockfile-output

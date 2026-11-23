@@ -1,0 +1,110 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/rpc-controller.test.ts (36 tests) 1319ms
+ ✓ packages/cli/src/rpc/session-compaction-lifecycle.test.ts (79 tests) 48819ms
+   ✓ RPC summary retry admission (memory) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2018ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2006ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2018ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2007ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2018ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2019ms
+   ✓ RPC summary retry admission (native) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2129ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2094ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2120ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2121ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2115ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2120ms
+   ✓ RPC summary retry admission (structural) (7)
+     ✓ revalidates cancel-start without changing retry defaults or exposing withdrawn results 2129ms
+     ✓ revalidates provider-immediate without changing retry defaults or exposing withdrawn results 2099ms
+     ✓ revalidates provider-microtask without changing retry defaults or exposing withdrawn results 2116ms
+     ✓ revalidates retry-finished without changing retry defaults or exposing withdrawn results 2143ms
+     ✓ revalidates shadowed-signal without changing retry defaults or exposing withdrawn results 2122ms
+     ✓ revalidates success without changing retry defaults or exposing withdrawn results 2155ms
+   ✓ RPC summary listener lifetime (memory) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2005ms
+   ✓ RPC summary listener lifetime (native) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2154ms
+   ✓ RPC summary listener lifetime (structural) (1)
+     ✓ captures one cancellation subscription before callbacks and removes it after an otherwise normal retry 2132ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-state.test.ts (19 tests) 25ms
+ ✓ packages/cli/src/rpc/context-settings-reload.test.ts (12 tests) 24ms
+ ✓ packages/cli/src/rpc/session-branch-lifecycle.test.ts (18 tests) 39ms
+ ✓ packages/cli/src/rpc/session-clone-position.test.ts (12 tests) 339ms
+ ✓ packages/cli/src/rpc/session-summary-hooks.test.ts (16 tests) 710ms
+ ❯ packages/cli/src/rpc/session-branch-ui.test.ts (7 tests | 7 failed) 35029ms
+   × keeps or retires branch-created RPC UI only according to fork publication (veto=true) 5014ms
+   × keeps or retires branch-created RPC UI only according to fork publication (veto=false) 5002ms
+   × keeps or retires branch-created RPC UI only according to clone publication (veto=true) 5003ms
+   × keeps or retires branch-created RPC UI only according to clone publication (veto=false) 5002ms
+   × retires summary-created RPC UI only on navigation publication (publish) 5003ms
+   × retires summary-created RPC UI only on navigation publication (cancel) 5002ms
+   × retires summary-created RPC UI only on navigation publication (stale) 5002ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-process.test.ts (1 test) 403ms
+   ✓ exposes replay, presentation, updates, abort, and EOF through the emitted RPC executable 402ms
+ ✓ packages/cli/src/rpc/compaction-context-boundary.test.ts (5 tests) 120ms
+ ✓ packages/cli/src/rpc/session-navigation.test.ts (11 tests) 131ms
+ ✓ packages/cli/src/rpc/session-statistics.test.ts (8 tests) 202ms
+ ✓ packages/cli/src/rpc/run-lifetime.test.ts (13 tests) 217ms
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 150ms
+ ✓ packages/cli/src/rpc/context-settings-lifecycle.test.ts (3 tests) 18ms
+ ✓ packages/cli/src/rpc/rpc-input.test.ts (10 tests) 500ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui.test.ts (4 tests) 11ms
+ ✓ packages/cli/src/rpc/rpc-extension-ui-public.test.ts (1 test) 789ms
+   ✓ exports optional RPC UI declarations through the genuine emitted Core entry 788ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > keeps or retires branch-created RPC UI only according to fork publication (veto=true)
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > keeps or retires branch-created RPC UI only according to fork publication (veto=false)
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > keeps or retires branch-created RPC UI only according to clone publication (veto=true)
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > keeps or retires branch-created RPC UI only according to clone publication (veto=false)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ vi.waitFor.timeout packages/cli/src/rpc/session-branch-ui.test.ts:33:109
+     31|     const command = async (type: string, id: string, fields: Record<st…
+     32|       input.write(JSON.stringify({ type, id, ...fields }) + '\n');
+     33|       await vi.waitFor(() => expect(records.some(record => record.type…
+       |                                                                                                             ^
+     34|       return records.find(record => record.type === 'response' && reco…
+     35|     };
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > retires summary-created RPC UI only on navigation publication (publish)
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > retires summary-created RPC UI only on navigation publication (cancel)
+ FAIL  packages/cli/src/rpc/session-branch-ui.test.ts > retires summary-created RPC UI only on navigation publication (stale)
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ vi.waitFor.timeout packages/cli/src/rpc/session-branch-ui.test.ts:78:107
+     76|   const command = async (type: string, id: string, fields: Record<stri…
+     77|     input.write(JSON.stringify({ type, id, ...fields }) + '\n');
+     78|     await vi.waitFor(() => expect(records.some(record => record.type =…
+       |                                                                                                           ^
+     79|     return records.find(record => record.type === 'response' && record…
+     80|   };
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+
+ Test Files  1 failed | 17 passed (18)
+      Tests  7 failed | 255 passed (262)
+   Start at  12:07:38
+   Duration  95.77s (tests 94%, import 5%, transform 2%)

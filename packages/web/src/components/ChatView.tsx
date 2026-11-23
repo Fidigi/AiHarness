@@ -1,18 +1,37 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
-import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, ExtensionInteractionSnapshot, Message, ModelCatalog, ProviderType, Session, TokenUsage } from '@ai-harness/core';
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
+import type { CSSProperties, FormEvent, KeyboardEvent, ReactNode } from 'react';
+import { parseShellCommandInput } from '@ai-harness/core/shell-input';
+import type { AgentEvent, AgentRunSnapshot, EffectiveConfiguration, Message, ModelCatalog, ProviderType, Session } from '@ai-harness/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AgentCapabilities, CommandSnapshot, ExtensionWidget, PaletteItem, SessionInfo } from '../services/api';
 import type { DraftAttachment, StoredSession } from '../store/session-store';
+import { restoreWhileOwned } from './scroll-restoration';
+import { unseenMessagesAfter } from './history-reading';
+import type { CapturedSelection } from './SelectionActions';
+import { replyMessages } from './reply-messages';
 import type { TranslationFunction } from '../i18n/types';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
-import { useSessionStore } from '../store/session-store';
+import { registerFeatureLocaleMessages } from '../i18n/registry';
+import { canSyncCanonicalSession, captureCanonicalRunGuard, captureInteractionReplyGuard, interactionReplyComparison, getSessionRecord, getRunAuthority, getStoredRun, useSessionStore, type RunRequestGuard } from '../store/session-store';
 import { usePreferences } from '../store/preferences';
 import MarkdownContent from './MarkdownContent';
-import { SubagentPanel } from './SubagentPanel';
+import { applyCodemodeProgress, codemodeDetails } from './codemode-state';
+import { applyToolProgress } from './tool-progress-state';
+import ToolProgressBoundary from './ToolProgressBoundary';
+import ProcessBlock from './ProcessBlockBoundary';
+import AnsiOutput from './AnsiOutput';
+import { Icon } from './Icon';
+import { processTurns, type ProcessTurn } from './process-turns';
+import { composerKeySubmits } from './composer-submit';
+import { clipboardTextToMarkdown } from './markdown-paste';
+import { getMarkdownListContinuation } from './markdown-list-continuation';
+import { InteractionPresentationLedger } from '../services/interaction-presentation';
+import { InteractionViewLifetime, interactionEpochKey, interactionViewKey as queueInteractionViewKey } from '../services/interaction-scope';
 import { publishNotice, type NoticeLevel } from '../services/notices';
-import { useFocusTrap } from '../hooks/useFocusTrap';
+import ExtensionInteractionBoundary from './ExtensionInteractionBoundary';
+import { mobileKeyboardViewKey, useMobileKeyboard } from '../hooks/useMobileKeyboard';
 import {
   cancelCommand,
   clearAgentQueue,
@@ -33,8 +52,13 @@ import {
   getSessionTree,
   reloadAgentResources,
   respondToExtensionInteraction,
+  orderedExtensionRequests,
+  reconcileInteractionSnapshot,
+  extensionInteractionChanges,
+  isFreshInteractionSnapshot,
   runExtensionCommand,
   searchFiles,
+  saveNewSessionDefault,
   startAgentRun,
   startCommand,
   stopAgentRun,
@@ -43,9 +67,28 @@ import {
   updateSession,
 } from '../services/api';
 
+// Presentation-only copy uses the accepted synchronous bounded fill-only registry.
+registerFeatureLocaleMessages({
+  en: { 'chat.extensionInteraction.waiting': '{count} waiting' },
+  fr: { 'chat.extensionInteraction.waiting': '{count} en attente' },
+});
+
 interface ChatViewProps {
   onStreamingUpdate?: (content: string) => void;
+  terminalControl?: ReactNode;
 }
+
+function SubagentUnavailable() {
+  const { t } = useI18n();
+  return <span role="alert">{t('subagents.statusUnavailable')}</span>;
+}
+const SubagentPanel = lazy(() => import('./SubagentPanel').then(module => ({ default: module.SubagentPanel }))
+  .catch(() => ({ default: SubagentUnavailable })));
+const CacheNotices = lazy(() => import('./CacheNotices'));
+const MessageUsage = lazy(() => import('./CacheNotices').then(module => ({ default: module.MessageUsage })));
+const CodemodeCard = lazy(() => import('./CodemodeCard').then(module => ({ default: module.CodemodeCard })));
+const SelectionActions = lazy(() => import('./SelectionActions').catch(() => ({ default: () => null })));
+const WrittenFiles = lazy(() => import('./ProcessBlock').then(module => ({ default: module.FilesWritten })).catch(() => ({ default: () => null })));
 
 type QueueMode = 'steer' | 'follow-up';
 const EMPTY_ATTACHMENTS: DraftAttachment[] = [];
@@ -83,7 +126,7 @@ function readSessionScroll(cwd: string, sessionId: string): SessionScrollPositio
   try {
     const parsed = JSON.parse(sessionStorage.getItem(scrollStorageKey(cwd)) ?? '{}') as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    return normalizeSessionScroll((parsed as Record<string, unknown>)[sessionId]);
+    return normalizeSessionScroll(getSessionRecord(parsed as Record<string, unknown>, sessionId));
   } catch {
     return undefined;
   }
@@ -127,6 +170,11 @@ function isActivePhase(phase?: string): boolean {
   return Boolean(phase && !['completed', 'failed', 'stopped'].includes(phase));
 }
 
+function displayToolName(name: string): string {
+  const match = /^mcp__([^_]+(?:_[^_]+)*)__([^_]+(?:_[^_]+)*?)(?:__[a-f0-9]{10})?$/u.exec(name);
+  return match ? `MCP ${match[1]} / ${match[2]}` : name;
+}
+
 interface FileSuggestion {
   path: string;
   isDirectory: boolean;
@@ -153,34 +201,6 @@ function rankFileSuggestions(items: FileSuggestion[], query: string): FileSugges
     .map(entry => entry.item);
 }
 
-function clipboardHtmlToMarkdown(html: string): string {
-  const document = new DOMParser().parseFromString(html, 'text/html');
-  const convert = (node: Node): string => {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
-    if (!(node instanceof HTMLElement)) return '';
-    if (['script', 'style', 'template', 'iframe', 'object'].includes(node.tagName.toLowerCase())) return '';
-    const content = [...node.childNodes].map(convert).join('');
-    switch (node.tagName.toLowerCase()) {
-      case 'h1': case 'h2': case 'h3': case 'h4': case 'h5': case 'h6':
-        return `${'#'.repeat(Number(node.tagName.slice(1)))} ${content.trim()}\n\n`;
-      case 'strong': case 'b': return `**${content}**`;
-      case 'em': case 'i': return `*${content}*`;
-      case 'code': return node.parentElement?.tagName.toLowerCase() === 'pre' ? content : `\`${content}\``;
-      case 'pre': return `\n\`\`\`\n${content.replace(/\n+$/, '')}\n\`\`\`\n\n`;
-      case 'a': {
-        const href = node.getAttribute('href') ?? '';
-        return /^(?:https?:|file:)/i.test(href) ? `[${content}](${href})` : content;
-      }
-      case 'li': return `- ${content.trim()}\n`;
-      case 'blockquote': return `${content.trim().split('\n').map(line => `> ${line}`).join('\n')}\n\n`;
-      case 'br': return '\n';
-      case 'p': case 'div': return `${content.trim()}\n\n`;
-      default: return content;
-    }
-  };
-  return [...document.body.childNodes].map(convert).join('').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 function locationMessageId(hash: string): string | undefined {
   if (!hash.startsWith('#') || hash.length < 2) return undefined;
   try { return decodeURIComponent(hash.slice(1)); } catch { return undefined; }
@@ -197,19 +217,34 @@ function historyGapMessageIds(session: StoredSession | undefined): Set<string> {
   return gaps;
 }
 
-function ChatView({ onStreamingUpdate }: ChatViewProps) {
+function ChatView({ onStreamingUpdate, terminalControl }: ChatViewProps) {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const sessions = useSessionStore(state => state.sessions);
   const currentSession = sessions.find(session => session.id === id);
+  const lastMessageId = currentSession?.messages.at(-1)?.id;
   const workspace = useSessionStore(state => state.workspace);
-  const activeProviderType = useSessionStore(state => state.providers.active);
+  const mobileKeyboard = useMobileKeyboard(mobileKeyboardViewKey(workspace?.id, workspace?.cwd, id, location.key));
+  const selectedProviderType = useSessionStore(state => state.providers.active);
+  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
+  const configurationKey = `${workspace?.id ?? ''}:${currentSession?.id ?? ''}`;
+  const [configurationReadyFor, setConfigurationReadyFor] = useState<string>();
+  // A routed assistant records the logical selection separately from physical billing.
+  // Restore that saved selection, rather than the global provider's startup fallback.
+  const savedVirtualSelection = [...currentSession?.messages ?? []].reverse()
+    .find(message => message.role === 'assistant' && !message.metadata?.outputError)?.metadata?.selection as { provider?: unknown; id?: unknown } | undefined;
+  const savedVirtualProvider = typeof savedVirtualSelection?.provider === 'string'
+    && savedVirtualSelection.id === (currentSession?.model ?? effectiveConfiguration?.values.model)
+    ? savedVirtualSelection.provider as ProviderType : undefined;
+  const activeProviderType = (effectiveConfiguration?.provenance.provider?.scope === 'environment'
+    ? effectiveConfiguration.values.provider
+    : currentSession?.draft ? effectiveConfiguration?.values.provider : savedVirtualProvider) as ProviderType | undefined ?? selectedProviderType;
   const providerConfig = useSessionStore(state => state.providers.available[activeProviderType]);
   const modelCatalog = useSessionStore(state => state.providers.catalog);
-  const currentRun = useSessionStore(state => id ? state.runs[id] : undefined);
-  const input = useSessionStore(state => id ? state.drafts[id] ?? '' : '');
-  const attachments = useSessionStore(state => id ? state.attachments[id] ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
+  const currentRun = useSessionStore(state => id ? getStoredRun(state.runs, id) : undefined);
+  const input = useSessionStore(state => id ? getSessionRecord(state.drafts, id) ?? '' : '');
+  const attachments = useSessionStore(state => id ? getSessionRecord(state.attachments, id) ?? EMPTY_ATTACHMENTS : EMPTY_ATTACHMENTS);
   const setDraft = useSessionStore(state => state.setDraft);
   const createLocalSession = useSessionStore(state => state.createSession);
   const addAttachments = useSessionStore(state => state.addAttachments);
@@ -224,13 +259,22 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const upsertAssistantMessage = useSessionStore(state => state.upsertAssistantMessage);
   const updateSessionSettings = useSessionStore(state => state.updateSessionSettings);
   const renameLocalSession = useSessionStore(state => state.renameSession);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [preferences] = usePreferences();
   const [starting, setStarting] = useState(false);
+  const [stagedEdit, setStagedEdit] = useState<{ sessionId: string; messageId: string; previousDraft: string }>();
+  useEffect(() => { setStagedEdit(undefined); }, [id, workspace?.cwd]);
   const [queueMode, setQueueMode] = useState<QueueMode>('steer');
   const setNotice = (message?: string, level: NoticeLevel = 'error', options: { id?: string; progress?: number; timeoutMs?: number } = {}) => {
     if (message) publishNotice(message, { level, ...options });
   };
+  // Failure can settle before SSE attaches (or be restored by readiness/GET).
+  // Publish from admitted state as well as the live frame, using one stable ID.
+  useEffect(() => {
+    if (currentRun?.phase === 'failed') publishNotice(currentRun.error || t('chat.unexpectedError'), {
+      level: 'error', id: `run-error:${currentRun.sessionId}:${currentRun.id}`,
+    });
+  }, [currentRun?.id, currentRun?.sessionId, currentRun?.phase, currentRun?.error, t]);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [branchesOpen, setBranchesOpen] = useState(false);
@@ -240,6 +284,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [commandRun, setCommandRun] = useState<CommandSnapshot>();
   const [palette, setPalette] = useState<PaletteItem[]>([]);
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<string>();
+  useEffect(() => { setDismissedSuggestions(undefined); }, [input, currentSession?.id]);
   const [fileIndex, setFileIndex] = useState<{ items: FileSuggestion[]; truncated: boolean }>({ items: [], truncated: false });
   const [remoteFileSuggestions, setRemoteFileSuggestions] = useState<FileSuggestion[]>([]);
   const [nearBottom, setNearBottom] = useState(true);
@@ -249,18 +295,129 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const [capabilitiesOpen, setCapabilitiesOpen] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [automaticCompacting, setAutomaticCompacting] = useState(false);
-  const [effectiveConfiguration, setEffectiveConfiguration] = useState<EffectiveConfiguration>();
-  const [selection, setSelection] = useState<{ text: string; x: number; y: number }>();
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [defaultWarning, setDefaultWarning] = useState(false);
+  const [selection, setSelection] = useState<CapturedSelection>();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const [sessionUnavailable, setSessionUnavailable] = useState<string>();
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [connectionEpoch, reconnect] = useState(0);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const interactionLifetime = useRef(new InteractionViewLifetime());
+  const interactionView = interactionLifetime.current.enter(queueInteractionViewKey(workspace?.id, workspace?.cwd, id, location.key,
+    { pathname: location.pathname, search: location.search, hash: location.hash }));
+  const interactionMount = useRef<symbol | undefined>(Symbol('interaction owner'));
+  useLayoutEffect(() => {
+    const mount = interactionMount.current ?? Symbol('mounted interaction owner');
+    interactionMount.current = mount;
+    return () => { if (interactionMount.current === mount) interactionMount.current = undefined; };
+  }, []);
+  const interactionEpoch = interactionEpochKey(interactionView, currentRun?.id);
+  const forkAdmission = useRef<{ token: string; sessionId: string; workspaceId: string; cwd: string; pathname: string; search: string; originView: string; view?: string; retired?: boolean } | undefined>(undefined);
+  const pendingFork = forkAdmission.current;
+  if (pendingFork && pendingFork.view && pendingFork.view !== interactionView) pendingFork.retired = true;
+  if (pendingFork && !pendingFork.retired && !pendingFork.view && (location.state as { interactionFork?: string } | null)?.interactionFork === pendingFork.token
+    && workspace?.id === pendingFork.workspaceId && workspace.cwd === pendingFork.cwd && id === pendingFork.sessionId
+    && location.pathname === pendingFork.pathname && location.search === pendingFork.search && location.hash === '') pendingFork.view = interactionView;
+  else if (pendingFork && !pendingFork.view && pendingFork.originView !== interactionView) pendingFork.retired = true;
+  useLayoutEffect(() => {
+    if (!pendingFork || pendingFork.retired || pendingFork.view !== interactionView) setStarting(false);
+  }, [interactionView]);
+  const interactionScopeRef = useRef({ workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id });
+  interactionScopeRef.current = { workspaceId: workspace?.id, cwd: workspace?.cwd, sessionId: id, runId: currentRun?.id };
+  const interactionAddressRef = useRef(interactionView);
+  interactionAddressRef.current = interactionView;
+  const interactionEpochRef = useRef(interactionEpoch);
+  interactionEpochRef.current = interactionEpoch;
+  const interactionWatermark = useRef({ view: interactionView, sequence: 0 });
+  if (interactionWatermark.current.view !== interactionView) interactionWatermark.current = { view: interactionView, sequence: 0 };
+  const interactionLedger = useRef(new InteractionPresentationLedger());
+  const ledgerFor = (runId: string) => interactionLedger.current.forRun(runId);
+  // Observe the accepted store, not just Chat's own GET/SSE path. App polling can
+  // commit an empty baseline and then a new head before Chat's next resync.
+  useLayoutEffect(() => {
+    if (!id) return;
+    interactionLedger.current.clear();
+    const observe = () => {
+      const state = useSessionStore.getState();
+      const run = getStoredRun(state.runs, id);
+      if (!run || run.sessionId !== id || (workspace && run.cwd !== workspace.cwd)) return;
+      interactionLedger.current.observe(run);
+    };
+    observe();
+    return useSessionStore.subscribe(observe);
+  }, [interactionView]);
+  const acceptInteractionSnapshot = (snapshot: { sessionId: string; lastSequence: number; run?: AgentRunSnapshot }, captured?: RunRequestGuard): boolean => {
+    if (!interactionMount.current || !id || interactionWatermark.current.view !== interactionView || snapshot.sessionId !== id
+      || (snapshot.run && workspace && snapshot.run.cwd !== workspace.cwd)) return false;
+    const current = useSessionStore.getState();
+    const live = getStoredRun(current.runs, id);
+    const authority = getRunAuthority(current.runAuthorities, id);
+    if (authority?.deleted || !isFreshInteractionSnapshot(snapshot, interactionReplyComparison(current, id, captured),
+      Math.max(interactionWatermark.current.sequence, authority?.sequence ?? 0))) return false;
+    const ledger = snapshot.run ? ledgerFor(snapshot.run.id) : undefined;
+    // The store also owns retired IDs, deletion tombstones and workspace epochs.
+    // Do not consume a watermark (or close a ledger) when it rejects this run.
+    const admitted = setRun(id, reconcileInteractionSnapshot(snapshot.run, ledger?.closed), {
+      ...(captured ?? { epoch: current.runEpoch, authority, activeSessionId: current.activeSessionId }),
+      ...(snapshot.run ? { snapshotSequence: snapshot.lastSequence } : { absenceSequence: snapshot.lastSequence }),
+    });
+    if (!admitted) return false;
+    interactionWatermark.current.sequence = snapshot.lastSequence;
+    if (live && live.id !== snapshot.run?.id) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+    if (ledger) {
+      const requests = orderedExtensionRequests(snapshot.run);
+      for (const request of requests) {
+        // The first accepted projection is restoration, not live attention.
+        // Later new IDs in this observed run can first appear via polling/resync.
+        if (!ledger.restored && !ledger.known.has(request.id)) ledger.sounded.add(request.id);
+        ledger.known.add(request.id);
+      }
+      ledger.restored = true;
+      if (live?.id === snapshot.run?.id) for (const request of orderedExtensionRequests(live)) {
+        if (!requests.some(entry => entry.id === request.id)) ledger.closed.add(request.id);
+      }
+    }
+    return true;
+  };
+  const interactions = currentRun && currentRun.sessionId === id && (!workspace || currentRun.cwd === workspace.cwd)
+    ? orderedExtensionRequests(currentRun).filter(request => !ledgerFor(currentRun.id).closed.has(request.id)) : [];
+  const displayedInteraction = interactions[0];
+  useEffect(() => {
+    if (!displayedInteraction || !currentRun) return;
+    const ledger = ledgerFor(currentRun.id);
+    // App may render a poll before Chat classifies it; do not consume unknown attention.
+    if (!ledger.known.has(displayedInteraction.id) || ledger.sounded.has(displayedInteraction.id)) return;
+    ledger.sounded.add(displayedInteraction.id);
+    if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
+    if (preferences.notifications && preferences.notificationEvents.attention
+      && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: displayedInteraction.message, tag: `agent:${id}:attention` });
+    }
+  }, [interactionEpoch, displayedInteraction, preferences.sound, preferences.soundEvents.attention,
+    preferences.soundVolume, preferences.notifications, preferences.notificationEvents.attention, currentSession?.title, id]);
+  useEffect(() => {
+    interactionEpochRef.current = interactionEpoch;
+    return () => { interactionEpochRef.current = ''; };
+  }, [interactionEpoch]);
+  const interactionViewKey = interactionEpoch;
+  const interactionViewRef = useRef(interactionViewKey);
+  interactionViewRef.current = interactionViewKey;
+  const interactionFocusKey = JSON.stringify([workspace?.id, workspace?.cwd, id, currentRun?.id,
+    displayedInteraction?.id, displayedInteraction?.kind]);
+  const interactionFocusAdmission = useRef({ view: interactionViewKey, request: interactionFocusKey, allowed: true });
+  if (interactionFocusAdmission.current.request !== interactionFocusKey) {
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: true };
+  } else if (interactionFocusAdmission.current.view !== interactionViewKey) {
+    // Re-presenting the same pending request in a replacement route is not new focus intent.
+    interactionFocusAdmission.current = { view: interactionViewKey, request: interactionFocusKey, allowed: false };
+  }
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const nearBottomRef = useRef(true);
   const previousMessageCount = useRef(0);
-  const readingBaselineCount = useRef(0);
+  const readingTail = useRef<string | undefined>(undefined);
   const pendingScrollAnchor = useRef<{
     messageId: string;
     offset: number;
@@ -279,6 +436,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   const settingMutationVersions = useRef(new Map<string, number>());
   const effectiveRefreshVersion = useRef(0);
   const composingRef = useRef(false);
+  const lastCompositionEndRef = useRef(-Infinity);
+  const scrollRestoration = useRef<(() => void) | undefined>(undefined);
   const streamContent = useRef(new Map<string, string>());
   const streamReasoning = useRef(new Map<string, string>());
   const mentionMatch = input.match(/(^|\s)@(?:"([^"]*)|([^\s"]*))$/);
@@ -297,8 +456,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   useEffect(() => {
     setSessionUnavailable(undefined);
-    if (id) setActiveSession(id);
-  }, [id, setActiveSession]);
+    if (currentSession) setActiveSession(currentSession.id);
+  }, [id, currentSession?.id, setActiveSession]);
 
   useEffect(() => {
     void getAgentPalette(workspace?.cwd, workspace?.id).then(result => {
@@ -321,6 +480,9 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => {
     let current = true;
     setAutomaticCompacting(false);
+    setEffectiveConfiguration(undefined);
+    setConfigurationReadyFor(undefined);
+    setDefaultWarning(false);
     if (!workspace?.id) {
       setEffectiveConfiguration(undefined);
       return () => { current = false; };
@@ -329,10 +491,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       workspace.id,
       currentSession?.draft ? undefined : currentSession?.id,
     ).then(result => {
-      if (current && result.success && result.data) setEffectiveConfiguration(result.data);
+      if (!current) return;
+      if (!result.success || !result.data) {
+        setNotice(result.error || t('settings.defaults.failed'));
+        return;
+      }
+      setEffectiveConfiguration(result.data);
+      setConfigurationReadyFor(configurationKey);
     });
     return () => { current = false; };
-  }, [currentSession?.draft, currentSession?.id, workspace?.id]);
+  }, [currentSession?.draft, currentSession?.id, workspace?.id, configurationKey]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -350,7 +518,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   useEffect(() => () => compactionController.current?.abort(), [currentSession?.id]);
 
   useEffect(() => {
-    if (!workspace?.trusted) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted)) {
       setFileIndex({ items: [], truncated: false });
       return;
     }
@@ -366,10 +534,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       });
     });
     return () => controller.abort();
-  }, [workspace?.cwd, workspace?.trusted]);
+  }, [workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useEffect(() => {
-    if (mentionQuery === undefined || !workspace?.trusted || !fileIndex.truncated || !mentionQuery) {
+    if (mentionQuery === undefined || !(workspace?.operationTrusted ?? workspace?.trusted) || !fileIndex.truncated || !mentionQuery) {
       setRemoteFileSuggestions([]);
       return;
     }
@@ -387,7 +555,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.trusted]);
+  }, [fileIndex.truncated, mentionQuery, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   useLayoutEffect(() => {
     const sessionId = currentSession?.id;
@@ -398,14 +566,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     pendingSessionScroll.current = saved;
     nearBottomRef.current = startsNearBottom;
     previousMessageCount.current = currentSession?.messages.length ?? 0;
-    readingBaselineCount.current = currentSession?.messages.length ?? 0;
-    pendingScrollAnchor.current = undefined;
+    readingTail.current = lastMessageId;
     requestedHistoryTarget.current = undefined;
     requestedScrollTarget.current = undefined;
-    lastScrolledTarget.current = undefined;
     setNearBottom(startsNearBottom);
     setUnseenMessages(0);
-    setLoadingHistory(false);
     setMinimapOpen(false);
     return () => {
       if (scrollSaveTimer.current !== undefined) {
@@ -418,6 +583,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       }
     };
   }, [currentSession?.id, workspace?.cwd]);
+
+  useLayoutEffect(() => {
+    pendingScrollAnchor.current = undefined;
+    lastScrolledTarget.current = undefined;
+    if (targetMessageId) pendingSessionScroll.current = undefined;
+    setLoadingHistory(false);
+    return () => scrollRestoration.current?.();
+  }, [interactionView]);
 
   useEffect(() => {
     const sessionId = currentSession?.id;
@@ -434,7 +607,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     return () => window.removeEventListener('pagehide', save);
   }, [currentSession?.id, workspace?.cwd]);
 
+  useEffect(() => {
+    const resume = () => reconnect(epoch => epoch + 1);
+    window.addEventListener('online', resume);
+    return () => window.removeEventListener('online', resume);
+  }, []);
+
   useLayoutEffect(() => {
+    let disposeRestoration: (() => void) | undefined;
     const count = currentSession?.messages.length ?? 0;
     const container = messagesContainerRef.current;
     const preserved = pendingScrollAnchor.current;
@@ -462,15 +642,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           const index = currentSession?.messages.findIndex(message => message.id === savedPosition.anchorId) ?? -1;
           if (index >= 0) messageVirtualizer.scrollToIndex(index, { align: 'start' });
         }
-        let attempts = 0;
-        const finishSavedRestoration = () => {
-          restoreSavedAnchor();
-          if (++attempts < 10) window.requestAnimationFrame(finishSavedRestoration);
-        };
-        window.requestAnimationFrame(finishSavedRestoration);
-        window.setTimeout(restoreSavedAnchor, 120);
-        window.setTimeout(restoreSavedAnchor, 300);
-        window.setTimeout(restoreSavedAnchor, 600);
+        disposeRestoration = restoreWhileOwned(container, restoreSavedAnchor);
       }
     } else if (savedPosition) {
       // Keep the position until cached or remote messages have been materialized.
@@ -484,35 +656,28 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         else container.scrollTop = targetScrollTop;
         return true;
       };
-      const finishRestoration = () => {
-        window.requestAnimationFrame(() => window.requestAnimationFrame(restoreAnchor));
-        window.setTimeout(restoreAnchor, 120);
-      };
       if (restoreAnchor()) {
         pendingScrollAnchor.current = undefined;
-        finishRestoration();
+        disposeRestoration = restoreWhileOwned(container, restoreAnchor);
       } else if (virtualized) {
         const index = currentSession?.messages.findIndex(message => message.id === preserved.messageId) ?? -1;
         if (index >= 0) messageVirtualizer.scrollToIndex(index, { align: 'start' });
         let attempts = 0;
-        const restoreMountedAnchor = () => {
+        disposeRestoration = restoreWhileOwned(container, () => {
           if (restoreAnchor()) {
             if (pendingScrollAnchor.current === preserved) pendingScrollAnchor.current = undefined;
-            finishRestoration();
-          } else if (++attempts < 5) window.requestAnimationFrame(restoreMountedAnchor);
-          else {
+          } else if (++attempts === 5) {
             container.scrollTop = preserved.scrollTop + Math.max(0, container.scrollHeight - preserved.scrollHeight);
             if (pendingScrollAnchor.current === preserved) pendingScrollAnchor.current = undefined;
           }
-        };
-        window.requestAnimationFrame(restoreMountedAnchor);
+        });
       } else {
         container.scrollTop = preserved.scrollTop + Math.max(0, container.scrollHeight - preserved.scrollHeight);
         pendingScrollAnchor.current = undefined;
       }
     } else if (preserved) {
       // Keep the anchor until the requested page actually changes the message window.
-    } else if (targetMessageId) {
+    } else if (container && targetMessageId) {
       const targetKey = `${currentSession?.id ?? ''}:${targetMessageId}`;
       const target = document.getElementById(targetMessageId);
       if (target && lastScrolledTarget.current !== targetKey) {
@@ -522,51 +687,58 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const index = currentSession?.messages.findIndex(message => message.id === targetMessageId) ?? -1;
         if (index >= 0) {
           messageVirtualizer.scrollToIndex(index, { align: 'center' });
-          window.requestAnimationFrame(() => {
+          scrollRestoration.current?.();
+          scrollRestoration.current = restoreWhileOwned(container, () => {
+            if (interactionAddressRef.current !== interactionView) return;
             document.getElementById(targetMessageId)?.scrollIntoView({ block: 'center' });
             lastScrolledTarget.current = targetKey;
           });
         }
-      } else if (!nearBottom) {
-        setUnseenMessages(Math.max(0, count - readingBaselineCount.current));
       }
     } else if (nearBottomRef.current && nearBottom) {
       container?.scrollTo({ top: container.scrollHeight, behavior: previousMessageCount.current ? 'smooth' : 'auto' });
-    } else if (!nearBottom) {
-      setUnseenMessages(Math.max(0, count - readingBaselineCount.current));
     }
+    // Reading evidence is independent of anchor/target restoration ownership.
+    if (!nearBottom) setUnseenMessages(unseenMessagesAfter(currentSession?.messages ?? [], readingTail.current));
     previousMessageCount.current = count;
-  }, [currentSession?.messages, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
+    // Layout/near-bottom rerenders do not retire this same-view settling lease.
+    // A new lease or the identity-scoped effect above does; newer offsets also do.
+    if (disposeRestoration) {
+      scrollRestoration.current?.();
+      scrollRestoration.current = disposeRestoration;
+    }
+  }, [currentSession?.messages, interactionView, messageVirtualizer, nearBottom, targetMessageId, targetMessageLoaded, virtualized]);
 
   useEffect(() => {
-    if (!id || id.startsWith('draft:') || !targetMessageId || targetMessageLoaded) return;
-    const requestKey = `${id}:${targetMessageId}`;
+    if (!id || id.startsWith('draft:') || !currentSession || !targetMessageId || targetMessageLoaded) return;
+    const requestKey = `${interactionView}:${targetMessageId}`;
     if (requestedHistoryTarget.current === requestKey) return;
     requestedHistoryTarget.current = requestKey;
     const controller = new AbortController();
     setLoadingHistory(true);
     void getSessionMessages(id, { around: targetMessageId, limit: 80, signal: controller.signal }).then(result => {
+      if (controller.signal.aborted || interactionAddressRef.current !== interactionView) return;
       if (result.success && result.data) mergeMessagePage(id, result.data);
-      else if (!controller.signal.aborted) {
+      else {
         requestedHistoryTarget.current = undefined;
         setNotice(result.error || t('chat.historyLoadFailed'));
       }
-      if (!controller.signal.aborted) setLoadingHistory(false);
+      setLoadingHistory(false);
     });
     return () => controller.abort();
-  }, [id, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
+  }, [currentSession?.id, id, interactionView, mergeMessagePage, t, targetMessageId, targetMessageLoaded]);
 
   useEffect(() => {
     const saved = pendingSessionScroll.current;
     const anchorId = saved?.anchorId;
     if (!id || id.startsWith('draft:') || !anchorId
       || currentSession?.messages.some(message => message.id === anchorId)) return;
-    const requestKey = `${id}:${anchorId}`;
+    const requestKey = `${interactionView}:${anchorId}`;
     if (requestedScrollTarget.current === requestKey) return;
     requestedScrollTarget.current = requestKey;
     const controller = new AbortController();
     void getSessionMessages(id, { around: anchorId, limit: 80, signal: controller.signal }).then(result => {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || interactionAddressRef.current !== interactionView) return;
       if (result.success && result.data) mergeMessagePage(id, result.data);
       else {
         pendingSessionScroll.current = { ...saved, anchorId: undefined, anchorOffset: undefined };
@@ -577,24 +749,98 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       controller.abort();
       if (requestedScrollTarget.current === requestKey) requestedScrollTarget.current = undefined;
     };
-  }, [currentSession?.messages, id, mergeMessagePage, t]);
+  }, [currentSession?.messages, id, interactionView, mergeMessagePage, t]);
 
   useEffect(() => {
-    if (!id || id.startsWith('draft:')) return;
+    // Do not start a disposable unknown-cwd stream before workspace bootstrap.
+    // Its first frames cannot belong to the later admitted workspace lifetime.
+    if (!workspace?.id || !workspace.cwd || !id || id.startsWith('draft:')) return;
     const controller = new AbortController();
-    let mounted = true;
-    let sequence = 0;
+    let sequence = 0, terminalSequence = 0;
+    const ownsView = () => !controller.signal.aborted && interactionAddressRef.current === interactionView;
+    const restorePartial = (run?: AgentRunSnapshot) => {
+      const partial = run?.partialMessage;
+      if (!partial) return;
+      streamContent.current.set(partial.id, partial.content);
+      streamReasoning.current.set(partial.id, partial.reasoning ?? '');
+      upsertAssistantMessage(id, partial.id, partial.content, partial.reasoning);
+    };
+    let frame = 0;
+    const showMessage = (messageId: string) => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        if (!ownsView() || !isActivePhase(getStoredRun(useSessionStore.getState().runs, id)?.phase)) return;
+        const content = streamContent.current.get(messageId) ?? '';
+        upsertAssistantMessage(id, messageId, content, streamReasoning.current.get(messageId));
+        onStreamingUpdate?.(content);
+      });
+    };
 
+    const syncCanonical = () => {
+      const guard = captureCanonicalRunGuard(useSessionStore.getState(), id);
+      void getAgentState(id).then(state => {
+        if (state.success && state.data && ownsView()) {
+          const accepted = acceptInteractionSnapshot(state.data, guard);
+          if (accepted) sequence = Math.max(sequence, state.data.lastSequence);
+          if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence)) {
+            syncSession(state.data.session);
+          }
+        }
+      });
+    };
     const applyEvent = async (event: AgentEvent): Promise<void> => {
-      sequence = Math.max(sequence, event.sequence);
-      if (!mounted) return;
+      const state = useSessionStore.getState();
+      const run = getStoredRun(state.runs, id);
+      const terminalEvent = ['run.completed', 'run.failed', 'run.stopped'].includes(event.type);
+      const terminalCompletion = terminalEvent && event.runId === run?.id && run?.phase === event.type.slice(4);
+      const watermark = Math.max(sequence, interactionWatermark.current.sequence, terminalCompletion ? 0 : run?.lastSequence ?? 0);
+      // Canonical discovery can acknowledge this version before its actual final
+      // frame arrives. Re-read once, without replaying phase/notification effects.
+      const lateTerminal = terminalCompletion && event.sequence <= watermark && event.sequence > terminalSequence;
+      if (!ownsView() || event.sessionId !== id
+        || !Number.isSafeInteger(event.sequence) || event.sequence < 0
+        || (event.sequence <= watermark && !lateTerminal)) return;
+      const authority = getRunAuthority(state.runAuthorities, id);
+      // Event correlation must be admitted before consuming sequence/presentation state.
+      // Discovery/connection.ready, not an arbitrary foreign event, admits a new run.
+      const sessionEvent = event.type === 'notice' || event.type.startsWith('compaction.') || event.type.startsWith('subagent.');
+      // Core publishes terminal run.phase before its corresponding settlement
+      // event. Admit that exact final event, not late tool/UI/notice callbacks.
+      if (authority?.deleted) return;
+      if (event.runId && run?.id !== event.runId) {
+        // A run started outside this browser can finish before the running-list
+        // poll ever sees it. Its lifecycle frame is only a discovery hint: do
+        // not consume its version or payload, and require fresh canonical state
+        // to independently name that exact run before admitting anything.
+        if (event.type === 'run.started' && !authority?.retired.includes(event.runId)) {
+          const discoveryGuard = captureCanonicalRunGuard(state, id);
+          const discovered = await getAgentState(id);
+          if (!ownsView()) return;
+          if (discovered.success && discovered.data?.run?.id === event.runId) {
+            const accepted = acceptInteractionSnapshot(discovered.data, discoveryGuard);
+            if (accepted) sequence = Math.max(sequence, discovered.data.lastSequence);
+            if (accepted || canSyncCanonicalSession(useSessionStore.getState(), id, discovered.data, discoveryGuard, interactionWatermark.current.sequence)) {
+              syncSession(discovered.data.session);
+            }
+          }
+        }
+        return;
+      }
+      if ((!event.runId && !sessionEvent) || (event.runId && ((authority?.terminal && !terminalCompletion)
+        || authority?.retired.includes(event.runId)))) return;
+      if (lateTerminal) { terminalSequence = event.sequence; syncCanonical(); return; }
+      sequence = event.sequence;
+      if (terminalEvent) terminalSequence = sequence;
+      interactionWatermark.current.sequence = sequence;
       const runId = event.runId;
       const patchRun = (changes: Partial<AgentRunSnapshot>): void => {
-        const existing = useSessionStore.getState().runs[id];
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
         if (!existing || (runId && existing.id !== runId)) return;
-        setRun(id, { ...existing, ...changes });
+        const before = useSessionStore.getState();
+        setRun(id, { ...existing, ...changes, lastSequence: sessionEvent ? existing.lastSequence : event.sequence },
+          { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, id), snapshotSequence: event.sequence });
       };
-      const eventData = event.data as { content?: unknown; messageId?: unknown };
+      const eventData = (event.data && typeof event.data === 'object' ? event.data : {}) as { content?: unknown; messageId?: unknown };
       const messageId = typeof eventData.messageId === 'string'
         ? eventData.messageId
         : runId ? `stream:${runId}` : undefined;
@@ -611,14 +857,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         const chunk = typeof eventData.content === 'string' ? eventData.content : '';
         const content = `${streamContent.current.get(messageId) ?? ''}${chunk}`;
         streamContent.current.set(messageId, content);
-        upsertAssistantMessage(id, messageId, content, streamReasoning.current.get(messageId));
-        onStreamingUpdate?.(content);
+        showMessage(messageId);
       }
       if (event.type === 'reasoning.delta' && messageId) {
         const chunk = typeof eventData.content === 'string' ? eventData.content : '';
         const reasoning = `${streamReasoning.current.get(messageId) ?? ''}${chunk}`;
         streamReasoning.current.set(messageId, reasoning);
-        upsertAssistantMessage(id, messageId, streamContent.current.get(messageId) ?? '', reasoning);
+        showMessage(messageId);
+      }
+      if (event.type === 'message.completed' && typeof eventData.messageId === 'string' && messageId && typeof eventData.content === 'string') {
+        const complete = event.data as { content: string; reasoning?: unknown };
+        const reasoning = typeof complete.reasoning === 'string' ? complete.reasoning : '';
+        streamContent.current.set(messageId, complete.content);
+        streamReasoning.current.set(messageId, reasoning);
+        showMessage(messageId);
       }
       if (event.type === 'retry.scheduled') {
         const retry = event.data as AgentRunSnapshot['retry'];
@@ -628,24 +880,33 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         }
       }
       if (event.type === 'tool.started') {
-        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown };
-        if (typeof tool.id === 'string' && typeof tool.name === 'string') patchRun({
-          phase: 'tool',
-          activeTool: { id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp },
-        });
+        const tool = event.data as { id?: unknown; name?: unknown; input?: unknown; parentId?: unknown };
+        if (tool.parentId === undefined && typeof tool.id === 'string' && typeof tool.name === 'string') {
+          const tools = [...runTools(getStoredRun(useSessionStore.getState().runs, id))];
+          if (!tools.some(item => item.id === tool.id) && tools.length < 4) tools.push({ id: tool.id, name: tool.name, input: tool.input, startedAt: event.timestamp });
+          patchRun({ phase: 'tool', ...toolPatch(tools) });
+        }
       }
-      if (event.type === 'tool.completed' || event.type === 'tool.failed') patchRun({ activeTool: undefined });
+      if (event.type === 'tool.progress') {
+        const tools = runTools(getStoredRun(useSessionStore.getState().runs, id));
+        const next = tools.map(tool => applyToolProgress(applyCodemodeProgress(tool, event.data), event.data)!);
+        if (next.some((tool, index) => tool !== tools[index])) patchRun(toolPatch(next));
+      }
+      if (event.type === 'tool.completed' || event.type === 'tool.failed') {
+        const data = event.data as { call?: { id?: unknown }; id?: unknown; parentId?: unknown };
+        if (data.parentId === undefined) patchRun(toolPatch(runTools(getStoredRun(useSessionStore.getState().runs, id))
+          .filter(tool => tool.id !== (data.call?.id ?? data.id))));
+      }
       if (event.type === 'extension.ui') {
-        const data = event.data as { action?: unknown; request?: unknown };
-        if (data.action === 'request' && data.request && typeof data.request === 'object') {
-          const request = data.request as ExtensionInteractionSnapshot;
-          patchRun({ extensionRequest: request });
-          if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
-          if (preferences.notifications && preferences.notificationEvents.attention
-            && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(currentSession?.title || 'AiHarness', { body: request.message, tag: `agent:${id}:attention` });
-          }
-        } else if (data.action === 'resolved') patchRun({ extensionRequest: undefined });
+        const existing = getStoredRun(useSessionStore.getState().runs, id);
+        if (existing && (!runId || existing.id === runId)) {
+          const ledger = ledgerFor(existing.id);
+          const data = eventData as { action?: unknown; requestId?: unknown };
+          if (data.action === 'resolved' && typeof data.requestId === 'string') ledger.closed.add(data.requestId);
+          const changes = extensionInteractionChanges(existing, event.data, ledger.closed);
+          for (const request of orderedExtensionRequests({ ...existing, ...changes })) ledger.known.add(request.id);
+          patchRun(changes);
+        }
       }
       if (event.type === 'notice') {
         const data = event.data as { message?: unknown; level?: unknown; progress?: unknown; id?: unknown };
@@ -691,7 +952,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         if (preferences.sound && preferences.soundEvents.completion) playCompletionSound(preferences.soundVolume);
         if (preferences.notifications && preferences.notificationEvents.completion
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          const notification = new Notification(currentSession?.title || 'AiHarness', {
+          const notification = new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', {
             body: t('chat.agentCompleted'),
             tag: `agent:${id}:${event.runId ?? ''}`,
           });
@@ -702,32 +963,40 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           };
         }
       }
+      if (['run.completed', 'run.failed', 'run.stopped'].includes(event.type)) {
+        const live = getStoredRun(useSessionStore.getState().runs, id);
+        if (live && (!runId || runId === live.id)) for (const request of orderedExtensionRequests(live)) ledgerFor(live.id).closed.add(request.id);
+      }
       if (event.type === 'run.failed') {
         const message = (event.data as { message?: unknown }).message;
         const detail = typeof message === 'string' ? message : t('chat.unexpectedError');
-        patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, activeTool: undefined });
-        setNotice(detail);
+        patchRun({ phase: 'failed', error: typeof message === 'string' ? message : undefined, retry: undefined, ...toolPatch([]) });
+        setNotice(detail, 'error', { id: `run-error:${id}:${event.runId}` });
         if (preferences.sound && preferences.soundEvents.attention) playCompletionSound(preferences.soundVolume, true);
         if (preferences.notifications && preferences.notificationEvents.attention
           && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification(currentSession?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
+          new Notification(useSessionStore.getState().sessions.find(session => session.id === id)?.title || 'AiHarness', { body: detail, tag: `agent:${id}:attention` });
         }
       }
-      if (event.type === 'run.completed') patchRun({ phase: 'completed', retry: undefined, activeTool: undefined });
-      if (event.type === 'run.stopped') patchRun({ phase: 'stopped', retry: undefined, activeTool: undefined });
+      if (event.type === 'run.completed' || event.type === 'run.stopped') patchRun({
+        phase: event.type === 'run.completed' ? 'completed' : 'stopped', retry: undefined, ...toolPatch([]),
+      });
+      // Stamp the event after its queue/phase projection, never before it.
+      // An eager version-only stamp would make this event's real membership
+      // change look like a same-version forged snapshot to the store.
+      patchRun({});
       if (['run.completed', 'run.failed', 'run.stopped', 'tool.completed', 'tool.failed', 'compaction.completed', 'compaction.failed'].includes(event.type)) {
-        const state = await getAgentState(id);
-        if (state.success && state.data && mounted) {
-          syncSession(state.data.session);
-          if (state.data.run) setRun(id, state.data.run);
-        }
+        syncCanonical();
       }
     };
 
     void (async () => {
-      while (mounted && !controller.signal.aborted) {
+      while (ownsView()) {
         try {
+          const before = useSessionStore.getState();
+          const guard = captureCanonicalRunGuard(before, id);
           const state = await getAgentState(id);
+          if (!ownsView()) break;
           if (!state.success || !state.data) {
             if (/\b404\b|not found|introuvable/i.test(state.error ?? '')) {
               removeSession(id);
@@ -737,33 +1006,43 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             throw new Error(state.error || t('chat.unexpectedError'));
           }
           setSessionUnavailable(undefined);
-          syncSession(state.data.session);
-          sequence = state.data.lastSequence;
-          if (state.data.run) {
-            setRun(id, state.data.run);
-            if (state.data.run.partialMessage) {
-              streamContent.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.content);
-              streamReasoning.current.set(state.data.run.partialMessage.id, state.data.run.partialMessage.reasoning ?? '');
-              upsertAssistantMessage(id, state.data.run.partialMessage.id, state.data.run.partialMessage.content, state.data.run.partialMessage.reasoning);
-            }
-          }
+          const accepted = acceptInteractionSnapshot(state.data, guard);
+          sequence = Math.max(sequence, interactionWatermark.current.sequence, getStoredRun(useSessionStore.getState().runs, id)?.lastSequence ?? 0);
+          const transcriptAccepted = accepted || canSyncCanonicalSession(useSessionStore.getState(), id, state.data, guard, interactionWatermark.current.sequence);
+          if (transcriptAccepted) syncSession(state.data.session);
+          const canonicalSequence = transcriptAccepted ? state.data.lastSequence : -1;
+          if (accepted) restorePartial(state.data.run);
+          const beforeStream = useSessionStore.getState();
+          const streamGuard = captureCanonicalRunGuard(beforeStream, id);
           for await (const record of streamAgentEvents(id, sequence, controller.signal)) {
+            if (!ownsView()) break;
             if (record.type === 'connection.ready') {
-              sequence = Math.max(sequence, record.snapshot.lastSequence);
-              if (record.snapshot.run) {
-                setRun(id, record.snapshot.run);
-                if (record.snapshot.run.partialMessage) {
-                  streamContent.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content);
-                  streamReasoning.current.set(record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.reasoning ?? '');
-                  upsertAssistantMessage(id, record.snapshot.run.partialMessage.id, record.snapshot.run.partialMessage.content, record.snapshot.run.partialMessage.reasoning);
+              const readyAccepted = acceptInteractionSnapshot(record.snapshot, streamGuard);
+              if (readyAccepted) sequence = Math.max(sequence, record.snapshot.lastSequence);
+              let snapshot = readyAccepted ? record.snapshot : undefined;
+              // Readiness contains no transcript. Replay through its watermark
+              // is skipped, so catch up durable messages with a fresh owned GET.
+              if (record.reset || record.snapshot.lastSequence > canonicalSequence) {
+                const resumedGuard = captureCanonicalRunGuard(useSessionStore.getState(), id);
+                const resumed = await getAgentState(id);
+                if (!ownsView()) break;
+                if (!resumed.success || !resumed.data) throw new Error(resumed.error || t('chat.unexpectedError'));
+                const resumedAccepted = acceptInteractionSnapshot(resumed.data, resumedGuard);
+                if (resumedAccepted) {
+                  sequence = Math.max(sequence, resumed.data.lastSequence);
+                  snapshot = resumed.data;
+                }
+                if (resumedAccepted || canSyncCanonicalSession(useSessionStore.getState(), id, resumed.data, resumedGuard, interactionWatermark.current.sequence)) {
+                  syncSession(resumed.data.session);
                 }
               }
+              restorePartial(snapshot?.run);
             } else await applyEvent(record.event);
           }
           // A real SSE response stays open. Avoid a hot reconnect loop when a proxy closes it cleanly.
-          if (mounted && !controller.signal.aborted) await new Promise(resolve => setTimeout(resolve, 100));
+          if (ownsView()) await new Promise(resolve => setTimeout(resolve, 100));
         } catch (error) {
-          if (controller.signal.aborted) break;
+          if (!ownsView()) break;
           const message = error instanceof Error ? error.message : t('chat.unexpectedError');
           if (/\b404\b|not found|introuvable/i.test(message)) {
             removeSession(id);
@@ -777,10 +1056,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     })();
 
     return () => {
-      mounted = false;
       controller.abort();
+      window.cancelAnimationFrame(frame);
     };
-  }, [currentSession?.title, id, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
+  }, [connectionEpoch, id, interactionView, navigate, onStreamingUpdate, preferences.notificationEvents, preferences.notifications, preferences.sound, preferences.soundEvents, preferences.soundVolume, removeSession, setRun, syncSession, t, upsertAssistantMessage, workspace?.cwd]);
 
   const active = isActivePhase(currentRun?.phase);
   const modelLocked = effectiveConfiguration?.provenance.model?.scope === 'environment';
@@ -817,19 +1096,36 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     : effectiveConfiguration?.provenance[key]?.scope ?? 'default';
   const modelScope = settingScope('model', currentSession?.model !== undefined);
   const thinkingScope = settingScope('thinking', currentSession?.thinking !== undefined);
+  const saveDefault = async (kind: 'model' | 'thinking') => {
+    if (savingDefault) return;
+    setSavingDefault(true);
+    try {
+      const result = await saveNewSessionDefault({ projectId: workspace?.id,
+        ...(kind === 'model' ? { kind, provider: activeProviderType, model } : { kind, thinking }) });
+      if (!result.success || !result.data) { setNotice(result.error || t('settings.defaults.failed')); return; }
+      setDefaultWarning(result.data.overridden.length > 0);
+      setNotice(t(result.data.overridden.length ? 'settings.defaults.overrideWarning' : 'settings.defaults.saved'),
+        result.data.overridden.length ? 'warning' : 'success');
+    } finally { setSavingDefault(false); }
+  };
   const toolPresetScope = settingScope('toolPreset', currentSession?.toolPreset !== undefined);
   const autoCompactionScope = settingScope('autoCompaction', currentSession?.autoCompaction !== undefined);
-  const slashQuery = input.startsWith('/') && !input.includes(' ') ? input.slice(1).toLocaleLowerCase() : undefined;
+  const slashQuery = dismissedSuggestions !== input && input.startsWith('/') && !input.includes(' ')
+    ? input.slice(1).toLocaleLowerCase() : undefined;
   const paletteResults = slashQuery === undefined ? [] : palette
     .filter(item => item.name.toLocaleLowerCase().includes(slashQuery))
     .slice(0, 10);
-  const fileResults = mentionQuery === undefined ? [] : rankFileSuggestions(
+  const fileResults = mentionQuery === undefined || dismissedSuggestions === input ? [] : rankFileSuggestions(
     [...new Map([...fileIndex.items, ...remoteFileSuggestions].map(item => [item.path, item])).values()],
     mentionQuery,
   ).slice(0, 10);
   const suggestionCount = paletteResults.length || fileResults.length;
-  const busyCompacting = compacting || automaticCompacting;
-  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspace && !starting && !busyCompacting);
+  useEscapeLayer(suggestionCount > 0, 'menu', () => { setDismissedSuggestions(input); }, textareaRef);
+  const busyCompacting = compacting || automaticCompacting || currentRun?.phase === 'compacting';
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
+  const canSend = Boolean((input.trim() || attachments.length) && currentSession && workspaceOperationTrusted
+    && !starting && !busyCompacting && (!currentSession.draft || configurationReadyFor === configurationKey));
   const status = busyCompacting
     ? t('chat.status.compacting')
     : starting
@@ -841,11 +1137,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           message: currentRun.retry.message,
         })
       : currentRun?.phase === 'tool' && currentRun.activeTool
-        ? t('chat.status.toolNamed', { tool: currentRun.activeTool.name })
+        ? t('chat.status.toolNamed', { tool: displayToolName(currentRun.activeTool.name) })
         : active
           ? t(`chat.status.${currentRun?.phase}`)
           : undefined;
-  const stopLabel = compacting
+  const stopLabel = busyCompacting
     ? t('chat.stop.compaction')
     : currentRun?.phase === 'tool'
       ? t('chat.stop.tool')
@@ -864,6 +1160,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       return;
     }
     try {
+      const { prepareImage } = await import('./prepare-image');
       const prepared = await Promise.all(images.map(prepareImage));
       const totalSize = [...attachments, ...prepared].reduce((sum, image) => sum + image.size, 0);
       if (totalSize > 6 * 1024 * 1024) throw new Error(t('chat.imageTotalLimit'));
@@ -880,6 +1177,28 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     if (!currentSession || !workspace || !raw.startsWith('/')) return false;
     const [name, ...parts] = raw.slice(1).trim().split(/\s+/);
     const argument = parts.join(' ');
+    // Resolve ownership afresh: a reload can change who owns /mcp while a run streams.
+    if (name.toLocaleLowerCase() === 'mcp') {
+      const latest = await getAgentPalette(workspace.cwd, workspace.id);
+      if (!latest.success || !latest.data) {
+        setNotice(latest.error || t('chat.extensionCommandFailed'));
+        return true;
+      }
+      setPalette(latest.data);
+      const owner = latest.data.find(item => item.name === 'mcp' && item.source === 'extension');
+      if (owner) {
+        if (currentSession.draft) setNotice(t('chat.extensionCommandFailed'), 'warning');
+        else {
+          const result = await runExtensionCommand(currentSession.id, 'mcp', argument);
+          if (!result.success) setNotice(result.error || t('chat.extensionCommandFailed'));
+          else if (result.data?.output) setNotice(result.data.output, 'info');
+        }
+        return true;
+      }
+      if (!argument) navigate('/settings#mcp');
+      else setNotice(t('chat.unknownCommand', { command: raw }), 'warning');
+      return true;
+    }
     switch (name.toLocaleLowerCase()) {
       case 'auto-compact': {
         const mode = argument.trim().toLocaleLowerCase();
@@ -1022,12 +1341,12 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
   const runShellCommand = async (raw: string) => {
     if (!currentSession || !workspace) return;
-    const excludedFromContext = raw.startsWith('!!');
-    const command = raw.slice(excludedFromContext ? 2 : 1).trim();
-    if (!command) {
+    const parsed = parseShellCommandInput(raw);
+    if (!parsed?.command) {
       setNotice(t('chat.commandMissing'), 'warning');
       return;
     }
+    const { command, excludedFromContext } = parsed;
     let sessionId = currentSession.id;
     if (currentSession.draft) {
       const created = await createApiSession(command.slice(0, 50), workspace.cwd);
@@ -1084,17 +1403,17 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     setHistoryIndex(-1);
     setNotice(undefined);
 
-    if (content.startsWith('/')) {
+    if (!stagedEdit && content.startsWith('/')) {
       await executeSlashCommand(content);
       return;
     }
 
-    if (content.startsWith('!')) {
+    if (!stagedEdit && content.startsWith('!')) {
       await runShellCommand(content);
       return;
     }
 
-    if (active && currentRun) {
+    if (!stagedEdit && active && currentRun) {
       const queued = await enqueueAgentMessage(currentRun.id, queueMode, content, [
         { type: 'text', text: content },
         ...attachments.map(attachment => ({
@@ -1106,7 +1425,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         })),
       ]);
       if (queued.success && queued.data) {
-        setRun(currentSession.id, queued.data);
+        if (interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: queued.data.lastSequence, run: queued.data });
         clearAttachments(currentSession.id);
       }
       else {
@@ -1117,10 +1436,39 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
 
     setStarting(true);
-    const localId = currentSession.id;
+    let localId = currentSession.id;
+    const originEpoch = interactionEpoch;
+    const originMount = interactionMount.current;
+    const ownsStart = () => {
+      if (!originMount || interactionMount.current !== originMount) return false;
+      if (interactionEpochRef.current === originEpoch) return true;
+      const admission = forkAdmission.current;
+      const current = interactionScopeRef.current;
+      return Boolean(admission && !admission.retired && admission.sessionId === localId
+        && admission.view === interactionAddressRef.current && current.sessionId === localId
+        && current.workspaceId === workspace.id && current.cwd === workspace.cwd);
+    };
+    const beforeStart = useSessionStore.getState();
+    let completedView: string | undefined;
     try {
+      if (stagedEdit?.sessionId === currentSession.id) {
+        const forked = await forkSession(currentSession.id, { messageId: stagedEdit.messageId, before: true,
+          title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
+        if (!forked.success || !forked.data) throw new Error(forked.error || t('session.branchFailed'));
+        if (!ownsStart()) return;
+        localId = forked.data.id;
+        setStagedEdit(undefined);
+        const loaded = await getSession(localId);
+        if (!ownsStart()) return;
+        if (loaded.success && loaded.data) syncSession(loaded.data);
+        const pathname = `/chat/${encodeURIComponent(localId)}`;
+        const search = `?cwd=${encodeURIComponent(workspace.cwd)}`;
+        const token = crypto.randomUUID();
+        forkAdmission.current = { token, sessionId: localId, workspaceId: workspace.id, cwd: workspace.cwd, pathname, search, originView: interactionView };
+        navigate(pathname + search, { state: { interactionFork: token } });
+      }
       const result = await startAgentRun({
-        ...(currentSession.draft ? {} : { sessionId: currentSession.id }),
+        ...(currentSession.draft ? {} : { sessionId: localId }),
         cwd: workspace.cwd,
         provider: activeProviderType,
         input: content,
@@ -1142,19 +1490,38 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         autoCompaction: currentSession.autoCompaction ?? autoCompaction,
         settingOverrides,
       });
+      if (!ownsStart()) return;
+      completedView = interactionAddressRef.current;
       if (!result.success || !result.data) throw new Error(result.error || t('chat.unexpectedError'));
       replaceSession(localId, result.data.session);
       clearAttachments(result.data.session.id);
       if (localId !== result.data.session.id) clearAttachments(localId);
-      setRun(result.data.session.id, result.data.run);
+      const started = result.data.run;
+      const live = getStoredRun(useSessionStore.getState().runs, result.data.session.id);
+      const scope = interactionScopeRef.current;
+      const admission = forkAdmission.current;
+      const pendingForkView = localId !== currentSession.id && admission?.sessionId === localId && !admission.retired
+        && admission.view === interactionAddressRef.current
+        && scope.workspaceId === workspace.id && scope.cwd === workspace.cwd && scope.sessionId === localId
+        && (scope.runId === undefined || scope.runId === started.id);
+      if ((interactionEpochRef.current === interactionEpoch || pendingForkView)
+        && isFreshInteractionSnapshot({ sessionId: result.data.session.id, lastSequence: started.lastSequence, run: started }, live,
+          result.data.session.id === id ? interactionWatermark.current.sequence : 0)) {
+        setRun(result.data.session.id, reconcileInteractionSnapshot(started, ledgerFor(started.id).closed),
+          captureCanonicalRunGuard(beforeStart, result.data.session.id, false));
+      }
       if (localId !== result.data.session.id) {
         navigate(`/chat/${encodeURIComponent(result.data.session.id)}?cwd=${encodeURIComponent(workspace.cwd)}`, { replace: true });
       }
     } catch (error) {
+      if (!ownsStart()) return;
       setDraft(localId, content);
       setNotice(error instanceof Error ? error.message : t('chat.unexpectedError'));
     } finally {
-      setStarting(false);
+      // Readiness may admit the run before HTTP settles. Release this view's
+      // local busy state even when the reply no longer owns the run epoch.
+      if (originMount && interactionMount.current === originMount
+        && (interactionAddressRef.current === interactionView || ownsStart() || completedView === interactionAddressRef.current)) setStarting(false);
     }
   };
 
@@ -1185,6 +1552,13 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const enterKey = event.key === 'Enter' && !event.shiftKey;
+    const recentlyComposed = performance.now() - lastCompositionEndRef.current < 100;
+    const isComposing = composingRef.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+    if (enterKey && (isComposing || recentlyComposed)) {
+      if (recentlyComposed) event.preventDefault();
+      return;
+    }
     if (suggestionCount && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
       event.preventDefault();
       setPaletteIndex(index => event.key === 'ArrowDown'
@@ -1192,15 +1566,38 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         : (index - 1 + suggestionCount) % suggestionCount);
       return;
     }
-    if (suggestionCount && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && !composingRef.current))) {
+    if (suggestionCount && (event.key === 'Tab' || enterKey)) {
       event.preventDefault();
       selectSuggestion();
       return;
     }
-    if (event.key === 'Enter' && !event.shiftKey && !composingRef.current) {
+    if (composerKeySubmits({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      isComposing,
+      keyCode: event.nativeEvent.keyCode,
+    }, preferences.sendMode)) {
       event.preventDefault();
       void sendMessage();
       return;
+    }
+    if (event.key === 'Enter' && !isComposing && !recentlyComposed
+      && !event.ctrlKey && !event.metaKey && !event.altKey && currentSession) {
+      const target = event.currentTarget;
+      const edit = getMarkdownListContinuation(input, target.selectionStart, target.selectionEnd);
+      if (edit) {
+        event.preventDefault();
+        const nextDraft = `${input.slice(0, edit.start)}${edit.text}${input.slice(edit.end)}`;
+        setDraft(currentSession.id, nextDraft);
+        const caret = edit.start + edit.text.length;
+        requestAnimationFrame(() => {
+          if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+            && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(caret, caret);
+        });
+        return;
+      }
     }
     if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !input.includes('\n') && history.length) {
       const next = event.key === 'ArrowUp'
@@ -1251,22 +1648,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   }
 
-  const branchFrom = async (messageId: string, content: string, edit = false) => {
-    if (!currentSession || currentSession.draft || active) return;
-    const result = await forkSession(currentSession.id, { messageId, title: `${currentSession.title || t('sidebar.untitled')} (branch)` });
-    if (!result.success || !result.data) {
-      setNotice(result.error || t('session.branchFailed'));
-      return;
-    }
-    const loaded = await getSession(result.data.id);
-    if (loaded.success && loaded.data) syncSession(loaded.data);
-    await updateSession(currentSession.id, { activeLeafId: result.data.id });
-    if (edit) setDraft(result.data.id, content);
-    navigate(`/chat/${encodeURIComponent(result.data.id)}?cwd=${encodeURIComponent(workspace!.cwd)}`);
+  const stageHistoryEdit = (messageId: string, content: string) => {
+    if (!currentSession || currentSession.draft || active || starting) return;
+    setStagedEdit({ sessionId: currentSession.id, messageId,
+      previousDraft: stagedEdit?.previousDraft ?? input });
+    setDraft(currentSession.id, content);
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
   const cloneFrom = async (messageId: string) => {
-    if (!currentSession || currentSession.draft || active) return;
+    if (!currentSession || currentSession.draft || starting) return;
     const result = await cloneSession(currentSession.id, `${currentSession.title || t('sidebar.untitled')} (copy)`, messageId);
     if (!result.success || !result.data) {
       setNotice(result.error || t('session.cloneFailed'));
@@ -1309,10 +1700,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
       return;
     }
     if (!currentRun) return;
+    if (!currentSession) return;
+    const epoch = interactionEpoch;
+    const mount = interactionMount.current;
+    const before = useSessionStore.getState();
+    const guard = { epoch: before.runEpoch, authority: getRunAuthority(before.runAuthorities, currentSession.id), activeSessionId: before.activeSessionId };
     const result = await stopAgentRun(currentRun.id);
+    if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || getStoredRun(useSessionStore.getState().runs, currentSession.id)?.id !== currentRun.id
+      || useSessionStore.getState().runEpoch !== guard.epoch
+      || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
     if (!result.success) setNotice(result.error || t('chat.stopFailed'));
-    else if (result.data) setRun(currentSession!.id, result.data);
+    else if (result.data?.id === currentRun.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data }, guard);
   };
+
+  useEscapeLayer(active || compacting, 'agent', () => { void stop(); });
 
   const loadHistoryBefore = async (beforeMessageId?: string) => {
     if (!id || id.startsWith('draft:') || loadingHistory || !beforeMessageId) return;
@@ -1329,6 +1730,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
     setLoadingHistory(true);
     const result = await getSessionMessages(id, { before: beforeMessageId, limit: 80 });
+    if (interactionAddressRef.current !== interactionView) return;
     if (result.success && result.data) mergeMessagePage(id, result.data);
     else {
       pendingScrollAnchor.current = undefined;
@@ -1338,17 +1740,20 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   };
 
   const scrollToMessage = (messageId: string) => {
+    scrollRestoration.current?.();
     lastScrolledTarget.current = undefined;
     navigate(`${location.pathname}${location.search}#${encodeURIComponent(messageId)}`, { replace: true });
-    window.setTimeout(() => document.getElementById(messageId)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
+    // The target layout effect owns materialization and scrolling in the new view.
   };
 
   const scrollToBottom = () => {
+    scrollRestoration.current?.();
     const container = messagesContainerRef.current;
     if (location.hash) navigate(`${location.pathname}${location.search}`, { replace: true });
-    container?.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    // Reach the current tail before an incoming response can invalidate a smooth target.
+    container?.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     nearBottomRef.current = true;
-    readingBaselineCount.current = currentSession?.messages.length ?? 0;
+    readingTail.current = lastMessageId;
     setNearBottom(true);
     setUnseenMessages(0);
   };
@@ -1396,7 +1801,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     }
   };
 
+  const toolInputs = useMemo(() => new Map((currentSession?.messages ?? []).flatMap(message =>
+    (message.toolCalls ?? message.blocks?.flatMap(block => block.type === 'tool_call' ? [block] : []) ?? [])
+      .map(call => [call.id, call.input] as const))), [currentSession?.messages]);
   const historyGaps = historyGapMessageIds(currentSession);
+  const processGroups = processTurns(currentSession?.messages ?? [], historyGaps);
   const historyPage = currentSession?.messagePage;
   const sessionIndex = sessions.findIndex(session => session.id === currentSession?.id);
   const previousSession = sessionIndex > 0 ? sessions[sessionIndex - 1] : undefined;
@@ -1409,6 +1818,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
     if (id && sessionUnavailable) {
       const fallback = sessions.find(session => session.id !== id);
       return <div className="chat-empty" role="alert">
+        {terminalControl}
         <h2>{t('chat.sessionUnavailable')}</h2>
         <p>{sessionUnavailable}</p>
         <button onClick={() => fallback ? navigateToSession(fallback.id) : navigate(`/?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`)}>
@@ -1416,39 +1826,52 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </button>
       </div>;
     }
-    if (id) return <div className="chat-empty" role="status">{t('common.loading')}…</div>;
+    if (id) return <div className="chat-empty" role="status">{terminalControl}{t('common.loading')}…</div>;
     return (
       <div className="chat-empty">
+        {terminalControl}
         <h2>{t('chat.welcome')}</h2>
         <p>{t('chat.selectOrCreate')}</p>
       </div>
     );
   }
 
-  const messageArticle = (message: Message) => <article id={message.id} className={`message ${message.role}`}
+  const messageArticle = (message: Message) => {
+    const process = processGroups.get(message.id);
+    return <article id={message.id} className={`message ${message.role}`}
+    data-process-turn={process?.id}
     aria-label={`${message.role}: ${message.content.slice(0, 80)}`}>
     <div className="message-role">
-      {message.role === 'user' ? `👤 ${t('chat.role.user')}`
-        : message.role === 'tool' ? `🔧 ${message.name || t('chat.role.tool')}`
+      {message.role === 'user' ? <><Icon name="user" /> {t('chat.role.user')}</>
+        : message.role === 'tool' ? <><Icon name="tool" /> {message.name || t('chat.role.tool')}</>
           : message.role === 'system' ? t('chat.role.system')
-            : `🤖 ${t('chat.role.assistant')}`}
+            : <><Icon name="bot" /> {t('chat.role.assistant')}</>}
     </div>
-    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t)}</div>
+    <div className="message-content">{renderMessage(message, preferences.reasoningOpen, t,
+      message.toolCallId ? toolInputs.get(message.toolCallId) : undefined, process, currentSession?.id)}</div>
+    {message.role === 'assistant' && message.metadata?.stopReason === 'length' && <aside className="notice warning reply-evidence" role="note">
+      <span>{replyMessages(locale).truncated}</span>
+      {message.id === lastMessageId && <button type="button" disabled={active || busyCompacting || !workspaceOperationTrusted}
+        onClick={() => void executeSlashCommand('/compact')}>{replyMessages(locale).compact}</button>}
+    </aside>}
+    {message.role === 'assistant' && typeof message.metadata?.outputError === 'string' && <p className="notice error reply-evidence" role="note">{message.metadata.outputError}</p>}
     <footer className="message-meta">
-      <time dateTime={message.timestamp.toISOString()}>{message.timestamp.toLocaleTimeString()}</time>
-      {message.model && <span>{message.model}</span>}
-      {message.usage && <span title={messageUsageDetails(message.usage)}>{messageUsageSummary(message.usage)}</span>}
+      <Suspense fallback={null}><MessageUsage message={message} /></Suspense>
       <button onClick={() => void copyMessage(message)} aria-live="polite">
         {copiedMessageId === message.id ? t('chat.copied') : t('chat.copy')}
       </button>
-      {!currentSession.draft && !active && message.role === 'user' && (
+      {!currentSession.draft && message.role === 'user' && (
         <>
-          <button onClick={() => void branchFrom(message.id, message.content, true)}>{t('session.editFromHere')}</button>
+          {!active && <button onClick={() => stageHistoryEdit(message.id, message.content)}>{t('session.editFromHere')}</button>}
           <button onClick={() => void cloneFrom(message.id)}>{t('session.newFromHere')}</button>
         </>
       )}
     </footer>
+    {!!currentSession.cacheNotices?.length && <Suspense fallback={null}>
+      <CacheNotices notices={currentSession.cacheNotices!} messageId={message.id} locale={locale} />
+    </Suspense>}
   </article>;
+  };
 
   const historyGap = (messageId: string) => historyGaps.has(messageId) && (
     <div className="history-gap" role="separator">
@@ -1460,7 +1883,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
   );
 
   return (
-    <div className="chat-view">
+    <div className="chat-view" data-mobile-keyboard={mobileKeyboard.keyboardOpen}
+      style={mobileKeyboard.keyboardOpen ? {
+        '--mobile-keyboard-height': `${mobileKeyboard.viewportHeight}px`,
+        '--mobile-keyboard-top': `${mobileKeyboard.viewportOffsetTop}px`,
+      } as CSSProperties : undefined}>
       <header className="chat-toolbar">
         <div>
           <strong>{currentSession.title || t('sidebar.untitled')}</strong>
@@ -1469,16 +1896,16 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         <div className="chat-toolbar-actions">
           {!currentSession.draft && sessions.length > 1 && <div className="session-navigation" role="group" aria-label={t('session.navigation')}>
             <button className="toolbar-button" disabled={!previousSession}
-              onClick={() => previousSession && navigateToSession(previousSession.id)} aria-label={t('session.previous')}>←</button>
+              onClick={() => previousSession && navigateToSession(previousSession.id)} aria-label={t('session.previous')}><Icon name="arrow-left" /></button>
             <button className="toolbar-button" disabled={!nextSession}
-              onClick={() => nextSession && navigateToSession(nextSession.id)} aria-label={t('session.next')}>→</button>
+              onClick={() => nextSession && navigateToSession(nextSession.id)} aria-label={t('session.next')}><Icon name="arrow-right" /></button>
           </div>}
           <span className={`agent-phase ${active ? 'active' : ''}`} role="status">{status}</span>
-          {!currentSession.draft && <SubagentPanel
+          {!currentSession.draft && <Suspense fallback={null}><SubagentPanel
             parentSessionId={currentSession.metadata?.subagent === true && currentSession.parentId
               ? currentSession.parentId
               : currentSession.id}
-            parentLinkId={currentSession.metadata?.subagent === true ? currentSession.parentId : undefined} />}
+            parentLinkId={currentSession.metadata?.subagent === true ? currentSession.parentId : undefined} /></Suspense>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleBranches()}>{t('session.branches')}</button>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleCapabilities()}>{t('chat.context')}</button>}
           {!currentSession.draft && <button className="toolbar-button" onClick={() => void toggleInfo()}>{t('session.info')}</button>}
@@ -1503,15 +1930,32 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </details>)}
       </aside>}
 
-      {currentRun?.extensionRequest && <ExtensionInteractionDialog
-        key={currentRun.extensionRequest.id}
-        request={currentRun.extensionRequest}
+      {displayedInteraction && currentRun && <ExtensionInteractionBoundary
+        key={interactionViewKey}
+        request={displayedInteraction}
+        waitingCount={Math.max(0, interactions.length - 1)}
+        locale={locale}
         restoreFocusRef={textareaRef}
-        onResolve={async result => {
-          const response = await respondToExtensionInteraction(currentSession.id, currentRun.extensionRequest!.id, result);
-          if (response.success && response.data) setRun(currentSession.id, response.data);
-          else setNotice(response.error || t('chat.extensionInteractionFailed'));
-          window.requestAnimationFrame(() => textareaRef.current?.focus());
+        canRestoreFocus={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey}
+        canFocusInitially={() => Boolean(interactionMount.current) && interactionViewRef.current === interactionViewKey && interactionFocusAdmission.current.allowed}
+        renderOutput={content => <AnsiOutput content={content} />}
+        onResolve={async (result, signal) => {
+          const epoch = interactionEpoch;
+          const mount = interactionMount.current;
+          const before = useSessionStore.getState();
+          const guard = captureInteractionReplyGuard(before, currentSession.id, displayedInteraction.id);
+          const response = await respondToExtensionInteraction(currentSession.id, displayedInteraction.id, result, signal);
+          const live = getStoredRun(useSessionStore.getState().runs, currentSession.id);
+          if (signal.aborted) return;
+          if (!mount || interactionMount.current !== mount || interactionEpochRef.current !== epoch || live?.id !== currentRun.id
+            || useSessionStore.getState().runEpoch !== guard.epoch
+            || getRunAuthority(useSessionStore.getState().runAuthorities, currentSession.id) !== guard.authority) return;
+          if (response.success && response.data) {
+            if (response.data.id === live.id) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: response.data.lastSequence, run: response.data }, guard);
+          } else if (!ledgerFor(live.id).closed.has(displayedInteraction.id)
+            && orderedExtensionRequests(live)[0]?.id === displayedInteraction.id) {
+            setNotice(response.error || t('chat.extensionInteractionFailed'));
+          }
         }} t={t} />}
 
       {!currentSession.draft && (
@@ -1555,7 +1999,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             <summary>{t('chat.activeTools', { count: capabilities.tools.length })}</summary>
             {capabilities.tools.map(tool => (
               <details key={tool.name} className="tool-definition">
-                <summary>{tool.name}</summary>
+                <summary>{displayToolName(tool.name)}</summary>
                 <p>{tool.description}</p>
                 <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
               </details>
@@ -1566,7 +2010,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
 
       {infoOpen && info && (
         <aside className="session-info" aria-label={t('session.info')}>
-          <button className="info-close" onClick={() => setInfoOpen(false)} aria-label={t('common.close')}>×</button>
+          <button className="info-close" onClick={() => setInfoOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button>
           <dl>
             <dt>ID</dt><dd>{info.id} <button onClick={() => void navigator.clipboard?.writeText(info.id)}>{t('chat.copy')}</button></dd>
             <dt>{t('session.file')}</dt><dd>{info.file} <button onClick={() => void navigator.clipboard?.writeText(info.file)}>{t('chat.copy')}</button></dd>
@@ -1585,6 +2029,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         </aside>
       )}
 
+      <div className="messages-region">
       {minimapOpen && (
         <aside className="conversation-minimap" aria-label={t('chat.minimap')}>
           <header>
@@ -1593,22 +2038,25 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               loaded: currentSession.messages.length,
               total: historyPage?.total ?? currentSession.messages.length,
             })}</span>
-            <button onClick={() => setMinimapOpen(false)} aria-label={t('common.close')}>×</button>
+            <button onClick={() => setMinimapOpen(false)} aria-label={t('common.close')}><Icon name="close" /></button>
           </header>
           <nav>
             {currentSession.messages.map(message => {
               const tool = message.blocks?.find(block => block.type === 'tool_call' || block.type === 'tool_result');
               const kind = tool ? 'tool' : message.role;
               const preview = tool && 'name' in tool
-                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${tool.name || message.name || 'tool'}`
+                ? `${tool.type === 'tool_call' ? 'Tool' : 'Result'}: ${displayToolName(tool.name || message.name || 'tool')}`
                 : message.content.replace(/\s+/g, ' ').slice(0, 44) || message.role;
               return (
                 <Fragment key={`minimap:${message.id}`}>
                   {historyGaps.has(message.id) && <span className="minimap-gap" aria-label={t('chat.historyGap')}>⋯</span>}
                   <button className={`minimap-entry ${kind}`} onClick={() => scrollToMessage(message.id)}
-                    aria-label={`${kind}: ${preview}`} title={message.content.slice(0, 160)}>
+                    aria-label={tool ? `${kind}: ${preview}` : undefined} title={tool ? preview : undefined}>
                     <span aria-hidden="true" />
-                    <small>{preview}</small>
+                    {!tool && <span className="sr-only">{kind}: </span>}
+                    <small>{!tool && ['user', 'assistant'].includes(message.role)
+                      ? <MarkdownContent content={message.content} compact keepLineBreaks={message.role === 'user'} />
+                      : preview}</small>
                   </button>
                 </Fragment>
               );
@@ -1629,12 +2077,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           const wasNearBottom = nearBottomRef.current;
           nearBottomRef.current = next;
           setNearBottom(next);
-          if (next) {
-            readingBaselineCount.current = currentSession.messages.length;
-            setUnseenMessages(0);
-          } else if (wasNearBottom) {
-            readingBaselineCount.current = currentSession.messages.length;
-          }
+          if (next || wasNearBottom) readingTail.current = lastMessageId;
+          if (next) setUnseenMessages(0);
           scheduleScrollSave(element);
         }} onMouseUp={() => {
         if (!preferences.selectionActions) return;
@@ -1644,8 +2088,8 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           setSelection(undefined);
           return;
         }
-        const rect = selected.getRangeAt(0).getBoundingClientRect();
-        setSelection({ text: text.slice(0, 10_000), x: rect.left + rect.width / 2, y: rect.top });
+        setSelection({ text: text.slice(0, 10_000), range: selected.getRangeAt(0).cloneRange(),
+          view: interactionView, scope: interactionScopeRef.current });
       }}>
         {historyPage?.hasMoreBefore && currentSession.messages[0] && (
           <div className="history-page-control">
@@ -1674,7 +2118,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         ))}
         {currentSession.commands?.map(command => (
           <article key={command.id} className="message command">
-            <div className="message-role">⌘ {command.command}</div>
+            <div className="message-role"><Icon name="terminal" /> {command.command}</div>
             <div className="message-content">
               <pre>{command.output || `[${command.status}]`}</pre>
             </div>
@@ -1687,19 +2131,10 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
         ))}
         <div ref={messagesEndRef} />
       </div>
-      {!nearBottom && (
-        <button className="scroll-bottom" onClick={scrollToBottom} aria-label={t('chat.backToBottom')}>
-          ↓ {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
-        </button>
-      )}
+      </div>
 
-      {selection && (
-        <div className="selection-actions" role="toolbar" aria-label={t('chat.selectionActions')}
-          style={{ left: selection.x, top: selection.y }}>
-          <button onClick={() => quoteSelection(false)}>{t('chat.askHere')}</button>
-          <button onClick={() => quoteSelection(true)}>{t('chat.askNew')}</button>
-        </div>
-      )}
+      {selection && <Suspense fallback={null}><SelectionActions capture={selection} view={interactionView}
+        setCapture={setSelection} onQuote={quoteSelection} /></Suspense>}
 
       {commandRun && (
         <section className="command-run" aria-live="polite">
@@ -1730,11 +2165,14 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             </section>
           ))}
           <button className="clear-queues" onClick={() => void clearAgentQueue(currentRun.id).then(result => {
-            if (result.success && result.data) setRun(currentSession.id, result.data);
+            if (result.success && result.data && interactionEpochRef.current === interactionEpoch) acceptInteractionSnapshot({ sessionId: currentSession.id, lastSequence: result.data.lastSequence, run: result.data });
           })}>{t('chat.clearQueues')}</button>
         </div>
       )}
 
+      {runTools(currentRun).map(tool => tool.name !== 'codemode'
+        ? <ToolProgressBoundary key={`${currentRun!.id}:${tool.id}`} value={tool.progress} toolCallId={tool.id} toolName={tool.name} />
+        : <Suspense key={`${currentRun!.id}:${tool.id}`} fallback={null}><CodemodeCard running input={tool.input} calls={tool.nestedCalls} /></Suspense>)}
       <form onSubmit={handleSubmit} className="input-container"
         onDragOver={event => { if ([...event.dataTransfer.items].some(item => item.type.startsWith('image/'))) event.preventDefault(); }}
         onDrop={event => {
@@ -1744,6 +2182,11 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             void attachImages(files);
           }
         }}>
+        {!nearBottom && (
+          <button type="button" className="scroll-bottom" onClick={scrollToBottom} aria-label={t('chat.backToBottom')}>
+            <Icon name="arrow-down" /> {t('chat.backToBottom')}{unseenMessages ? ` (${unseenMessages})` : ''}
+          </button>
+        )}
         {paletteResults.length > 0 && (
           <div className="command-palette" role="listbox" aria-label={t('chat.commandPalette')}>
             {paletteResults.map((item, index) => (
@@ -1763,7 +2206,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
                 aria-selected={index === paletteIndex} className={index === paletteIndex ? 'active' : ''}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => insertFileSuggestion(item)}>
-                <strong>{item.isDirectory ? '📁' : '📄'} {item.path}</strong>
+                <strong><Icon name={item.isDirectory ? 'folder' : 'file'} /> {item.path}</strong>
                 <small>{item.isDirectory ? t('files.directory') : t('files.file')}</small>
               </button>
             ))}
@@ -1775,11 +2218,19 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               <figure key={attachment.id}>
                 <img src={attachment.url} alt={attachment.name} />
                 <figcaption>{attachment.name}</figcaption>
-                <button type="button" onClick={() => removeAttachment(currentSession.id, attachment.id)} aria-label={t('chat.removeAttachment', { name: attachment.name })}>×</button>
+                <button type="button" onClick={() => removeAttachment(currentSession.id, attachment.id)} aria-label={t('chat.removeAttachment', { name: attachment.name })}><Icon name="close" /></button>
               </figure>
             ))}
           </div>
         )}
+        {stagedEdit?.sessionId === currentSession.id && <div className="staged-history-edit" role="status">
+          <span>{t('session.editStaged')}</span>
+          <button type="button" disabled={starting} onClick={() => {
+            setDraft(currentSession.id, stagedEdit.previousDraft);
+            setStagedEdit(undefined);
+            textareaRef.current?.focus();
+          }}>{t('session.cancelEdit')}</button>
+        </div>}
         <textarea
           ref={textareaRef}
           value={input}
@@ -1797,23 +2248,33 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
             }
             const html = event.clipboardData.getData('text/html');
             if (html) {
-              const markdown = clipboardHtmlToMarkdown(html);
+              const markdown = clipboardTextToMarkdown(event.clipboardData.getData('text/plain'), html);
               if (!markdown) return;
               event.preventDefault();
               const start = event.currentTarget.selectionStart;
               const end = event.currentTarget.selectionEnd;
-              setDraft(currentSession.id, `${input.slice(0, start)}${markdown}${input.slice(end)}`);
+              const target = event.currentTarget;
+              const nextDraft = `${input.slice(0, start)}${markdown}${input.slice(end)}`;
+              setDraft(currentSession.id, nextDraft);
+              requestAnimationFrame(() => {
+                if (target.isConnected && textareaRef.current === target && target.value === nextDraft
+                  && useSessionStore.getState().activeSessionId === currentSession.id) target.setSelectionRange(start + markdown.length, start + markdown.length);
+              });
             }
           }}
           onCompositionStart={() => { composingRef.current = true; }}
-          onCompositionEnd={() => { composingRef.current = false; }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+            lastCompositionEndRef.current = performance.now();
+          }}
           placeholder={t('chat.inputPlaceholder', { provider: activeProviderType })}
           aria-label={t('chat.inputLabel')}
-          autoFocus
+          autoFocus={!displayedInteraction && !window.matchMedia?.('(pointer: coarse)').matches}
           rows={1}
           disabled={starting || busyCompacting}
         />
         <div className="composer-controls">
+          {terminalControl}
           <input ref={imageInputRef} className="visually-hidden" type="file" accept="image/*" multiple
             aria-label={t('chat.addImage')}
             onChange={event => {
@@ -1821,7 +2282,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               if (files.length) void attachImages(files);
               event.target.value = '';
             }} />
-          <button type="button" className="attach-button" onClick={() => imageInputRef.current?.click()} aria-label={t('chat.addImage')}>＋📷</button>
+          <button type="button" className="attach-button" onClick={() => imageInputRef.current?.click()} aria-label={t('chat.addImage')}><Icon name="image" /></button>
           <label>
             <span className="visually-hidden">{t('settings.model')}</span>
             <input
@@ -1845,7 +2306,7 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
               ? undefined
               : event.target.value as Session['thinking'])}>
             <option value="auto">{t('chat.setting.auto')} · {thinking}</option>
-            {['off', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
+            {['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(level => <option key={level} value={level}>{level}</option>)}
           </select>
           <select
             className="composer-setting"
@@ -1885,91 +2346,46 @@ function ChatView({ onStreamingUpdate }: ChatViewProps) {
           <button type="submit" disabled={!canSend}>{starting ? '…' : active ? t('chat.queue') : t('chat.send')}</button>
         </div>
         <div className="composer-setting-scopes" aria-label={t('chat.settingScopes')}>
-          <span>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</span>
-          <span>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</span>
+          <details>
+            <summary aria-label={t('chat.defaults.modelActions')}>{t('settings.model')}: {t(`chat.scope.${modelScope}`)}</summary>
+            <button type="button" disabled={savingDefault || !model || modelLocked}
+              onClick={() => void saveDefault('model')}>{t('chat.defaults.saveModel')}</button>
+          </details>
+          <details>
+            <summary aria-label={t('chat.defaults.thinkingActions')}>{t('chat.thinking')}: {t(`chat.scope.${thinkingScope}`)}</summary>
+            <button type="button" disabled={savingDefault || thinkingLocked}
+              onClick={() => void saveDefault('thinking')}>{t('chat.defaults.saveThinking')}</button>
+          </details>
           <span>{t('chat.tools')}: {t(`chat.scope.${toolPresetScope}`)}</span>
           <span>{t('chat.autoCompaction')}: {t(`chat.scope.${autoCompactionScope}`)}</span>
+          {defaultWarning && <p role="status">{t('settings.defaults.overrideWarning')}</p>}
         </div>
       </form>
     </div>
   );
 }
 
-function ExtensionInteractionDialog({ request, onResolve, restoreFocusRef, t }: {
-  request: ExtensionInteractionSnapshot;
-  onResolve(response: { cancelled: boolean; value?: unknown }): Promise<void>;
-  restoreFocusRef: RefObject<HTMLElement | null>;
-  t: TranslationFunction;
-}) {
-  const initial = request.kind === 'custom'
-    ? Object.fromEntries((request.fields ?? []).map(field => [field.name,
-        field.type === 'checkbox' ? false : field.type === 'select' && field.required ? field.options?.[0]?.value ?? '' : '']))
-    : request.kind === 'select' ? request.options?.[0]?.value ?? '' : '';
-  const [value, setValue] = useState<unknown>(initial);
-  const [submitting, setSubmitting] = useState(false);
-  const custom = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const resolve = async (response: { cancelled: boolean; value?: unknown }) => {
-    if (submitting) return;
-    setSubmitting(true);
-    try { await onResolve(response); } finally { setSubmitting(false); }
-  };
-  const dialogRef = useRef<HTMLFormElement>(null);
-  useFocusTrap(true, dialogRef, () => { void resolve({ cancelled: true }); }, restoreFocusRef);
-  return <div className="modal-overlay extension-interaction-overlay" onMouseDown={event => {
-    if (!submitting && event.target === event.currentTarget) void resolve({ cancelled: true });
-  }}>
-    <form ref={dialogRef} tabIndex={-1} className="extension-interaction" role="dialog" aria-modal="true" aria-labelledby={`extension-title-${request.id}`}
-      onSubmit={event => { event.preventDefault(); void resolve({ cancelled: false, value: request.kind === 'confirm' ? true : value }); }}>
-      <header><h3 id={`extension-title-${request.id}`}>{request.title}</h3></header>
-      {request.message && <p>{request.message}</p>}
-      {request.output && (/\u001b\[[0-9;]*m/.test(request.output)
-        ? <AnsiOutput content={request.output} /> : <pre className="extension-output">{request.output}</pre>)}
-      {request.kind === 'input' && <input data-autofocus required value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'editor' && <textarea data-autofocus required rows={10} value={String(value)} placeholder={request.placeholder}
-        onChange={event => setValue(event.target.value)} aria-label={request.title} />}
-      {request.kind === 'select' && <select data-autofocus value={String(value)} onChange={event => setValue(event.target.value)} aria-label={request.title}>
-        {request.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>}
-      {request.kind === 'custom' && <details className="extension-custom-panel" open>
-        <summary>{t('chat.extensionInteraction.fields')}</summary>
-        <div className="extension-fields">
-          {request.fields?.map(field => <label key={field.name}>
-            <span>{field.label}</span>
-            {field.type === 'textarea' ? <textarea required={field.required} placeholder={field.placeholder}
-              value={String(custom[field.name] ?? '')} onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />
-              : field.type === 'select' ? <select required={field.required} value={String(custom[field.name] ?? '')}
-                onChange={event => setValue({ ...custom, [field.name]: event.target.value })}>
-                {!field.required && <option value="" />}
-                {field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-                : field.type === 'checkbox' ? <input type="checkbox" checked={custom[field.name] === true}
-                  onChange={event => setValue({ ...custom, [field.name]: event.target.checked })} />
-                  : <input required={field.required} placeholder={field.placeholder} value={String(custom[field.name] ?? '')}
-                    onChange={event => setValue({ ...custom, [field.name]: event.target.value })} />}
-          </label>)}
-        </div>
-      </details>}
-      <footer>
-        <button type="button" disabled={submitting} onClick={() => void resolve({ cancelled: true })}>{t('common.cancel')}</button>
-        <button type="submit" disabled={submitting}>{request.kind === 'confirm' ? t('common.confirm') : t('common.submit')}</button>
-      </footer>
-    </form>
-  </div>;
+function runTools(run?: AgentRunSnapshot) {
+  return run?.activeTools ?? (run?.activeTool ? [run.activeTool] : []);
+}
+function toolPatch(tools: NonNullable<AgentRunSnapshot['activeTool']>[]) {
+  return { activeTool: tools[0], activeTools: tools };
 }
 
-function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction): ReactNode {
+function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationFunction, callInput?: unknown, process?: ProcessTurn, sessionId?: string): ReactNode {
+  const codeDetails = message.name === 'codemode' && message.toolCallId
+    ? codemodeDetails(message.metadata?.codemode, message.toolCallId) : undefined;
   const reasoning = message.blocks?.filter(block => block.type === 'reasoning') ?? [];
   const images = message.blocks?.filter(block => block.type === 'image') ?? [];
   const toolBlocks = message.blocks?.filter(block => block.type === 'tool_call' || block.type === 'tool_result' || block.type === 'command') ?? [];
-  const writtenFiles = findWrittenFiles(toolBlocks);
+  const hasWrittenFiles = toolBlocks.some(block => (block.type === 'tool_call' || block.type === 'tool_result') && /(?:write|edit|patch|create|save)/i.test(block.name ?? ''));
   const processCount = reasoning.length + toolBlocks.length;
   return (
     <>
-      {processCount > 0 && <section className="agent-process" aria-label={t('chat.process')}>
-        <header>
+      {processCount > 0 && <section key={process?.finalAnswerId ?? 'pending'} className="agent-process" aria-label={t('chat.process')}>
+        <header aria-hidden={process?.header === false}>
           <strong>{t('chat.process')}</strong>
-          <span>{t('chat.processSteps', { count: processCount })}</span>
+          <span>{t('chat.processSteps', { count: process?.steps ?? processCount })}</span>
           {message.model && <code>{message.provider ? `${message.provider}/` : ''}{message.model}</code>}
           {message.durationMs !== undefined && <small>{Math.max(0, message.durationMs / 1_000).toFixed(2)}s</small>}
           {message.usage?.totalTokens !== undefined && <small>{message.usage.totalTokens.toLocaleString()} tokens</small>}
@@ -1978,127 +2394,43 @@ function renderMessage(message: Message, reasoningOpen: boolean, t: TranslationF
         {reasoning.map((block, index) => block.type === 'reasoning' && (
           <ProcessBlock className="reasoning-block" key={`reasoning-${index}`}
             summary={t('chat.reasoning')} content={block.text} defaultOpen={reasoningOpen}
-            filename={`reasoning-${message.id}.txt`} t={t} />
+            filename={`reasoning-${message.id}.txt`} t={t} openFile={openWorkspaceFile} />
         ))}
         {toolBlocks.map((block, index) => {
+          if (block.type === 'tool_result' && codeDetails) return <Suspense key={`tool-${index}`}
+            fallback={<pre className="tool-block-pre">{block.content?.slice(0, 8_000)}</pre>}>
+            <CodemodeCard input={callInput} output={block.fullContent ?? block.content} calls={codeDetails.nestedCalls} details={codeDetails} />
+          </Suspense>;
           const content = block.type === 'tool_call' ? JSON.stringify(block.input, null, 2)
             : (block.type === 'tool_result' ? block.content : block.output) ?? '';
           const fullContent = block.type === 'tool_result' ? block.fullContent : undefined;
-          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${block.name}`
-            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${block.name || ''}`
+          const summary = block.type === 'tool_call' ? `${t('chat.toolCall')}: ${displayToolName(block.name)}`
+            : block.type === 'tool_result' ? `${block.isError ? t('chat.toolError') : t('chat.toolResult')}: ${displayToolName(block.name || '')}`
               : `${t('chat.command')}: ${block.command}`;
           return <ProcessBlock className="tool-block" key={`tool-${index}`} summary={summary}
             content={content} fullContent={fullContent} truncated={block.type === 'tool_result' && block.truncated}
             filename={`${block.type === 'command' ? 'command' : block.type === 'tool_call' ? block.name : block.name || 'tool-result'}-${message.id}.txt`}
-            error={block.type === 'tool_result' && block.isError} t={t} />;
+            error={block.type === 'tool_result' && block.isError} t={t} openFile={openWorkspaceFile} />;
         })}
       </section>}
-      {(message.content || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
-        {message.content && renderMessageContent(message.content)}
+      {sessionId && message.role === 'tool' && [...new Set([...message.content.matchAll(/mcp-content:([a-f0-9-]{36})/gu)].map(match => match[1]!))].slice(0, 64).map((id, index) => (
+        <a key={id} className="mcp-content-download" download="mcp-content.bin" target="_blank" rel="noopener noreferrer"
+          href={`/api/mcp/content/${encodeURIComponent(sessionId)}/${id}`}>{t('common.download')} MCP {index + 1}</a>
+      ))}
+      {message.role === 'tool' && message.name && message.name !== 'codemode' && message.toolCallId && <ToolProgressBoundary
+        key={`${message.id}:${message.toolCallId}`} terminal value={message.metadata?.toolProgress}
+        toolCallId={message.toolCallId} toolName={message.name} />}
+      {((!codeDetails && message.content) || images.length > 0) && <section className="message-output" aria-label={message.role === 'assistant' ? t('chat.response') : undefined}>
+        {message.content && renderMessageContent(message.content, message.role === 'user')}
         {images.map((block, index) => block.type === 'image' && (
           <a className="message-image" href={block.url} target="_blank" rel="noopener noreferrer" key={`image-${index}`}>
             <img src={block.url} alt={block.name || 'Attachment'} loading="lazy" />
           </a>
         ))}
       </section>}
-      {writtenFiles.length > 0 && <div className="files-written" aria-label={t('chat.filesWritten')}>
-        <strong>{t('chat.filesWritten')}</strong>
-        {writtenFiles.map(file => <button key={file} onClick={() => openWorkspaceFile(file)}>{file}</button>)}
-      </div>}
+      {hasWrittenFiles && <Suspense fallback={null}><WrittenFiles blocks={toolBlocks} t={t} openFile={openWorkspaceFile} /></Suspense>}
     </>
   );
-}
-
-const PROCESS_PREVIEW_LENGTH = 8_000;
-
-function ProcessBlock({ className, summary, content, fullContent, truncated, filename, defaultOpen, error, t }: {
-  className: string;
-  summary: string;
-  content: string;
-  fullContent?: string;
-  truncated?: boolean;
-  filename: string;
-  defaultOpen?: boolean;
-  error?: boolean;
-  t: TranslationFunction;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const complete = fullContent ?? content;
-  const long = truncated === true || complete.length > PROCESS_PREVIEW_LENGTH;
-  const visible = expanded
-    ? complete
-    : content.length > PROCESS_PREVIEW_LENGTH ? `${content.slice(0, PROCESS_PREVIEW_LENGTH)}\n…` : content;
-  const copy = async () => {
-    await navigator.clipboard?.writeText(complete);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1_500);
-  };
-  return <details className={`${className}${error ? ' error' : ''}`} open={defaultOpen}>
-    <summary>{summary}{truncated && <span className="truncated-badge">{t('chat.truncated')}</span>}</summary>
-    <div className="process-block-actions" role="toolbar" aria-label={t('chat.blockActions')}>
-      <button type="button" onClick={() => void copy()}>{copied ? t('chat.copied') : t('common.copy')}</button>
-      {long && <button type="button" onClick={() => setExpanded(value => !value)}>
-        {expanded ? t('chat.collapseOutput') : t('chat.expandOutput')}
-      </button>}
-      {long && <button type="button" onClick={() => downloadText(complete, filename)}>{t('common.download')}</button>}
-    </div>
-    {/\u001b\[[0-9;]*m/.test(visible) ? <AnsiOutput content={visible} /> : <ToolOutput content={visible} />}
-  </details>;
-}
-
-function downloadText(content: string, rawFilename: string): void {
-  const filename = rawFilename.replace(/[^a-z0-9._-]+/gi, '-').slice(0, 160) || 'output.txt';
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-function AnsiOutput({ content }: { content: string }) {
-  const colors: Record<number, string> = {
-    30: 'black', 31: 'red', 32: 'green', 33: 'yellow', 34: 'blue', 35: 'magenta', 36: 'cyan', 37: 'white',
-    90: 'bright-black', 91: 'bright-red', 92: 'bright-green', 93: 'bright-yellow', 94: 'bright-blue',
-    95: 'bright-magenta', 96: 'bright-cyan', 97: 'bright-white',
-  };
-  let color = '';
-  let bold = false;
-  let cursor = 0;
-  const segments: ReactNode[] = [];
-  for (const match of content.matchAll(/\u001b\[([0-9;]*)m/g)) {
-    if (match.index! > cursor) segments.push(<span key={cursor} className={[color && `ansi-${color}`, bold && 'ansi-bold'].filter(Boolean).join(' ')}>{content.slice(cursor, match.index)}</span>);
-    for (const code of (match[1] || '0').split(';').map(Number)) {
-      if (code === 0) { color = ''; bold = false; }
-      else if (code === 1) bold = true;
-      else if (colors[code]) color = colors[code];
-    }
-    cursor = match.index! + match[0].length;
-  }
-  if (cursor < content.length) segments.push(<span key={cursor} className={[color && `ansi-${color}`, bold && 'ansi-bold'].filter(Boolean).join(' ')}>{content.slice(cursor)}</span>);
-  return <pre className="tool-output ansi-output">{segments}</pre>;
-}
-
-function findWrittenFiles(blocks: NonNullable<Message['blocks']>): string[] {
-  const files = new Set<string>();
-  const add = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const candidate = value.trim().replace(/(?:[:#]L?\d+)$/i, '');
-    if (/^(?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.[a-z0-9]+$/i.test(candidate)) files.add(candidate);
-  };
-  for (const block of blocks) {
-    if (block.type === 'tool_call' && /(?:write|edit|patch|create|save)/i.test(block.name)) {
-      const input = block.input as Record<string, unknown>;
-      for (const [key, value] of Object.entries(input)) {
-        if (/(?:path|file|target|destination)/i.test(key)) add(value);
-      }
-    } else if (block.type === 'tool_result' && /(?:write|edit|patch|create|save)/i.test(block.name ?? '')) {
-      const pattern = /((?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|html|py|rb|rs|go|java|kt|sh|bash|yml|yaml|toml))(?:[:#]L?(\d+))?/gi;
-      for (const match of block.content.matchAll(pattern)) add(match[1]);
-    }
-  }
-  return [...files];
 }
 
 function openWorkspaceFile(path: string, line?: number): void {
@@ -2106,52 +2438,8 @@ function openWorkspaceFile(path: string, line?: number): void {
   window.setTimeout(() => window.dispatchEvent(new CustomEvent('aih-open-file', { detail: { path, line } })), 0);
 }
 
-function ToolOutput({ content }: { content: string }) {
-  const pathPattern = /((?:\.{0,2}\/)?(?:[\w@.+-]+\/)*[\w@.+ -]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md|mdx|css|scss|html|py|rb|rs|go|java|kt|sh|bash|yml|yaml|toml))(?:[:#]L?(\d+))?/gi;
-  return <pre className="tool-output">{content.split(pathPattern).map((part, index, values) => {
-    if (index % 3 !== 1) return index % 3 === 2 ? null : <Fragment key={index}>{part}</Fragment>;
-    const line = values[index + 1] ? Number(values[index + 1]) : undefined;
-    return <button key={index} onClick={() => openWorkspaceFile(part, line)}>{part}{line ? `:${line}` : ''}</button>;
-  })}</pre>;
-}
-
-function renderMessageContent(content: string): ReactNode {
-  return <MarkdownContent content={content} />;
-}
-
-async function fileDataUrl(file: Blob): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Image read failed'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function prepareImage(file: File): Promise<DraftAttachment> {
-  if (file.size > 10 * 1024 * 1024) throw new Error(`Image too large: ${file.name}`);
-  let blob: Blob = file;
-  if (!['image/gif', 'image/svg+xml'].includes(file.type)) {
-    try {
-      const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-      canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      bitmap.close();
-      const compressed = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', .86));
-      if (compressed && compressed.size < file.size) blob = compressed;
-    } catch { /* Keep the original when browser image decoding is unavailable. */ }
-  }
-  if (blob.size > 4 * 1024 * 1024) throw new Error(`Compressed image is still too large: ${file.name}`);
-  return {
-    id: crypto.randomUUID(),
-    name: file.name,
-    mediaType: blob.type || file.type,
-    size: blob.size,
-    url: await fileDataUrl(blob),
-  };
+function renderMessageContent(content: string, keepLineBreaks = false): ReactNode {
+  return <MarkdownContent content={content} keepLineBreaks={keepLineBreaks} />;
 }
 
 function playCompletionSound(volume = 0.25, attention = false): void {
@@ -2169,22 +2457,6 @@ function playCompletionSound(volume = 0.25, attention = false): void {
     oscillator.stop(context.currentTime + .18);
     oscillator.addEventListener('ended', () => void context.close());
   } catch { /* Audio is best effort and may require a user gesture. */ }
-}
-
-function messageUsageSummary(usage: TokenUsage): string {
-  const hasTokens = usage.totalTokens !== undefined || usage.inputTokens !== undefined || usage.outputTokens !== undefined;
-  const tokens = usage.totalTokens ?? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
-  return [hasTokens ? `${tokens.toLocaleString()} tokens` : '', usage.costUsd !== undefined ? `$${usage.costUsd.toFixed(4)}` : '']
-    .filter(Boolean).join(' · ');
-}
-
-function messageUsageDetails(usage: TokenUsage): string {
-  return [
-    usage.inputTokens !== undefined ? `${usage.inputTokens.toLocaleString()} input` : '',
-    usage.outputTokens !== undefined ? `${usage.outputTokens.toLocaleString()} output` : '',
-    usage.cacheReadTokens !== undefined ? `${usage.cacheReadTokens.toLocaleString()} cache read` : '',
-    usage.cacheWriteTokens !== undefined ? `${usage.cacheWriteTokens.toLocaleString()} cache write` : '',
-  ].filter(Boolean).join(' · ');
 }
 
 function formatDuration(durationMs: number): string {

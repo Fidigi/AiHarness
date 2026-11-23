@@ -1,0 +1,97 @@
+[1;33m[BUILD] Construction de l'image de test...[0m
+docker build -f .docker/Dockerfile.test \
+	-t ai-harness:test-latest \
+	--target test-runner \
+	.
+#1 [internal] load build definition from Dockerfile.test
+#1 sha256:2515e1f3eff7a50bd5d2e90c806f06e9c3d8f5f392d51172c017aa82a6f3050f
+#1 transferring dockerfile: 2.41kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24.15.0-bookworm-slim
+#2 sha256:474e51bc321101a059fc1d1d1b7416f0256fa6ceaf2fc5ea158c8d4309f5ab95
+#2 DONE 0.5s
+
+#3 [internal] load .dockerignore
+#3 sha256:d899e778d2c1eb08e036a048643090b87ddc8f2f90da7403b1f1b0335069f36d
+#3 transferring context: 1.17kB done
+#3 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:4bb86dc57a547bf79559e77f4640f49a364100e694e8d3afa39575391a1b78fd
+#12 DONE 0.0s
+
+#18 [base  1/15] FROM docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d
+#18 sha256:d7dc2c1a700a6b001b77996e757322ee31ca4909e052bc2c66d1d0f71b81bed4
+#18 resolve docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d 0.0s done
+#18 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:4bb86dc57a547bf79559e77f4640f49a364100e694e8d3afa39575391a1b78fd
+#12 transferring context: 188.79kB 0.1s done
+#12 DONE 0.1s
+
+#4 [base 11/15] RUN npm ci
+#4 sha256:fa8bbb2736792ca5f61275041ea9824837be213d73713fe7394bbf487fe38b26
+#4 CACHED
+
+#6 [base  9/15] COPY packages/web/package.json packages/web/
+#6 sha256:a6d50c202c3031c6e7eb7d06bfe83e3d632e3f8d6c58b3be5527b8823ba44769
+#6 CACHED
+
+#7 [base  6/15] COPY package.json package-lock.json .npmrc ./
+#7 sha256:079255c365b1b610393731c3818550fabe0da016a1a0c26fa833c1ec294c8982
+#7 CACHED
+
+#9 [base 13/15] RUN npm run build --workspace @ai-harness/core     && npm run build --workspace @ai-harness/cli     && npm run build --workspace @ai-harness/server     && npm run build --workspace @ai-harness/web
+#9 sha256:717f5e667d85446d0561c5bfae55209fbcd432c7dd34e2bbfa68047fae9e2457
+#9 CACHED
+
+#19 [base  8/15] COPY packages/cli/package.json packages/cli/
+#19 sha256:0418a5694d932a3d37365238b9f6392f658288b2a80f536ae3141a1c07ed0ed2
+#19 CACHED
+
+#16 [base 14/15] RUN node --test .docker/test-build.test.mjs
+#16 sha256:8efb110241c7e0868ebf7d150e730720ca25ffebe33276dadc1c162b7057d25c
+#16 CACHED
+
+#17 [base  5/15] WORKDIR /app
+#17 sha256:82a427ed08f91a3dd752ef44f0746fe81a465a9aa7cbb3c4d4af24dcd8a551cd
+#17 CACHED
+
+#5 [base 10/15] COPY packages/server/package.json packages/server/
+#5 sha256:a42b51e5400dbba54a1a593531bafc7abc1601ac435d477f9c152862c65b05c0
+#5 CACHED
+
+#13 [base  3/15] RUN apt-get update && apt-get install -y --no-install-recommends     chromium     fonts-liberation     fonts-noto-cjk     fonts-noto-color-emoji     libasound2     libatk-bridge2.0-0     libatk1.0-0     libc6     libcairo2     libcups2     libdbus-1-3     libexpat1     libfontconfig1     libgbm1     libgcc1     libglib2.0-0     libgtk-3-0     libnspr4     libnss3     libpango-1.0-0     libpangocairo-1.0-0     libstdc++6     libx11-xcb1     libxcb1     libxcomposite1     libxdamage1     libxfixes3     libxi6     libxrandr2     libxrender1     libxss1     libxtst6     ca-certificates     g++     git     make     python3     wget     && rm -rf /var/lib/apt/lists/*
+#13 sha256:fc1b37b5a4174fa175030838671168c707b11c8981c0d5e342a64d6cf412fed5
+#13 CACHED
+
+#11 [base  4/15] COPY .docker/test-fonts.conf /etc/fonts/local.conf
+#11 sha256:891b2e04ca4f7e1aed9c4aeabbce050d02f579fde36dc7c37c09b4c0a7736274
+#11 CACHED
+
+#8 [base  7/15] COPY packages/core/package.json packages/core/
+#8 sha256:dc3da072e4c6d2312cf819458e5a46e0c2e655e258e41107b2a843933e3bb36b
+#8 CACHED
+
+#15 [base 12/15] COPY . .
+#15 sha256:d1b97f5ff201e64deff9b0633f4e47bbe534197baa4a6b8d976bc7be521ed0e0
+#15 CACHED
+
+#14 [base  2/15] RUN npm install --global npm@12.1.0
+#14 sha256:a072c845a7e874e563d9d994d8a539c30590639196a9e0791aec2dc885476c22
+#14 CACHED
+
+#10 [base 15/15] RUN node --test .docker/e2e-suites.test.mjs
+#10 sha256:4a7402dd8ffa6e78501b84d88371feb243173f2b960ae8e10cd1bab7f39874aa
+#10 CACHED
+
+#20 exporting to image
+#20 sha256:9084809e28a0016c02141d13fc6588904035ae861e96fc7fc1745ebc21fb462f
+#20 exporting layers done
+#20 exporting manifest sha256:479ef95ecbd4a046acd48d964b06b406bcd0d469e99e39b3e11d0f121122be0c done
+#20 exporting config sha256:caf1bab847a66dd04d13c8ba53ee93322dac268e0b849c8975044a3d044af3c8 done
+#20 naming to docker.io/library/ai-harness:test-latest done
+#20 unpacking to docker.io/library/ai-harness:test-latest done
+#20 DONE 0.0s

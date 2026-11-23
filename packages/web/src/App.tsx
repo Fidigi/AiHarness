@@ -2,31 +2,39 @@
 // Web App - Main Component
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
-import WorkspacePanel from './components/WorkspacePanel';
+import { Icon } from './components/Icon';
+import IconControlHints from './components/IconControlHints';
+import WorkspacePanelBoundary from './components/WorkspacePanelBoundary';
 import LoginView from './components/LoginView';
 import PwaStatus from './components/PwaStatus';
-import CommandPalette from './components/CommandPalette';
+import CommandPaletteBoundary from './components/CommandPaletteBoundary';
 import StatusCenter from './components/StatusCenter';
 import { SubagentMonitor } from './components/SubagentMonitor';
 import { useI18n } from './hooks/useI18n';
 import { getAgentRun, getWebAuthStatus, listRunningAgentRuns } from './services/api';
-import { useSessionStore } from './store/session-store';
+import { captureCanonicalRunGuard, useSessionStore } from './store/session-store';
 import { readPreferences, usePreferences } from './store/preferences';
 import { matchesShortcut } from './services/keyboard';
+import { currentEscapeModal, keyboardComposing } from './services/escape-stack';
+import { useEscapeLayer } from './hooks/useEscapeLayer';
+import { InteractionViewLifetime } from './services/interaction-scope';
 
 const SettingsView = lazy(() => import('./components/SettingsView'));
+const Sidebar = lazy(() => import('./components/Sidebar'));
 const TerminalPanel = lazy(() => import('./components/TerminalPanel'));
 
 function App() {
   const [isNarrow, setIsNarrow] = useState(() => window.matchMedia?.('(max-width: 959px)').matches ?? false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [explorerHost, setExplorerHost] = useState<HTMLDivElement | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(() => readPreferences().sidebarVisible);
   const [filesOpen, setFilesOpen] = useState(() => !window.matchMedia?.('(max-width: 959px)').matches && readPreferences().filesOpen);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteModal, setPaletteModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState<HTMLElement | null>(null);
   const [terminalWorkspaceId, setTerminalWorkspaceId] = useState<string>();
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const location = useLocation();
@@ -36,19 +44,47 @@ function App() {
   const hydrateProviders = useSessionStore(state => state.hydrateProviders);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const createSession = useSessionStore(state => state.createSession);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
   const workspace = useSessionStore(state => state.workspace);
   const setRun = useSessionStore(state => state.setRun);
   const { t } = useI18n();
   const [preferences, setPreferences] = usePreferences();
+  const lastChatAddress = useRef('/');
+  const settingsInvoker = useRef<HTMLElement | null>(null);
+  const settingsDiscard = useRef<((discard?: () => void) => true) | null>(null);
+  const previousSettings = useRef(false);
+  useLayoutEffect(() => {
+    const settings = location.pathname.startsWith('/settings');
+    if (settings && !previousSettings.current) {
+      settingsInvoker.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    const leaving = previousSettings.current && !settings;
+    previousSettings.current = settings;
+    if (!settings) lastChatAddress.current = `${location.pathname}${location.search}${location.hash}`;
+    if (!leaving) return;
+    const invoker = settingsInvoker.current;
+    let newer = false;
+    const retire = () => { newer = true; };
+    document.addEventListener('focusin', retire, true);
+    const frame = requestAnimationFrame(() => {
+      document.removeEventListener('focusin', retire, true);
+      if (newer || document.activeElement !== document.body
+        || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+      const available = invoker !== document.body && invoker?.isConnected && invoker.getClientRects().length > 0
+        && !invoker.closest('[inert], [aria-hidden="true"]') && !invoker.matches(':disabled')
+        && !(coarse && invoker.matches('input, textarea, [contenteditable="true"]'));
+      const target = available ? invoker : document.querySelector<HTMLElement>('main.main-content');
+      target?.focus({ preventScroll: true });
+    });
+    return () => { cancelAnimationFrame(frame); document.removeEventListener('focusin', retire, true); };
+  }, [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
     const media = window.matchMedia?.('(max-width: 959px)');
     const update = () => {
       const narrow = media?.matches ?? false;
       setIsNarrow(narrow);
-      setFilesOpen(narrow ? false : readPreferences().filesOpen);
       if (!narrow) setSidebarOpen(false);
     };
     media?.addEventListener('change', update);
@@ -85,27 +121,37 @@ function App() {
     navigate(`/chat/${encodeURIComponent(activeSessionId)}?cwd=${encodeURIComponent(workspace.cwd)}`, { replace: true });
   }, [activeSessionId, location.pathname, navigate, workspace]);
 
+  const runPollLifetime = useRef(new InteractionViewLifetime());
+  const runPollView = runPollLifetime.current.enter(JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash, authenticated]));
+  const runPollViewRef = useRef(runPollView);
+  runPollViewRef.current = runPollView;
   useEffect(() => {
-    if (!workspace) return;
+    if (!workspace || !authenticated) return;
     let disposed = false;
     let request: AbortController | undefined;
     const refreshRuns = async () => {
       request?.abort();
       request = new AbortController();
       const signal = request.signal;
+      // The unversioned list is only a discovery hint. It cannot overwrite work
+      // admitted/updated while this request was pending (including an empty list).
+      const captured = useSessionStore.getState();
+      const guardFor = (sessionId: string) => captureCanonicalRunGuard(captured, sessionId);
       const result = await listRunningAgentRuns(signal);
-      if (disposed || signal.aborted || !result.success || !result.data) return;
+      if (disposed || signal.aborted || runPollViewRef.current !== runPollView || !result.success || !result.data) return;
       const running = result.data.filter(run => run.workspaceId ? run.workspaceId === workspace.id : run.cwd === workspace.cwd);
       const runningIds = new Set(running.map(run => run.id));
-      for (const run of running) setRun(run.sessionId, run);
-      const stale = Object.values(useSessionStore.getState().runs).filter(run => (
+      for (const run of running) setRun(run.sessionId, run, guardFor(run.sessionId));
+      const stale = Object.values(captured.runs).filter(run => (
         (run.workspaceId ? run.workspaceId === workspace.id : run.cwd === workspace.cwd)
         && !['completed', 'failed', 'stopped'].includes(run.phase)
         && !runningIds.has(run.id)
       ));
       await Promise.all(stale.map(async run => {
         const terminal = await getAgentRun(run.id, signal);
-        if (!disposed && !signal.aborted && terminal.success && terminal.data) setRun(run.sessionId, terminal.data);
+        if (!disposed && !signal.aborted && runPollViewRef.current === runPollView && terminal.success && terminal.data && terminal.data.id === run.id) {
+          setRun(run.sessionId, terminal.data, { ...guardFor(run.sessionId), canonical: false });
+        }
       }));
     };
     const onVisibility = () => { if (!document.hidden) void refreshRuns(); };
@@ -118,17 +164,21 @@ function App() {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [setRun, workspace?.cwd, workspace?.id]);
+  }, [setRun, workspace?.cwd, workspace?.id, activeSessionId, location.pathname, location.search, location.hash, location.key, authenticated, runPollView]);
 
   useEffect(() => {
     const requestTerminal = () => {
-      if (workspace) setTerminalWorkspaceId(workspace.id);
+      if (workspace) {
+        if (window.matchMedia?.('(max-width: 959px)').matches) setFilesOpen(false);
+        setTerminalWorkspaceId(workspace.id);
+      }
     };
     window.addEventListener('aih-toggle-terminal', requestTerminal);
     window.addEventListener('aih-open-terminal', requestTerminal);
     if (workspace) {
       try {
-        const stored = JSON.parse(sessionStorage.getItem(`ai-harness-terminals-v1:${workspace.id}`) || 'null') as {
+        const raw = sessionStorage.getItem(`ai-harness-terminals-v1:${workspace.id}`);
+        const stored = JSON.parse(raw && raw.length <= 32_768 ? raw : 'null') as {
           version?: number; open?: boolean; ids?: unknown;
         } | null;
         setTerminalWorkspaceId(stored?.version === 1 && stored.open === true && Array.isArray(stored.ids)
@@ -141,21 +191,24 @@ function App() {
     };
   }, [location.pathname, workspace?.id]);
 
-  useEffect(() => {
+  // Register before the bootstrap DOM is observable, not in a later passive task.
+  useLayoutEffect(() => {
     const toggleFiles = () => {
       setFilesOpen(!filesOpen);
       setPreferences({ filesOpen: !filesOpen });
     };
     const shortcuts = (event: KeyboardEvent) => {
-      if (event.target instanceof Element && event.target.closest('[data-shortcut-capture]')) return;
+      if (event.key === 'Escape' || keyboardComposing(event, document)
+        || event.target instanceof Element && event.target.closest('[data-shortcut-capture]')) return;
       const binding = preferences.keybindings;
       let handled = true;
       if (matchesShortcut(event, binding.newSession)) {
-        createSession();
-        const id = useSessionStore.getState().activeSessionId;
-        if (id) navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
+        if (!settingsDiscard.current?.()) {
+          const id = useSessionStore.getState().createSession();
+          navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
+        }
       } else if (matchesShortcut(event, binding.focusPrompt)) {
-        window.dispatchEvent(new CustomEvent('aih-focus-prompt'));
+        if (!currentEscapeModal(document)) window.dispatchEvent(new CustomEvent('aih-focus-prompt'));
       } else if (matchesShortcut(event, binding.toggleSidebar)) {
         if (isNarrow) setSidebarOpen(value => !value);
         else {
@@ -182,60 +235,65 @@ function App() {
       window.removeEventListener('aih-files-toggle', toggleFiles);
       window.removeEventListener('aih-show-files', showFiles);
     };
-  }, [createSession, filesOpen, isNarrow, navigate, preferences.keybindings, setPreferences, sidebarVisible, workspace?.cwd]);
+  }, [filesOpen, isNarrow, navigate, preferences.keybindings, setPreferences, sidebarVisible, workspace?.cwd]);
 
   useEffect(() => {
     setSidebarOpen(false);
     setPaletteOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    const closeOverlays = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || paletteOpen) return;
-      if (sidebarOpen) setSidebarOpen(false);
-      else if (filesOpen && window.matchMedia?.('(max-width: 959px)').matches) setFilesOpen(false);
-    };
-    window.addEventListener('keydown', closeOverlays);
-    return () => window.removeEventListener('keydown', closeOverlays);
-  }, [filesOpen, paletteOpen, sidebarOpen]);
+  useEscapeLayer(true, 'navigation', () => {
+    // The real modal owns Escape once loaded; pending imports still cancel here.
+    if (paletteOpen) setPaletteOpen(false);
+    else if (sidebarOpen) setSidebarOpen(false);
+    else if (filesOpen && isNarrow) setFilesOpen(false);
+    else if (location.pathname.startsWith('/settings')) navigate(lastChatAddress.current);
+    else return false;
+    return true;
+  });
 
   if (authenticated === null) return <div className="app-loading" role="status">{t('common.loading')}…</div>;
   if (!authenticated) return <LoginView onLogin={() => setAuthenticated(true)} />;
 
+  const terminalControl = workspace && terminalWorkspaceId !== workspace.id
+    ? <button type="button" className="terminal-launcher" onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))}
+      aria-label={t('terminal.open')}><Icon name="terminal" /></button> : null;
+
   return (
-    <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
+    <div className={`app ${sidebarVisible ? '' : 'sidebar-hidden'}`} inert={!!settingsModal || undefined}>
       <button className="mobile-menu" onClick={() => setSidebarOpen(open => !open)}
-        aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><span className="menu-icon" aria-hidden="true" /></button>
+        aria-expanded={sidebarOpen} aria-label={t('sidebar.toggle')}><Icon name="menu" /></button>
       {!location.pathname.startsWith('/settings') && <button className="mobile-files" onClick={() => {
         setFilesOpen(!filesOpen);
         setPreferences({ filesOpen: !filesOpen });
       }}
-        aria-expanded={filesOpen} aria-label={t('files.explorer')}>☷</button>}
+        aria-expanded={filesOpen} aria-label={t('files.explorer')}><Icon name="folder" /></button>}
       {sidebarOpen && <button className="mobile-backdrop" aria-label={t('common.close')} onClick={() => setSidebarOpen(false)} />}
-      {(isNarrow || sidebarVisible) && <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
-        inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} />}
-      <main className="main-content">
+      {(isNarrow || sidebarVisible) && <Suspense fallback={<p className={`sidebar ${sidebarOpen ? 'open' : ''}`} role="status">{t('common.loading')}…</p>}>
+        <Sidebar isOpen={sidebarOpen} modal={isNarrow && sidebarOpen}
+          inactive={isNarrow && !sidebarOpen} onRequestClose={() => setSidebarOpen(false)} explorerHostRef={setExplorerHost} />
+      </Suspense>}
+      <main className="main-content" tabIndex={-1}>
         <Routes>
-          <Route path="/" element={<ChatView />} />
-          <Route path="/chat/:id" element={<ChatView />} />
+          <Route path="/" element={<ChatView terminalControl={terminalControl} />} />
+          <Route path="/chat/:id" element={<ChatView terminalControl={terminalControl} />} />
           <Route path="/settings" element={<Suspense fallback={
             <div className="app-loading" role="status">{t('common.loading')}…</div>
-          }><SettingsView /></Suspense>} />
+          }><SettingsView leaveRef={settingsDiscard} onClose={() => navigate(lastChatAddress.current)} onEscape={close => paletteOpen ? setPaletteOpen(false) : close()} onModalChange={setSettingsModal} suspended={paletteModal} /></Suspense>} />
         </Routes>
       </main>
-      {!location.pathname.startsWith('/settings') && filesOpen && <WorkspacePanel isOpen={filesOpen} onRequestClose={() => {
+      {!location.pathname.startsWith('/settings') && workspace && filesOpen && <WorkspacePanelBoundary key={JSON.stringify([workspace?.id, workspace?.cwd, activeSessionId, location.key, location.pathname, location.search, location.hash])} explorerHost={isNarrow ? null : explorerHost} onRequestClose={() => {
         setFilesOpen(false);
         setPreferences({ filesOpen: false });
       }} />}
-      {!location.pathname.startsWith('/settings') && terminalWorkspaceId !== workspace?.id && workspace
-        && <button className="terminal-launcher" onClick={() => setTerminalWorkspaceId(workspace.id)}
-          aria-label={t('terminal.open')}>⌘</button>}
       {!location.pathname.startsWith('/settings') && workspace && terminalWorkspaceId === workspace.id
         && <Suspense fallback={null}><TerminalPanel key={workspace.id} initialOpen /></Suspense>}
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {paletteOpen && <CommandPaletteBoundary onClose={() => setPaletteOpen(false)} onModalChange={setPaletteModal}
+        leaveRef={settingsDiscard} />}
       <SubagentMonitor />
-      <StatusCenter />
+      <StatusCenter container={settingsModal} />
       <PwaStatus />
+      <IconControlHints />
     </div>
   );
 }

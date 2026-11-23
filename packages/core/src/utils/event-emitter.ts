@@ -36,24 +36,35 @@ export interface EventMap {
 
 type StoredHandler = EventHandler<unknown>;
 
+const MAX_EVENT_TYPES = 512;
+const MAX_LISTENERS_PER_EVENT = 256;
+
 /** Minimal typed event emitter with synchronous and asynchronous listeners. */
 export class EventEmitter<TEvents extends object> {
   private listeners = new Map<keyof TEvents, Set<StoredHandler>>();
   private onceListeners = new Map<keyof TEvents, Set<StoredHandler>>();
 
   on<K extends keyof TEvents>(event: K, handler: EventHandler<TEvents[K]>): void {
+    if (this.listeners.get(event)?.has(handler as StoredHandler)) return;
+    this.assertCapacity(event);
     if (!this.listeners.has(event)) this.listeners.set(event, new Set());
     this.listeners.get(event)!.add(handler as StoredHandler);
   }
 
   once<K extends keyof TEvents>(event: K, handler: EventHandler<TEvents[K]>): void {
+    if (this.onceListeners.get(event)?.has(handler as StoredHandler)) return;
+    this.assertCapacity(event);
     if (!this.onceListeners.has(event)) this.onceListeners.set(event, new Set());
     this.onceListeners.get(event)!.add(handler as StoredHandler);
   }
 
   off<K extends keyof TEvents>(event: K, handler: EventHandler<TEvents[K]>): void {
-    this.listeners.get(event)?.delete(handler as StoredHandler);
-    this.onceListeners.get(event)?.delete(handler as StoredHandler);
+    const regular = this.listeners.get(event);
+    const once = this.onceListeners.get(event);
+    regular?.delete(handler as StoredHandler);
+    once?.delete(handler as StoredHandler);
+    if (regular?.size === 0) this.listeners.delete(event);
+    if (once?.size === 0) this.onceListeners.delete(event);
   }
 
   /** Emit an event and wait for every listener. Listener failures are isolated. */
@@ -67,8 +78,8 @@ export class EventEmitter<TEvents extends object> {
     this.onceListeners.delete(event);
 
     await Promise.all([
-      ...regular.map(handler => this.invoke(event, handler, data, false)),
-      ...once.map(handler => this.invoke(event, handler, data, true)),
+      ...regular.map(handler => this.invoke(handler, data, false)),
+      ...once.map(handler => this.invoke(handler, data, true)),
     ]);
   }
 
@@ -95,16 +106,22 @@ export class EventEmitter<TEvents extends object> {
   }
 
   private async invoke<K extends keyof TEvents>(
-    event: K,
     handler: StoredHandler,
     data: TEvents[K],
     once: boolean,
   ): Promise<void> {
     try {
       await handler(data);
-    } catch (error) {
+    } catch {
       const kind = once ? 'once listener' : 'listener';
-      console.error(`[EventEmitter] Error in ${kind} for "${String(event)}":`, error);
+      console.error(`[EventEmitter] ${kind} failed.`);
     }
+  }
+
+  private assertCapacity<K extends keyof TEvents>(event: K): void {
+    const known = this.listeners.has(event) || this.onceListeners.has(event);
+    const eventTypes = new Set([...this.listeners.keys(), ...this.onceListeners.keys()]);
+    if (!known && eventTypes.size >= MAX_EVENT_TYPES) throw new Error('Event type limit reached.');
+    if (this.listenerCount(event) >= MAX_LISTENERS_PER_EVENT) throw new Error('Event listener limit reached.');
   }
 }

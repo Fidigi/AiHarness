@@ -25,6 +25,6 @@ describe('EncryptedCredentialStore', () => {
   });
 
   it('rejects weak master keys', () => {
-    expect(() => new EncryptedCredentialStore('/tmp/test', 'short')).toThrow('16 caractères');
+    expect(() => new EncryptedCredentialStore('/tmp/test', 'short')).toThrow('at least 16 bytes');
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockProvider, ProviderFactory } from '../providers';
 import { SessionManager } from '../sessions/session-manager';
+import { AI_HARNESS_EXTENSION_API_VERSION } from '../public-api-version';
 import { ExtensionRegistry, type ExtensionRuntimeContext } from './extension-registry';
 
 function context(sessionManager = new SessionManager()): ExtensionRuntimeContext {
@@ -11,6 +12,15 @@ function context(sessionManager = new SessionManager()): ExtensionRuntimeContext
 }
 
 describe('ExtensionRegistry', () => {
+  it('supplies the versioned public API to extension factories', async () => {
+    const registry = new ExtensionRegistry();
+    let observedVersion: number | undefined;
+
+    await registry.load('version-probe', api => { observedVersion = api.version; });
+
+    expect(observedVersion).toBe(AI_HARNESS_EXTENSION_API_VERSION);
+  });
+
   it('loads, invokes and unloads extension commands', async () => {
     const registry = new ExtensionRegistry();
     await registry.load('hello', api => {
@@ -73,6 +83,21 @@ describe('ExtensionRegistry', () => {
       cancelled: false,
       data: { sessionId: 'session-1', provider: 'mock', input: 'start one two' },
     });
+  });
+
+  it('does not run subsequent model hooks after the operation signal is aborted', async () => {
+    const registry = new ExtensionRegistry();
+    const controller = new AbortController();
+    const first = vi.fn(() => { controller.abort(); });
+    const skipped = vi.fn();
+    await registry.load('model-policy', api => {
+      api.before('before:model', first); api.before('before:model', skipped);
+    });
+    const data = { type: 'classifier' as const, request: { model: 'virtual', input: 'x', labels: ['a'] },
+      context: context(), signal: controller.signal };
+    expect((await registry.runBefore('before:model', data)).cancelled).toBe(true);
+    expect((await registry.runBefore('before:model', data)).cancelled).toBe(true);
+    expect(first).toHaveBeenCalledTimes(1); expect(skipped).not.toHaveBeenCalled();
   });
 
   it('stops hooks on cancellation and preserves the reason', async () => {

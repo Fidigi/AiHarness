@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
+import { selectGeneralSettings } from './fixtures/settings-navigation';
 
 test.describe('Internationalisation', () => {
   test('détecte le français puis mémorise un choix explicite', async ({ page }) => {
@@ -44,8 +45,11 @@ test.describe('Internationalisation', () => {
     await page.goto('/settings');
 
     await expect(page.getByRole('heading', { name: 'Réglages', exact: true })).toBeVisible();
+    await selectGeneralSettings(page, 'authentication');
     await expect(page.getByRole('heading', { name: 'Authentification du serveur' })).toBeVisible();
+    await selectGeneralSettings(page, 'about');
     await expect(page.getByText('Nombre total de sessions : 0')).toBeVisible();
+    await selectGeneralSettings(page, 'behavior');
     await expect(page.getByRole('button', { name: 'Enregistrer' }).first()).toBeVisible();
   });
 });

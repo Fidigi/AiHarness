@@ -1,0 +1,104 @@
+{
+  "session": {
+    "id": "v2-tree",
+    "schemaVersion": 2,
+    "title": "Contract tree",
+    "messages": [
+      {
+        "id": "message-root",
+        "role": "user",
+        "content": "Root question",
+        "timestamp": "<TIMESTAMP>",
+        "blocks": [
+          { "type": "text", "text": "Root question" }
+        ]
+      },
+      {
+        "id": "message-active",
+        "role": "assistant",
+        "content": "Active answer",
+        "timestamp": "<TIMESTAMP>",
+        "provider": "mock",
+        "model": "mock-model",
+        "usage": { "inputTokens": 4, "outputTokens": 2, "totalTokens": 6 },
+        "parentMessageId": "message-root"
+      }
+    ],
+    "commands": [
+      {
+        "id": "command-active",
+        "command": "printf contract",
+        "cwd": "/workspace",
+        "timestamp": "<TIMESTAMP>",
+        "status": "completed",
+        "parentEntryId": "message-active",
+        "output": "contract",
+        "exitCode": 0,
+        "excludedFromContext": false
+      }
+    ],
+    "createdAt": "<TIMESTAMP>",
+    "updatedAt": "<TIMESTAMP>",
+    "activeLeafId": "summary-active",
+    "cwd": "/workspace",
+    "model": "mock-model",
+    "thinking": "medium",
+    "toolPreset": "read-only",
+    "providerConfig": { "type": "mock", "model": "mock-model" },
+    "metadata": { "hasBranchedHistory": true, "custom": "retained" }
+  },
+  "rawEntries": [
+    {
+      "id": "message-root",
+      "type": "message",
+      "version": 2,
+      "timestamp": "<TIMESTAMP>",
+      "role": "user",
+      "content": "Root question",
+      "blocks": [{ "type": "text", "text": "Root question" }]
+    },
+    {
+      "id": "message-active",
+      "type": "message",
+      "version": 2,
+      "timestamp": "<TIMESTAMP>",
+      "role": "assistant",
+      "content": "Active answer",
+      "parentMessageId": "message-root",
+      "provider": "mock",
+      "model": "mock-model",
+      "usage": { "inputTokens": 4, "outputTokens": 2, "totalTokens": 6 }
+    },
+    {
+      "id": "command-active",
+      "type": "command",
+      "version": 2,
+      "timestamp": "<TIMESTAMP>",
+      "parentEntryId": "message-active",
+      "command": "printf contract",
+      "cwd": "/workspace",
+      "status": "completed",
+      "output": "contract",
+      "exitCode": 0,
+      "excludedFromContext": false
+    },
+    {
+      "id": "summary-active",
+      "type": "branch_summary",
+      "version": 2,
+      "timestamp": "<TIMESTAMP>",
+      "parentEntryId": "command-active",
+      "branchName": "Active branch",
+      "summary": "Active branch summary"
+    },
+    {
+      "id": "message-abandoned",
+      "type": "message",
+      "version": 2,
+      "timestamp": "<TIMESTAMP>",
+      "role": "assistant",
+      "content": "Abandoned answer",
+      "parentMessageId": "message-root"
+    }
+  ]
+}

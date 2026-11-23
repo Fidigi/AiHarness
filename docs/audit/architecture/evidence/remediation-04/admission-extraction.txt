@@ -1,0 +1,435 @@
+npm notice run @ai-harness/core@0.1.0 build
+npm notice run node ../../scripts/run-typescript.mjs
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/core/src/agent/prestart-admission.test.ts packages/core/src/agent/provider-turn.test.ts packages/core/src/agent/tool-loop.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/core/src/agent/prestart-admission.test.ts (5 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:05:57
+   Duration  1.53s (transform 73%, import 26%)
+
+{
+  "scope": "src TS/TSX excluding tests, declarations and fixture directories; literal imports/re-exports/require only; no proof of external SDK usage or computed worker/assets",
+  "sourceDigest": "aea5a2e2ed877a584645f8f53fc79a6e1a5d951e012a1a727e2b7cf853fa3519",
+  "packages": {
+    "core": {
+      "files": 220,
+      "lines": 55437
+    },
+    "cli": {
+      "files": 59,
+      "lines": 14324
+    },
+    "server": {
+      "files": 53,
+      "lines": 14618
+    },
+    "web": {
+      "files": 126,
+      "lines": 19652
+    }
+  },
+  "moduleCount": 458,
+  "edgeCount": 1774,
+  "largest": [
+    {
+      "file": "packages/core/src/providers/index.ts",
+      "lines": 7364
+    },
+    {
+      "file": "packages/core/src/sessions/session-manager.ts",
+      "lines": 3692
+    },
+    {
+      "file": "packages/web/src/components/ChatView.tsx",
+      "lines": 2473
+    },
+    {
+      "file": "packages/cli/src/index.ts",
+      "lines": 2397
+    },
+    {
+      "file": "packages/core/src/mcp/config-import.ts",
+      "lines": 2263
+    },
+    {
+      "file": "packages/cli/src/rpc/rpc-controller.ts",
+      "lines": 2076
+    },
+    {
+      "file": "packages/web/src/services/api.ts",
+      "lines": 1994
+    },
+    {
+      "file": "packages/core/src/mcp/config-inventory.ts",
+      "lines": 1900
+    },
+    {
+      "file": "packages/cli/src/commands/handler.ts",
+      "lines": 1867
+    },
+    {
+      "file": "packages/core/src/plugins/plugin-service.ts",
+      "lines": 1778
+    },
+    {
+      "file": "packages/server/src/index.ts",
+      "lines": 1712
+    },
+    {
+      "file": "packages/web/src/store/session-store.ts",
+      "lines": 1262
+    },
+    {
+      "file": "packages/core/src/security/project-trust.ts",
+      "lines": 1236
+    },
+    {
+      "file": "packages/core/src/providers/credentials.ts",
+      "lines": 1223
+    },
+    {
+      "file": "packages/core/src/agent/runtime.ts",
+      "lines": 1167
+    }
+  ],
+  "crossPackageCounts": {
+    "cli -> core": 64,
+    "server -> core": 59,
+    "web -> core": 43
+  },
+  "forbiddenCoreEdges": [],
+  "webCoreValueEdges": [
+    {
+      "from": "packages/web/src/components/ChatView.tsx",
+      "to": "packages/core/src/tools/shell-input.ts",
+      "line": 4,
+      "typeOnly": false,
+      "dynamic": false
+    }
+  ],
+  "cycles": [
+    [
+      "packages/core/src/providers/anthropic-oauth.ts",
+      "packages/core/src/providers/credentials.ts",
+      "packages/core/src/providers/kimi-coding-oauth.ts",
+      "packages/core/src/providers/meta-oauth.ts",
+      "packages/core/src/providers/oauth-device.ts",
+      "packages/core/src/providers/xai-oauth.ts"
+    ],
+    [
+      "packages/core/src/extensions/index.ts",
+      "packages/core/src/extensions/module-loader.ts",
+      "packages/core/src/extensions/native-module-alias.ts",
+      "packages/core/src/extensions/typescript-module.ts",
+      "packages/core/src/index.ts"
+    ],
+    [
+      "packages/core/src/providers/classification-questions.ts",
+      "packages/core/src/providers/specialized-models.ts"
+    ],
+    [
+      "packages/core/src/tools/codemode.ts",
+      "packages/core/src/tools/tool-search.ts"
+    ],
+    [
+      "packages/web/src/store/session-store.ts",
+      "packages/web/src/store/workspace-refresh.ts"
+    ]
+  ],
+  "cycleEdges": [
+    [
+      {
+        "from": "packages/core/src/providers/anthropic-oauth.ts",
+        "to": "packages/core/src/providers/credentials.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/anthropic-oauth.ts",
+        "to": "packages/core/src/providers/oauth-device.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/credentials.ts",
+        "to": "packages/core/src/providers/xai-oauth.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/credentials.ts",
+        "to": "packages/core/src/providers/meta-oauth.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/credentials.ts",
+        "to": "packages/core/src/providers/anthropic-oauth.ts",
+        "line": 4,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/credentials.ts",
+        "to": "packages/core/src/providers/kimi-coding-oauth.ts",
+        "line": 6,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/kimi-coding-oauth.ts",
+        "to": "packages/core/src/providers/credentials.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/kimi-coding-oauth.ts",
+        "to": "packages/core/src/providers/oauth-device.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/meta-oauth.ts",
+        "to": "packages/core/src/providers/credentials.ts",
+        "line": 1,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/meta-oauth.ts",
+        "to": "packages/core/src/providers/oauth-device.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/oauth-device.ts",
+        "to": "packages/core/src/providers/meta-oauth.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/oauth-device.ts",
+        "to": "packages/core/src/providers/kimi-coding-oauth.ts",
+        "line": 4,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/xai-oauth.ts",
+        "to": "packages/core/src/providers/credentials.ts",
+        "line": 2,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/xai-oauth.ts",
+        "to": "packages/core/src/providers/oauth-device.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      }
+    ],
+    [
+      {
+        "from": "packages/core/src/extensions/index.ts",
+        "to": "packages/core/src/extensions/module-loader.ts",
+        "line": 4,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/extensions/module-loader.ts",
+        "to": "packages/core/src/extensions/typescript-module.ts",
+        "line": 15,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/extensions/module-loader.ts",
+        "to": "packages/core/src/extensions/native-module-alias.ts",
+        "line": 17,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/extensions/native-module-alias.ts",
+        "to": "packages/core/src/index.ts",
+        "line": 154,
+        "typeOnly": false,
+        "dynamic": true
+      },
+      {
+        "from": "packages/core/src/extensions/typescript-module.ts",
+        "to": "packages/core/src/index.ts",
+        "line": 23,
+        "typeOnly": false,
+        "dynamic": true
+      },
+      {
+        "from": "packages/core/src/index.ts",
+        "to": "packages/core/src/extensions/index.ts",
+        "line": 414,
+        "typeOnly": false,
+        "dynamic": false
+      }
+    ],
+    [
+      {
+        "from": "packages/core/src/providers/classification-questions.ts",
+        "to": "packages/core/src/providers/specialized-models.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/providers/specialized-models.ts",
+        "to": "packages/core/src/providers/classification-questions.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      }
+    ],
+    [
+      {
+        "from": "packages/core/src/tools/codemode.ts",
+        "to": "packages/core/src/tools/tool-search.ts",
+        "line": 11,
+        "typeOnly": false,
+        "dynamic": false
+      },
+      {
+        "from": "packages/core/src/tools/tool-search.ts",
+        "to": "packages/core/src/tools/codemode.ts",
+        "line": 1,
+        "typeOnly": false,
+        "dynamic": false
+      }
+    ],
+    [
+      {
+        "from": "packages/web/src/store/session-store.ts",
+        "to": "packages/web/src/store/workspace-refresh.ts",
+        "line": 799,
+        "typeOnly": false,
+        "dynamic": true
+      },
+      {
+        "from": "packages/web/src/store/workspace-refresh.ts",
+        "to": "packages/web/src/store/session-store.ts",
+        "line": 3,
+        "typeOnly": false,
+        "dynamic": false
+      }
+    ]
+  ],
+  "unreachableFromDeclaredRoots": [
+    "packages/core/src/media/image-worker.ts",
+    "packages/web/src/components/provider-settings.fixture.tsx",
+    "packages/web/src/test-support/native-frontend-relay.ts"
+  ],
+  "unresolved": [
+    {
+      "file": "packages/web/src/components/CodemodeCard.tsx",
+      "line": 3,
+      "spec": "./codemode-card.css"
+    },
+    {
+      "file": "packages/web/src/components/ExtensionInteractionDialog.tsx",
+      "line": 4,
+      "spec": "./extension-interaction-dialog.css"
+    },
+    {
+      "file": "packages/web/src/components/LinkedDirectoryModal.tsx",
+      "line": 8,
+      "spec": "./linked-directory-modal.css"
+    },
+    {
+      "file": "packages/web/src/components/MarkdownContentRenderer.tsx",
+      "line": 8,
+      "spec": "./MarkdownContent.css"
+    },
+    {
+      "file": "packages/web/src/components/OAuthPastePanel.tsx",
+      "line": 4,
+      "spec": "./provider-lifecycle.css"
+    },
+    {
+      "file": "packages/web/src/components/ProviderRenamePanel.tsx",
+      "line": 6,
+      "spec": "./provider-lifecycle.css"
+    },
+    {
+      "file": "packages/web/src/components/ResourceBatchControls.tsx",
+      "line": 6,
+      "spec": "./resource-batches.css"
+    },
+    {
+      "file": "packages/web/src/components/SessionRowCopyMenu.tsx",
+      "line": 10,
+      "spec": "./session-row-copy.css"
+    },
+    {
+      "file": "packages/web/src/components/SettingsLocaleBoundary.tsx",
+      "line": 6,
+      "spec": "./settings-locale-boundary.css"
+    },
+    {
+      "file": "packages/web/src/components/SettingsView.tsx",
+      "line": 6,
+      "spec": "../settings.css"
+    },
+    {
+      "file": "packages/web/src/components/Sidebar.tsx",
+      "line": 6,
+      "spec": "../sidebar.css"
+    },
+    {
+      "file": "packages/web/src/components/ToolProgressCard.tsx",
+      "line": 5,
+      "spec": "./tool-progress-card.css"
+    },
+    {
+      "file": "packages/web/src/components/WorkspacePanelBoundary.tsx",
+      "line": 4,
+      "spec": "./workspace-panel-boundary.css"
+    },
+    {
+      "file": "packages/web/src/components/WorkspacePanelBoundary.tsx",
+      "line": 11,
+      "spec": "../workspace-panel.css"
+    },
+    {
+      "file": "packages/web/src/hooks/mobileKeyboardStyles.ts",
+      "line": 1,
+      "spec": "./mobile-keyboard.css?url&no-inline"
+    },
+    {
+      "file": "packages/web/src/index.tsx",
+      "line": 11,
+      "spec": "./index.css"
+    },
+    {
+      "file": "packages/web/src/index.tsx",
+      "line": 12,
+      "spec": "./agent.css"
+    },
+    {
+      "file": "packages/web/src/index.tsx",
+      "line": 13,
+      "spec": "./terminal.css"
+    }
+  ]
+}

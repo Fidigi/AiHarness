@@ -1,0 +1,4 @@
+.markdown-content .code-block,
+.markdown-content .inline-code {
+  color: var(--text-primary);
+}

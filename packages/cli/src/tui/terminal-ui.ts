@@ -5,12 +5,23 @@
 // ============================================================
 
 import chalk from 'chalk';
-import readline from 'readline';
-import type { TerminalTheme } from './theme-manager.js';
+import type { Interface, Key } from 'readline';
+import { ThemeManager, type TerminalTheme } from './theme-manager.js';
+import { statusLines, type TerminalStatus } from './status.js';
+import { clipTerminalText, TerminalTextFilter, terminalText, wrapTerminalText } from './terminal-text.js';
+
+interface TerminalTextRedactor {
+  push(chunk: string): string;
+  flush(): string;
+}
 
 export interface TerminalOptions {
   title?: string;
+  /** Hide the initial status snapshot until the first submitted nonempty input. */
+  startupDetails?: boolean;
   theme?: 'dark' | 'light' | TerminalTheme;
+  redactText?: (value: string) => string;
+  createTextRedactor?: () => TerminalTextRedactor;
 }
 
 export interface TranscriptEntry {
@@ -19,14 +30,67 @@ export interface TranscriptEntry {
   timestamp: Date;
 }
 
+export interface ShellCommandSummary {
+  status: 'completed' | 'failed' | 'cancelled';
+  exitCode?: number;
+  truncated: boolean;
+  fullOutputPath?: string;
+}
+
+export interface ShellCommandWriter {
+  write(chunk: string): void;
+  finish(summary: ShellCommandSummary): void;
+}
+
+const MAX_TERMINAL_TEXT_BYTES = 1024 * 1024;
+const MAX_TRANSCRIPT_BYTES = 16 * 1024 * 1024;
+const TRANSCRIPT_PAGE_ENTRIES = 20;
+
 /** Manages terminal output with scrollable transcript and streaming support */
 export class TerminalUI {
-  private options: Required<TerminalOptions>;
-  protected readonly theme: TerminalTheme;
+  private options: { title: string; theme: 'dark' | 'light' | TerminalTheme; startupDetails: boolean };
+  private startup = true;
+
+  protected get title(): string { return this.options.title; }
+  protected get statusVisible(): boolean { return !this.startup || this.options.startupDetails; }
+
+  /** Startup preferences do not hide subsequent live conversation status. */
+  finishStartup(): void {
+    if (!this.startup) return;
+    this.startup = false;
+    this.onStatusChanged();
+  }
+  protected theme: TerminalTheme;
   protected isStreaming = false;
+  private readonly redact: (value: string) => string;
+  private readonly createTextRedactor?: () => TerminalTextRedactor;
+  protected terminalStatus?: TerminalStatus;
+
+  /** Composition owns snapshots; rendering never reads journals or contacts providers. */
+  setStatus(status: TerminalStatus): void {
+    this.terminalStatus = structuredClone(status);
+    this.onStatusChanged();
+  }
+
+  protected onStatusChanged(): void { /* Regular output is printed at prompt boundaries. */ }
+
+  protected editorStatus(): string {
+    return this.isMultiLineMode ? `multiline (${this.multiLineBuffer.length} lines)`
+      : this.isStreaming ? 'ready · Enter steer · Alt+Enter follow-up' : 'ready · Enter send · /edit multiline';
+  }
+
+  /** Call before restoring readline's prompt, never in the middle of a stream. */
+  displayStatus(): void {
+    if (!this.statusVisible || !this.terminalStatus || this.isStreaming) return;
+    const width = Math.max(1, process.stdout.columns ?? 80);
+    for (const line of statusLines(this.terminalStatus, this.editorStatus(), width)) {
+      console.log(chalk.hex(this.theme.colors.muted)(this.safeText(line)));
+    }
+  }
   
   // Transcript for session conversations (scrollable)
   private transcript: TranscriptEntry[] = [];
+  private transcriptBytes = 0;
   private readonly maxTranscriptEntries = 500;
   private scrollPosition = 0;
   private isScrolling = false;
@@ -37,18 +101,46 @@ export class TerminalUI {
   protected readonly maxMultiLineLines = 100;
 
   constructor(options: TerminalOptions = {}) {
+    this.redact = options.redactText ?? (value => value);
+    this.createTextRedactor = options.createTextRedactor;
     const mode = typeof options.theme === 'string' ? options.theme : options.theme?.mode || 'dark';
-    this.theme = typeof options.theme === 'object' ? options.theme : {
-      name: mode,
-      mode,
-      colors: mode === 'light'
-        ? { accent: '#0369a1', user: '#15803d', assistant: '#0f172a', warning: '#a16207', error: '#b91c1c', muted: '#64748b' }
-        : { accent: '#22d3ee', user: '#4ade80', assistant: '#f8fafc', warning: '#facc15', error: '#f87171', muted: '#94a3b8' },
-    };
+    this.theme = typeof options.theme === 'object'
+      ? options.theme
+      : ThemeManager.builtins().find(theme => theme.mode === mode)!;
     this.options = {
       title: options.title || 'AiHarness',
       theme: options.theme || this.theme,
+      startupDetails: options.startupDetails !== false,
     };
+  }
+
+  /** Replace the active palette without rebuilding the runtime. */
+  setTheme(theme: TerminalTheme): void {
+    this.theme = theme;
+    this.options.theme = theme;
+    this.onThemeChanged();
+  }
+
+  protected onThemeChanged(): void {
+    // Regular terminals apply colors on their next write.
+  }
+
+  protected safeText(value: string, allowSgr = false): string {
+    const safe = terminalText(this.redact(value), allowSgr);
+    return Buffer.byteLength(safe) <= MAX_TERMINAL_TEXT_BYTES
+      ? safe
+      : '[REDACTED: terminal output exceeded safe limit]';
+  }
+
+  protected createSafeTextRedactor(): TerminalTextRedactor {
+    const redactor = this.createTextRedactor?.() ?? {
+      push: (chunk: string) => this.redact(chunk),
+      flush: () => '',
+    };
+    const filter = new TerminalTextFilter();
+    const bounded = (value: string): string => Buffer.byteLength(value) <= MAX_TERMINAL_TEXT_BYTES
+      ? filter.push(value) : '[REDACTED: terminal output exceeded safe limit]';
+    return { push: chunk => bounded(redactor.push(chunk)), flush: () => bounded(redactor.flush()) };
   }
 
   /** Display welcome screen */
@@ -57,15 +149,15 @@ export class TerminalUI {
     const accent = chalk.bold.hex(this.theme.colors.accent);
     const dim = chalk.hex(this.theme.colors.muted);
 
-    console.log(accent(`╔══════════════════════════════════════╗`));
-    console.log(accent(`║${' '.repeat(32)}║`));
-    console.log(accent(`║  ${accent('AiHarness CLI')} - Unified AI Agent Platform${' '.repeat(4)}║`));
-    console.log(accent(`║${' '.repeat(32)}║`));
-    console.log(accent(`╚══════════════════════════════════════╝`));
+    const width = Math.max(1, process.stdout.columns ?? 80);
+    for (const line of wrapTerminalText(this.safeText(this.options.title), width)) console.log(accent(line));
+    this.displayStatus();
     console.log();
-    console.log(dim('  Type /help for available commands'));
-    console.log(dim('  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock'));
-    console.log(dim('  Tip: Use Ctrl+C to interrupt streaming responses'));
+    for (const hint of [
+      '  Type /help for available commands',
+      '  Providers: mock, openai, anthropic, google, local, azure, vertex, bedrock',
+      '  Tip: Use Escape or Ctrl+C to interrupt active work',
+    ]) for (const line of wrapTerminalText(hint, width)) console.log(dim(line));
     console.log();
   }
 
@@ -77,8 +169,8 @@ export class TerminalUI {
       process.stdout.write('\n');
     }
 
-    const prompt = chalk.bold.hex(this.theme.colors.user)('you> ');
-    console.log(prompt + content);
+    const prompt = chalk.bold.hex(this.theme.colors.userMessageText)('you> ');
+    console.log(prompt + this.safeText(content));
   }
 
   /** Display assistant response (non-streaming, for /command output) */
@@ -88,17 +180,13 @@ export class TerminalUI {
       process.stdout.write('\n');
     }
 
-    console.log(chalk.dim('┌─ Assistant'));
+    const border = chalk.hex(this.theme.colors.borderMuted);
+    const body = chalk.hex(this.theme.colors.text);
+    console.log(border('┌─ Assistant'));
     // Render Markdown before formatting the assistant frame.
-    const lines = this.renderMarkdown(content).split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (i === 0) {
-        console.log(chalk.white(`│ ${lines[i]}`));
-      } else {
-        console.log(chalk.dim('│ ') + chalk.white(lines[i]));
-      }
-    }
-    console.log(chalk.dim('└──────────────'));
+    const lines = this.renderMarkdown(this.safeText(content)).split('\n');
+    for (const line of lines) console.log(border('│ ') + body(line));
+    console.log(border('└──────────────'));
     console.log();
   }
 
@@ -111,7 +199,7 @@ export class TerminalUI {
     this.isStreaming = true;
 
     // Print header
-    process.stdout.write(chalk.dim('┌─ Assistant\n│ '));
+    process.stdout.write(chalk.hex(this.theme.colors.borderMuted)('┌─ Assistant\n│ '));
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -124,7 +212,7 @@ export class TerminalUI {
       });
 
       process.stdout.write('\n');
-      console.log(chalk.dim('└──────────────'));
+      console.log(chalk.hex(this.theme.colors.borderMuted)('└──────────────'));
       onComplete?.();
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -141,30 +229,30 @@ export class TerminalUI {
     cancel: () => void;
   } {
     this.isStreaming = true;
-    process.stdout.write(chalk.dim('┌─ Assistant\n│ '));
+    const border = chalk.hex(this.theme.colors.borderMuted);
+    const redactor = this.createSafeTextRedactor();
+    process.stdout.write(border('┌─ Assistant\n│ '));
+    const write = (text: string): void => {
+      if (!text) return;
+      if (text.includes('\n')) {
+        const parts = text.split('\n');
+        for (let i = 0; i < parts.length; i++) {
+          process.stdout.write(parts[i]);
+          if (i < parts.length - 1) process.stdout.write('\n' + border('│ '));
+        }
+      } else process.stdout.write(text);
+    };
 
     return {
-      write: (text: string) => {
-        // Handle newlines in streaming content
-        if (text.includes('\n')) {
-          const parts = text.split('\n');
-          for (let i = 0; i < parts.length; i++) {
-            process.stdout.write(parts[i]);
-            if (i < parts.length - 1) {
-              // Move to next line, indent with dim pipe
-              process.stdout.write('\n' + chalk.dim('│ '));
-            }
-          }
-        } else {
-          process.stdout.write(text);
-        }
-      },
+      write: (text: string) => write(redactor.push(text)),
       finish: () => {
-        console.log('\n' + chalk.dim('└──────────────'));
+        write(redactor.flush());
+        console.log('\n' + border('└──────────────'));
         this.isStreaming = false;
       },
       cancel: () => {
-        console.log(chalk.yellow('[Interrupted]'));
+        write(redactor.flush());
+        console.log(chalk.hex(this.theme.colors.warning)('[Interrupted]'));
         this.isStreaming = false;
       },
     };
@@ -172,7 +260,48 @@ export class TerminalUI {
 
   /** Write unframed command output. Fullscreen backends override this sink. */
   writeOutput(output: string): void {
+    process.stdout.write(`${this.safeText(output, true)}\n\n`);
+  }
+
+  /** Deliberate local-only bypass used solely by `/credential reveal <provider>`. */
+  writeExplicitCredentialReveal(output: string): void {
     process.stdout.write(`${output}\n\n`);
+  }
+
+  /** Stream a direct `!`/`!!` command without buffering unbounded terminal output. */
+  startShellCommand(command: string, excludedFromContext: boolean): ShellCommandWriter {
+    const policy = excludedFromContext ? 'excluded from model context' : 'included in model context';
+    process.stdout.write(`${chalk.hex(this.theme.colors.bashMode)(`[shell] $ ${this.safeText(command)}`)} ${chalk.hex(this.theme.colors.dim)(`(${policy})`)}\n`);
+    const redactor = this.createSafeTextRedactor();
+    let wroteOutput = false;
+    let endedWithNewline = true;
+    return {
+      write: chunk => {
+        const safe = redactor.push(chunk);
+        if (!safe) return;
+        wroteOutput = true;
+        endedWithNewline = safe.endsWith('\n');
+        process.stdout.write(safe);
+      },
+      finish: summary => {
+        const suffix = redactor.flush();
+        if (suffix) {
+          wroteOutput = true;
+          endedWithNewline = suffix.endsWith('\n');
+          process.stdout.write(suffix);
+        }
+        if (wroteOutput && !endedWithNewline) process.stdout.write('\n');
+        if (!wroteOutput) process.stdout.write(chalk.dim('(no output)\n'));
+        const status = summary.status === 'cancelled'
+          ? 'cancelled'
+          : `exit ${summary.exitCode ?? 'unknown'}`;
+        process.stdout.write(chalk.dim(`[${status}${summary.truncated ? ' · truncated' : ''}]\n`));
+        if (summary.fullOutputPath) {
+          process.stdout.write(chalk.dim(`[full output: ${this.safeText(summary.fullOutputPath)}]\n`));
+        }
+        process.stdout.write('\n');
+      },
+    };
   }
 
   /** Display command output */
@@ -181,8 +310,8 @@ export class TerminalUI {
       this.clearCurrentLine();
       process.stdout.write('\n');
     }
-    console.log(chalk.yellow(`[${name}]`));
-    const lines = output.split('\n');
+    console.log(chalk.hex(this.theme.colors.toolTitle)(`[${this.safeText(name)}]`));
+    const lines = this.safeText(output).split('\n');
     for (const line of lines) {
       console.log(line);
     }
@@ -195,7 +324,7 @@ export class TerminalUI {
       this.clearCurrentLine();
       process.stdout.write('\n');
     }
-    console.error(chalk.red(`[Error] ${message}`));
+    console.error(chalk.hex(this.theme.colors.error)(`[Error] ${this.safeText(message)}`));
     console.log();
   }
 
@@ -218,8 +347,8 @@ ${chalk.bold('Conversation and sessions')}
 ${chalk.bold('Providers and context')}
   ${chalk.cyan('/provider [name]')}              List or select a provider
   ${chalk.cyan('/model [list|cycle|name]')}      List or select a model
-  ${chalk.cyan('/thinking [level]')}             Set off/low/medium/high/xhigh
-  ${chalk.cyan('/login <provider>')}             Start a configured OAuth device flow
+  ${chalk.cyan('/thinking [level]')}             Set off/minimal/low/medium/high/xhigh/max
+  ${chalk.cyan('/login <provider> [--issuer github-copilot|openai-codex] [--method browser]')}  Start an explicit OAuth device flow
   ${chalk.cyan('/compact [instructions]')}       Compact the active conversation
   ${chalk.cyan('/summarize-branch [id] [text]')} Store a branch summary
   ${chalk.cyan('/fork <id> [index] [title]')}    Fork a conversation
@@ -231,6 +360,7 @@ ${chalk.bold('Files, resources and sharing')}
   ${chalk.cyan('/import <path>')}                Import JSON or JSONL sessions
   ${chalk.cyan('/share [hours]')}                Create a temporary share link
   ${chalk.cyan('/bug [description]')}            Prepare a GitHub issue URL
+  Privacy: review exports, public shares and diagnostic text for unrecognized secrets.
   ${chalk.cyan('/skills')}                       List discovered skills
   ${chalk.cyan('/skill:<name> [request]')}       Invoke a skill
   ${chalk.cyan('/prompts')}                      List prompt templates
@@ -238,32 +368,50 @@ ${chalk.bold('Files, resources and sharing')}
 
 ${chalk.bold('Extensions and application')}
   ${chalk.cyan('/extensions')}                   List loaded extensions
-  ${chalk.cyan('/tools')}                        List extension tools
-  ${chalk.cyan('/tool <name> [json]')}           Run an extension tool
-  ${chalk.cyan('/trust [status|add|remove|list]')} Manage project trust
-  ${chalk.cyan('/reload')}                       Reload resources and extensions
+  ${chalk.cyan('/mcp [status|tools|exposure|test]')} Inspect/manage MCP (status is passive)
+  MCP: missing exposure = direct; codemode is script-only; deferred needs tool_search.
+  Hidden is not model-callable; allowlists, exclusions and read-only checks still apply.
+  ${chalk.cyan('/tools')}                        List built-in and extension tools
+  ${chalk.cyan('/tool <name> [json]')}           Run a registered tool
+  ${chalk.cyan('/trust [status|allow|allow-parent|refuse|forget|list]')} Manage project trust decisions
+  ${chalk.cyan('/reload')}                       Reload settings, resources and extensions
+  ${chalk.cyan('/settings')}                     Show effective agent settings and sources
   ${chalk.cyan('/config')}                       Show storage configuration
   ${chalk.cyan('/help')}                         Show this help
   ${chalk.cyan('/quit')} or ${chalk.cyan('/exit')}                  Exit AiHarness
 
 ${chalk.bold('Input')}
   ${chalk.cyan('/edit')} / ${chalk.cyan('/send')} / ${chalk.cyan('/cancel')}          Multi-line input
+  ${chalk.cyan('!<command>')}                    Run a shell command and include its output in context
+  ${chalk.cyan('!!<command>')}                   Run a shell command outside model context
+  ${chalk.cyan('Enter')}                         Send now, or steer an active response
+  ${chalk.cyan('Alt+Enter / Ctrl+Q')}             Queue a follow-up after the active task
+  ${chalk.cyan('Alt+Up')}                        Restore queued messages to the editor
+  ${chalk.cyan('Alt+J')}                         Insert a newline; Enter submits the whole draft
+  ${chalk.cyan('Ctrl+Left/Right / Alt+B/F')}      Move by whitespace-delimited word
+  ${chalk.cyan('Alt+Backspace / Alt+D')}          Delete previous/next word
+  ${chalk.cyan('Ctrl+Z / Alt+Z')}                Undo/redo draft edits (bounded, not submitted messages)
+  Bracketed paste is inert until Enter (64 KiB maximum); unbracketed input is ordinary typing.
+  Native terminal selection only; no application mouse, inline images or custom terminal component protocol.
+  Stored unsupported preferences are reported by /settings, not silently applied.
   ${chalk.cyan('Ctrl+G')}                        Open $VISUAL or $EDITOR
-  ${chalk.cyan('Ctrl+C')}                        Interrupt streaming or exit
+  ${chalk.cyan('Escape / Ctrl+C')}               Interrupt; queued messages return to the editor
+  ${chalk.cyan('F1 / Alt+K')}                     Browse/filter all keyboard actions; Escape returns
 
 ${chalk.bold('Providers:')}
   mock, openai, anthropic, google, local, azure, vertex, bedrock
 
 ${chalk.bold('Main environment variables:')}
   ${chalk.dim('OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY')}
-  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_TUI_MODE')}
+  ${chalk.dim('LOCAL_BASE_URL / LLAMA_BASE_URL, AI_HARNESS_AGENT_DIR')}
+  ${chalk.dim('AI_HARNESS_SESSIONS_DIR, AI_HARNESS_TUI_MODE, AI_HARNESS_KEYBINDINGS')}
 `;
     console.log(helpText);
   }
 
   /** Display exit message */
   exitMessage(message: string): void {
-    console.log(chalk.green(`\n${message}`));
+    console.log(chalk.green(`\n${this.safeText(message)}`));
   }
 
   /** Clear terminal */
@@ -287,16 +435,20 @@ ${chalk.bold('Main environment variables:')}
 
   /** Add an entry to the transcript buffer */
   addTranscriptEntry(entry: Omit<TranscriptEntry, 'timestamp'>): void {
-    this.transcript.push({ ...entry, timestamp: new Date() });
-    
-    // Trim old entries if needed
-    while (this.transcript.length > this.maxTranscriptEntries) {
-      this.transcript.shift();
+    const content = this.safeText(entry.content);
+    this.transcript.push({ ...entry, content, timestamp: new Date() });
+    if (this.scrollPosition > 0) this.scrollPosition++;
+    this.transcriptBytes += Buffer.byteLength(content);
+    while (this.transcript.length > this.maxTranscriptEntries || this.transcriptBytes > MAX_TRANSCRIPT_BYTES) {
+      const removed = this.transcript.shift();
+      if (removed) this.transcriptBytes -= Buffer.byteLength(removed.content);
     }
+    this.scrollPosition = Math.min(this.scrollPosition, Math.max(0, this.transcript.length - TRANSCRIPT_PAGE_ENTRIES));
   }
 
   /** Display the transcript with scrolling support */
   displayTranscript(sessionId?: string, limit: number = 50): void {
+    limit = Number.isSafeInteger(limit) ? Math.max(0, Math.min(500, limit)) : 50;
     const entries = sessionId 
       ? this.transcript.filter(e => e.type !== 'system') // Filter by session if needed
       : this.transcript;
@@ -337,24 +489,34 @@ ${chalk.bold('Main environment variables:')}
     }
   }
 
-  /** Scroll up in transcript */
+  /** Replay an older bounded page; do not mutate the live stream or editor. */
   scrollUp(lines: number = 1): void {
-    if (this.transcript.length === 0) return;
-    
-    this.scrollPosition = Math.max(0, this.scrollPosition - lines);
-    const visibleEntries = this.transcript.slice(-Math.min(this.scrollPosition + 20, this.transcript.length));
-    
-    console.log(chalk.dim(`[Scroll: showing last ${visibleEntries.length} entries]`));
+    const step = Number.isSafeInteger(lines) ? Math.max(0, Math.min(500, lines)) : 1;
+    this.scrollPosition = Math.min(Math.max(0, this.transcript.length - TRANSCRIPT_PAGE_ENTRIES), this.scrollPosition + step);
+    this.displayTranscriptPage();
   }
 
-  /** Scroll down in transcript */
+  /** Replay a newer page, stopping at the newest buffered entries. */
   scrollDown(lines: number = 1): void {
-    if (this.transcript.length === 0) return;
-    
-    this.scrollPosition = Math.min(this.transcript.length - 20, this.scrollPosition + lines);
-    const visibleEntries = this.transcript.slice(-Math.min(this.scrollPosition + 20, this.transcript.length));
-    
-    console.log(chalk.dim(`[Scroll: showing last ${visibleEntries.length} entries]`)); // Fixed: removed extra space
+    const step = Number.isSafeInteger(lines) ? Math.max(0, Math.min(500, lines)) : 1;
+    this.scrollPosition = Math.max(0, this.scrollPosition - step);
+    this.displayTranscriptPage();
+  }
+
+  private displayTranscriptPage(): void {
+    if (!this.transcript.length) return;
+    const columns = process.stdout.columns ?? 80;
+    const width = Number.isFinite(columns) ? Math.max(1, Math.min(300, Math.floor(columns))) : 80;
+    const end = this.transcript.length - this.scrollPosition;
+    const start = Math.max(0, end - TRANSCRIPT_PAGE_ENTRIES);
+    const labels: Record<TranscriptEntry['type'], string> = { user: 'You', assistant: 'AI', system: 'System', command: 'Command' };
+    console.log(chalk.hex(this.theme.colors.muted)(clipTerminalText(`Transcript entries ${start + 1}-${end}/${this.transcript.length} (buffered preview)`, width)));
+    for (const entry of this.transcript.slice(start, end)) {
+      // Redact complete stored text before limiting preview work, including secrets
+      // learned after admission. Each entry occupies at most one bounded cell row.
+      const preview = this.safeText(entry.content).slice(0, 4096).replace(/\s+/gu, ' ');
+      console.log(clipTerminalText(`${labels[entry.type]}: ${preview}`, width));
+    }
   }
 
   /** Get transcript statistics */
@@ -374,17 +536,17 @@ ${chalk.bold('Main environment variables:')}
   // ===================================================================
 
   /** Set the readline instance for keyboard handling */
-  setReadline(_rl: readline.Interface): void {
+  setReadline(_rl: Interface): void {
     // Kept as a compatibility hook for future fullscreen TUI integration.
   }
 
   /** Handle keypress events in TUI mode */
-  handleKeypress(key: any, _input?: string): boolean {
+  handleKeypress(key: Key, _input?: string): boolean {
     // Ctrl+C - interrupt or exit
     if (key.ctrl && key.name === 'c') {
       if (this.isStreaming) {
         process.stdout.write('\n');
-        console.log(chalk.yellow('[Interrupted]'));
+        console.log(chalk.hex(this.theme.colors.warning)('[Interrupted]'));
         return true; // Handled
       }
       // Not streaming, let it pass through for readline's default behavior
@@ -423,7 +585,7 @@ ${chalk.bold('Main environment variables:')}
 
   /** Search through the transcript buffer for a query string */
   searchTranscript(query: string, maxResults: number = 20): { matches: TranscriptEntry[]; totalMatches: number } {
-    if (!query || !query.trim()) {
+    if (!query || Buffer.byteLength(query) > 4_096 || !query.trim()) {
       return { matches: [], totalMatches: 0 };
     }
 
@@ -447,8 +609,9 @@ ${chalk.bold('Main environment variables:')}
   displaySearchResults(query: string): void {
     const result = this.searchTranscript(query);
 
+    const safeQuery = this.safeText(query);
     if (result.matches.length === 0) {
-      console.log(chalk.yellow(`No matches found for "${chalk.cyan(query)}"`));
+      console.log(chalk.yellow(`No matches found for "${chalk.cyan(safeQuery)}"`));
       return;
     }
 
@@ -458,7 +621,7 @@ ${chalk.bold('Main environment variables:')}
       e.content.toLowerCase().includes(query.toLowerCase())
     ).length;
 
-    console.log(chalk.bold(`\n🔍 Search results for "${chalk.cyan(query)}": ${result.matches.length} match(es)`));
+    console.log(chalk.bold(`\n🔍 Search results for "${chalk.cyan(safeQuery)}": ${result.matches.length} match(es)`));
     if (actualTotal > result.matches.length) {
       console.log(chalk.dim(`   (showing first ${result.matches.length} of ${actualTotal})`));
     }
@@ -505,7 +668,7 @@ ${chalk.bold('Main environment variables:')}
       
       // Highlight the matching portion (truncate if too long)
       const matchEnd = searchFrom + query.length;
-      let displayMatch = content.slice(searchFrom, matchEnd);
+      const displayMatch = content.slice(searchFrom, matchEnd);
       if (displayMatch.length > 100) {
         result += chalk.bgYellow.black(displayMatch.slice(0, 50) + '...');
       } else {
@@ -518,7 +681,7 @@ ${chalk.bold('Main environment variables:')}
     }
 
     // Add the rest of the content (truncated if too long)
-    let remaining = content.slice(lastIndex);
+    const remaining = content.slice(lastIndex);
     if (remaining.length > 200) {
       result += '...' + chalk.dim(remaining.slice(-150));
     } else {
@@ -605,30 +768,40 @@ ${chalk.bold('Main environment variables:')}
       return `\u0001P${index}\u0002`;
     };
 
-    let result = text.replace(/```(?:([\w+#-]+))?\s*\n?([\s\S]*?)```/g, (_, lang: string | undefined, code: string) => {
-      const body = chalk.gray(code.replace(/\n$/, ''));
-      return protect(lang ? `${chalk.bgCyan.black(` ${lang} `)}\n${body}` : body);
+    let result = this.safeText(text).replace(/```(?:([\w+#-]+))?\s*\n?([\s\S]*?)```/g, (_, lang: string | undefined, code: string) => {
+      const body = chalk.hex(this.theme.colors.mdCodeBlock)(code.replace(/\n$/, ''));
+      const label = chalk.bgHex(this.theme.colors.customMessageBg)
+        .hex(this.theme.colors.customMessageLabel)(` ${lang ?? 'code'} `);
+      return protect(`${label}\n${body}`);
     });
 
-    result = result.replace(/`([^`\n]+)`/g, (_, code: string) => protect(chalk.bgYellow.black(code)));
+    result = result.replace(/`([^`\n]+)`/g, (_, code: string) =>
+      protect(chalk.bgHex(this.theme.colors.selectedBg).hex(this.theme.colors.mdCode)(code)),
+    );
     result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label: string, url: string) =>
-      protect(`${chalk.underline.blue(label)} (${chalk.gray(url)})`),
+      protect(`${chalk.underline.hex(this.theme.colors.mdLink)(label)} (${chalk.hex(this.theme.colors.mdLinkUrl)(url)})`),
     );
 
-    result = result.replace(/^#{1,6}\s+(.+)$/gm, (_, heading: string) => chalk.bold.cyan(heading));
+    result = result.replace(/^#{1,6}\s+(.+)$/gm, (_, heading: string) =>
+      chalk.bold.hex(this.theme.colors.mdHeading)(heading),
+    );
     result = result.replace(/\*\*(.+?)\*\*/g, (_, value: string) => chalk.bold(value));
     result = result.replace(/__(.+?)__/g, (_, value: string) => chalk.bold(value));
     result = result.replace(/~~(.+?)~~/g, (_, value: string) => chalk.dim(chalk.strikethrough(value)));
     result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*/g, (_, value: string) => chalk.italic(value));
     result = result.replace(/(?<!_)_(?!_)(.+?)_(?!_)/g, (_, value: string) => chalk.italic(value));
     result = result.replace(/^(\s*)[-*]\s+(.+)$/gm, (_, indent: string, value: string) =>
-      `${indent}${chalk.green('•')} ${value}`,
+      `${indent}${chalk.hex(this.theme.colors.mdListBullet)('•')} ${value}`,
     );
     result = result.replace(/^(\s*)(\d+)\.\s+(.+)$/gm, (_, indent: string, number: string, value: string) =>
-      `${indent}${chalk.cyan(`${number}.`)} ${value}`,
+      `${indent}${chalk.hex(this.theme.colors.mdListBullet)(`${number}.`)} ${value}`,
     );
-    result = result.replace(/^>\s?(.*)$/gm, (_, value: string) => chalk.gray(`│ ${value}`));
-    result = result.replace(/^\s*(-{3,}|\*{3,})\s*$/gm, () => chalk.dim('─'.repeat(60)));
+    result = result.replace(/^>\s?(.*)$/gm, (_, value: string) =>
+      chalk.hex(this.theme.colors.mdQuoteBorder)('│ ') + chalk.hex(this.theme.colors.mdQuote)(value),
+    );
+    result = result.replace(/^\s*(-{3,}|\*{3,})\s*$/gm, () =>
+      chalk.hex(this.theme.colors.mdHr)('─'.repeat(60)),
+    );
 
     return result.replace(/\u0001P(\d+)\u0002/g, (_, index: string) => protectedBlocks[Number(index)] ?? '');
   }

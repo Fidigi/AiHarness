@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
+import { Icon } from './Icon';
 
 interface InstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -26,7 +27,11 @@ export default function PwaStatus() {
 
     let updateTimer: number | undefined;
     let reloading = false;
+    let controlled = Boolean(navigator.serviceWorker?.controller);
     const handleControllerChange = () => {
+      // First installation claims this page; it must not discard reading/input
+      // intent (or reload an offline tab). Only a replacement needs a reload.
+      if (!controlled) { controlled = true; return; }
       if (reloading) return;
       reloading = true;
       window.location.reload();
@@ -74,7 +79,7 @@ export default function PwaStatus() {
       {update && <>
         <span>{t('pwa.updateAvailable')}</span>
         <button onClick={applyUpdate}>{t('pwa.update')}</button>
-        <button aria-label={t('common.close')} onClick={() => setUpdate(undefined)}>×</button>
+        <button aria-label={t('common.close')} onClick={() => setUpdate(undefined)}><Icon name="close" /></button>
       </>}
     </aside>
   );

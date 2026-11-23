@@ -1,0 +1,18 @@
+[
+  {
+    "phase": "before",
+    "modelCount": 393,
+    "pairedReads": 500,
+    "samplingInterval": 32768,
+    "sampledAllocatedBytes": 1604341248,
+    "limits": "V8 probabilistic allocation sampling, including collected objects. Not exact total allocation, retained heap/RSS, or production latency. Separate from the uninstrumented CPU/wall probe; contains stack metadata only, not object values."
+  },
+  {
+    "phase": "after",
+    "modelCount": 393,
+    "pairedReads": 500,
+    "samplingInterval": 32768,
+    "sampledAllocatedBytes": 15450872,
+    "limits": "V8 probabilistic allocation sampling, including collected objects. Not exact total allocation, retained heap/RSS, or production latency. Separate from the uninstrumented CPU/wall probe; contains stack metadata only, not object values."
+  }
+]

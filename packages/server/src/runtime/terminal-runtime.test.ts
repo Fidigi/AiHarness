@@ -1,9 +1,12 @@
+import { CredentialRedactor } from '@ai-harness/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   TerminalRuntime,
   type PseudoTerminal,
   type SpawnPseudoTerminal,
 } from './terminal-runtime.js';
+
+vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 
 class FakePty implements PseudoTerminal {
   readonly pid = 42;
@@ -77,6 +80,32 @@ describe('TerminalRuntime', () => {
     }
   });
 
+  it('redacts credentials fragmented across PTY chunks before replay or subscribers', () => {
+    const terminals: FakePty[] = [];
+    const redactor = new CredentialRedactor(['runtime-terminal-secret']);
+    const runtime = new TerminalRuntime({
+      spawn: () => {
+        const terminal = new FakePty();
+        terminals.push(terminal);
+        return terminal;
+      },
+      createRedactionStream: () => redactor.createStream(),
+    });
+    const created = runtime.create({ cwd: '/workspace' });
+    const listener = vi.fn();
+    runtime.subscribe(created.id, listener);
+
+    terminals[0]!.emitData('token=runtime-ter');
+    terminals[0]!.emitData('minal-secret\r\n$ ');
+    terminals[0]!.emitExit(0);
+
+    const serialized = JSON.stringify(runtime.replay(created.id, 0));
+    expect(serialized).not.toContain('runtime-terminal-secret');
+    expect(runtime.replay(created.id, 0).events
+      .flatMap(event => event.type === 'output' ? [event.data] : []).join('')).toContain('token=[REDACTED]');
+    expect(JSON.stringify(listener.mock.calls)).not.toContain('runtime-terminal-secret');
+  });
+
   it('replays bounded ANSI output by UTF-8 byte offset and signals reset', () => {
     const { runtime, terminals } = fixture({ maxReplayBytes: 8 });
     const created = runtime.create({ cwd: '/workspace' });
@@ -88,6 +117,51 @@ describe('TerminalRuntime', () => {
     expect(tail.events).toEqual([expect.objectContaining({ type: 'output', data: 'éééé', offset: firstOffset })]);
     expect(tail.lastOffset).toBe(firstOffset + 8);
     expect(runtime.replay(created.id, 1).reset).toBe(true);
+  });
+
+  it('resets expired cold, interior Unicode and future cursors to complete retained events', () => {
+    const { runtime, terminals } = fixture({ maxReplayBytes: 8 });
+    const { id } = runtime.create({ cwd: '/workspace' });
+    terminals[0]!.emitData('discarded'); terminals[0]!.emitData('é😀');
+    for (const after of [0, 1, 10, 11, 100]) {
+      expect(runtime.replay(id, after)).toMatchObject({ reset: true, oldestOffset: 9,
+        events: [expect.objectContaining({ offset: 9, endOffset: 15, data: 'é😀' })] });
+    }
+    expect(runtime.replay(id, 9).reset).toBe(false);
+    expect(runtime.replay(id, 15)).toMatchObject({ reset: false, events: [] });
+    terminals[0]!.emitExit(0);
+    expect(runtime.replay(id, 15).events).toEqual([expect.objectContaining({ type: 'exit', endOffset: 15 })]);
+  });
+
+  it('bounds tiny-event history and large control/Unicode chunks without breaking byte offsets', () => {
+    const { runtime, terminals } = fixture(); const { id } = runtime.create({ cwd: '/workspace' });
+    for (let i = 0; i < 4_100; i++) terminals[0]!.emitData('x');
+    expect(runtime.replay(id, 0)).toMatchObject({ reset: true, oldestOffset: 4 });
+    expect(runtime.replay(id, 0).events).toHaveLength(4_096);
+    const large = '\x1b'.repeat(16_383) + '😀é'.repeat(20_000);
+    const offset = runtime.get(id)!.lastOffset;
+    terminals[0]!.emitData(large);
+    const events = runtime.replay(id, offset).events;
+    expect(events.flatMap(event => event.type === 'output' ? [event.data] : []).join('')).toBe(large);
+    let cursor = offset;
+    for (const event of events) {
+      expect(event.offset).toBe(cursor);
+      if (event.type === 'output') {
+        expect(event.endOffset - cursor).toBe(Buffer.byteLength(event.data));
+        expect(JSON.stringify(event).length).toBeLessThan(128_000);
+        expect(event.data).not.toContain('\uFFFD');
+      }
+      cursor = event.endOffset;
+    }
+  });
+
+  it('closes removed leases once and does not notify already released subscribers', () => {
+    const { runtime } = fixture(); const { id } = runtime.create({ cwd: '/workspace' });
+    const removed = vi.fn(), retired = vi.fn();
+    runtime.subscribe(id, vi.fn(), removed);
+    runtime.subscribe(id, vi.fn(), retired)();
+    runtime.remove(id); runtime.remove(id); runtime.shutdown();
+    expect(removed).toHaveBeenCalledOnce(); expect(retired).not.toHaveBeenCalled();
   });
 
   it('evicts a single output chunk larger than the replay budget', () => {
@@ -113,6 +187,29 @@ describe('TerminalRuntime', () => {
     expect(terminals[0]!.killed).toBe(false);
     expect(terminals[1]!.killed).toBe(true);
     expect(runtime.get(second.id)).toBeUndefined();
+  });
+
+  it('bounds retained terminal records and subscribers', () => {
+    const terminals: FakePty[] = [];
+    const runtime = new TerminalRuntime({
+      spawn: () => {
+        const terminal = new FakePty();
+        terminals.push(terminal);
+        return terminal;
+      },
+      maxRecords: 2,
+      maxListenersPerTerminal: 1,
+    });
+    const first = runtime.create({ cwd: '/workspace' });
+    terminals[0]!.emitExit(0);
+    const second = runtime.create({ cwd: '/workspace' });
+    terminals[1]!.emitExit(0);
+    const third = runtime.create({ cwd: '/workspace' });
+
+    expect(runtime.get(first.id)).toBeUndefined();
+    expect(runtime.list().map(item => item.id)).toEqual([second.id, third.id]);
+    runtime.subscribe(third.id, vi.fn());
+    expect(() => runtime.subscribe(third.id, vi.fn())).toThrow(/abonnés/i);
   });
 
   it('validates input, dimensions, active count and lifecycle', () => {

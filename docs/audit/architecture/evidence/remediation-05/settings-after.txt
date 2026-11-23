@@ -1,0 +1,9 @@
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+[WebServer] npm notice run vite
+
+
+
+Running 1 test using 1 worker
+
+[1/1] [chromium] › e2e/settings.spec.ts:19:3 › Settings and authentication › présente les fournisseurs hydratés et le nombre de sessions
+  1 passed (3.5s)

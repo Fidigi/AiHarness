@@ -1,0 +1,180 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/configuration-defaults.test.ts packages/server/src/api/provider-host-integration.test.ts packages/server/src/api/virtual-model-http.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on pending intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on malformed intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on linked intent in every mode (false)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on pending intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on malformed intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > blocks listener/legacy upgrades on linked intent in every mode (true)
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > defaults OFF and only enables the strict environment value 1
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > never activates restricted mode over a still-owned previous generation with bounded asynchronous cleanup
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses overlapping data/session/config/trust roots before activation
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > permanently refuses unleased legacy, PTY, model and resource/file mutations and upgrades
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > holds exclusive ownership after disconnect; excludes inline sessions, profiles and references; settles and restarts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > holds exclusive ownership after disconnect; excludes inline sessions, profiles and references; settles and restarts
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > leases the real inline create handler, child tool admission and extension-triggered reload for their awaited lifetimes
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > quarantines a real HTTP rename after same-byte external registry replacement refuses rollback, including restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > quarantines a real HTTP rename after same-byte external registry replacement refuses rollback, including restart
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > keeps ordinary session create/update/append/fork/clone and profile/ref changes available outside rename
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > refuses credential command configuration rather than executing it outside the root boundary
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > real restricted provider host composition > does not execute workspace shell tools or administrator/project extensions in this mode
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > captures command interaction authority before provider admission awaits
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+stdout | packages/server/src/api/provider-host-integration.test.ts > refuses mixed-case scoped provider references before rename publication
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/provider-host-integration.test.ts (18 tests) 1187ms
+   ✓ real restricted provider host composition (16)
+     ✓ leases the real inline create handler, child tool admission and extension-triggered reload for their awaited lifetimes 414ms
+stdout | packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ❯ packages/server/src/api/configuration-defaults.test.ts (11 tests | 6 failed) 15093ms
+   ❯ independent new-session defaults (11)
+     ✓ saves model and thinking independently, reports masked project precedence, and inherits in a new run 128ms
+     ✓ transmits scoped numeric reasoning budgets to detached runs without accepting prompt-body overrides 776ms
+     ✓ resolves scoped budgets and trusted-file fallback for delegation without a prior parent run 226ms
+     × owns detached numeric budgets for claude-haiku-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2260ms
+     × owns detached numeric budgets for claude-haiku-4-5-20251001 in the validated workspace, never in prompt maps or opaque cache IDs 2327ms
+     × owns detached numeric budgets for claude-opus-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2313ms
+     × owns detached numeric budgets for claude-opus-4-5-20251101 in the validated workspace, never in prompt maps or opaque cache IDs 2263ms
+     × owns detached numeric budgets for claude-sonnet-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2305ms
+     × owns detached numeric budgets for claude-sonnet-4-5-20250929 in the validated workspace, never in prompt maps or opaque cache IDs 2339ms
+     ✓ rejects invalid levels, hidden fields and scope selectors without changing another key 8ms
+     ✓ never overwrites settings which became unreadable after startup 10ms
+stdout | packages/server/src/api/virtual-model-http.test.ts > rejects retired routes, retains direct embedding/isolated children and resumes an unloaded router with physical accounting
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/virtual-model-http.test.ts (1 test) 308ms
+   ✓ rejects retired routes, retains direct embedding/isolated children and resumes an unloaded router with physical accounting 307ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-haiku-4-5 in the validated workspace, never in prompt maps or opaque cache IDs
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-haiku-4-5-20251001 in the validated workspace, never in prompt maps or opaque cache IDs
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-opus-4-5 in the validated workspace, never in prompt maps or opaque cache IDs
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-opus-4-5-20251101 in the validated workspace, never in prompt maps or opaque cache IDs
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-sonnet-4-5 in the validated workspace, never in prompt maps or opaque cache IDs
+ FAIL  packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults > owns detached numeric budgets for claude-sonnet-4-5-20250929 in the validated workspace, never in prompt maps or opaque cache IDs
+AssertionError: expected 409 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 409
+
+ ❯ chat packages/server/src/api/configuration-defaults.test.ts:172:33
+    170|       });
+    171|       if (budget === 'untrusted') {
+    172|         expect(response.status).toBe(403);
+       |                                 ^
+    173|         expect(calls).toHaveLength(before);
+    174|         return;
+ ❯ packages/server/src/api/configuration-defaults.test.ts:222:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  6 failed | 24 passed (30)
+   Start at  13:23:55
+   Duration  19.29s (tests 87%, transform 7%, import 6%)

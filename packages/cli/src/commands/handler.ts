@@ -5,28 +5,150 @@
 // ============================================================
 
 import chalk from 'chalk';
-import { SessionManager, JsonlSessionStore, AiProvider, ProviderFactory, Message, Session } from '@ai-harness/core';
-import type { ExtensionRegistry, ExtensionRuntimeContext, ThinkingLevel } from '@ai-harness/core';
+import { resolveVirtualModelFallback } from '@ai-harness/core';
+import {
+  atomicWriteStableFile,
+  clampPublishedThinkingLevel,
+  closeProviderNetworkDispatchers,
+  collectProviderModelCatalog,
+  createProviderBranchSummarizer,
+  flattenModelCatalog,
+  getSupportedThinkingLevels,
+  getGitHubCopilotOAuthConfig,
+  GITHUB_COPILOT_MODELS,
+  OPENAI_CODEX_MODELS,
+  getSessionAccounting,
+  getSessionCacheWarmingStatus,
+  prepareCompactionContext,
+  assertCompactionTranscript,
+  getSummaryModelMessages,
+  copyCompactionResponse,
+  readCompactionSummary,
+  normalizeProviderUsage,
+  isValidSessionId,
+  resolveAgentCompactionContextWindow,
+  resolveAgentCompactionSettings,
+  resolveModelReference,
+  resolveModelScope,
+  ProviderFactory,
+  SessionBranchCancelledError,
+  serializeSessionForExport,
+  readBoundedResourceText,
+  WorkspaceManager
+} from '@ai-harness/core';
+import type {
+  AgentProviderNetworkSettings,
+  AgentSettings,
+  ExtensionRegistry,
+  ExtensionRuntimeContext,
+  McpConfigInventory,
+  PreparedMcpTools,
+  ModelCatalogEntry,
+  ProviderCredentialService,
+  ThemeInventoryItem,
+  ThinkingLevel,
+
+  SessionManager,
+  JsonlSessionStore,
+  AiProvider,
+  Message,
+  Session} from '@ai-harness/core';
 import type { TerminalUI } from '../tui/terminal-ui.js';
+import { usageText } from '../tui/status.js';
 import { renderSessionHtml, sanitizeFilename } from '../utils/session-export.js';
+import { DIAGNOSTIC_PRIVACY_WARNING, EXPORT_PRIVACY_WARNING, SHARE_PRIVACY_WARNING } from '../security/privacy-warnings.js';
 import { copyToClipboard } from '../utils/system-integration.js';
 import type { ProjectTrustManager } from '../security/project-trust.js';
 import { OAuthDeviceClient, oauthConfigFromEnv } from '../security/oauth-device.js';
-import * as fs from 'fs/promises';
+import { createConfiguredProviders, getConfiguredSpecializedProviders } from '../providers/configured-providers.js';
+import { cliGitHubCopilotCredentialSource, cliSubscriptionCredentialSource } from '../providers/provider-runtime.js';
+import { loginOpenAICodex, loginOpenAICodexBrowser } from '../security/codex-login.js';
+import { loginKimiCoding } from '../security/kimi-login.js';
+import { loginMeta } from '../security/meta-login.js';
+import { loginXai } from '../security/xai-login.js';
+import { loginAnthropic } from '../security/anthropic-login.js';
+import { loginOpenRouter } from '../security/openrouter-login.js';
+import { terminalText } from '../tui/terminal-text.js';
 import * as path from 'path';
+
+interface ExplicitCredentialRevealOutput {
+  text: string;
+  /** Unforgeable outside this module's built-in command registry. */
+  kind: 'explicit-local-credential-reveal';
+}
+
+type CommandOutput = string | ExplicitCredentialRevealOutput;
+
+const MAX_SHARE_RESPONSE_BYTES = 256 * 1024;
+const SHARE_REQUEST_TIMEOUT_MS = 30_000;
+const compactionAbortState = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')!.get!;
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return normalized === 'localhost' || normalized === '::1' || /^127(?:\.\d{1,3}){3}$/u.test(normalized);
+}
+
+function resolveShareServerUrl(value: string): URL | undefined {
+  if (!value || Buffer.byteLength(value) > 4_096 || /[\u0000-\u001f\u007f]/u.test(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    if ((parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)))
+      || parsed.username || parsed.password || parsed.search || parsed.hash) return undefined;
+    parsed.pathname = `${parsed.pathname.replace(/\/$/u, '')}/`;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readBoundedShareResponse(response: Response): Promise<string> {
+  const declared = response.headers.get('content-length');
+  if (declared && (!/^\d+$/u.test(declared) || Number(declared) > MAX_SHARE_RESPONSE_BYTES)) {
+    throw new Error('Share response is invalid.');
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      total += item.value.byteLength;
+      if (total > MAX_SHARE_RESPONSE_BYTES) throw new Error('Share response is invalid.');
+      chunks.push(item.value);
+    }
+  } finally {
+    void Promise.resolve(reader.cancel()).catch(() => undefined);
+    reader.releaseLock();
+  }
+  const bytes = Buffer.allocUnsafe(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    Buffer.from(chunk).copy(bytes, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
 
 /** Registry of command handlers */
 interface CommandEntry {
   name: string;
   description: string;
   usage?: string;
-  handler: (args: string[], ctx: CommandContext) => Promise<string>;
+  handler: (args: string[], ctx: CommandContext) => Promise<CommandOutput>;
 }
 
 export interface CommandContext {
+  offline?: boolean;
+  /** Foreground command lifetime supplied by the interactive input owner. */
+  signal?: AbortSignal;
+  providerLifetime?: AbortSignal;
   sessionManager: SessionManager;
   jsonlStore: JsonlSessionStore;
   terminal: TerminalUI;
+  /** Optional host warning sink; headless hosts must keep notices off transcript stdout. */
+  writeWarning?: (message: string) => void;
   currentSessionId?: string;
   provider?: AiProvider;
   providers: Map<string, AiProvider>;
@@ -34,6 +156,162 @@ export interface CommandContext {
   extensionProviderNames: Set<string>;
   thinkingLevel: ThinkingLevel;
   trustManager?: ProjectTrustManager;
+  isProjectTrusted?: () => boolean;
+  cwd: string;
+  workspaceManager?: WorkspaceManager;
+  workspaceId?: string;
+  enabledToolNames?: () => readonly string[];
+  modelPatterns?: readonly string[];
+  settingsInfo?: () => string;
+  /** Read the current trusted settings snapshot, including after interactive reload. */
+  agentSettings?: () => AgentSettings;
+  credentialService?: ProviderCredentialService;
+  providerCredentialValues?: ReadonlyMap<string, string>;
+  allowCredentialReveal?: boolean;
+  providerNetwork?: AgentProviderNetworkSettings;
+  themeControl?: CommandThemeControl;
+  mcpControl?: CommandMcpControl;
+  redactText?: (value: string) => string;
+  redactJson?: <T>(value: T) => T;
+}
+
+export interface CommandThemeControl {
+  current(): string;
+  list(): Promise<ThemeInventoryItem[]>;
+  select(name: string): Promise<string>;
+}
+
+export interface CommandMcpControl {
+  overview(): Promise<McpConfigInventory>;
+  prepare(sessionId: string, preset?: Session['toolPreset'], signal?: AbortSignal): Promise<PreparedMcpTools>;
+  finish(sessionId: string): void;
+  reconnect(sessionId: string): Promise<void>;
+  manage?(args: string[], signal?: AbortSignal): Promise<string>;
+}
+
+export interface CommandWorkspaceContext {
+  offline?: boolean;
+  providerLifetime?: AbortSignal;
+  writeWarning?: (message: string) => void;
+  cwd: string;
+  workspaceManager?: WorkspaceManager;
+  workspaceId?: string;
+  isProjectTrusted?: () => boolean;
+  enabledToolNames?: () => readonly string[];
+  modelPatterns?: readonly string[];
+  settingsInfo?: () => string;
+  agentSettings?: () => AgentSettings;
+  providers?: Map<string, AiProvider>;
+  credentialService?: ProviderCredentialService;
+  providerCredentialValues?: ReadonlyMap<string, string>;
+  allowCredentialReveal?: boolean;
+  providerNetwork?: AgentProviderNetworkSettings;
+  themeControl?: CommandThemeControl;
+  mcpControl?: CommandMcpControl;
+  redactText?: (value: string) => string;
+  redactJson?: <T>(value: T) => T;
+}
+
+function commandChat(ctx: CommandContext, provider: AiProvider): AiProvider['chat'] {
+  return (messages, options) => ctx.extensionRegistry
+    ? ctx.extensionRegistry.chat(provider, messages, options, name => ctx.providers.get(name))
+    : provider.chat(messages, options);
+}
+
+function safeText(ctx: CommandContext, value: string): string {
+  return ctx.redactText?.(value) ?? value;
+}
+
+function privacyWarning(ctx: CommandContext, message: string): void {
+  const text = safeText(ctx, message);
+  if (ctx.writeWarning) ctx.writeWarning(text);
+  else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(chalk.yellow(text));
+  else process.stderr.write(`${text}\n`);
+}
+
+function safeJson<T>(ctx: CommandContext, value: T): T {
+  return ctx.redactJson?.(value) ?? value;
+}
+
+function parseCommandLine(input: string): string[] | undefined {
+  if (typeof input !== 'string' || Buffer.byteLength(input) > 1024 * 1024 || input.includes('\0')) return undefined;
+  const result: string[] = [];
+  let token = '';
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+  let started = false;
+  const push = (): boolean => {
+    if (!started) return true;
+    if (Buffer.byteLength(token) > 64 * 1024 || result.length >= 256) return false;
+    result.push(token);
+    token = '';
+    started = false;
+    return true;
+  };
+  for (const character of input.trim()) {
+    if (escaped) {
+      token += /[\s\\"']/u.test(character) ? character : `\\${character}`;
+      started = true;
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      started = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+      else token += character;
+      started = true;
+      continue;
+    }
+    if ((character === '"' || character === "'") && !started) {
+      quote = character;
+      started = true;
+      continue;
+    }
+    if (/\s/u.test(character)) {
+      if (!push()) return undefined;
+      continue;
+    }
+    token += character;
+    started = true;
+  }
+  if (escaped) token += '\\';
+  if (quote || !push()) return undefined;
+  return result;
+}
+
+function commandProjectTrusted(ctx: CommandContext): boolean {
+  return ctx.isProjectTrusted?.() ?? ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false;
+}
+
+async function commandWorkspaceManager(ctx: CommandContext): Promise<WorkspaceManager> {
+  if (ctx.workspaceManager) return ctx.workspaceManager;
+  const manager = new WorkspaceManager({ allowedRoots: [ctx.cwd], defaultCwd: ctx.cwd });
+  await manager.initialize();
+  ctx.workspaceManager = manager;
+  return manager;
+}
+
+async function resolveCommandPath(
+  ctx: CommandContext,
+  input: string,
+  options: { mustExist: boolean; kind?: 'file' | 'directory' | 'any' },
+): Promise<string> {
+  if (typeof input !== 'string' || !input || Buffer.byteLength(input) > 4_096
+    || /[\u0000-\u001f\u007f-\u009f]/u.test(input)) {
+    throw new Error('Invalid workspace path.');
+  }
+  const manager = await commandWorkspaceManager(ctx);
+  if (!options.mustExist) {
+    return manager.resolveDestination(input, { base: ctx.cwd, kind: options.kind });
+  }
+  if (options.kind === 'file') {
+    return manager.resolveStableFile(input, { base: ctx.cwd });
+  }
+  return manager.resolve(input, { base: ctx.cwd, mustExist: true, kind: options.kind });
 }
 
 function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
@@ -41,10 +319,16 @@ function createExtensionContext(ctx: CommandContext): ExtensionRuntimeContext {
     sessionManager: ctx.sessionManager,
     currentSessionId: ctx.currentSessionId,
     provider: ctx.provider,
+    specializedProviders: () => getConfiguredSpecializedProviders(ctx.providers),
+    providerName: String((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type ?? 'unknown'),
+    cwd: ctx.cwd,
+    workspaceId: ctx.workspaceId,
+    projectTrusted: ctx.isProjectTrusted?.() ?? ctx.trustManager?.isTrustedSync(ctx.cwd) ?? false,
     notify: (message, level = 'info') => {
-      if (level === 'error') ctx.terminal.showError(message);
-      else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(message);
-      else process.stdout.write(`${message}\n`);
+      const safeMessage = safeText(ctx, message);
+      if (level === 'error') ctx.terminal.showError(safeMessage);
+      else if (typeof ctx.terminal.writeOutput === 'function') ctx.terminal.writeOutput(safeMessage);
+      else process.stdout.write(`${safeMessage}\n`);
     },
   };
 }
@@ -55,19 +339,99 @@ function syncExtensionProviders(ctx: CommandContext): void {
 
   for (const { type, definition } of ctx.extensionRegistry?.getProviderDefinitions() ?? []) {
     try {
+      const network = ctx.providerNetwork;
+      const credential = ctx.providerCredentialValues?.get(type);
       const provider = ProviderFactory.create({
         ...definition.defaultConfig,
+        ...(credential ? { apiKey: credential } : {}),
+        ...(network ? {
+          transport: network.transport,
+          ...(network.httpProxy ? { httpProxy: network.httpProxy } : {}),
+          httpIdleTimeoutMs: network.httpIdleTimeoutMs,
+          websocketConnectTimeoutMs: network.websocketConnectTimeoutMs,
+          requestTimeoutMs: network.requestTimeoutMs,
+          providerMaxRetries: network.maxRetries,
+          providerMaxRetryDelayMs: network.maxRetryDelayMs,
+        } : {}),
         type,
-      } as any);
+      });
       ctx.providers.set(type, provider);
       ctx.extensionProviderNames.add(type);
     } catch (error) {
-      ctx.terminal.showError(`Failed to initialize extension provider "${type}": ${error instanceof Error ? error.message : String(error)}`);
+      ctx.terminal.showError(safeText(ctx, `Failed to initialize extension provider "${type}": ${error instanceof Error ? error.message : String(error)}`));
     }
   }
 
-  const activeType = (ctx.provider as any)?.config?.type as string | undefined;
+  ctx.extensionRegistry?.addVirtualProviders(ctx.providers);
+  const activeType = ctx.provider?.getProviderType();
   if (activeType && !ctx.providers.has(activeType)) ctx.provider = ctx.providers.get('mock');
+}
+
+async function availableCommandModels(ctx: CommandContext): Promise<ModelCatalogEntry[]> {
+  return flattenModelCatalog(await collectProviderModelCatalog(ctx.providers, {
+    virtualModels: ctx.extensionRegistry?.virtualModels,
+    discover: ctx.offline !== true,
+    timeoutMs: 2_000,
+    retries: 0,
+  })).filter(model => model.available);
+}
+
+function modelLabel(model: ModelCatalogEntry): string {
+  return model.name === model.id ? model.source : model.name;
+}
+
+function importedMessage(value: unknown): Message {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid imported message.');
+  }
+  const source = value as Record<string, unknown>;
+  if (!['user', 'assistant', 'system', 'tool'].includes(String(source.role))
+    || typeof source.content !== 'string') {
+    throw new Error('Invalid imported message.');
+  }
+  const timestamp = source.timestamp === undefined ? new Date() : new Date(source.timestamp as string | number);
+  if (!Number.isFinite(timestamp.getTime())) throw new Error('Invalid imported message.');
+  return {
+    id: typeof source.id === 'string' && source.id ? source.id : `import-${crypto.randomUUID()}`,
+    role: source.role as Message['role'],
+    content: source.content,
+    timestamp,
+    ...(source.blocks !== undefined ? { blocks: source.blocks as Message['blocks'] } : {}),
+    ...(source.toolCalls !== undefined ? { toolCalls: source.toolCalls as Message['toolCalls'] } : {}),
+    ...(typeof source.toolCallId === 'string' ? { toolCallId: source.toolCallId } : {}),
+    ...(typeof source.name === 'string' ? { name: source.name } : {}),
+    ...(typeof source.isError === 'boolean' ? { isError: source.isError } : {}),
+    ...(typeof source.provider === 'string' ? { provider: source.provider } : {}),
+    ...(typeof source.model === 'string' ? { model: source.model } : {}),
+    ...(source.usage && typeof source.usage === 'object' ? { usage: source.usage as Message['usage'] } : {}),
+    ...(typeof source.durationMs === 'number' ? { durationMs: source.durationMs } : {}),
+    ...(typeof source.parentMessageId === 'string' ? { parentMessageId: source.parentMessageId } : {}),
+    ...(typeof source.agentId === 'string' ? { agentId: source.agentId } : {}),
+    ...(source.metadata && typeof source.metadata === 'object' && !Array.isArray(source.metadata)
+      ? { metadata: source.metadata as Record<string, unknown> } : {}),
+  };
+}
+
+async function selectCommandModel(
+  ctx: CommandContext,
+  model: ModelCatalogEntry,
+  thinkingLevel?: ThinkingLevel,
+): Promise<void> {
+  const provider = ctx.providers.get(model.provider);
+  if (!provider) throw new Error(`Provider unavailable: ${model.provider}`);
+  provider.setConfiguredModel(model.id);
+  ctx.provider = provider;
+  if (thinkingLevel) {
+    ctx.thinkingLevel = clampPublishedThinkingLevel(
+      thinkingLevel,
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels, provider),
+    );
+  } else {
+    ctx.thinkingLevel = clampPublishedThinkingLevel(
+      ctx.thinkingLevel,
+      getSupportedThinkingLevels(model.provider, model.id, ctx.extensionRegistry?.virtualModels, provider),
+    );
+  }
 }
 
 const commands: CommandEntry[] = [
@@ -77,12 +441,22 @@ const commands: CommandEntry[] = [
     handler: async () => '', // Handled by TerminalUI.showHelp()
   },
   {
+    name: 'settings',
+    description: 'Show effective agent settings and their source scopes',
+    handler: async (_args, ctx) => ctx.settingsInfo?.()
+      ?? chalk.yellow('Agent settings are not configured for this runtime.'),
+  },
+  {
     name: 'new',
     description: 'Create a new conversation',
     usage: '/new [title]',
     handler: async (args, ctx) => {
       const title = args.length > 0 ? args.join(' ') : `Conversation ${ctx.sessionManager.list().length + 1}`;
-      const session = await ctx.sessionManager.create({ title });
+      const session = await ctx.sessionManager.create({
+        title,
+        cwd: ctx.cwd,
+        workspaceId: ctx.workspaceId,
+      });
       // Switch to the newly created session
       ctx.currentSessionId = session.id;
       return `Created: ${chalk.cyan(session.id)} - ${chalk.dim(title)}`;
@@ -147,7 +521,7 @@ const commands: CommandEntry[] = [
 
       if (!session) session = await ctx.sessionManager.loadFromStore(target);
 
-      const numericIndex = Number.parseInt(target, 10);
+      const numericIndex = /^[1-9]\d*$/u.test(target) && Number.isSafeInteger(Number(target)) ? Number(target) : 0;
       if (!session && numericIndex > 0) {
         session = ctx.sessionManager.list()[numericIndex - 1];
       }
@@ -162,8 +536,15 @@ const commands: CommandEntry[] = [
         return chalk.red(`Session not found: ${chalk.yellow(target)}. Use /list to see available sessions.`);
       }
 
+      const fallback = ctx.extensionRegistry ? await resolveVirtualModelFallback(ctx.sessionManager, session.id,
+        ctx.extensionRegistry.virtualModels, name => ctx.providers.get(name), undefined, ctx.signal) : undefined;
+      if (fallback) {
+        await ctx.sessionManager.update(session.id, { model: fallback.selection.id, providerConfig: { type: fallback.selection.provider } });
+        ctx.provider = fallback.provider; ctx.provider.setConfiguredModel(fallback.selection.id);
+        ctx.thinkingLevel = fallback.selection.thinkingLevel ?? 'off';
+      }
       ctx.currentSessionId = session.id;
-      return `Switched to session: ${chalk.cyan(session.id)} - ${chalk.dim(session.title || 'Untitled')} (${session.messages.length} msgs)`;
+      return `${fallback ? 'Saved virtual router unavailable; resuming its last physical model.\n' : ''}Switched to session: ${chalk.cyan(session.id)} - ${chalk.dim(session.title || 'Untitled')} (${session.messages.length} msgs)`;
     },
   },
   {
@@ -172,6 +553,9 @@ const commands: CommandEntry[] = [
     usage: '/delete <id>',
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /delete <id>');
+      if (args[0] === ctx.currentSessionId) {
+        return chalk.red('Cannot delete the active session. Use /new or /switch first.');
+      }
 
       const deleted = await ctx.sessionManager.delete(args[0]);
       return deleted ? `Deleted session ${chalk.yellow(args[0])}` : chalk.red(`Session not found: ${chalk.yellow(args[0])}`);
@@ -190,7 +574,8 @@ const commands: CommandEntry[] = [
       // Create a fresh empty session with same ID
       const title = session.title || 'Untitled';
       const newSession = { ...session, messages: [], createdAt: new Date(), updatedAt: new Date() };
-      ctx.sessionManager['sessions'].set(newSession.id, newSession as any);
+      const sessionCache = ctx.sessionManager as unknown as { sessions: Map<string, Session> };
+      sessionCache.sessions.set(newSession.id, newSession);
 
       return chalk.green(`Cleared ${chalk.bold(title)} — conversation is now empty.`);
     },
@@ -215,8 +600,7 @@ const commands: CommandEntry[] = [
 
         // Also check by type string in config
         for (const [, p] of ctx.providers) {
-          const providerConfig = p['config'] as any;
-          if (providerConfig?.type === providerName) {
+          if (p.getProviderType() === providerName) {
             newProvider = p;
             break;
           }
@@ -229,7 +613,7 @@ const commands: CommandEntry[] = [
 
         // Try creating a new one from default configs
         if (providerName === 'mock' && !ctx.providers.has('mock')) {
-          const mockProvider = ProviderFactory.create({ type: 'mock', apiKey: '' } as any);
+          const mockProvider = ProviderFactory.create({ type: 'mock', apiKey: '' });
           ctx.providers.set('mock', mockProvider);
           ctx.provider = mockProvider;
           return `Switched to provider: ${chalk.cyan('mock')} (for testing)`;
@@ -251,108 +635,55 @@ const commands: CommandEntry[] = [
   },
   {
     name: 'model',
-    description: 'List/switch/cycle models for current provider',
-    usage: '/model [list|cycle|<model-name>]',
+    description: 'List/switch/cycle models from the shared catalogue',
+    usage: '/model [list|cycle|<[provider/]model[:thinking]>]',
     handler: async (args, ctx) => {
-      const provider = ctx.provider;
-      if (!provider) return chalk.yellow('No active provider configured.');
+      const activeProvider = ctx.provider;
+      if (!activeProvider) return chalk.yellow('No active provider configured.');
+      const activeProviderName = String((activeProvider as unknown as { config?: { type?: string } }).config?.type ?? 'unknown');
+      const available = await availableCommandModels(ctx);
+      if (!available.length) return chalk.yellow('No models available for configured providers.');
 
-      // Get the config type to determine available models
-      const configType = (provider as any)['config']?.type || 'unknown';
-      
-      // Define available models per provider
-      const modelRegistry: Record<string, { name: string; description: string }[]> = {
-        openai: [
-          { name: 'gpt-4o', description: 'default, recommended' },
-          { name: 'gpt-4-turbo', description: 'fast and capable' },
-          { name: 'gpt-3.5-turbo', description: 'lightweight, cost-effective' },
-        ],
-        anthropic: [
-          { name: 'claude-3-opus-20240229', description: 'most capable' },
-          { name: 'claude-3-sonnet-20240229', description: 'balanced performance' },
-          { name: 'claude-3-haiku-20240307', description: 'fastest, cost-effective' },
-        ],
-        google: [
-          { name: 'gemini-2.5-pro', description: 'advanced reasoning' },
-          { name: 'gemini-2.0-flash', description: 'fast, multimodal' },
-          { name: 'gemini-2.0-flash-lite', description: 'lightweight' },
-        ],
-        azure: [{ name: 'gpt-4o', description: 'Azure OpenAI deployment' }],
-        vertex: [{ name: 'gemini-2.0-flash', description: 'Google Vertex AI' }],
-        bedrock: [{ name: 'anthropic.claude-3-haiku-20240307-v1:0', description: 'AWS Bedrock Converse' }],
-        mock: [
-          { name: 'mock-model-v1', description: 'for testing only' },
-        ],
-      };
-
-      let models = modelRegistry[configType] || [];
-      if (configType === 'local' && provider.getAvailableModels) {
-        const discoveredModels = await provider.getAvailableModels();
-        models = discoveredModels.map(name => ({ name, description: 'modèle local détecté' }));
-        if (models.length === 0) {
-          const configuredModel = (provider as any)['config']?.model || 'local-model';
-          models = [{ name: configuredModel, description: 'modèle local configuré' }];
-        }
+      if (args[0]?.toLowerCase() === 'cycle' || args[0]?.toLowerCase() === '--cycle') {
+        const scope = ctx.modelPatterns?.length
+          ? resolveModelScope(ctx.modelPatterns, available).models
+          : available.filter(model => model.provider === activeProviderName)
+            .map(model => ({ model, thinkingLevel: undefined as ThinkingLevel | undefined }));
+        if (!scope.length) return chalk.yellow('No models match the active model scope.');
+        const currentModel = activeProvider.getConfiguredModel();
+        const currentIndex = scope.findIndex(item => (
+          item.model.provider === activeProviderName && item.model.id === currentModel
+        ));
+        const next = scope[(currentIndex + 1 + scope.length) % scope.length]!;
+        await selectCommandModel(ctx, next.model, next.thinkingLevel);
+        return `${chalk.green('✅')} Switched to ${chalk.cyan(`${next.model.provider}/${next.model.id}`)}`
+          + ` (${modelLabel(next.model)})\n   Cycle: [`
+          + `${scope.map(item => chalk.dim(`${item.model.provider}/${item.model.id}`)).join(' → ')}]`;
       }
 
-      // Handle cycling (e.g., /model cycle or just /model with --cycle)
-      if (args.length > 0 && (args[0].toLowerCase() === 'cycle' || args[0].toLowerCase() === '--cycle')) {
-        const currentModel = (provider as any)['config']?.model;
-        let currentIndex = -1;
-
-        // Find the index of the current model in the registry
-        if (currentModel) {
-          currentIndex = models.findIndex(m => m.name.toLowerCase().includes(currentModel.toLowerCase()));
+      if (args.length > 0 && args[0]?.toLowerCase() !== 'list') {
+        const reference = args.join(' ');
+        const resolved = resolveModelReference(reference, available);
+        if (!resolved.model) {
+          return chalk.red(`${resolved.message ?? `Unknown model: ${reference}`} Available:\n  `
+            + available.map(model => `${chalk.cyan(`${model.provider}/${model.id}`)} - ${modelLabel(model)}`).join('\n  '));
         }
-
-        const nextIndex = (currentIndex + 1) % models.length;
-        const nextModel = models[nextIndex];
-
-        // Update the provider's model config
-        if ((provider as any)['config']) {
-          (provider as any)['config'].model = nextModel.name;
-        }
-
-        return `${chalk.green('✅')} Switched to ${chalk.cyan(nextModel.name)} (${nextModel.description})` +
-          `\n   Cycle: [${models.map(m => chalk.dim(m.name)).join(' → ')}]`;
+        await selectCommandModel(ctx, resolved.model, resolved.thinkingLevel);
+        return `${chalk.green('✅')} Set model to ${chalk.cyan(`${resolved.model.provider}/${resolved.model.id}`)}`
+          + ` (${modelLabel(resolved.model)})`;
       }
 
-      // Handle setting a specific model (e.g., /model gpt-4o)
-      if (args.length > 0) {
-        const modelName = args[0].toLowerCase();
-        
-        // Find matching model
-        const matchedModel = models.find(m => m.name.toLowerCase().includes(modelName));
-        
-        if (!matchedModel) {
-          return chalk.red(`Unknown model: ${chalk.yellow(args[0])}. Available:` +
-            `\n  ${models.map(m => `${chalk.cyan(m.name)} - ${m.description}`).join('\n  ')}`);
-        }
-
-        // Update the provider's model config
-        if ((provider as any)['config']) {
-          (provider as any)['config'].model = matchedModel.name;
-        }
-
-        return `${chalk.green('✅')} Set model to ${chalk.cyan(matchedModel.name)}` +
-          ` (${matchedModel.description})`;
-      }
-
-      // No args - show current model and available options
-      const currentModel = (provider as any)['config']?.model || models[0]?.name;
-      
-      let output = `${chalk.bold('Current Model:')} ${chalk.cyan(currentModel)}\n`;
-      output += `\n${chalk.bold(`${configType.toUpperCase()} Models:`)}\n`;
-
+      const currentModel = activeProvider.getConfiguredModel();
+      const models = available.filter(model => model.provider === activeProviderName);
+      let output = `${chalk.bold('Current Model:')} ${chalk.cyan(currentModel ?? 'none')}\n`;
+      output += `\n${chalk.bold(`${activeProviderName.toUpperCase()} Models:`)}\n`;
       for (const model of models) {
-        const marker = model.name === currentModel ? chalk.green('●') : chalk.dim('○');
-        output += `  ${marker} ${chalk.cyan(model.name)} - ${model.description}\n`;
+        const marker = model.id === currentModel ? chalk.green('●') : chalk.dim('○');
+        output += `  ${marker} ${chalk.cyan(model.id)} - ${modelLabel(model)}\n`;
       }
-
       output += `\n${chalk.yellow('Commands:')}\n`;
-      output += `  /model <name>     Set specific model\n`;
-      output += `  /model cycle       Cycle to next model in list`; // No trailing newline for cleaner display
-
+      output += `  /model <name>      Set a fuzzy or provider-qualified model\n`;
+      output += `  /model cycle       Cycle through the active --models scope`;
       return output;
     },
   },
@@ -365,12 +696,137 @@ const commands: CommandEntry[] = [
   Auto-save: Enabled`,
   },
   {
-    name: 'login',
-    description: 'Authentifier un provider avec un flux OAuth device',
-    usage: '/login <provider>',
+    name: 'theme',
+    description: 'Lister ou sélectionner un thème terminal à chaud',
+    usage: '/theme [name]',
     handler: async (args, ctx) => {
-      const providerName = args[0]?.toLowerCase();
-      if (!providerName) return chalk.red('Usage: /login <provider>');
+      if (!ctx.themeControl) return chalk.yellow('La sélection de thème n’est pas disponible.');
+      const selected = args.join(' ').trim();
+      if (selected) {
+        const name = await ctx.themeControl.select(selected);
+        return chalk.green(`Thème actif : ${name}.`);
+      }
+      const inventory = await ctx.themeControl.list();
+      const hasActivePath = inventory.some(theme => theme.active);
+      return inventory.map(theme => {
+        const marker = theme.active || (!hasActivePath && theme.name === ctx.themeControl?.current()) ? '●' : '○';
+        const source = `${theme.provenance.scope}/${theme.provenance.source}`;
+        return `${marker} ${theme.name} (${source})${theme.valid ? '' : ' [invalide]'}`;
+      }).join('\n');
+    },
+  },
+  {
+    name: 'login',
+    description: 'Authentifier un provider avec un flux OAuth explicite',
+    usage: '/login <provider> [--issuer github-copilot|openai-codex|kimi-coding|openrouter|anthropic|meta|xai] [--method device|browser]',
+    handler: async (args, ctx) => {
+      const providerName = args[0]?.trim().toLowerCase();
+      let issuer: string | undefined, method: string | undefined, valid = true;
+      for (let i = 1; i < args.length; i++) {
+        const raw = args[i]!, equal = raw.indexOf('='), key = equal < 0 ? raw : raw.slice(0, equal);
+        const value = equal < 0 ? args[++i] : raw.slice(equal + 1);
+        if (key === '--issuer' && issuer === undefined && value) issuer = value;
+        else if (key === '--method' && method === undefined && (value === 'device' || value === 'browser')) method = value;
+        else valid = false;
+      }
+      if (!valid || !providerName || args.length !== 1 && issuer !== 'github-copilot' && issuer !== 'openai-codex' && issuer !== 'kimi-coding' && issuer !== 'openrouter' && issuer !== 'anthropic' && issuer !== 'meta' && issuer !== 'xai'
+        || method !== undefined && issuer !== 'openai-codex' && !((issuer === 'openrouter' || issuer === 'anthropic') && method === 'browser') && !((issuer === 'meta' || issuer === 'xai') && method === 'device')) return chalk.red('Usage: /login <provider> [--issuer github-copilot|openai-codex|kimi-coding|openrouter|anthropic|meta|xai] [--method device|browser]');
+      if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(providerName)) return chalk.red('Provider OAuth invalide.');
+      const credentialService = ctx.credentialService as (typeof ctx.credentialService
+        & { hasPersistentStore?: () => boolean }) | undefined;
+      if (!credentialService?.hasPersistentStore?.()) {
+        return chalk.yellow('Un stockage chiffré persistant est requis avant une authentification OAuth.');
+      }
+      if (issuer === 'openrouter') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          await loginOpenRouter(credentialService, providerName, uri => ctx.terminal.writeOutput(`Ouvrez ${uri} pour autoriser AiHarness.`), signal); signal.throwIfAborted();
+          if (providerName === 'openrouter' && !process.env.AI_HARNESS_OPENROUTER_API_KEY_COMMAND && !ctx.agentSettings?.().providerApiKeyCommands?.openrouter) {
+            const resolved = await credentialService.resolve(providerName, { env: process.env, allowCommands: false }); signal.throwIfAborted();
+            if (resolved?.credential.type === 'api-key') {
+              const provider = createConfiguredProviders(process.env, { network: ctx.providerNetwork, credentials: new Map([[providerName, resolved.credential.apiKey]]) }).get(providerName);
+              signal.throwIfAborted(); if (provider) ctx.providers.set(providerName, provider);
+            }
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
+      }
+      if (issuer === 'kimi-coding' || issuer === 'anthropic' || issuer === 'meta' || issuer === 'xai') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          const instructions = (uri: string, code?: string) => ctx.terminal.writeOutput(code === undefined ? `Ouvrez ${uri} pour autoriser AiHarness.` : `Ouvrez ${uri} et saisissez le code ${code}.`);
+          const realm = issuer === 'kimi-coding' ? process.env.KIMI_CODE_OAUTH_HOST || process.env.KIMI_OAUTH_HOST : undefined;
+          const credential = issuer === 'kimi-coding' ? await loginKimiCoding(credentialService, providerName, instructions, signal, realm) : issuer === 'meta' ? await loginMeta(credentialService, providerName, instructions, signal) : issuer === 'xai' ? await loginXai(credentialService, providerName, instructions, signal) : await loginAnthropic(credentialService, providerName, 'browser', instructions, signal);
+          signal.throwIfAborted();
+          if (providerName === issuer && !process.env[`AI_HARNESS_${issuer.toUpperCase().replace(/-/g, '_')}_API_KEY_COMMAND`] && !ctx.agentSettings?.().providerApiKeyCommands?.[issuer]) {
+            const oauth = { credential, credentialSource: cliSubscriptionCredentialSource(credentialService, issuer, ctx.providerLifetime, !ctx.offline, realm) };
+            const provider = createConfiguredProviders(process.env, { network: ctx.providerNetwork,
+              ...(issuer === 'kimi-coding' ? { kimiOAuth: oauth } : issuer === 'meta' ? { metaOAuth: oauth } : issuer === 'xai' ? { xaiOAuth: oauth } : { anthropicOAuth: oauth }),
+            }).get(issuer);
+            if (provider) ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
+      }
+      if (issuer === 'openai-codex') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          if (method === 'browser') await loginOpenAICodexBrowser(credentialService, providerName, uri => {
+            ctx.terminal.writeOutput(`Ouvrez ${uri} pour autoriser AiHarness.`);
+          }, signal);
+          else await loginOpenAICodex(credentialService, providerName, (uri, code) => {
+            ctx.terminal.writeOutput(`Ouvrez ${uri} et saisissez le code ${code}.`);
+          }, signal);
+          signal.throwIfAborted();
+          if (providerName === 'openai-codex') {
+            const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, openaiCodex: {
+              model: OPENAI_CODEX_MODELS[0]!.id,
+              credentialSource: cliSubscriptionCredentialSource(credentialService, 'openai-codex', ctx.providerLifetime),
+            } }).get('openai-codex');
+            if (provider) ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
+      }
+      if (issuer === 'github-copilot') {
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, ...[ctx.signal, ctx.providerLifetime].filter((value): value is AbortSignal => Boolean(value))]);
+        const deadline = performance.now() + 300_000;
+        let timer = setTimeout(() => controller.abort(), 300_000);
+        try {
+          const publish = await credentialService.prepareOAuthLogin(providerName, signal);
+          const client = new OAuthDeviceClient(getGitHubCopilotOAuthConfig(process.env.GITHUB_COPILOT_ENTERPRISE_DOMAIN), credentialService.redactor);
+          const prompt = await client.requestCode(signal);
+          signal.throwIfAborted();
+          credentialService.redactor.add(prompt.deviceCode);
+          const code = credentialService.redactor.redact(prompt.userCode);
+          if (Buffer.from(prompt.userCode, 'utf8').toString('utf8') !== prompt.userCode
+            || terminalText(prompt.userCode) !== prompt.userCode || code !== prompt.userCode) throw new Error('Invalid OAuth code.');
+          const uri = new URL(prompt.verificationUri);
+          ctx.terminal.writeOutput(`Ouvrez ${credentialService.redactor.redact(`${uri.origin}${uri.pathname}`)} et saisissez le code ${code}.`);
+          clearTimeout(timer);
+          timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(deadline - performance.now(), prompt.expiresIn * 1000)));
+          const credential = await client.pollCredential(prompt, signal);
+          signal.throwIfAborted();
+          await publish(credential);
+          signal.throwIfAborted();
+          // Explicit login makes the canonical adapter available, not selected.
+          const model = GITHUB_COPILOT_MODELS.find(model => credential.subscription?.provider === 'github-copilot' && credential.subscription.availableModelIds.includes(model.id));
+          if (providerName === 'github-copilot' && model) {
+            const provider = createConfiguredProviders({}, { network: ctx.providerNetwork, githubCopilot: {
+              model: model.id, credentialSource: cliGitHubCopilotCredentialSource(credentialService, ctx.providerLifetime),
+            } }).get('github-copilot')!;
+            ctx.providers.set(providerName, provider);
+          }
+          return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
+        } finally { clearTimeout(timer); controller.abort(); }
+      }
       const config = oauthConfigFromEnv(providerName);
       if (!config) {
         return chalk.yellow(`OAuth non configuré pour ${providerName}. Définissez AI_HARNESS_OAUTH_${providerName.toUpperCase()}_{DEVICE_URL,TOKEN_URL,CLIENT_ID}.`);
@@ -378,30 +834,83 @@ const commands: CommandEntry[] = [
       const client = new OAuthDeviceClient(config);
       const prompt = await client.requestCode();
       ctx.terminal.writeOutput(`Ouvrez ${prompt.verificationUriComplete || prompt.verificationUri} et saisissez le code ${prompt.userCode}.`);
-      const token = await client.pollToken(prompt);
+      const credential = await client.pollCredential(prompt);
+      await credentialService.setOAuth(providerName, credential);
       const existing = ctx.providers.get(providerName) as unknown as { config?: Record<string, unknown> } | undefined;
       const provider = ProviderFactory.create({
         ...(existing?.config ?? {}),
         type: providerName,
-        apiKey: token,
-      } as any);
+        apiKey: credential.accessToken,
+      });
       ctx.providers.set(providerName, provider);
       ctx.provider = provider;
       return chalk.green(`Authentification OAuth réussie pour ${providerName}.`);
     },
   },
   {
+    name: 'logout',
+    description: 'Supprimer les identifiants enregistrés pour un provider',
+    usage: '/logout <provider>',
+    handler: async (args, ctx) => {
+      const providerName = args[0]?.trim().toLowerCase();
+      if (!providerName) return chalk.red('Usage: /logout <provider>');
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      await ctx.credentialService.delete(providerName);
+      await closeProviderNetworkDispatchers();
+      ctx.providers.delete(providerName);
+      if ((ctx.provider as unknown as { config?: { type?: string } } | undefined)?.config?.type === providerName) {
+        ctx.provider = ctx.providers.get('mock');
+      }
+      return chalk.green(`Identifiants supprimés pour ${providerName}.`);
+    },
+  },
+  {
+    name: 'credentials',
+    description: 'Lister les descripteurs non secrets des identifiants enregistrés',
+    handler: async (_args, ctx) => {
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      const descriptors = ctx.credentialService.list();
+      return descriptors.length
+        ? descriptors.map(item => `${item.provider} — ${item.type} (${item.source})${item.refreshable ? ' [actualisable]' : ''}`).join('\n')
+        : 'Aucun identifiant enregistré.';
+    },
+  },
+  {
+    name: 'credential',
+    description: 'Révéler explicitement un identifiant dans ce terminal local',
+    usage: '/credential reveal <provider>',
+    handler: async (args, ctx) => {
+      if (args.length !== 2 || args[0] !== 'reveal' || !args[1]) {
+        return chalk.red('Usage: /credential reveal <provider>');
+      }
+      if (!ctx.allowCredentialReveal) {
+        return chalk.red('La révélation est disponible uniquement dans un terminal interactif local.');
+      }
+      if (!ctx.credentialService) return chalk.yellow('Le stockage sécurisé des identifiants n’est pas configuré.');
+      const value = await ctx.credentialService.reveal(args[1], { cwd: ctx.cwd });
+      return value === undefined
+        ? chalk.yellow(`Aucun identifiant résolu pour ${args[1]}.`)
+        : { text: value, kind: 'explicit-local-credential-reveal' };
+    },
+  },
+  {
     name: 'thinking',
     description: 'Configurer le niveau de raisonnement du modèle',
-    usage: '/thinking [off|low|medium|high|xhigh]',
+    usage: '/thinking [off|minimal|low|medium|high|xhigh|max]',
     handler: async (args, ctx) => {
       const level = args[0]?.toLowerCase() as ThinkingLevel | undefined;
       if (!level) return `Niveau de raisonnement : ${chalk.cyan(ctx.thinkingLevel)}`;
-      if (!['off', 'low', 'medium', 'high', 'xhigh'].includes(level)) {
-        return chalk.red('Usage: /thinking [off|low|medium|high|xhigh]');
+      if (!['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(level)) {
+        return chalk.red('Usage: /thinking [off|minimal|low|medium|high|xhigh|max]');
       }
-      ctx.thinkingLevel = level;
-      return chalk.green(`Niveau de raisonnement défini sur ${level}.`);
+      const available = getSupportedThinkingLevels(
+        ctx.provider?.getProviderType() ?? 'unknown',
+        ctx.provider?.getConfiguredModel(),
+        ctx.extensionRegistry?.virtualModels,
+        ctx.provider,
+      );
+      ctx.thinkingLevel = clampPublishedThinkingLevel(level, available);
+      return chalk.green(`Niveau de raisonnement défini sur ${ctx.thinkingLevel}.`);
     },
   },
   {
@@ -409,51 +918,71 @@ const commands: CommandEntry[] = [
     description: 'Compact conversation context (summarize old messages)',
     usage: '/compact [instructions]',
     handler: async (args, ctx) => {
-      const sessions = ctx.sessionManager.list();
+      const manager = ctx.sessionManager, selectedSessionId = ctx.currentSessionId, signal = ctx.signal;
+      const sessions = manager.list();
       if (!sessions.length) return chalk.yellow('No active session to compact.');
-
-      const instructions = args.length > 0 ? args.join(' ') : undefined;
-      const session = (ctx.currentSessionId && ctx.sessionManager.get(ctx.currentSessionId)) || sessions[0];
-      const messages = session.messages;
-
-      if (messages.length < 3) {
-        return chalk.yellow(`Not enough messages to compact (${messages.length}/3 minimum).`);
-      }
-
-      // Find the provider for LLM summarization
-      const provider = ctx.provider;
-      if (!provider || !provider.validateConfig()) {
-        return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
-      }
-
+      const session = (selectedSessionId && manager.get(selectedSessionId)) || sessions[0];
+      const provider = ctx.provider, chat = provider && commandChat(ctx, provider);
+      const summaryProvider = provider?.getProviderType(), summaryModel = provider?.getConfiguredModel();
+      const redactText = ctx.redactText?.bind(ctx) ?? ((value: string) => value);
+      const redactJson = ctx.redactJson?.bind(ctx);
+      const leaf = session.activeLeafId;
+      const identity = Object.getOwnPropertyDescriptor(session, 'id');
+      const sessionId: string | undefined = identity && Object.hasOwn(identity, 'value') && typeof identity.value === 'string'
+        ? identity.value : undefined;
+      const validate = () => {
+        if (signal && compactionAbortState.call(signal)) throw new DOMException('Compaction cancelled', 'AbortError');
+        const currentIdentity = Object.getOwnPropertyDescriptor(session, 'id');
+        if (!sessionId || !currentIdentity || !Object.hasOwn(currentIdentity, 'value') || currentIdentity.value !== sessionId
+          || ctx.sessionManager !== manager || ctx.currentSessionId !== selectedSessionId
+          || manager.get(sessionId) !== session || session.activeLeafId !== leaf) {
+          throw new Error('Compaction context or policy changed.');
+        }
+      };
       try {
-        // Build system prompt for summarization
-        const instructionsText = instructions || 'Summarize this conversation concisely, preserving key information and context.';
+        if (!sessionId) throw new Error('Compaction context or policy changed.');
+        validate();
+        const sourceMessages = structuredClone(session.messages);
+        if (sourceMessages.length < 3) return chalk.yellow(`Not enough messages to compact (${sourceMessages.length}/3 minimum).`);
+        const source = manager.captureCompactionSource(sessionId);
+        if (!source) throw new Error('Compaction context or policy changed.');
+        const preparation = prepareCompactionContext(manager, sessionId);
+        if (!preparation) return chalk.yellow('No complete context prefix to compact.');
+        const messages = preparation.toCompact, firstKeptId = preparation.firstKeptEntryId;
+        if (!provider || !chat || !provider.validateConfig()) {
+          return chalk.red('No configured AI provider for compaction. Set API keys or use /provider mock.');
+        }
+        validate();
+        const summaryInput = getSummaryModelMessages(messages);
+        const safeMessages = redactJson?.(summaryInput) ?? summaryInput;
+        assertCompactionTranscript(safeMessages);
         const summaryMessages: Message[] = [
-          ...messages.map(m => ({ ...m })),
+          ...safeMessages,
           { id: '__compact__', role: 'user', content: `Please summarize the above conversation. Focus on preserving important facts, decisions, and context needed for future responses. Keep it concise but comprehensive.`, timestamp: new Date() },
         ];
-
-        // Use provider's chat to generate summary (non-streaming for reliability)
-        const result = await provider.chat(summaryMessages, { systemPrompt: instructionsText });
-
-        if (!result.content) {
-          return chalk.red('Compaction failed: no summary generated.');
-        }
-
-        // Apply compaction - replace old messages with summary
-        const firstKeptId = session.messages[session.messages.length - 2]?.id || '';
-        await ctx.sessionManager.applyCompaction(
-          session.id,
-          result.content,
-          firstKeptId,
-        );
-
+        assertCompactionTranscript(summaryMessages);
+        validate();
+        const result = await chat(summaryMessages, {
+          systemPrompt: args.join(' ') || 'Summarize this conversation concisely, preserving key information and context.',
+          sessionId,
+          signal,
+          tools: [],
+          maxTokens: 4096,
+        });
+        validate();
+        const content = result && typeof result === 'object' ? Object.getOwnPropertyDescriptor(result, 'content') : undefined;
+        if (content && 'value' in content && content.value === '') return chalk.red('Compaction failed: no summary generated.');
+        const ownedResponse = copyCompactionResponse(result);
+        const summary = readCompactionSummary({ content: redactText(ownedResponse.content) });
+        await manager.applyCompaction(sessionId, summary, firstKeptId, { provider: ownedResponse.provider ?? summaryProvider,
+          model: ownedResponse.model ?? summaryModel, usage: normalizeProviderUsage(ownedResponse.usage) }, { signal, source });
+        const appliedSummary = typeof session.metadata?.compactionSummary === 'string' ? session.metadata.compactionSummary : summary;
+        // Cancellation after final save admission must not turn durable success into failure.
         return chalk.green(`✅ Compacted ${chalk.bold(session.title || 'conversation')}\n` +
-          `   Summary: ${(result.content as string).slice(0, 100)}${(result.content as string).length > 100 ? '...' : ''}`);
+          `   Summary: ${appliedSummary.slice(0, 100)}${appliedSummary.length > 100 ? '...' : ''}`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return chalk.red(`Compaction failed: ${errorMessage}`);
+        return chalk.red(`Compaction failed: ${redactText(errorMessage)}`);
       }
     },
   },
@@ -471,12 +1000,57 @@ const commands: CommandEntry[] = [
       if (!session) return chalk.red('Aucune branche active à résumer.');
       if (!ctx.provider?.validateConfig()) return chalk.red('Aucun provider configuré pour générer le résumé.');
       const instructionArgs = explicitSession ? args.slice(1) : args;
-      const result = await ctx.provider.chat(session.messages.map(message => ({ ...message })), {
+      const result = await commandChat(ctx, ctx.provider)(session.messages.map(message => ({ ...message })), {
         systemPrompt: instructionArgs.join(' ') || 'Résume cette branche de conversation en préservant les décisions, résultats et contexte utiles.',
       });
       if (!result.content.trim()) return chalk.red('Le provider n’a produit aucun résumé.');
       await ctx.sessionManager.addBranchSummary(session.id, result.content, session.title);
       return chalk.green(`Résumé de branche enregistré pour ${session.title || session.id}.`);
+    },
+  },
+  {
+    name: 'navigate',
+    description: 'Navigate to a session entry, optionally summarizing the abandoned branch',
+    usage: '/navigate [entry-id] [--summarize|--no-summary] [--instructions "focus"]',
+    handler: async (args, ctx) => {
+      const session = ctx.currentSessionId ? ctx.sessionManager.get(ctx.currentSessionId) : undefined;
+      if (!session) return chalk.red('No active session.');
+      if (!args.length) {
+        const entries = (await ctx.sessionManager.getRawEntries(session.id)).filter(entry => entry.type !== 'metadata');
+        const listed = entries.slice(-128).map(entry => {
+          const safeId = entry.id.slice(0, 256).replace(/[^\x20-\x7e]/gu,
+            char => `\\u{${char.codePointAt(0)!.toString(16)}}`);
+          return `${entry.id === session.activeLeafId ? '●' : '○'} ${safeId} [${entry.type}]`;
+        });
+        return ['Session entries (latest 128):', ...listed,
+          'Use /navigate <entry-id> --summarize or --no-summary.'].join('\n');
+      }
+      let summarize: boolean | undefined;
+      let customInstructions: string | undefined;
+      for (let index = 1; index < args.length; index++) {
+        const option = args[index];
+        if ((option === '--summarize' || option === '--no-summary') && summarize === undefined) {
+          summarize = option === '--summarize';
+        } else if (option === '--instructions' && customInstructions === undefined && args[index + 1] !== undefined) {
+          customInstructions = args[++index];
+        } else return chalk.red('Usage: /navigate <entry-id> [--summarize|--no-summary] [--instructions "focus"]');
+      }
+      const settings = ctx.agentSettings?.().branchSummary;
+      if (summarize === undefined && settings?.skipPrompt !== true) {
+        return chalk.yellow('Summarize the branch? Repeat with --summarize or --no-summary. No navigation performed.');
+      }
+      summarize ??= false;
+      if (customInstructions !== undefined && !summarize) return chalk.red('--instructions requires --summarize.');
+      if (summarize && !ctx.provider) return chalk.red('No configured provider for branch summarization.');
+      const summaryProvider = summarize ? createProviderBranchSummarizer(ctx.provider!, undefined, commandChat(ctx, ctx.provider!)) : undefined;
+      const result = await ctx.sessionManager.navigateTree(session.id, args[0], {
+        summarize, ...summaryProvider, ...(summarize ? { reserveTokens: settings?.reserveTokens } : {}),
+        customInstructions, signal: ctx.signal,
+      });
+      if (result.status === 'cancelled') return chalk.yellow('Navigation cancelled.');
+      if (result.status === 'stale') return chalk.yellow('Session changed during summarization. No navigation performed.');
+      if (result.status === 'not-found') return chalk.red('Session entry not found.');
+      return chalk.green(`Navigated to ${result.entryId}.${result.summary ? ' Branch summary saved.' : ''}`);
     },
   },
   {
@@ -517,17 +1091,8 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /fork <session-id> [message-index] [title]');
 
-      const sessionId = args[0];
-      let session: Session | null | undefined = ctx.sessionManager.get(sessionId);
-
-      // Try loading from store if not in memory
-      if (!session) {
-        session = await ctx.sessionManager.loadFromStore(sessionId);
-      }
-
-      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
-
-      // Parse optional arguments
+      const sessionId = args[0], signal = ctx.signal;
+      // Capture all caller choices before an awaited source load.
       let messageIndex: number | undefined;
       let newTitle: string | undefined;
 
@@ -545,7 +1110,9 @@ const commands: CommandEntry[] = [
         newTitle = args.slice(2).join(' ');
       }
 
-      const forked = await ctx.sessionManager.forkSession(sessionId, messageIndex, newTitle);
+      const session = ctx.sessionManager.get(sessionId) ?? await ctx.sessionManager.loadFromStore(sessionId);
+      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
+      const forked = await ctx.sessionManager.forkSession(sessionId, messageIndex, newTitle, { signal });
 
       if (!forked) return chalk.red('Fork failed: session not found');
 
@@ -561,18 +1128,11 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       if (!args[0]) return chalk.red('Usage: /clone <session-id> [title]');
 
-      const sessionId = args[0];
-      let session: Session | null | undefined = ctx.sessionManager.get(sessionId);
-
-      // Try loading from store if not in memory
-      if (!session) {
-        session = await ctx.sessionManager.loadFromStore(sessionId);
-      }
-
-      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
-
+      const sessionId = args[0], signal = ctx.signal;
       const newTitle = args.length > 1 ? args.slice(1).join(' ') : undefined;
-      const cloned = await ctx.sessionManager.cloneSession(sessionId, newTitle);
+      const session = ctx.sessionManager.get(sessionId) ?? await ctx.sessionManager.loadFromStore(sessionId);
+      if (!session) return chalk.red(`Session not found: ${chalk.yellow(sessionId)}. Use /list to see available sessions.`);
+      const cloned = await ctx.sessionManager.cloneSession(sessionId, newTitle, undefined, { signal });
 
       if (!cloned) return chalk.red('Clone failed: session not found');
 
@@ -588,25 +1148,56 @@ const commands: CommandEntry[] = [
     handler: async (args, ctx) => {
       const sessionId = ctx.currentSessionId || ctx.sessionManager.list()[0]?.id;
       if (!sessionId) return chalk.red('Aucune session à partager.');
-      const baseUrl = (process.env.AI_HARNESS_SERVER_URL || 'http://127.0.0.1:3080').replace(/\/$/, '');
-      const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(process.env.AI_HARNESS_AUTH_TOKEN ? { Authorization: `Bearer ${process.env.AI_HARNESS_AUTH_TOKEN}` } : {}),
-        },
-        body: JSON.stringify({ ttlHours: Number(args[0]) || 24 }),
-      });
-      if (!response.ok) return chalk.red(`Partage impossible (${response.status}) : ${await response.text()}`);
-      const result = await response.json() as { url: string; expiresInHours: number };
-      return chalk.green(`Lien valable ${result.expiresInHours} h : ${result.url}`);
+      if (args.length > 1 || (args[0] !== undefined && !/^\d{1,3}$/u.test(args[0]))) {
+        return chalk.red('Usage: /share [durée-heures]');
+      }
+      const ttlHours = args[0] === undefined ? 24 : Number(args[0]);
+      if (!Number.isSafeInteger(ttlHours) || ttlHours < 1 || ttlHours > 168) {
+        return chalk.red('La durée de partage doit être comprise entre 1 et 168 heures.');
+      }
+      const baseUrl = resolveShareServerUrl(process.env.AI_HARNESS_SERVER_URL || 'http://127.0.0.1:3080');
+      if (!baseUrl) return chalk.red('URL du serveur de partage invalide.');
+      privacyWarning(ctx, SHARE_PRIVACY_WARNING);
+      const endpoint = new URL(`api/sessions/${encodeURIComponent(sessionId)}/share`, baseUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(new Error('Share request timed out.')), SHARE_REQUEST_TIMEOUT_MS);
+      timeout.unref?.();
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(process.env.AI_HARNESS_AUTH_TOKEN ? { Authorization: `Bearer ${process.env.AI_HARNESS_AUTH_TOKEN}` } : {}),
+          },
+          body: JSON.stringify({ ttlHours }),
+        });
+        if (!response.ok) {
+          void Promise.resolve(response.body?.cancel()).catch(() => undefined);
+          return chalk.red(`Partage impossible (${response.status}).`);
+        }
+        const text = await readBoundedShareResponse(response);
+        const result: unknown = JSON.parse(text);
+        if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Share response is invalid.');
+        const { url, expiresInHours } = result as Record<string, unknown>;
+        if (typeof url !== 'string' || Buffer.byteLength(url) > 4_096
+          || /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/u.test(url)
+          || !Number.isSafeInteger(expiresInHours) || (expiresInHours as number) < 1 || (expiresInHours as number) > 168) {
+          throw new Error('Share response is invalid.');
+        }
+        return chalk.green(`Lien valable ${expiresInHours as number} h : ${url}`);
+      } finally {
+        clearTimeout(timeout);
+      }
     },
   },
   {
     name: 'bug',
     description: 'Préparer un rapport de bug GitHub',
     usage: '/bug [description]',
-    handler: async args => {
+    handler: async (args, ctx) => {
+      privacyWarning(ctx, DIAGNOSTIC_PRIVACY_WARNING);
       const description = args.join(' ') || 'Décrivez le problème rencontré.';
       const body = [description, '', `Node: ${process.version}`, `Platform: ${process.platform}/${process.arch}`].join('\n');
       const repository = process.env.AI_HARNESS_ISSUES_URL || 'https://github.com/Fidigi/AiHarness/issues/new';
@@ -616,10 +1207,17 @@ const commands: CommandEntry[] = [
   {
     name: 'export',
     description: 'Export conversation to file',
-    usage: '/export <format> [path]',
+    usage: '/export <format> [--include-opaque-continuations] [path]',
     handler: async (args, ctx) => {
       const format = (args[0] || 'json').toLowerCase();
-      let outputPath = args.slice(1).join(' ') || undefined; // Optional explicit path
+      const completeFlag = '--include-opaque-continuations';
+      const flags = args.slice(1).filter(arg => arg.startsWith(completeFlag));
+      const includeOpaqueContinuations = args[1] === completeFlag;
+      if (flags.length > 1 || flags.some(flag => flag !== completeFlag)
+        || (flags.length > 0 && (!includeOpaqueContinuations || format !== 'json'))) {
+        return chalk.red('Usage: /export <format> [--include-opaque-continuations (JSON only)] [path]');
+      }
+      let outputPath = args.slice(includeOpaqueContinuations ? 2 : 1).join(' ') || undefined;
       
       const sessions = ctx.sessionManager.list();
       if (!sessions.length) return chalk.yellow('No conversations to export.');
@@ -632,12 +1230,24 @@ const commands: CommandEntry[] = [
       if (!session) {
         session = sessions[0];
       }
+      const rawSession = session;
+      const { messages: _messages, commands: rawCommands, ...sessionMetadata } = rawSession;
+      session = {
+        ...safeJson(ctx, sessionMetadata),
+        messages: rawSession.messages.map(message => safeJson(ctx, message)),
+        ...(rawCommands ? { commands: rawCommands.map(command => safeJson(ctx, command)) } : {}),
+      } as Session;
       let content: string;
+      let continuationWarning: string | undefined;
 
       switch (format) {
-        case 'json':
-          content = JSON.stringify(session, null, 2);
+        case 'json': {
+          const exported = serializeSessionForExport(session, { includeOpaqueContinuations });
+          continuationWarning = exported.warning;
+          content = JSON.stringify({ ...exported.session,
+            ...(exported.warning ? { exportWarning: exported.warning } : {}) }, null, 2);
           break;
+        }
         case 'markdown':
           content = `# ${session.title || 'Conversation'}\n\n`;
           for (const msg of session.messages) {
@@ -653,11 +1263,13 @@ const commands: CommandEntry[] = [
           break;
         case 'jsonl': {
           // Export as JSONL format (one message per line)
-          const lines = session.messages.map(m => JSON.stringify({
+          const exported = serializeSessionForExport(session);
+          continuationWarning = exported.warning;
+          const lines = exported.session.messages.map(m => JSON.stringify({
             id: m.id,
             role: m.role,
             content: m.content,
-            timestamp: m.timestamp.toISOString(),
+            timestamp: m.timestamp,
             ...(m.toolCalls ? { toolCalls: m.toolCalls } : {}),
             ...(m.toolCallId ? { toolCallId: m.toolCallId } : {}),
             ...(m.name ? { name: m.name } : {}),
@@ -686,16 +1298,17 @@ const commands: CommandEntry[] = [
         }
         filename = outputPath;
       } else {
-        // Auto-generate filename in sessions directory
-        const sessionDir = path.join(process.env.HOME || '.', '.ai-harness', 'exports');
-        await fs.mkdir(sessionDir, { recursive: true });
+        // Default exports stay in the active, WorkspaceManager-confined directory.
         const extMap: Record<string, string> = { json: 'json', markdown: 'md', jsonl: 'jsonl', html: 'html' };
         const safeTitle = sanitizeFilename(session.title || 'export');
-        filename = path.join(sessionDir, `${safeTitle}-${timestamp}.${extMap[format]}`);
+        filename = `${safeTitle}-${timestamp}.${extMap[format]}`;
       }
 
-      // Write to file
-      await fs.writeFile(filename, content, 'utf-8');
+      privacyWarning(ctx, EXPORT_PRIVACY_WARNING);
+      if (continuationWarning) privacyWarning(ctx, continuationWarning);
+      const destination = await resolveCommandPath(ctx, filename, { mustExist: false });
+      await atomicWriteStableFile(destination, content, { overwrite: true, maxBytes: 64 * 1024 * 1024 });
+      filename = destination;
 
       return `✅ Exported session "${chalk.cyan(session.title || 'Untitled')}" as ${format} (${content.length} chars)\n   → ${chalk.green(path.basename(filename))}`;
     },
@@ -718,14 +1331,21 @@ const commands: CommandEntry[] = [
       const targetSessions = showAll ? sessions : [currentSession];
 
       for (const session of targetSessions) {
-        const tokenCount = ctx.sessionManager.getTokenCount(session.id);
-        const userMsgs = session.messages.filter(m => m.role === 'user').length;
-        const assistantMsgs = session.messages.filter(m => m.role === 'assistant').length;
-
+        const accounting = getSessionAccounting(await ctx.sessionManager.getRawEntries(session.id), session.activeLeafId);
+        const contextTokens = ctx.sessionManager.estimateContextTokens(session.id);
+        const counts = (scope: typeof accounting.active): string =>
+          `${scope.userMessages} (you) + ${scope.assistantMessages} (AI), ${scope.toolResults} tool results = ${scope.totalMessages} message/command entries`;
         output += `${chalk.bold('📊 Session:')} ${chalk.cyan(session.title || 'Untitled')}\n`;
-        output += `   ID: ${chalk.dim(session.id.slice(0, 8))}\n`;
-        output += `   Messages: ${userMsgs} (you) + ${assistantMsgs} (AI) = ${session.messages.length} total\n`;
-        output += `   Tokens (est.): ~${tokenCount.toLocaleString()} tokens\n`;
+        output += `   ID: ${chalk.dim(session.id)}\n`;
+        output += `   File: ${ctx.jsonlStore.getSessionFilePath(session.id) ?? 'memory (not saved)'}\n`;
+        output += `   Active path${accounting.activePathComplete ? '' : ' (incomplete)'}: ${counts(accounting.active)}\n`;
+        output += `   Active accounting: ${usageText(accounting.active)}\n`;
+        output += `   Full history (all branches): ${counts(accounting.history)}\n`;
+        output += `   History accounting: ${usageText(accounting.history)}\n`;
+        output += `   Context (est.): ${contextTokens === null ? 'unknown' : `~${contextTokens.toLocaleString()} tokens`} (effective model context, not accounting totals)\n`;
+        const warming = getSessionCacheWarmingStatus(ctx.sessionManager, session.id);
+        output += `   Cache warming: ${ctx.agentSettings?.().cacheWarming ?? 'streaming'} / ${warming.state}${warming.reason ? ` (${warming.reason})` : ''}${warming.extensionOverride ? ' [extension override]' : ''}\n`;
+        if (warming.decision) output += `   Expected cache savings: $${warming.decision.expectedSavings.toFixed(5)}\n`;
         output += `   Created: ${new Date(session.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}\n`;
         output += `   Updated: ${chalk.dim(new Date(session.updatedAt).toLocaleString('fr-FR'))}\n\n`;
       }
@@ -763,7 +1383,7 @@ const commands: CommandEntry[] = [
       return chalk.green(`✅ Session title updated to: "${chalk.cyan(title)}"`);
     },
   },
-  // Alias for /name (Pi compatibility)
+  // Alias for /name.
   {
     name: 'rename',
     description: 'Rename the current session (alias for /name)',
@@ -814,89 +1434,94 @@ const commands: CommandEntry[] = [
     description: 'Import sessions from a JSONL file',
     usage: '/import <path-to-jsonl-file>',
     handler: async (args, ctx) => {
-      const filePath = args[0];
+      const filePath = args.join(' ').trim();
       if (!filePath) return chalk.red('Usage: /import <path-to-jsonl-file>');
+      if (!commandProjectTrusted(ctx)) {
+        return chalk.yellow('Project trust is required before importing a workspace file.');
+      }
 
-      // Resolve the file path
-      const resolvedPath = path.resolve(filePath);
-
+      let displayName = path.basename(filePath);
       try {
-        // Read and parse JSONL file
-        const rawContent = await fs.readFile(resolvedPath, 'utf-8');
-        const lines = rawContent.split('\n').filter(line => line.trim());
-
+        const resolvedPath = await resolveCommandPath(ctx, filePath, { mustExist: true, kind: 'file' });
+        displayName = path.basename(resolvedPath);
+        const rawContent = await readBoundedResourceText(resolvedPath, 64 * 1024 * 1024);
+        const lines = rawContent.split(/\r?\n/u).filter(line => line.trim());
         if (lines.length === 0) {
-          return chalk.yellow(`No messages found in ${chalk.cyan(path.basename(resolvedPath))}`);
+          return chalk.yellow(`No messages found in ${chalk.cyan(displayName)}`);
         }
+        if (lines.length > 100_000) throw new Error('Import entry limit exceeded.');
 
-        // Try to detect format: JSON array of sessions or single-session JSONL
-        let importedCount = 0;
-
-        try {
-          // Attempt to parse as a JSON array (multi-session export)
-          const data = JSON.parse(lines.join('\n'));
-          if (Array.isArray(data)) {
-            // Multi-session format: [{id, title, messages: [...]}, ...]
-            for (const sessionData of data) {
-              if (sessionData.id && Array.isArray(sessionData.messages)) {
-                await ctx.sessionManager.create({ 
-                  id: sessionData.id,
-                  title: sessionData.title || 'Imported Session',
-                  messages: sessionData.messages.map((m: any) => ({
-                    ...m,
-                    timestamp: new Date(m.timestamp),
-                  })),
-                });
-                importedCount++;
-              }
-            }
+        const drafts: Array<{ id?: string; title: string; messages: Message[] }> = [];
+        let importedMessages = 0;
+        if (rawContent.trimStart().startsWith('[')) {
+          const data = JSON.parse(rawContent) as unknown;
+          if (!Array.isArray(data) || data.length === 0 || data.length > 10_000) {
+            throw new Error('Invalid session array.');
           }
-        } catch {
-          // Not a JSON array, try JSONL format (one message per line)
+          const importedIds = new Set<string>();
+          for (const value of data) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+              throw new Error('Invalid imported session.');
+            }
+            const source = value as Record<string, unknown>;
+            if (typeof source.id !== 'string' || !isValidSessionId(source.id)
+              || importedIds.has(source.id) || !Array.isArray(source.messages)
+              || ctx.sessionManager.get(source.id)) {
+              throw new Error('Invalid or duplicate imported session.');
+            }
+            importedIds.add(source.id);
+            importedMessages += source.messages.length;
+            if (importedMessages > 100_000) throw new Error('Import message limit exceeded.');
+            if (source.title !== undefined && (typeof source.title !== 'string'
+              || Buffer.byteLength(source.title) > 4_096
+              || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(source.title))) {
+              throw new Error('Invalid imported title.');
+            }
+            drafts.push({
+              id: source.id,
+              title: source.title ?? 'Imported Session',
+              messages: source.messages.map(importedMessage),
+            });
+          }
+        } else {
           const messages: Message[] = [];
           let title = 'Imported Session';
-
           for (const line of lines) {
-            try {
-              const msgData = JSON.parse(line);
-              if (msgData.role && msgData.content !== undefined) {
-                // Check for session metadata in first message
-                if (messages.length === 0 && msgData.sessionTitle) {
-                  title = msgData.sessionTitle;
+            if (Buffer.byteLength(line) > 16 * 1024 * 1024) throw new Error('Imported message is too large.');
+            const value = JSON.parse(line) as unknown;
+            if (messages.length === 0 && value && typeof value === 'object' && !Array.isArray(value)) {
+              const requestedTitle = (value as Record<string, unknown>).sessionTitle;
+              if (requestedTitle !== undefined) {
+                if (typeof requestedTitle !== 'string' || Buffer.byteLength(requestedTitle) > 4_096
+                  || /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/u.test(requestedTitle)) {
+                  throw new Error('Invalid imported title.');
                 }
-                messages.push({
-                  id: msgData.id || `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                  role: msgData.role as Message['role'],
-                  content: String(msgData.content),
-                  timestamp: msgData.timestamp ? new Date(msgData.timestamp) : new Date(),
-                  toolCalls: msgData.toolCalls,
-                  toolCallId: msgData.toolCallId,
-                  name: msgData.name,
-                  isError: msgData.isError,
-                });
+                title = requestedTitle;
               }
-            } catch {
-              // Skip malformed lines
-              continue;
             }
+            messages.push(importedMessage(value));
           }
-
-          if (messages.length > 0) {
-            await ctx.sessionManager.create({ title, messages });
-            importedCount++;
-          }
+          drafts.push({ title, messages });
         }
 
-        if (importedCount === 0) {
-          return chalk.red(`Failed to import: unrecognized format in ${chalk.cyan(path.basename(resolvedPath))}`);
+        const createdIds: string[] = [];
+        try {
+          for (const draft of drafts) {
+            const created = await ctx.sessionManager.create(draft);
+            createdIds.push(created.id);
+          }
+        } catch (error) {
+          for (const id of createdIds.reverse()) {
+            try { await ctx.sessionManager.delete(id); }
+            catch { /* Preserve the import failure while each durable rollback is attempted. */ }
+          }
+          throw error;
         }
-
+        const importedCount = drafts.length;
         const sessionType = importedCount > 1 ? 'sessions' : 'session';
-        return chalk.green(`✅ Imported ${importedCount} ${sessionType} from ${chalk.cyan(path.basename(resolvedPath))}\n   → ${chalk.dim(importedCount === 1 ? `Session: ${ctx.sessionManager.list()[0]?.title || 'Imported Session'}` : `${importedCount} sessions loaded`)}`);
-
-      } catch (error) {
-        const err = error instanceof Error ? error.message : String(error);
-        return chalk.red(`❌ Import failed: ${err}\n   File: ${chalk.cyan(resolvedPath)}`);
+        return chalk.green(`✅ Imported ${importedCount} ${sessionType} from ${chalk.cyan(displayName)}`);
+      } catch {
+        return chalk.red(`❌ Import failed: the file is unavailable, unsafe, or invalid.\n   File: ${chalk.cyan(displayName)}`);
       }
     },
   },
@@ -935,20 +1560,68 @@ const commands: CommandEntry[] = [
     },
   },
   {
+    name: 'mcp',
+    description: 'Inspect persistent MCP servers and session tools',
+    usage: '/mcp [status|tools|reconnect|test|add|remove|enable|disable|exposure|login|logout] [arguments]',
+    handler: async (args, ctx) => {
+      if (!ctx.mcpControl) return chalk.yellow('MCP runtime is not configured.');
+      const action = args[0]?.toLowerCase() || 'status';
+      if (['test', 'add', 'remove', 'enable', 'disable', 'exposure', 'login', 'logout'].includes(action)) {
+        if (!ctx.mcpControl.manage) return chalk.yellow('MCP management is not configured.');
+        return ctx.mcpControl.manage([action, ...args.slice(1)], ctx.signal);
+      }
+      if (action === 'status' || action === 'list') {
+        const inventory = await ctx.mcpControl.overview();
+        if (inventory.servers.length === 0) return chalk.yellow('No MCP servers configured.');
+        return inventory.servers.map(server => {
+          const configured = !server.valid ? 'invalid'
+            : server.shadowedByProject || server.registration?.shadowedByFile ? 'shadowed'
+              : !server.enabled ? 'disabled' : 'configured';
+          const runtime = server.runtimeStatus
+            ? ` · ${server.runtimeStatus.state}${server.runtimeStatus.toolCount === undefined ? '' : ` (${server.runtimeStatus.toolCount} tools)`}`
+            : '';
+          return `${server.runtimeStatus?.state === 'connected' ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(server.name)} [${server.scope}${server.registration ? ` · extension:${server.registration.extensionId}` : ''}] — ${configured}${runtime}`;
+        }).join('\n');
+      }
+      if (!ctx.currentSessionId) return chalk.red('An active session is required.');
+      const session = ctx.sessionManager.get(ctx.currentSessionId);
+      if (action === 'reconnect') {
+        await ctx.mcpControl.reconnect(ctx.currentSessionId);
+      } else if (action !== 'tools') {
+        return chalk.red('Usage: /mcp [status|tools|reconnect]');
+      }
+      try {
+        const prepared = await ctx.mcpControl.prepare(ctx.currentSessionId, session?.toolPreset, ctx.signal);
+        if (prepared.tools.length === 0) {
+          return action === 'reconnect'
+            ? chalk.yellow('MCP connections reset; no direct tools are ready yet.')
+            : chalk.yellow('No direct MCP tools are ready.');
+        }
+        const heading = action === 'reconnect' ? `${chalk.green('MCP connections refreshed.')}\n` : '';
+        return `${heading}${prepared.tools.map(tool => `${chalk.green('●')} ${chalk.cyan(tool.name)} — ${tool.mcp.server}/${tool.mcp.tool}${tool.readOnly ? ' [read-only]' : ''}`).join('\n')}`;
+      } finally {
+        ctx.mcpControl.finish(ctx.currentSessionId);
+      }
+    },
+  },
+  {
     name: 'tools',
-    description: 'List tools registered by extensions',
+    description: 'List built-in and extension tools',
     handler: async (_args, ctx) => {
       const tools = ctx.extensionRegistry?.getTools() ?? [];
-      if (tools.length === 0) return chalk.yellow('No extension tools registered.');
-      return tools.map(tool => `${chalk.green('●')} ${chalk.cyan(tool.name)} — ${tool.description}`).join('\n');
+      if (tools.length === 0) return chalk.yellow('No tools registered.');
+      const enabled = new Set(ctx.enabledToolNames?.() ?? tools.map(tool => tool.name));
+      return tools.map(tool => `${enabled.has(tool.name) ? chalk.green('●') : chalk.dim('○')} ${chalk.cyan(tool.name)} — ${tool.description}${enabled.has(tool.name) ? '' : chalk.dim(' [disabled]')}`).join('\n');
     },
   },
   {
     name: 'tool',
-    description: 'Execute an extension tool manually',
+    description: 'Execute a registered tool manually',
     usage: '/tool <name> [json-input]',
     handler: async (args, ctx) => {
       if (!ctx.extensionRegistry || !args[0]) return chalk.red('Usage: /tool <name> [json-input]');
+      const enabled = new Set(ctx.enabledToolNames?.() ?? ctx.extensionRegistry.getTools().map(tool => tool.name));
+      if (!enabled.has(args[0].toLowerCase())) return chalk.red(`Tool is disabled for this run: ${args[0]}`);
       let input: unknown = {};
       if (args.length > 1) {
         try {
@@ -968,26 +1641,51 @@ const commands: CommandEntry[] = [
   {
     name: 'trust',
     description: 'Gérer la confiance accordée au projet courant',
-    usage: '/trust [status|add|remove|list]',
+    usage: '/trust [status|allow|allow-parent|refuse|forget|list]',
     handler: async (args, ctx) => {
       if (!ctx.trustManager) return chalk.yellow('La gestion de confiance n’est pas configurée.');
       const action = args[0]?.toLowerCase() || 'status';
       if (action === 'list') {
-        const projects = ctx.trustManager.list();
-        return projects.length ? projects.join('\n') : 'Aucun projet approuvé.';
+        await ctx.trustManager.refresh();
+        const decisions = ctx.trustManager.listDecisions();
+        return decisions.length
+          ? decisions.map(entry => `[${entry.decision ? 'allow' : 'refuse'}] ${entry.path}`).join('\n')
+          : 'Aucune décision de confiance enregistrée.';
       }
-      if (action === 'add') {
-        const trusted = await ctx.trustManager.trust(process.cwd());
-        return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses extensions.`);
+      if (action === 'add' || action === 'allow') {
+        const trusted = await ctx.trustManager.trust(ctx.cwd);
+        return chalk.green(`Projet approuvé : ${trusted}. Utilisez /reload pour charger ses ressources.`);
       }
-      if (action === 'remove') {
-        const removed = await ctx.trustManager.untrust(process.cwd());
-        return chalk.yellow(`Confiance retirée : ${removed}. Utilisez /reload.`);
+      if (action === 'parent' || action === 'allow-parent') {
+        const parent = path.dirname(ctx.cwd);
+        if (parent === ctx.cwd) return chalk.red('Le dossier racine ne possède pas de parent approuvable.');
+        await ctx.trustManager.setMany([
+          { path: parent, decision: true },
+          { path: ctx.cwd, decision: null },
+        ]);
+        return chalk.green(`Dossier parent approuvé : ${parent}. La décision est héritée ; utilisez /reload.`);
       }
-      if (action !== 'status') return chalk.red('Usage: /trust [status|add|remove|list]');
-      return await ctx.trustManager.isTrusted(process.cwd())
-        ? chalk.green('Le projet courant est approuvé.')
-        : chalk.yellow('Le projet courant n’est pas approuvé ; ses extensions sont ignorées.');
+      if (action === 'remove' || action === 'deny' || action === 'refuse') {
+        const refused = await ctx.trustManager.refuse(ctx.cwd);
+        return chalk.yellow(`Refus enregistré : ${refused}. Utilisez /reload.`);
+      }
+      if (action === 'forget') {
+        const forgotten = await ctx.trustManager.forget(ctx.cwd);
+        return chalk.yellow(`Décision exacte supprimée : ${forgotten}. Utilisez /reload.`);
+      }
+      if (action !== 'status') {
+        return chalk.red('Usage: /trust [status|allow|allow-parent|refuse|forget|list]');
+      }
+      const status = await ctx.trustManager.getStatus(ctx.cwd);
+      const effectiveTrusted = ctx.isProjectTrusted?.() ?? status.trusted;
+      const origin = status.decisionPath
+        ? `${status.inherited ? 'héritée de' : 'enregistrée pour'} ${status.decisionPath}`
+        : !status.requiresTrust
+          ? 'aucune ressource protégée'
+          : effectiveTrusted ? 'autorisation limitée au processus' : 'aucune décision enregistrée';
+      return effectiveTrusted
+        ? chalk.green(`Le projet courant est approuvé (${origin}).`)
+        : chalk.yellow(`Le projet courant n’est pas approuvé (${origin}) ; ses ressources sont ignorées.`);
     },
   },
   {
@@ -1017,88 +1715,15 @@ export class CommandHandler {
     terminal: TerminalUI,
     extensionRegistry?: ExtensionRegistry,
     trustManager?: ProjectTrustManager,
+    workspace: CommandWorkspaceContext = { cwd: process.cwd() },
   ) {
-    // Initialize providers
-    const providers = new Map<string, AiProvider>();
-
-    // Mock provider (always available for testing)
-    providers.set('mock', ProviderFactory.create({ type: 'mock' as any, apiKey: '' }));
-
-    // Try to initialize real providers if API keys are configured
-    try {
-      const openaiKey = process.env.OPENAI_API_KEY;
-      if (openaiKey) {
-        providers.set('openai', ProviderFactory.create({ type: 'openai' as any, apiKey: openaiKey }));
-      }
-    } catch { /* Skip OpenAI provider initialization */ }
-
-    try {
-      const anthropicKey = process.env.ANTHROPIC_API_KEY;
-      if (anthropicKey) {
-        providers.set('anthropic', ProviderFactory.create({ type: 'anthropic' as any, apiKey: anthropicKey }));
-      }
-    } catch { /* Skip Anthropic provider initialization */ }
-
-    try {
-      const googleKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      if (googleKey) {
-        providers.set('google', ProviderFactory.create({
-          type: 'google' as any,
-          apiKey: googleKey,
-          model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
-        }));
-      }
-    } catch { /* Skip Gemini provider initialization */ }
-
-    try {
-      if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT) {
-        providers.set('azure', ProviderFactory.create({
-          type: 'azure' as any,
-          apiKey: process.env.AZURE_OPENAI_API_KEY,
-          baseUrl: process.env.AZURE_OPENAI_ENDPOINT,
-          deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
-          model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o',
-          apiVersion: process.env.AZURE_OPENAI_API_VERSION,
-        }));
-      }
-    } catch { /* Skip Azure initialization */ }
-
-    try {
-      if (process.env.GOOGLE_VERTEX_ACCESS_TOKEN && process.env.GOOGLE_CLOUD_PROJECT) {
-        providers.set('vertex', ProviderFactory.create({
-          type: 'vertex' as any,
-          apiKey: process.env.GOOGLE_VERTEX_ACCESS_TOKEN,
-          project: process.env.GOOGLE_CLOUD_PROJECT,
-          location: process.env.GOOGLE_CLOUD_LOCATION,
-          model: process.env.VERTEX_MODEL || 'gemini-2.0-flash',
-        }));
-      }
-    } catch { /* Skip Vertex initialization */ }
-
-    try {
-      if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        providers.set('bedrock', ProviderFactory.create({
-          type: 'bedrock' as any,
-          region: process.env.AWS_REGION,
-          model: process.env.BEDROCK_MODEL,
-        }));
-      }
-    } catch { /* Skip Bedrock initialization */ }
-
-    // Local OpenAI-compatible provider (Ollama, llama.cpp, AirNES router).
-    try {
-      providers.set('local', ProviderFactory.create({
-        type: 'local' as any,
-        baseUrl: process.env.LOCAL_BASE_URL || process.env.LLAMA_BASE_URL || 'http://localhost:11434/v1',
-        apiKey: process.env.LOCAL_API_KEY || process.env.LLAMA_API_KEY || 'local',
-        model: process.env.LOCAL_MODEL || process.env.LLAMA_MODEL || 'local-model',
-      }));
-    } catch { /* Skip invalid local provider initialization */ }
+    const providers = workspace.providers ?? createConfiguredProviders();
 
     this.ctx = {
       sessionManager,
       jsonlStore,
       terminal,
+      writeWarning: workspace.writeWarning,
       currentSessionId: undefined,
       provider: providers.get('mock'), // Default to mock
       providers,
@@ -1106,6 +1731,24 @@ export class CommandHandler {
       extensionProviderNames: new Set(),
       thinkingLevel: 'off',
       trustManager,
+      isProjectTrusted: workspace.isProjectTrusted,
+      cwd: workspace.cwd,
+      workspaceManager: workspace.workspaceManager,
+      workspaceId: workspace.workspaceId,
+      enabledToolNames: workspace.enabledToolNames,
+      modelPatterns: workspace.modelPatterns,
+      offline: workspace.offline,
+      providerLifetime: workspace.providerLifetime,
+      settingsInfo: workspace.settingsInfo,
+      agentSettings: workspace.agentSettings,
+      credentialService: workspace.credentialService,
+      providerCredentialValues: workspace.providerCredentialValues,
+      allowCredentialReveal: workspace.allowCredentialReveal,
+      providerNetwork: workspace.providerNetwork,
+      themeControl: workspace.themeControl,
+      mcpControl: workspace.mcpControl,
+      redactText: workspace.redactText,
+      redactJson: workspace.redactJson,
     };
     syncExtensionProviders(this.ctx);
   }
@@ -1125,9 +1768,13 @@ export class CommandHandler {
 
   /** Execute a command */
   async execute(input: string): Promise<void> {
-    const parts = input.slice(1).trim().split(/\s+/);
+    const parts = parseCommandLine(input.slice(1));
+    if (!parts) {
+      this.ctx.terminal.showError('Invalid or oversized command line.');
+      return;
+    }
     const commandName = parts[0]?.toLowerCase();
-    const args = parts.slice(1);
+    const args = parts.slice(1).map(value => safeText(this.ctx, value));
 
     if (!commandName) return;
 
@@ -1138,31 +1785,76 @@ export class CommandHandler {
     }
 
     const exactCommand = commands.find(command => command.name === commandName);
-    const extensionCommand = exactCommand ? undefined : this.ctx.extensionRegistry?.getCommand(commandName);
+    const extensionCommand = !exactCommand || commandName === 'mcp'
+      ? this.ctx.extensionRegistry?.getCommand(commandName) : undefined;
 
     if (extensionCommand) {
       try {
-        const output = await extensionCommand.handler(args.join(' '), createExtensionContext(this.ctx));
+        const output = await extensionCommand.handler(safeText(this.ctx, args.join(' ')), createExtensionContext(this.ctx));
         if (output) this.writeOutput(output);
       } catch (error) {
-        this.ctx.terminal.showError(`Extension command failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.ctx.terminal.showError(safeText(this.ctx, `Extension command failed: ${error instanceof Error ? error.message : String(error)}`));
       }
       return;
     }
 
-    const cmd = exactCommand ?? commands.find(command => command.name.startsWith(commandName));
-    if (!cmd) {
+    const prefixMatches = exactCommand ? [exactCommand]
+      : commands.filter(command => command.name.startsWith(commandName));
+    if (prefixMatches.length === 0) {
       this.writeOutput(`Unknown command: ${chalk.red(commandName)}\nType /help for available commands.`);
       return;
     }
+    if (prefixMatches.length > 1) {
+      this.writeOutput(`Ambiguous command: ${chalk.red(commandName)} (${prefixMatches.map(command => `/${command.name}`).join(', ')})`);
+      return;
+    }
 
-    const output = await cmd.handler(args, this.ctx);
-    if (output) this.writeOutput(output);
+    try {
+      const selectedCommand = prefixMatches[0]!;
+      const commandContext = selectedCommand.name === 'credential' && commandName !== 'credential'
+        ? { ...this.ctx, allowCredentialReveal: false }
+        : this.ctx;
+      const previousProvider = this.ctx.provider, previousModel = previousProvider?.getConfiguredModel();
+      const previousSession = this.ctx.currentSessionId;
+      this.refreshCompactionSettings();
+      const output = await selectedCommand.handler(args, commandContext);
+      this.refreshCompactionSettings(previousProvider !== this.ctx.provider
+        || previousModel !== this.ctx.provider?.getConfiguredModel() || previousSession !== this.ctx.currentSessionId);
+      if (typeof output === 'string') {
+        if (output) this.writeOutput(output);
+      } else if (output.text) {
+        const exactCredentialReveal = commandName === 'credential'
+          && args.length === 2 && args[0] === 'reveal' && Boolean(args[1]);
+        this.writeOutput(output.text, output.kind === 'explicit-local-credential-reveal' && exactCredentialReveal);
+      }
+    } catch (error) {
+      if (error instanceof SessionBranchCancelledError) this.writeOutput(chalk.yellow('Session branch cancelled.'));
+      else this.ctx.terminal.showError('Command failed.');
+    }
   }
 
-  private writeOutput(output: string): void {
-    if (typeof this.ctx.terminal.writeOutput === 'function') this.ctx.terminal.writeOutput(output);
-    else process.stdout.write(`${output}\n\n`);
+  private refreshCompactionSettings(resetSessionWindow = false): void {
+    if (!this.ctx.agentSettings) return;
+    const provider = this.ctx.provider?.getProviderType();
+    const model = this.ctx.provider?.getConfiguredModel();
+    this.ctx.sessionManager.setCompactionSettings(resolveAgentCompactionSettings(
+      this.ctx.agentSettings(), provider, model,
+    ));
+    const window = resolveAgentCompactionContextWindow(provider, model, this.ctx.provider);
+    this.ctx.sessionManager.setCompactionContextWindow(window);
+    if (resetSessionWindow && this.ctx.currentSessionId && this.ctx.sessionManager.get(this.ctx.currentSessionId)) {
+      this.ctx.sessionManager.setCompactionContextWindow(window, this.ctx.currentSessionId);
+    }
+  }
+
+  private writeOutput(output: string, sensitive = false): void {
+    if (sensitive) {
+      this.ctx.terminal.writeExplicitCredentialReveal(output);
+      return;
+    }
+    const safeOutput = safeText(this.ctx, output);
+    if (typeof this.ctx.terminal.writeOutput === 'function') this.ctx.terminal.writeOutput(safeOutput);
+    else process.stdout.write(`${safeOutput}\n\n`);
   }
 
   getContext(): CommandContext {

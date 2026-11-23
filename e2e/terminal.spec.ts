@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
 
 test.describe('Terminal PTY du workspace', () => {
@@ -47,13 +47,13 @@ test.describe('Terminal PTY du workspace', () => {
       await page.locator('.workspace-button').click();
       const picker = page.locator('.directory-picker');
       if (cwd.endsWith('/project')) {
-        await expect(picker.getByRole('button', { name: '📁 project' })).toBeVisible();
-        await picker.getByRole('button', { name: '📁 project' }).click();
-        await expect(picker.getByRole('button', { name: '📁 project-marker' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project', exact: true })).toBeVisible();
+        await picker.getByRole('button', { name: 'project', exact: true }).click();
+        await expect(picker.getByRole('button', { name: 'project-marker', exact: true })).toBeVisible();
       } else {
-        await expect(picker.getByRole('button', { name: '📁 project-marker' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project-marker', exact: true })).toBeVisible();
         await picker.getByRole('button', { name: 'Parent directory' }).click();
-        await expect(picker.getByRole('button', { name: '📁 project' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project', exact: true })).toBeVisible();
       }
       await expect(picker.getByLabel('Workspace path')).toHaveValue(cwd);
       await picker.getByRole('button', { name: 'Use this workspace' }).click();

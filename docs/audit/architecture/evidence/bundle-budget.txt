@@ -1,0 +1,1 @@
+Bundle budgets OK: entry 147 KiB gzip; eager 159 KiB gzip; 28 JS chunks.

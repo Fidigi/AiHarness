@@ -1,0 +1,8022 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "1711a9c726114bc8490f2c790e372c1f061a73c9845e3f93290908243a876b10",
+  "catalogueSha256": {
+    "openai": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+    "azure": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727"
+  },
+  "modelProjections": 88,
+  "cases": 616,
+  "freshSdkRequests": 616,
+  "rows": [
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 8192
+      },
+      "fields": {
+        "max_output_tokens": 8192
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 4096
+      },
+      "fields": {
+        "max_output_tokens": 4096
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 4096
+      },
+      "fields": {
+        "max_output_tokens": 4096
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32000
+      },
+      "fields": {
+        "max_output_tokens": 32000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32000
+      },
+      "fields": {
+        "max_output_tokens": 32000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 8192
+      },
+      "fields": {
+        "max_output_tokens": 8192
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 8192,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 4096
+      },
+      "fields": {
+        "max_output_tokens": 4096
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32768
+      },
+      "fields": {
+        "max_output_tokens": 32768
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32768,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 4096
+      },
+      "fields": {
+        "max_output_tokens": 4096
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 4096,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 16384
+      },
+      "fields": {
+        "max_output_tokens": 16384
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 16384,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32000
+      },
+      "fields": {
+        "max_output_tokens": 32000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 128000
+      },
+      "fields": {
+        "max_output_tokens": 128000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 128000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 32000
+      },
+      "fields": {
+        "max_output_tokens": 32000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 32000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer1",
+      "options": {
+        "maxTokens": 1
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer15",
+      "options": {
+        "maxTokens": 15
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-answer16",
+      "options": {
+        "maxTokens": 16
+      },
+      "fields": {
+        "max_output_tokens": 16
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-maximum",
+      "options": {
+        "maxTokens": 100000
+      },
+      "fields": {
+        "max_output_tokens": 100000
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-zero",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "maxOutputTokens": 100000,
+      "case": "raw-temperature-one",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 1
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 1
+      }
+    }
+  ],
+  "limits": "Seven raw output/scalar request-field projections on88 original R models only:omission,1/15/16,published max,temperature0/1. All616 SDK requests freshly executed with per-call fetch/owned SSE/network-none and strict preimport244/11925 hash/mode checks. Whole raw requests retained separately;this fixture binds only max_output_tokens/temperature. Invalid-output refusals are Core safety,not executed SDK equivalence. No streamSimple/default/context/tokenization/output feasibility,sampling acceptance,account/service/complete typed-caller support/full profile or numeric arbitration certificate."
+}

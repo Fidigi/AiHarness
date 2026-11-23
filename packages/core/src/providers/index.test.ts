@@ -2,23 +2,37 @@
 // AI Provider Tests - Real API + Mock implementations
 // ============================================================
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
-  AiProvider,
   OpenAiProvider,
+  type AiProvider,
+  OpenAiResponsesProvider,
+  OpenAiMixedProvider,
+  OpenAICodexProvider,
+  getOpenAiResponsesTransportStats,
+  resetOpenAiResponsesTransportStats,
   AnthropicProvider,
   GeminiProvider,
   VertexGeminiProvider,
   BedrockProvider,
   LocalProvider,
   MockProvider,
+  normalizeProviderUsage,
   ProviderFactory,
 } from './index';
+import { closeProviderNetworkDispatchers, createProviderNetworkScope, PROVIDER_NETWORK_SCOPE, type ProviderWebSocket } from './provider-network.js';
+import type { ProviderOAuthCredential } from './credentials.js';
 import type { Message, ProviderConfig } from '../types';
 
 // ===================================================================
 // Helper functions
 // ===================================================================
+
+afterEach(async () => {
+  resetOpenAiResponsesTransportStats();
+  await closeProviderNetworkDispatchers();
+});
 
 function createMessage(role: 'user' | 'assistant', content: string): Message {
   return {
@@ -29,9 +43,360 @@ function createMessage(role: 'user' | 'assistant', content: string): Message {
   };
 }
 
+class ScriptedProviderWebSocket implements ProviderWebSocket {
+  readyState = 0;
+  readonly sent: Array<Record<string, unknown>> = [];
+  private readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+  private sendIndex = 0;
+
+  constructor(private readonly scripts: Array<Array<Record<string, unknown>> | 'error'>) {
+    queueMicrotask(() => {
+      this.readyState = 1;
+      this.emit('open', {});
+    });
+  }
+
+  send(data: string): void {
+    this.sent.push(JSON.parse(data));
+    const script = this.scripts[this.sendIndex++] ?? [];
+    queueMicrotask(() => {
+      if (script === 'error') {
+        this.emit('error', new Error('untrusted remote detail'));
+        return;
+      }
+      for (const event of script) {
+        if (event.__socketError === true) this.emit('error', new Error('untrusted remote detail'));
+        else this.emit('message', { data: JSON.stringify(event) });
+      }
+    });
+  }
+
+  close(code = 1000, reason = ''): void {
+    if (this.readyState === 3) return;
+    this.readyState = 3;
+    this.emit('close', { code, reason, wasClean: true });
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void): void {
+    const listeners = this.listeners.get(type) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: (event: unknown) => void): void {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  private emit(type: string, event: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+describe('Codex explicit WebSocket transport', () => {
+  const replay = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-continuation-reference.json', import.meta.url), 'utf8')) as {
+    events: Array<Record<string, unknown>>; finalEvents: Array<Record<string, unknown>>; tools: NonNullable<ChatOptionsForCodex['tools']>;
+  };
+  type ChatOptionsForCodex = import('./openai-codex.js').OpenAICodexChatOptions;
+  const grammar = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-constrained-reference.json', import.meta.url), 'utf8')) as { events: Array<Record<string, unknown>> };
+  const reference = JSON.parse(readFileSync(new URL('../../../../tests/fixtures/codex-websocket-reference.json', import.meta.url), 'utf8')) as {
+    rows: Array<{ mode: string; model: string; sessionId: string; tools: NonNullable<ChatOptionsForCodex['tools']>; frames: Array<Record<string, unknown>> }>;
+  };
+  function credential(account = 'fixture-codex-account', suffix = 'original'): ProviderOAuthCredential {
+    return { version: 1, type: 'oauth', accessToken: 'e30.' + Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: account } })).toString('base64url') + '.' + suffix,
+      refreshToken: 'disposable-refresh', expiresAt: Date.now() + 3600000, subscription: { provider: 'openai-codex', accountId: account } };
+  }
+  function fixture(scripts = [replay.events, replay.finalEvents, replay.finalEvents], transport: ProviderConfig['transport'] = 'websocket-cached') {
+    let current: ProviderOAuthCredential | undefined = credential();
+    const sockets: ScriptedProviderWebSocket[] = [], scope = createProviderNetworkScope();
+    const factory = vi.fn((_url: string, _options: { headers: Record<string, string> }) => {
+      const socket = new ScriptedProviderWebSocket(scripts); sockets.push(socket); return socket;
+    });
+    const fetcher = vi.fn(async (url: unknown) => {
+      expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/models?client_version=0.167.2');
+      return Response.json({ models: [{ slug: 'gpt-6.1-sol', visibility: 'list' }, { slug: 'gpt-5.5', visibility: 'list' }] });
+    });
+    global.fetch = fetcher;
+    const config = { type: 'openai-codex', model: 'gpt-6.1-sol', transport, webSocketFactory: factory, requestTimeoutMs: 2000,
+      [PROVIDER_NETWORK_SCOPE]: scope };
+    const provider = new OpenAICodexProvider(config, async () => current);
+    return { provider, config, factory, sockets, fetcher, scope, replace: (value: ProviderOAuthCredential | undefined) => { current = value; } };
+  }
+  const assistant = (response: import('./index.js').ChatResponse): Message => ({ ...response, id: 'assistant', role: 'assistant', timestamp: new Date(2) });
+
+  it.each(reference.rows)('binds the independently captured $mode private/tool/final cached chain', async row => {
+    const f = fixture([row.mode === 'function' ? replay.events : grammar.events, replay.finalEvents, replay.finalEvents]);
+    const user = { ...createMessage('user', 'probe'), timestamp: new Date(1) }, options = { sessionId: row.sessionId, tools: row.tools };
+    const first = await f.provider.chat([user], options);
+    const history: Message[] = [user, assistant(first), { id: 'result', role: 'tool', name: 'echo', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(3) }];
+    const final = await f.provider.chat(history, options);
+    await f.provider.chat([...history, assistant(final), createMessage('user', 'continue')], options);
+    expect(f.sockets).toHaveLength(1); expect(f.sockets[0].sent).toEqual(row.frames);
+    expect(f.factory.mock.calls[0][0]).toBe('wss://chatgpt.com/backend-api/codex/responses');
+    expect(f.factory.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer ' + credential().accessToken,
+      'chatgpt-account-id': 'fixture-codex-account', 'OpenAI-Beta': 'responses_websockets=2026-02-06', 'session-id': row.sessionId });
+    expect(f.fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('isolates account, rotating token, session, model, facade and reset generations', async () => {
+    const f = fixture([replay.finalEvents, replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'shared-session' };
+    await f.provider.chat([user], options); await f.provider.chat([user], options);
+    expect(f.sockets).toHaveLength(1); expect(f.sockets[0].sent).toHaveLength(2);
+    f.replace(credential('fixture-codex-account', 'rotated')); await f.provider.chat([user], options);
+    f.replace(credential('other-account')); await f.provider.chat([user], options);
+    f.replace(undefined); await expect(f.provider.chat([user], options)).rejects.toThrow('OpenAI Codex request failed.');
+    expect(f.sockets).toHaveLength(3);
+    f.replace(credential()); await f.provider.chat([user], options);
+    await new OpenAICodexProvider(f.config, async () => credential()).chat([user], options);
+    await f.provider.chat([user], { sessionId: 'different-session' });
+    await f.provider.chat([user], { ...options, model: 'gpt-5.5' });
+    expect(f.sockets).toHaveLength(7);
+    await closeProviderNetworkDispatchers(f.scope); expect(f.sockets.every(socket => socket.readyState === 3)).toBe(true);
+    await f.provider.chat([user], options); expect(f.sockets).toHaveLength(8);
+    for (const socket of f.sockets) expect(socket.sent[0].previous_response_id).toBeUndefined();
+    expect(f.factory.mock.calls.map(([, init]) => init.headers['chatgpt-account-id'])).toEqual([
+      'fixture-codex-account', 'fixture-codex-account', 'other-account', ...Array(5).fill('fixture-codex-account')]);
+    expect(f.factory.mock.calls[1][1].headers.Authorization).toBe('Bearer ' + credential('fixture-codex-account', 'rotated').accessToken);
+  });
+
+  it('does not revive a withdrawn continuation when the same token is later supplied again', async () => {
+    const f = fixture([replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'withdrawn' };
+    const first = await f.provider.chat([user], options);
+    f.replace(undefined); await expect(f.provider.chat([user], options)).rejects.toThrow('OpenAI Codex request failed.');
+    f.replace(credential()); await f.provider.chat([user, assistant(first), createMessage('user', 'continue')], options);
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+  });
+
+  it('keeps concurrent account turns on separate sockets even when the old consumer settles late', async () => {
+    const f = fixture([replay.finalEvents, replay.finalEvents]), user = createMessage('user', 'probe'), options = { sessionId: 'concurrent-account' };
+    let entered!: () => void, release!: () => void;
+    const ready = new Promise<void>(resolve => { entered = resolve; }), held = new Promise<void>(resolve => { release = resolve; });
+    const first = f.provider.streamChat([user], async () => { entered(); await held; }, undefined, error => { throw error; }, options);
+    try {
+      await ready; f.replace(credential('other-account'));
+      const current = await f.provider.chat([user], options);
+      release(); await first;
+      await f.provider.chat([user, assistant(current), createMessage('user', 'continue')], options);
+      expect(f.sockets).toHaveLength(2); expect(f.sockets[0].sent).toHaveLength(1); expect(f.sockets[1].sent).toHaveLength(2);
+      expect(f.sockets[1].sent[1].previous_response_id).toBe('resp_final');
+      expect(f.factory.mock.calls.map(([, init]) => init.headers['chatgpt-account-id'])).toEqual(['fixture-codex-account', 'other-account']);
+    } finally { release(); await first; }
+  });
+
+  it.each(['caller', 'scope'] as const)('retires a waiting socket on %s cancellation and allows only fresh continuation', async kind => {
+    const f = fixture([[]]), caller = new AbortController(), complete = vi.fn(), failure = vi.fn();
+    const pending = f.provider.streamChat([createMessage('user', 'probe')], () => {}, complete, failure, { signal: caller.signal, sessionId: 'cancelled' });
+    await vi.waitFor(() => expect(f.sockets[0]?.sent).toHaveLength(1));
+    if (kind === 'caller') caller.abort(); else await closeProviderNetworkDispatchers(f.scope);
+    await pending; expect(complete).not.toHaveBeenCalled(); expect(failure).toHaveBeenCalledOnce(); expect(f.sockets[0].readyState).toBe(3);
+    f.factory.mockImplementationOnce(() => { const socket = new ScriptedProviderWebSocket([replay.finalEvents]); f.sockets.push(socket); return socket; });
+    await f.provider.chat([createMessage('user', 'next')], { sessionId: 'cancelled' });
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+    expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a missing delta once as full input on a fresh socket without SSE fallback', async () => {
+    const f = fixture([replay.events, [{ type: 'error', error: { code: 'previous_response_not_found' } }]]);
+    const user = createMessage('user', 'probe'), options = { sessionId: 'lost-continuation', tools: replay.tools };
+    const first = await f.provider.chat([user], options);
+    f.factory.mockImplementationOnce(() => { const socket = new ScriptedProviderWebSocket([replay.finalEvents]); f.sockets.push(socket); return socket; });
+    await f.provider.chat([user, assistant(first), { id: 'result', role: 'tool', toolCallId: first.toolCalls![0].id, content: 'result', timestamp: new Date(3) }], options);
+    expect(f.sockets).toHaveLength(2); expect(f.sockets[0].sent[1].previous_response_id).toBe('resp_native');
+    expect(f.sockets[0].readyState).toBe(3); expect(f.sockets[1].sent[0].previous_response_id).toBeUndefined();
+    expect(JSON.stringify(f.sockets[1].sent[0])).toContain('opaque-empty'); expect(f.fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps explicit uncached sockets ephemeral and never silently falls back to SSE', async () => {
+    const f = fixture([replay.finalEvents], 'websocket'), user = createMessage('user', 'probe');
+    await f.provider.chat([user], { sessionId: 'ephemeral' }); await f.provider.chat([user], { sessionId: 'ephemeral' });
+    expect(f.sockets).toHaveLength(2); expect(f.sockets.every(socket => socket.readyState === 3)).toBe(true);
+    f.factory.mockImplementation(() => { const socket = new ScriptedProviderWebSocket(['error']); f.sockets.push(socket); return socket; });
+    for (let attempt = 0; attempt < 2; attempt++) await expect(f.provider.chat([user], { sessionId: 'ephemeral' })).rejects.toThrow('OpenAI Codex request failed.');
+    expect(f.sockets).toHaveLength(4); expect(f.fetcher).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('OpenAiResponsesProvider transport', () => {
+  it('keeps native encrypted WebSocket replay full and separates physical owner/model cache identities', async () => {
+    const output = [{ type: 'reasoning', id: 'rs_ws', summary: [{ type: 'summary_text', text: 'visible' }], encrypted_content: 'opaque-ws' },
+      { type: 'message', id: 'msg_ws', content: [{ type: 'output_text', text: 'answer', annotations: [] }] }];
+    const terminal = [{ type: 'response.completed', response: { id: 'resp_ws', status: 'completed', output } }];
+    const sockets: ScriptedProviderWebSocket[] = [], factory = vi.fn(() => {
+      const socket = new ScriptedProviderWebSocket([terminal, terminal]); sockets.push(socket); return socket;
+    });
+    const config = { apiKey: 'disposable-native', model: 'gpt-5', transport: 'websocket-cached' as const,
+      baseUrl: 'https://native.example/v1', webSocketFactory: factory, requestTimeoutMs: 2000 };
+    const owner = new OpenAiMixedProvider({ ...config, type: 'owner-a' }), other = new OpenAiMixedProvider({ ...config, type: 'owner-b' });
+    const user = createMessage('user', 'start'), options = { sessionId: 'native-identity', cacheRetention: 'none' as const };
+    const response = await owner.chat([user], options);
+    const history: Message[] = [user, { ...createMessage('assistant', response.content), provider: response.provider, api: response.api,
+      model: response.model, blocks: response.blocks }, createMessage('user', 'next')];
+    await owner.chat(history, options);
+    expect(factory).toHaveBeenCalledTimes(1); expect(sockets[0].sent).toHaveLength(2);
+    expect(sockets[0].sent[1].previous_response_id).toBeUndefined(); expect(JSON.stringify(sockets[0].sent[1].input)).toContain('opaque-ws');
+    await other.chat(history, options);
+    owner.setConfiguredModel('gpt-4o'); await owner.chat(history, options);
+    expect(factory).toHaveBeenCalledTimes(3);
+    for (const socket of sockets.slice(1)) {
+      expect(socket.sent[0].previous_response_id).toBeUndefined(); expect(JSON.stringify(socket.sent[0].input)).not.toContain('opaque-ws');
+      expect(JSON.stringify(socket.sent[0].input)).toContain('visible');
+    }
+    expect(getOpenAiResponsesTransportStats('native-identity')).toMatchObject({ websocketConnectionsCreated: 3, websocketConnectionsReused: 1, deltaRequests: 0, fullContextRequests: 4 });
+  });
+  it('reuses a session socket and sends a bounded previous-response delta', async () => {
+    const socket = new ScriptedProviderWebSocket([
+      [
+        { type: 'response.output_text.delta', delta: 'first answer' },
+        { type: 'response.completed', response: { id: 'response-1', model: 'responses-model', usage: { input_tokens: 2, output_tokens: 2, total_tokens: 4 } } },
+      ],
+      [
+        { type: 'response.output_text.delta', delta: 'second answer' },
+        { type: 'response.completed', response: { id: 'response-2', model: 'responses-model' } },
+      ],
+    ]);
+    const factory = vi.fn(() => socket);
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses',
+      apiKey: 'runtime-key',
+      baseUrl: 'https://responses.example/v1',
+      model: 'responses-model',
+      transport: 'websocket-cached',
+      customHeaders: {
+        'session-id': 'untrusted-session',
+        'x-client-request-id': 'untrusted-request',
+        'OpenAI-Beta': 'untrusted-beta',
+      },
+      webSocketFactory: factory,
+      requestTimeoutMs: 2_000,
+      httpIdleTimeoutMs: 2_000,
+      websocketConnectTimeoutMs: 100,
+    });
+    const firstChunks: string[] = [];
+    await provider.streamChat(
+      [createMessage('user', 'first question')],
+      chunk => firstChunks.push(chunk),
+      undefined,
+      error => { throw error; },
+      { sessionId: 'session-websocket' },
+    );
+    const secondChunks: string[] = [];
+    await provider.streamChat(
+      [
+        createMessage('user', 'first question'),
+        createMessage('assistant', 'first answer'),
+        createMessage('user', 'second question'),
+      ],
+      chunk => secondChunks.push(chunk),
+      undefined,
+      error => { throw error; },
+      { sessionId: 'session-websocket' },
+    );
+
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(factory.mock.calls[0]?.[1].headers).toMatchObject({
+      'session-id': 'session-websocket',
+      'x-client-request-id': 'session-websocket',
+      'OpenAI-Beta': 'responses_websockets=2026-02-06',
+    });
+    expect(firstChunks.join('')).toBe('first answer');
+    expect(secondChunks.join('')).toBe('second answer');
+    expect(socket.sent[1]).toMatchObject({
+      type: 'response.create',
+      previous_response_id: 'response-1',
+      input: [{ role: 'user', content: 'second question' }],
+    });
+    expect(getOpenAiResponsesTransportStats('session-websocket')).toMatchObject({
+      websocketConnectionsCreated: 1,
+      websocketConnectionsReused: 1,
+      fullContextRequests: 1,
+      deltaRequests: 1,
+      sseFallbacks: 0,
+    });
+  });
+
+  it('does not replay a request over SSE after any WebSocket response event', async () => {
+    const socket = new ScriptedProviderWebSocket([[
+      { type: 'response.created', response: { id: 'started-1' } },
+      { __socketError: true },
+    ]]);
+    const fetcher = vi.fn();
+    global.fetch = fetcher;
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses', apiKey: 'runtime-key', baseUrl: 'https://responses.example/v1',
+      transport: 'websocket', webSocketFactory: () => socket,
+      websocketConnectTimeoutMs: 100, requestTimeoutMs: 2_000, httpIdleTimeoutMs: 2_000,
+    });
+    let failure: Error | undefined;
+
+    await provider.streamChat(
+      [createMessage('user', 'do not replay')],
+      () => undefined,
+      undefined,
+      error => { failure = error; },
+      { sessionId: 'started-session' },
+    );
+
+    expect(failure).toMatchObject({ message: 'The provider WebSocket connection failed.' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('falls back to SSE only before WebSocket output starts and remembers the bounded fallback', async () => {
+    const factory = vi.fn(() => new ScriptedProviderWebSocket(['error']));
+    global.fetch = vi.fn().mockImplementation(async () => new Response([
+      'data: {"type":"response.output_text.delta","delta":"fallback"}',
+      'data: {"type":"response.completed","response":{"id":"sse-1"}}',
+      '',
+    ].join('\n'), { status: 200 }));
+    const provider = new OpenAiResponsesProvider({
+      type: 'custom-responses', apiKey: 'runtime-key', baseUrl: 'https://responses.example/v1',
+      transport: 'websocket', webSocketFactory: factory,
+      websocketConnectTimeoutMs: 100, requestTimeoutMs: 2_000, httpIdleTimeoutMs: 2_000,
+    });
+    const run = async (): Promise<string> => {
+      const chunks: string[] = [];
+      await provider.streamChat(
+        [createMessage('user', 'question')],
+        chunk => chunks.push(chunk),
+        undefined,
+        error => { throw error; },
+        { sessionId: 'fallback-session' },
+      );
+      return chunks.join('');
+    };
+
+    await expect(run()).resolves.toBe('fallback');
+    await expect(run()).resolves.toBe('fallback');
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(getOpenAiResponsesTransportStats('fallback-session')).toMatchObject({
+      websocketFailures: 1,
+      sseFallbacks: 2,
+      fallbackActive: true,
+    });
+  });
+});
+
 // ===================================================================
 // MockProvider Tests (no external dependencies needed)
 // ===================================================================
+
+describe('provider usage normalization', () => {
+  it('bounds malformed values and preserves unpriced usage', () => {
+    expect(normalizeProviderUsage({
+      promptTokens: -10,
+      completionTokens: 4,
+      cacheReadTokens: Number.NaN,
+      cacheWriteTokens: 2,
+      totalTokens: 1,
+      costUsd: Number.POSITIVE_INFINITY,
+    })).toEqual({
+      inputTokens: 0,
+      outputTokens: 4,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 2,
+      totalTokens: 6,
+    });
+  });
+});
 
 describe('MockProvider', () => {
   let provider: MockProvider;
@@ -91,11 +456,9 @@ describe('MockProvider', () => {
 
   describe('streamChat()', () => {
     let chunks: string[];
-    let events: any[];
 
     beforeEach(() => {
       chunks = [];
-      events = [];
       provider.reset();
     });
 
@@ -329,6 +692,33 @@ describe('multimodal provider adapters', () => {
     ],
   };
 
+  it.each(['openai', 'responses', 'anthropic', 'gemini', 'bedrock'])('projects %s tool images after the complete result batch without mutating history', async name => {
+    const factories: Record<string, () => AiProvider> = {
+      openai: () => new OpenAiProvider({ type: 'openai', apiKey: 'key' }),
+      responses: () => new OpenAiResponsesProvider({ type: 'openai', apiKey: 'key', transport: 'sse' }),
+      anthropic: () => new AnthropicProvider({ type: 'anthropic', apiKey: 'key' }),
+      gemini: () => new GeminiProvider({ type: 'google', apiKey: 'key' }),
+      bedrock: () => new BedrockProvider({ type: 'bedrock', accessKeyId: 'fixture', secretAccessKey: 'fixture', region: 'us-east-1', model: 'fixture' }),
+    };
+    const messages: Message[] = [{ ...createMessage('assistant', ''), toolCalls: ['a', 'b'].map(id => ({ id: `tool-${id}`, name: 'read', input: {} })) },
+      { ...imageMessage, role: 'tool', id: 'result-a', toolCallId: 'tool-a', name: 'read', content: 'Image result' },
+      { id: 'result-b', role: 'tool', content: 'Second result', timestamp: new Date(), toolCallId: 'tool-b', name: 'read',
+        blocks: [{ type: 'image', mediaType: 'image/png', name: 'other.png', size: 3, url: 'data:image/png;base64,BAMH' }] }];
+    const original = JSON.stringify(messages);
+    global.fetch = vi.fn().mockResolvedValue(new Response(name === 'responses'
+      ? 'data: {"type":"response.output_text.delta","delta":"ok"}\n\ndata: {"type":"response.completed","response":{"id":"tool-image"}}\n\n'
+      : JSON.stringify({
+      choices: [{ message: { content: 'ok' } }], content: [{ type: 'text', text: 'ok' }], output_text: 'ok',
+      output: name === 'bedrock' ? { message: { content: [{ text: 'ok' }] } } : [],
+      candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+    }), { status: 200, headers: { 'Content-Type': name === 'responses' ? 'text/event-stream' : 'application/json' } }));
+    await factories[name]().chat(messages);
+    const body = String((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+    expect(body).toContain('Second result'); expect(body).toContain('Tool images for tool-a');
+    for (const image of ['AQID', 'BAMH']) { expect(body).toContain(image); expect(body.indexOf(image)).toBeGreaterThan(body.indexOf('Second result')); }
+    expect(JSON.stringify(messages)).toBe(original);
+  });
+
   it('maps image blocks to OpenAI image_url content', async () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       model: 'gpt-4o', choices: [{ message: { role: 'assistant', content: 'image' } }],
@@ -349,7 +739,7 @@ describe('multimodal provider adapters', () => {
     const request = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
     expect(JSON.parse(String(request.body)).messages[0].content).toEqual([
       { type: 'text', text: 'Describe this image' },
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AQID' }, cache_control: { type: 'ephemeral' } },
     ]);
   });
 
@@ -428,6 +818,67 @@ describe('OpenAiProvider', () => {
       expect(result.model).toBe('gpt-4o');
     });
 
+    it('does not allow custom headers to replace the runtime authorization', async () => {
+      provider = new OpenAiProvider({
+        ...config,
+        customHeaders: { Authorization: 'Bearer untrusted', 'X-Custom': 'allowed' },
+      });
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        }),
+      });
+
+      await provider.chat([createMessage('user', 'Hello')]);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${OpenAiProvider.DEFAULT_BASE_URL}/chat/completions`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer sk-test-key-123',
+            'X-Custom': 'allowed',
+          }),
+        }),
+      );
+    });
+
+    it('bounds JSON returned by lightweight custom fetch shims', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          choices: [{ message: { role: 'assistant', content: 'x'.repeat(16 * 1024 * 1024) } }],
+        }),
+      });
+
+      await expect(provider.chat([createMessage('user', 'Hello')])).rejects.toThrow(
+        'The provider response exceeded the output limit.',
+      );
+    });
+
+    it('normalizes cache tokens out of OpenAI input usage', async () => {
+      global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        model: 'o3',
+        choices: [{ message: { role: 'assistant', content: 'Done' } }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 20,
+          total_tokens: 120,
+          prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 10 },
+        },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+      await expect(provider.chat([createMessage('user', 'Hello')])).resolves.toMatchObject({
+        usage: {
+          promptTokens: 50,
+          completionTokens: 20,
+          cacheReadTokens: 40,
+          cacheWriteTokens: 10,
+          totalTokens: 120,
+        },
+      });
+    });
+
     it('should handle API errors', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,
@@ -496,6 +947,7 @@ describe('OpenAiProvider', () => {
     });
 
     it('should retry on rate limit errors (429)', async () => {
+      provider = new OpenAiProvider({ ...config, providerMaxRetries: 2, providerMaxRetryDelayMs: 1 });
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(async () => {
         callCount++;
@@ -518,6 +970,7 @@ describe('OpenAiProvider', () => {
     });
 
     it('should retry on server errors (503)', async () => {
+      provider = new OpenAiProvider({ ...config, providerMaxRetries: 1, providerMaxRetryDelayMs: 1 });
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(async () => {
         callCount++;
@@ -703,7 +1156,7 @@ describe('LocalProvider', () => {
     await expect(provider.getAvailableModels()).resolves.toEqual(['qwen-35b', 'llama3.2', 'mistral']);
     expect(global.fetch).toHaveBeenCalledWith(
       'http://router:8888/v1/models',
-      expect.objectContaining({ headers: { Authorization: 'Bearer local' } }),
+      expect.objectContaining({ headers: {} }),
     );
   });
 

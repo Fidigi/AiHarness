@@ -1,0 +1,68 @@
+[WebServer] npm notice run @ai-harness/core@0.1.0 build
+
+
+[WebServer] npm notice run node ../../scripts/run-typescript.mjs
+[WebServer] npm notice run @ai-harness/server@0.1.0 start
+
+
+[WebServer] npm notice run tsx src/index.ts --port 3099
+[WebServer] npm notice run @ai-harness/web@0.1.0 preview
+
+[WebServer] npm notice run vite preview --port 3080 --host 0.0.0.0
+
+
+Running 34 tests using 1 worker
+
+[1/34] [chromium] › e2e/tool-progress.spec.ts:260:3 › desktop-light: genuine live phase, snapshot and durable terminal reload
+[2/34] [chromium] › e2e/tool-progress.spec.ts:260:3 › desktop-dark: genuine live phase, snapshot and durable terminal reload
+[3/34] [chromium] › e2e/tool-progress.spec.ts:260:3 › mobile-light: genuine live phase, snapshot and durable terminal reload
+[4/34] [chromium] › e2e/tool-progress.spec.ts:260:3 › mobile-dark: genuine live phase, snapshot and durable terminal reload
+[5/34] [chromium] › e2e/tool-progress.spec.ts:323:1 › stop durably cancels, ignores real late extension updates/results and reload never resurrects running activity
+[6/34] [chromium] › e2e/tool-progress.spec.ts:341:1 › siblings keep host IDs independent, clear content/details are authoritative, and legacy tools load no progress card
+[7/34] [chromium] › e2e/tool-progress.spec.ts:364:3 › desktop-light: French leaf copy and genuine failed terminal persist after reload
+[8/34] [chromium] › e2e/tool-progress.spec.ts:364:3 › desktop-dark: French leaf copy and genuine failed terminal persist after reload
+[9/34] [chromium] › e2e/tool-progress.spec.ts:364:3 › mobile-light: French leaf copy and genuine failed terminal persist after reload
+[10/34] [chromium] › e2e/tool-progress.spec.ts:364:3 › mobile-dark: French leaf copy and genuine failed terminal persist after reload
+[11/34] [chromium] › e2e/tool-progress.spec.ts:401:1 › legacy tools leave progress JS/CSS unloaded; a genuine delayed leaf has nonblank loading and never steals focus
+[12/34] [chromium] › e2e/tool-progress.spec.ts:425:1 › failed genuine leaf import shows progress/error text while product Stop remains usable
+[13/34] [chromium] › e2e/tool-progress.spec.ts:437:1 › real code-mode nested progress retains specialized live and durable cards without generic promotion
+[14/34] [chromium] › e2e/tool-progress.spec.ts:470:1 › ready watermark gap: actual running GET then completed readiness restores canonical transcript
+[15/34] [chromium] › e2e/tool-progress.spec.ts:571:34 › real concurrent approvals at 1440px: ordered replacement, individual close, sound and cold replay
+[16/34] [chromium] › e2e/tool-progress.spec.ts:571:34 › real concurrent approvals at 390px: ordered replacement, individual close, sound and cold replay
+[17/34] [chromium] › e2e/tool-progress.spec.ts:628:1 › real Stop and executable rebuild revoke every pending approval and old handles cannot republish
+[18/34] [chromium] › e2e/tool-progress.spec.ts:654:47 › real length: durable follow-up notice and reachable explicit compaction action
+[19/34] [chromium] › e2e/tool-progress.spec.ts:654:47 › real emptylength: durable follow-up notice and reachable explicit compaction action
+[20/34] [chromium] › e2e/tool-progress.spec.ts:681:1 › real provider failure retains scrubbed partial output and its adjacent error through terminal resync/reload
+[21/34] [chromium] › e2e/tool-progress.spec.ts:697:1 › real loaded turns share process ownership and one live/terminal tool presentation
+[22/34] [chromium] › e2e/tool-progress.spec.ts:716:1 › optional process controls are unloaded for plain replies; delayed genuine controls retain native text and focus
+[23/34] [chromium] › e2e/tool-progress.spec.ts:744:1 › cached-failed genuine process controls retain native output and never disable product Stop
+[24/34] [chromium] › e2e/tool-progress.spec.ts:758:1 › real automatic compaction snapshot keeps policy/cancel reachable and blocks Send after reload
+[25/34] [chromium] › e2e/tool-progress.spec.ts:810:1 › real active source continues independently after row copy, without a second provider request or interrupted output
+[26/34] [chromium] › e2e/tool-progress.spec.ts:869:1 › native RUN behavior › native parallel batch reconnects both tools, joins before the nested parent and renders its real image
+[WebServer] [Server] Request failed.
+
+[27/34] [chromium] › e2e/tool-progress.spec.ts:890:3 › native RUN behavior › live queue all/all: recall, clear, draft/reconnect and exactly-once provider delivery
+
+[WebServer] [Server] Request failed.
+[28/34] [chromium] › e2e/tool-progress.spec.ts:890:3 › native RUN behavior › live queue all/one-at-a-time: recall, clear, draft/reconnect and exactly-once provider delivery
+
+[WebServer] [Server] Request failed.
+[29/34] [chromium] › e2e/tool-progress.spec.ts:890:3 › native RUN behavior › live queue one-at-a-time/all: recall, clear, draft/reconnect and exactly-once provider delivery
+[WebServer] [Server] Request failed.
+
+[30/34] [chromium] › e2e/tool-progress.spec.ts:890:3 › native RUN behavior › live queue one-at-a-time/one-at-a-time: recall, clear, draft/reconnect and exactly-once provider delivery
+
+[WebServer] [Server] Request failed.
+[31/34] [chromium] › e2e/tool-progress.spec.ts:932:1 › native RUN behavior › real background failure marks attention without stealing another session draft
+
+[WebServer] [Server] Request failed.
+[32/34] [chromium] › e2e/tool-progress.spec.ts:951:1 › native RUN behavior › actual HTTP length-truncated tool calls have no effects and recover through durable browser reload
+
+[WebServer] [Server] Request failed.
+[33/34] [chromium] › e2e/tool-progress.spec.ts:980:46 › native RUN behavior › actual HTTP overflow recovers once with smaller input, immutable raw history and authentic usage
+
+[WebServer] [Server] Request failed.
+[34/34] [chromium] › e2e/tool-progress.spec.ts:980:46 › native RUN behavior › actual HTTP length recovers once with smaller input, immutable raw history and authentic usage
+
+[WebServer] [Server] Request failed.
+  34 passed (11.1m)

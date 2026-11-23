@@ -9,6 +9,8 @@ import type {
 } from '@ai-harness/core';
 import type { SubagentService } from './subagent-service.js';
 
+type SubagentSystemPromptResolver = (input: { cwd: string; basePrompt: string }) => Promise<string>;
+
 export interface StartSubagentRequest {
   parentSessionId: string;
   profileId: string;
@@ -16,6 +18,9 @@ export interface StartSubagentRequest {
   provider: string;
   background?: boolean;
   parentToolPreset?: Session['toolPreset'];
+  parentPolicy?: ReturnType<AgentRuntime['getSessionDelegationPolicy']>;
+  /** Withdraw unpublished delegation; accepted background work is independent. */
+  signal?: AbortSignal;
 }
 
 const TERMINAL_PHASES = new Set(['completed', 'failed', 'stopped']);
@@ -27,17 +32,22 @@ function inheritedMessages(parent: Session): Session['messages'] {
   const selected: Session['messages'] = [];
   let characters = 0;
   for (const message of [...parent.messages].reverse()) {
+    // Public text only; omit private replay/loadout, binary data and orphaned tool groups.
+    if ((message.role !== 'user' && message.role !== 'assistant') || !message.content) continue;
     if (selected.length >= MAX_INHERITED_MESSAGES) break;
     if (characters + message.content.length > MAX_INHERITED_CHARACTERS) break;
     characters += message.content.length;
     selected.push({
-      ...structuredClone(message),
+      role: message.role,
+      content: message.content,
       id: `inherited:${crypto.randomUUID()}`,
       timestamp: new Date(message.timestamp),
-      metadata: { ...message.metadata, inheritedFromSession: parent.id },
+      metadata: { inheritedFromSession: parent.id },
     });
   }
-  return selected.reverse();
+  selected.reverse();
+  for (let index = 1; index < selected.length; index++) selected[index]!.parentMessageId = selected[index - 1]!.id;
+  return selected;
 }
 
 function outputFor(session: Session | undefined): string | undefined {
@@ -46,25 +56,40 @@ function outputFor(session: Session | undefined): string | undefined {
   ))?.content;
 }
 
+function intersect(left: string[] | undefined, right: string[] | undefined): string[] | undefined {
+  if (left === undefined) return right ? [...right] : undefined;
+  if (right === undefined) return [...left];
+  const allowed = new Set(right.map(value => value.toLowerCase()));
+  return left.filter(value => allowed.has(value.toLowerCase()));
+}
+
 /** Coordinates bounded child runs while AgentRuntime remains the execution engine. */
 export class SubagentRuntime {
   private readonly runs = new Map<string, SubagentRunSnapshot>();
   private readonly childAgentRuns = new Map<string, string>();
   private readonly unsubscribers = new Map<string, () => void>();
   private startQueue = Promise.resolve();
+  private readonly controllers = new Map<string, AbortController>();
+  private closed = false;
 
   constructor(
     private readonly profiles: SubagentService,
     private readonly agentRuntime: AgentRuntime,
     private readonly sessionManager: SessionManager,
+    private readonly resolveSystemPrompt: SubagentSystemPromptResolver = async input => input.basePrompt,
+    private readonly redactText: (value: string) => string = value => value,
+    private readonly redactJson: <T>(value: T) => T = value => value,
   ) {}
 
   async start(request: StartSubagentRequest): Promise<SubagentRunSnapshot> {
+    request = { ...request, parentPolicy: request.parentPolicy ? structuredClone(request.parentPolicy) : undefined };
     let release!: () => void;
     const previous = this.startQueue;
     this.startQueue = new Promise<void>(resolve => { release = resolve; });
     await previous;
     try {
+      if (this.closed) throw new Error('Subagent runtime is closed.');
+      request.signal?.throwIfAborted();
       return await this.startUnlocked(request);
     } finally {
       release();
@@ -73,57 +98,54 @@ export class SubagentRuntime {
 
   get(id: string): SubagentRunSnapshot | undefined {
     const run = this.runs.get(id);
-    return run ? structuredClone(run) : undefined;
+    return run ? this.redactJson(structuredClone(run)) : undefined;
   }
 
   list(parentSessionId?: string): SubagentRunSnapshot[] {
-    return [...this.runs.values()]
+    return [...this.runs.values()].reverse()
       .filter(run => !parentSessionId || run.parentSessionId === parentSessionId)
-      .sort((left, right) => right.startedAt.localeCompare(left.startedAt))
-      .map(run => structuredClone(run));
+      .map(run => this.redactJson(structuredClone(run)));
   }
 
   async wait(id: string): Promise<SubagentRunSnapshot | undefined> {
     const agentRunId = this.childAgentRuns.get(id);
-    if (agentRunId) await this.agentRuntime.wait(agentRunId);
+    if (agentRunId) { await this.agentRuntime.wait(agentRunId); this.complete(id); }
     return this.get(id);
   }
 
   stop(id: string): SubagentRunSnapshot {
     const run = this.requireRun(id);
-    if (TERMINAL_PHASES.has(run.status)) return structuredClone(run);
+    if (TERMINAL_PHASES.has(run.status)) return this.redactJson(structuredClone(run));
     const agentRunId = this.childAgentRuns.get(id);
-    if (agentRunId) this.agentRuntime.stop(agentRunId);
-    run.status = 'stopped';
-    run.phase = 'stopped';
-    run.completedAt = new Date().toISOString();
-    run.attention = true;
-    this.unsubscribers.get(id)?.();
-    this.unsubscribers.delete(id);
+    if (agentRunId && !TERMINAL_PHASES.has(this.agentRuntime.getRun(agentRunId)?.phase ?? '')) {
+      this.agentRuntime.stop(agentRunId);
+    }
+    this.controllers.get(id)?.abort();
+    // Retain the concurrency lease until durable settlement, not cancellation acknowledgement.
+    run.phase = 'stopping';
     this.publishParent(run, 'subagent.updated');
-    return structuredClone(run);
+    return this.redactJson(structuredClone(run));
   }
 
   acknowledge(id: string): SubagentRunSnapshot {
     const run = this.requireRun(id);
     run.attention = false;
-    return structuredClone(run);
+    this.publishParent(run, 'subagent.updated');
+    return this.redactJson(structuredClone(run));
   }
 
   async shutdown(): Promise<void> {
+    this.closed = true;
     const pending: Promise<unknown>[] = [];
     for (const run of this.runs.values()) {
       if (!TERMINAL_PHASES.has(run.status)) {
+        this.stop(run.id);
         const agentRunId = this.childAgentRuns.get(run.id);
-        if (agentRunId) {
-          try {
-            this.agentRuntime.stop(agentRunId);
-            pending.push(this.agentRuntime.wait(agentRunId));
-          } catch { /* Already terminal. */ }
-        }
+        if (agentRunId) pending.push(this.agentRuntime.wait(agentRunId));
       }
     }
     await Promise.allSettled(pending);
+    for (const run of this.runs.values()) this.complete(run.id);
     for (const unsubscribe of this.unsubscribers.values()) unsubscribe();
     this.unsubscribers.clear();
   }
@@ -132,14 +154,28 @@ export class SubagentRuntime {
     const parent = this.sessionManager.get(request.parentSessionId)
       ?? await this.sessionManager.loadFromStore(request.parentSessionId);
     if (!parent?.cwd) throw Object.assign(new Error('Session parente introuvable ou sans workspace.'), { status: 404 });
+    const parentKey = () => JSON.stringify([parent.cwd, parent.workspaceId, parent.gitBranch, parent.branchId,
+      parent.agentId, parent.model, parent.thinking, parent.toolPreset, parent.metadata?.subagentDepth]);
+    const admittedKey = parentKey();
+    const parentRun = this.agentRuntime.getSessionRun(parent.id)?.id;
+    const inherited = this.agentRuntime.getSessionDelegationPolicy(parent.id) ?? request.parentPolicy;
+    const assertParent = () => {
+      if (this.sessionManager.get(parent.id) !== parent || parentKey() !== admittedKey
+        || this.agentRuntime.getSessionRun(parent.id)?.id !== parentRun) throw new Error('Parent session changed.');
+    };
     if (typeof request.task !== 'string' || !request.task.trim() || request.task.length > 100_000) {
       throw Object.assign(new Error('Tâche de sous-agent invalide.'), { status: 400 });
     }
+    const safeTask = this.redactText(request.task);
     const configuration = await this.profiles.getConfiguration({
       cwd: parent.cwd,
       projectId: parent.workspaceId,
       scope: 'project',
+      requireTrusted: true,
     });
+    request.signal?.throwIfAborted();
+    assertParent();
+    if (this.closed) throw new Error('Subagent runtime is closed.');
     if (!configuration.engineEnabled) throw Object.assign(
       new Error('Le moteur de sous-agents est désactivé.'), { status: 409, code: 'SUBAGENTS_DISABLED' },
     );
@@ -150,13 +186,24 @@ export class SubagentRuntime {
       new Error('Limite de concurrence des sous-agents atteinte.'), { status: 409, code: 'SUBAGENT_CONCURRENCY_LIMIT' },
     );
     const parentDepth = Number(parent.metadata?.subagentDepth ?? 0);
-    if (!Number.isSafeInteger(parentDepth) || parentDepth >= 3) throw Object.assign(
+    if (!Number.isSafeInteger(parentDepth) || parentDepth < 0 || parentDepth >= 3) throw Object.assign(
       new Error('Profondeur maximale de délégation atteinte.'), { status: 409, code: 'SUBAGENT_DEPTH_LIMIT' },
     );
 
+    const model = profile.model ?? inherited?.model ?? parent.model;
+    const thinking = profile.thinking ?? inherited?.thinking ?? parent.thinking;
+    const presets = [inherited?.toolPreset, request.parentToolPreset, parent.toolPreset];
+    const readOnly = presets.includes('read-only') || ['explore', 'plan'].includes(profile.kind);
+    const toolPreset = presets.includes('chat-only') ? 'chat-only' : readOnly ? 'read-only'
+      : inherited?.toolPreset ?? request.parentToolPreset ?? parent.toolPreset ?? 'default';
+    const allowedTools = intersect(inherited?.allowedTools, profile.tools.length ? profile.tools : undefined);
+    const allowedSkills = intersect(inherited?.allowedSkills, profile.skills.length ? profile.skills : undefined);
+    const allowedExtensions = intersect(inherited?.allowedExtensions, profile.extensions.length ? profile.extensions : undefined);
+    const excludedTools = [...inherited?.excludedTools ?? [], ...(parentDepth + 1 >= 3 ? ['spawn_subagent'] : [])];
     const id = crypto.randomUUID();
+    const messages = profile.inheritContext ? this.redactJson(inheritedMessages(parent)) : [];
     const child = await this.sessionManager.create({
-      title: `${profile.name}: ${request.task.trim().replace(/\s+/g, ' ').slice(0, 64)}`,
+      title: this.redactText(`${profile.name}: ${safeTask.trim().replace(/\s+/g, ' ').slice(0, 64)}`),
       cwd: parent.cwd,
       workspaceId: parent.workspaceId,
       gitBranch: parent.gitBranch,
@@ -164,11 +211,9 @@ export class SubagentRuntime {
       branchId: parent.branchId ?? parent.id,
       parentAgentId: parent.agentId,
       agentId: id,
-      model: profile.model ?? parent.model,
-      thinking: profile.thinking ?? parent.thinking,
-      toolPreset: request.parentToolPreset ?? parent.toolPreset ?? 'default',
+      model, thinking, toolPreset,
       autoCompaction: false,
-      messages: profile.inheritContext ? inheritedMessages(parent) : [],
+      messages, activeLeafId: messages.at(-1)?.id,
       metadata: {
         subagent: true,
         subagentRunId: id,
@@ -183,10 +228,10 @@ export class SubagentRuntime {
       childSessionId: child.id,
       workspaceId: parent.workspaceId,
       profileId: profile.id,
-      profileName: profile.name,
-      task: request.task.trim(),
-      provider: request.provider,
-      model: profile.model ?? parent.model,
+      profileName: this.redactText(profile.name),
+      task: safeTask.trim(),
+      provider: this.redactText(request.provider),
+      model: model ? this.redactText(model) : undefined,
       status: 'queued',
       phase: 'queued',
       background,
@@ -198,44 +243,58 @@ export class SubagentRuntime {
     this.runs.set(id, snapshot);
     this.trimHistory();
 
+    const controller = new AbortController();
+    this.controllers.set(id, controller);
+    const abort = () => controller.abort();
+    request.signal?.addEventListener('abort', abort, { once: true });
+    if (request.signal?.aborted || this.closed) controller.abort();
     const unsubscribe = this.agentRuntime.journal.subscribe(child.id, event => this.onChildEvent(id, event));
     this.unsubscribers.set(id, unsubscribe);
     let agentRun: AgentRunSnapshot;
     try {
+      controller.signal.throwIfAborted();
+      assertParent();
+      const systemPrompt = await this.resolveSystemPrompt({
+        cwd: parent.cwd,
+        basePrompt: this.systemPrompt(profile),
+      });
+      controller.signal.throwIfAborted();
+      assertParent();
       agentRun = await this.agentRuntime.start({
         sessionId: child.id,
         cwd: parent.cwd,
         workspaceId: parent.workspaceId,
         provider: request.provider,
         input: request.task.trim(),
-        model: profile.model ?? parent.model,
-        thinking: profile.thinking ?? parent.thinking,
-        toolPreset: request.parentToolPreset ?? parent.toolPreset ?? 'default',
+        model, thinking, thinkingBudgets: inherited?.thinkingBudgets, toolPreset,
+        signal: controller.signal,
         persistSettings: false,
-        systemPrompt: this.systemPrompt(profile),
+        systemPrompt,
         maxToolRounds: profile.maxTurns,
         agentId: id,
-        allowedTools: this.allowedTools(profile, parentDepth + 1),
-        allowedSkills: profile.skills.length ? profile.skills : undefined,
-        allowedExtensions: profile.extensions.length ? profile.extensions : undefined,
+        allowedTools, excludedTools, allowedSkills, allowedExtensions,
+        codemode: inherited?.codemode,
       });
     } catch (error) {
-      snapshot.status = 'failed';
-      snapshot.phase = 'failed';
+      snapshot.status = controller.signal.aborted ? 'stopped' : 'failed';
+      snapshot.phase = snapshot.status;
       snapshot.completedAt = new Date().toISOString();
-      snapshot.error = error instanceof Error ? error.message : String(error);
+      snapshot.error = controller.signal.aborted ? undefined : this.redactText(error instanceof Error ? error.message : String(error)).slice(0, 16_384);
       snapshot.attention = true;
       unsubscribe();
       this.unsubscribers.delete(id);
+      this.controllers.delete(id);
       this.publishParent(snapshot, 'subagent.failed');
       throw error;
+    } finally {
+      request.signal?.removeEventListener('abort', abort);
     }
     this.childAgentRuns.set(id, agentRun.id);
     snapshot.status = 'running';
-    snapshot.phase = agentRun.phase;
+    snapshot.phase = controller.signal.aborted ? 'stopping' : agentRun.phase;
     this.publishParent(snapshot, 'subagent.started');
     void this.agentRuntime.wait(agentRun.id).then(() => this.complete(id));
-    return structuredClone(snapshot);
+    return this.redactJson(structuredClone(snapshot));
   }
 
   private onChildEvent(id: string, event: AgentEvent): void {
@@ -263,17 +322,23 @@ export class SubagentRuntime {
     const run = this.runs.get(id);
     if (!run || TERMINAL_PHASES.has(run.status)) return;
     const agentRunId = this.childAgentRuns.get(id);
+    if (!agentRunId) return;
     const agent = agentRunId ? this.agentRuntime.getRun(agentRunId) : undefined;
     run.phase = agent?.phase ?? 'failed';
     run.status = agent?.phase === 'completed'
       ? 'completed'
       : agent?.phase === 'stopped' ? 'stopped' : 'failed';
     run.completedAt = agent?.completedAt ?? new Date().toISOString();
-    run.output = outputFor(this.sessionManager.get(run.childSessionId));
-    run.error = agent?.error;
+    const output = outputFor(this.sessionManager.get(run.childSessionId));
+    const safeOutput = output === undefined ? undefined : this.redactText(output);
+    const suffix = '\n[Truncated; open the child session for complete output.]';
+    run.output = safeOutput && safeOutput.length > 16_384
+      ? safeOutput.slice(0, 16_384 - suffix.length) + suffix : safeOutput;
+    run.error = agent?.error?.slice(0, 16_384);
     run.attention = true;
     this.unsubscribers.get(id)?.();
     this.unsubscribers.delete(id);
+    this.controllers.delete(id);
     this.publishParent(run, run.status === 'completed' ? 'subagent.completed' : 'subagent.failed');
   }
 
@@ -282,12 +347,6 @@ export class SubagentRuntime {
     type: 'subagent.started' | 'subagent.updated' | 'subagent.completed' | 'subagent.failed',
   ): void {
     this.agentRuntime.publishSessionEvent(run.parentSessionId, type, structuredClone(run));
-  }
-
-  private allowedTools(profile: SubagentProfile, depth: number): string[] | undefined {
-    if (!profile.tools.length) return depth >= 3 ? this.agentRuntime.getTools('default')
-      .map(tool => tool.name).filter(name => name !== 'spawn_subagent') : undefined;
-    return depth >= 3 ? profile.tools.filter(name => name !== 'spawn_subagent') : profile.tools;
   }
 
   private systemPrompt(profile: SubagentProfile): string {
@@ -306,9 +365,7 @@ export class SubagentRuntime {
 
   private trimHistory(): void {
     if (this.runs.size <= MAX_RUN_HISTORY) return;
-    const removable = [...this.runs.values()]
-      .filter(run => TERMINAL_PHASES.has(run.status))
-      .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
+    const removable = [...this.runs.values()].filter(run => TERMINAL_PHASES.has(run.status));
     while (this.runs.size > MAX_RUN_HISTORY && removable.length) {
       const run = removable.shift()!;
       this.runs.delete(run.id);

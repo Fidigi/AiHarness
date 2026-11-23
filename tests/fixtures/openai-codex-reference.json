@@ -1,0 +1,2770 @@
+{
+  "fixtureNormalization": "Client-identifying headers are omitted; native request-body regression vectors are unchanged.",
+  "sourceCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "sourceSha256": "41a0095ce395f6ddf50ce3adbe7d03960bf183fb0f2f94412c88923adaa013b0",
+  "packageVersion": "1.2.0",
+  "scope": "27 independently executed normalized raw SDK SSE fetch projections; fixed system instructions and ordinary tool declarations. Synthetic unsigned JWT and response events; not HTTPS/vendor/entitlement/private-replay evidence.",
+  "models": [
+    {
+      "id": "gpt-5.3-codex-spark",
+      "name": "GPT-5.3 Codex Spark",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 1.75,
+        "output": 14,
+        "cacheRead": 0.175,
+        "cacheWrite": 0
+      },
+      "contextWindow": 128000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh",
+        "minimal": "low"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-5.5",
+      "name": "GPT-5.5",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 5,
+        "output": 30,
+        "cacheRead": 0.5,
+        "cacheWrite": 0,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 10,
+            "output": 45,
+            "cacheRead": 1,
+            "cacheWrite": 0
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh",
+        "minimal": "low"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "name": "GPT-5.6 Luna",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.2,
+        "output": 1.2,
+        "cacheRead": 0.02,
+        "cacheWrite": 0.25,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 0.4,
+            "output": 1.8,
+            "cacheRead": 0.04,
+            "cacheWrite": 0.5
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh",
+        "max": "max",
+        "minimal": "low"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "name": "GPT-5.6 Sol",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 4,
+        "output": 20,
+        "cacheRead": 0.4,
+        "cacheWrite": 5,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 8,
+            "output": 30,
+            "cacheRead": 0.8,
+            "cacheWrite": 10
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh",
+        "max": "max",
+        "minimal": "low"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "name": "GPT-5.6 Terra",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2,
+        "output": 12,
+        "cacheRead": 0.2,
+        "cacheWrite": 2.5,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "output": 18,
+            "cacheRead": 0.4,
+            "cacheWrite": 5
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh",
+        "max": "max",
+        "minimal": "low"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-6-astra",
+      "name": "GPT-6 Astra",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cacheRead": 1,
+        "cacheWrite": 12.5,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 20,
+            "output": 75,
+            "cacheRead": 2,
+            "cacheWrite": 25
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "off": null,
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-6-luna",
+      "name": "GPT-6 Luna",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 0.1,
+        "output": 0.5,
+        "cacheRead": 0.01,
+        "cacheWrite": 0.125,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 0.2,
+            "output": 0.75,
+            "cacheRead": 0.02,
+            "cacheWrite": 0.25
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "off": "none",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-6-sol",
+      "name": "GPT-6 Sol",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2,
+        "output": 10,
+        "cacheRead": 0.2,
+        "cacheWrite": 2.5,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "output": 15,
+            "cacheRead": 0.4,
+            "cacheWrite": 5
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "off": "none",
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "name": "GPT-6.1 Sol",
+      "api": "openai-codex-responses",
+      "provider": "openai-codex",
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "cost": {
+        "input": 2,
+        "output": 10,
+        "cacheRead": 0.1,
+        "cacheWrite": 2.5,
+        "tiers": [
+          {
+            "inputTokensAbove": 272000,
+            "input": 4,
+            "output": 15,
+            "cacheRead": 0.2,
+            "cacheWrite": 5
+          }
+        ]
+      },
+      "contextWindow": 272000,
+      "maxTokens": 128000,
+      "thinkingLevelMap": {
+        "off": null,
+        "minimal": "low",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      },
+      "compat": {
+        "supportsOpenAIGrammarTools": true,
+        "supportsAdditionalTools": true,
+        "supportsToolSearch": true,
+        "supportsMidConvoSystemMessages": true
+      },
+      "inputLimits": {
+        "images": {
+          "resize": {
+            "maxWidth": 2000,
+            "maxHeight": 2000,
+            "maxBytes": 4718592,
+            "jpegQuality": 80
+          }
+        }
+      },
+      "type": "chat"
+    }
+  ],
+  "responseEvents": [
+    {
+      "type": "response.created",
+      "response": {
+        "id": "resp_fixture",
+        "status": "in_progress",
+        "output": []
+      }
+    },
+    {
+      "type": "response.output_item.added",
+      "output_index": 0,
+      "item": {
+        "type": "message",
+        "id": "msg_fixture",
+        "role": "assistant",
+        "status": "in_progress",
+        "content": []
+      }
+    },
+    {
+      "type": "response.output_text.delta",
+      "item_id": "msg_fixture",
+      "output_index": 0,
+      "content_index": 0,
+      "delta": "ok"
+    },
+    {
+      "type": "response.output_item.done",
+      "output_index": 0,
+      "item": {
+        "type": "message",
+        "id": "msg_fixture",
+        "role": "assistant",
+        "status": "completed",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "ok",
+            "annotations": []
+          }
+        ]
+      }
+    },
+    {
+      "type": "response.completed",
+      "response": {
+        "id": "resp_fixture",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_fixture",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "ok",
+                "annotations": []
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2,
+          "total_tokens": 12
+        }
+      }
+    }
+  ],
+  "rows": [
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.3-codex-spark",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.3-codex-spark",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000175,
+            "output": 0.000028,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000045499999999999995
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831277,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 15
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.3-codex-spark",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.3-codex-spark",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000175,
+            "output": 0.000028,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000045499999999999995
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831293,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 1
+      }
+    },
+    {
+      "model": "gpt-5.3-codex-spark",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.3-codex-spark",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.3-codex-spark",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000175,
+            "output": 0.000028,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000045499999999999995
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831294,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 1
+      }
+    },
+    {
+      "model": "gpt-5.5",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.5",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.5",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.00005,
+            "output": 0.00006,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00011
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831294,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 1
+      }
+    },
+    {
+      "model": "gpt-5.5",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.5",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.5",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.00005,
+            "output": 0.00006,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00011
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831295,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.5",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.5",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.5",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.00005,
+            "output": 0.00006,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00011
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831296,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 1
+      }
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000020000000000000003,
+            "output": 0.0000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831297,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000020000000000000003,
+            "output": 0.0000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831297,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000020000000000000003,
+            "output": 0.0000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831298,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000039999999999999996,
+            "output": 0.00004,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00007999999999999999
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831298,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000039999999999999996,
+            "output": 0.00004,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00007999999999999999
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831299,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000039999999999999996,
+            "output": 0.00004,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.00007999999999999999
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831299,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-terra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-terra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831299,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-terra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-terra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831300,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-5.6-terra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-5.6-terra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.000024,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000044
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831300,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-astra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0001,
+            "output": 0.0001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0002
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831300,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-astra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0001,
+            "output": 0.0001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0002
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831300,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-astra",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-astra",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ]
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0001,
+            "output": 0.0001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0002
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831301,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0.000001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000020000000000000003
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831301,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0.000001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000020000000000000003
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831301,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-luna",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-luna",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-luna",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.0000010000000000000002,
+            "output": 0.000001,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0000020000000000000003
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831301,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831302,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831302,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6-sol",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ],
+          "reasoning": {
+            "effort": "none"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831302,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "default",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6.1-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831303,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "thinking",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "auto",
+          "parallel_tool_calls": true,
+          "temperature": 0.3,
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          }
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6.1-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831303,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "case": "tools",
+      "request": {
+        "url": "https://chatgpt.com/backend-api/codex/responses",
+        "headers": {
+          "accept": "text/event-stream",
+          "authorization": "Bearer e30.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiZml4dHVyZS1jb2RleC1hY2NvdW50In19.fixture-signature",
+          "chatgpt-account-id": "fixture-codex-account",
+          "content-encoding": "zstd",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental"
+        },
+        "body": {
+          "model": "gpt-6.1-sol",
+          "store": false,
+          "stream": true,
+          "instructions": "Follow instructions",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "probe"
+                }
+              ]
+            }
+          ],
+          "text": {
+            "verbosity": "low"
+          },
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "tool_choice": "required",
+          "parallel_tool_calls": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "echo",
+              "description": "Echo input",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "x"
+                ],
+                "additionalProperties": false
+              },
+              "strict": null
+            }
+          ]
+        }
+      },
+      "result": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "ok",
+            "textSignature": "{\"v\":1,\"id\":\"msg_fixture\"}"
+          }
+        ],
+        "api": "openai-codex-responses",
+        "provider": "openai-codex",
+        "model": "gpt-6.1-sol",
+        "usage": {
+          "input": 10,
+          "output": 2,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 12,
+          "cost": {
+            "input": 0.000019999999999999998,
+            "output": 0.00002,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000039999999999999996
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1794516831303,
+        "responseId": "resp_fixture",
+        "rawStopReason": "completed",
+        "durationMs": 0
+      }
+    }
+  ]
+}

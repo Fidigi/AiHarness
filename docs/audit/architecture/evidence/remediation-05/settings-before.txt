@@ -1,0 +1,4 @@
+
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+
+[WebServer] npm notice run vite

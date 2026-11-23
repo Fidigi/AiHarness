@@ -1,0 +1,4188 @@
+{
+  "fixtureNormalization": "Application-specific correlation IDs and reserved tool names are normalized to AiHarness. Historical capture hashes identify the original acquisition, not the normalized fixture.",
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "9d5679fd0dbe3b36354439fd4226e0b0eea00293e34582f1097fe4b2dae7e66c",
+  "programSha256": "acad0ea3de2b38b236820d38bb8e01cf4ff7d0f626b2deeb416d5bc46628ce60",
+  "catalogueSha256": "327ea610aca64889902458243e9b6a440eb678671f5993b88ad32ac6e827b587",
+  "modelProjections": 17,
+  "requests": 68,
+  "vectors": 68,
+  "callerDeclarations": 51,
+  "capturedDeferredDeclarations": 21,
+  "capturedDeferredModels": [
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-haiku-5-5",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-opus-5-5",
+    "claude-sonnet-5-5"
+  ],
+  "rows": [
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "server-side-fallback-2026-07-01"
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "server-side-fallback-2026-07-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "server-side-fallback-2026-07-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-fable-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "server-side-fallback-2026-07-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01"
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-fable-5-1",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-4-5-20251001",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01"
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-5-20251101",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-6",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-7",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-4-8",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01"
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01"
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-opus-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-5-20250929",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-4-6",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": null
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "no-tools",
+      "tools": [],
+      "callerDeclarations": null,
+      "capturedRequestTools": null,
+      "capturedDeferredDeclarations": [],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01"
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "required-object",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "title": "Root title"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-union",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Root description"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "api": "anthropic-messages",
+      "case": "optional-only",
+      "tools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true,
+            "title": "Optional root"
+          }
+        }
+      ],
+      "callerDeclarations": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        }
+      ],
+      "capturedRequestTools": [
+        {
+          "name": "echo",
+          "description": "Echo a value",
+          "eager_input_streaming": true,
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": []
+          }
+        },
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedDeferredDeclarations": [
+        {
+          "name": "__aih_deferred_placeholder__",
+          "description": "Reserved placeholder. Never available. Never call this.",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "defer_loading": true
+        }
+      ],
+      "capturedBeta": "mid-conversation-output-config-2026-07-01,thinking-binding-controls-2026-08-01,inline-tools-2026-09-15"
+    }
+  ],
+  "limits": "Bounded raw non-strict caller-declaration projection only: owned name/description/eager_input_streaming/input_schema, absent strict/tool_choice, no tools, required object, optional union and optional-only. Complete captured tools/betas remain retained;21 native inline-tools deferred placeholders across seven models are explicit UNBOUND counter-evidence, not removed from SDK evidence or claimed as Core full-tools/default equivalence. Core comparisons must compare its whole tools array with callerDeclarations, not silently filter unexpected Core tools. No strict/choice/grammar/deferred/inline tool changes, full defaults/context/reasoning/tool/media/replay/host/auth/account/service/schema acceptance, typed schema or numeric qualification. Raw SDK SSE is not a separate upstream nonstreaming JSON service capture."
+}

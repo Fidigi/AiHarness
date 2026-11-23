@@ -1,16 +1,18 @@
-import { Router, type Response } from 'express';
+import { Router } from 'express';
 import type { RuntimeServices } from '../runtime/services.js';
 import type { TerminalEvent, TerminalSnapshot } from '../runtime/terminal-runtime.js';
-
-function sendEvent(response: Response, event: string, data: unknown, id?: number): void {
-  if (id !== undefined) response.write(`id: ${id}\n`);
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
-}
+import { SseChannel } from './sse-channel.js';
 
 function integer(value: unknown, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (typeof value === 'string' && !/^(?:0|[1-9]\d*)$/u.test(value)) {
+    throw Object.assign(new Error('Paramètre numérique invalide.'), { status: 400 });
+  }
   const parsed = typeof value === 'string' ? Number(value) : value;
-  return Number.isSafeInteger(parsed) && Number(parsed) >= 0 ? Number(parsed) : fallback;
+  if (!Number.isSafeInteger(parsed) || Number(parsed) < 0) {
+    throw Object.assign(new Error('Paramètre numérique invalide.'), { status: 400 });
+  }
+  return Number(parsed);
 }
 
 async function requireTrustedTerminal(services: RuntimeServices, terminalId: string): Promise<TerminalSnapshot> {
@@ -25,6 +27,7 @@ async function requireTrustedTerminal(services: RuntimeServices, terminalId: str
 
 export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  router.use((_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next(); });
 
   router.get('/', async (request, response, next) => {
     try {
@@ -108,15 +111,16 @@ export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>):
     try {
       const services = await servicesPromise;
       const terminalId = request.params.terminalId;
-      const snapshot = await requireTrustedTerminal(services, terminalId);
+      await requireTrustedTerminal(services, terminalId);
       const after = integer(request.query.after ?? request.headers['last-event-id'], 0);
       response.status(200);
       response.setHeader('Content-Type', 'text/event-stream');
-      response.setHeader('Cache-Control', 'no-cache, no-transform');
+      response.setHeader('Cache-Control', 'no-store, no-transform');
       response.setHeader('Connection', 'keep-alive');
       response.setHeader('X-Accel-Buffering', 'no');
       response.flushHeaders?.();
 
+      const channel = new SseChannel(response, services.createTextRedactor());
       let sent = after;
       let exitSent = false;
       let replaying = true;
@@ -130,21 +134,22 @@ export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>):
         }
         sent = Math.max(sent, event.endOffset);
         if (event.type === 'exit') exitSent = true;
-        sendEvent(response, event.type, event, event.endOffset);
-        if (event.type === 'exit') response.end();
+        channel.send(event.type, services.redactJson(event), event.endOffset);
+        if (event.type === 'exit') channel.close();
       };
-      const unsubscribe = services.terminalRuntime.subscribe(terminalId, emit);
+      const unsubscribe = services.terminalRuntime.subscribe(terminalId, emit, () => channel.close());
       const replay = services.terminalRuntime.replay(terminalId, after);
-      sendEvent(response, 'connection.ready', {
-        snapshot,
+      sent = replay.reset ? replay.oldestOffset : after;
+      channel.send('connection.ready', services.redactJson({
+        snapshot: services.terminalRuntime.get(terminalId),
         reset: replay.reset,
         oldestOffset: replay.oldestOffset,
         lastOffset: replay.lastOffset,
-      });
+      }));
       for (const event of replay.events) {
         sent = Math.max(sent, event.endOffset);
         if (event.type === 'exit') exitSent = true;
-        sendEvent(response, event.type, event, event.endOffset);
+        channel.send(event.type, services.redactJson(event), event.endOffset);
       }
       replaying = false;
       pending.sort((left, right) => left.offset - right.offset).forEach(emit);
@@ -152,14 +157,20 @@ export function createTerminalRouter(servicesPromise: Promise<RuntimeServices>):
       const current = services.terminalRuntime.get(terminalId);
       if (!current || current.status !== 'running') {
         unsubscribe();
-        response.end();
+        channel.close();
         return;
       }
-      const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), 15_000);
-      request.on('close', () => {
+      const heartbeat = setInterval(() => channel.heartbeat(), 15_000);
+      let cleaned = false;
+      const cleanup = (): void => {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
         unsubscribe();
-      });
+      };
+      request.once('close', cleanup);
+      response.once('finish', cleanup);
+      response.once('close', cleanup);
     } catch (error) { next(error); }
   });
 

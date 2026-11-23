@@ -1,0 +1,13 @@
+Checked 109 Markdown files and 1617 local links (predictive mode).
+Found 8 documentation violation(s):
+- docs/audit/architecture/evidence/remediation-07/README.md:38: broken link '../remediation-04/README.md' (docs/audit/architecture/evidence/remediation-04/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:42: broken link '../remediation-02a/README.md' (docs/audit/architecture/evidence/remediation-02a/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:43: broken link '../remediation-02a/README.md' (docs/audit/architecture/evidence/remediation-02a/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:45: broken link '../remediation-03/README.md' (docs/audit/architecture/evidence/remediation-03/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:46: broken link '../remediation-03/README.md' (docs/audit/architecture/evidence/remediation-03/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:47: broken link '../remediation-01/README.md' (docs/audit/architecture/evidence/remediation-01/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:48: broken link '../remediation-01/README.md' (docs/audit/architecture/evidence/remediation-01/README.md does not exist)
+- docs/audit/architecture/evidence/remediation-07/README.md:49: broken link '../remediation-02b/README.md' (docs/audit/architecture/evidence/remediation-02b/README.md does not exist)
+
+Fix documentation violations before committing.
+make: *** [Makefile:291: lint-docs] Error 1

@@ -1,0 +1,303 @@
+import { randomUUID } from 'node:crypto';
+import { getMetaOAuthConfig, refreshMetaApiKey } from './meta-oauth.js';
+import { exchangeGitHubCopilotToken, getGitHubCopilotOAuthConfig } from './github-copilot-oauth.js';
+import { getKimiCodingOAuthConfig } from './kimi-coding-oauth.js';
+import type { CredentialRedactor, ProviderOAuthCredential, ProviderOAuthRefreshConfig } from './credentials.js';
+
+export interface OAuthDeviceConfig {
+  deviceAuthorizationUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  scope?: string;
+  responseProfile?: ProviderOAuthRefreshConfig['responseProfile'] | 'github-copilot' | 'meta';
+  enterpriseDomain?: string;
+}
+
+export interface OAuthDevicePrompt {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete?: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface OAuthDeviceCredential {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  tokenType?: string;
+  subscription?: ProviderOAuthCredential['subscription'];
+}
+
+const MAX_OAUTH_RESPONSE_BYTES = 256 * 1024;
+const OAUTH_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_POLL_ATTEMPTS = 600;
+const UNSAFE_OAUTH_TEXT = /[\u0000-\u001f\u007f-\u009f]/u;
+
+function validOAuthText(value: unknown, maxBytes: number): value is string {
+  return typeof value === 'string' && Boolean(value) && Buffer.byteLength(value) <= maxBytes
+    && !UNSAFE_OAUTH_TEXT.test(value);
+}
+
+function safeEndpoint(value: string): string {
+  let endpoint: URL;
+  if (typeof value !== 'string' || Buffer.byteLength(value) > 4_096
+    || /[\u0000-\u001f\u007f]/u.test(value)) {
+    throw new Error('La configuration OAuth doit utiliser une URL HTTPS sûre.');
+  }
+  try { endpoint = new URL(value); }
+  catch { throw new Error('La configuration OAuth doit utiliser une URL HTTPS sûre.'); }
+  if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.hash) {
+    throw new Error('La configuration OAuth doit utiliser HTTPS sans identifiants intégrés.');
+  }
+  return endpoint.toString();
+}
+
+async function boundedJson(response: Response, signal: AbortSignal, maximumBytes = MAX_OAUTH_RESPONSE_BYTES): Promise<Record<string, unknown>> {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
+    || Number(contentLength) > maximumBytes)) {
+    void response.body?.cancel('oauth-response-limit').catch(() => undefined);
+    throw new Error('La réponse OAuth est invalide.');
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('La réponse OAuth est invalide.');
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  let completed = false;
+  const abortedResult = Symbol('aborted');
+  let onAbort!: () => void;
+  const aborted = new Promise<typeof abortedResult>(resolve => {
+    onAbort = () => resolve(abortedResult);
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    while (true) {
+      const item = await Promise.race([reader.read(), aborted]);
+      if (item === abortedResult) throw new Error('invalid');
+      if (item.done) { completed = true; break; }
+      bytes += item.value.byteLength;
+      if (bytes > maximumBytes) throw new Error('invalid');
+      chunks.push(item.value);
+    }
+    const combined = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)));
+    const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(combined));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid');
+    return value as Record<string, unknown>;
+  } catch { throw new Error('La réponse OAuth est invalide.'); }
+  finally {
+    signal.removeEventListener('abort', onAbort);
+    if (!completed) void reader.cancel('oauth-response-abandoned').catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
+  }
+}
+
+function oauthDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new Error('Authentification OAuth annulée.'));
+  return new Promise((resolve, reject) => {
+    const done = (): void => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const timer = setTimeout(done, milliseconds);
+    const abort = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      reject(new Error('Authentification OAuth annulée.'));
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
+
+async function abortableFetch(url: string, init: RequestInit, signal: AbortSignal, fetcher?: typeof fetch): Promise<Response> {
+  signal.throwIfAborted();
+  return new Promise<Response>((resolve, reject) => {
+    const abort = (): void => reject(new Error('Authentification OAuth annulée.'));
+    signal.addEventListener('abort', abort, { once: true });
+    (fetcher ?? fetch)(url, init).then(response => {
+      signal.removeEventListener('abort', abort);
+      if (signal.aborted) void response.body?.cancel().catch(() => undefined);
+      resolve(response);
+    }, error => {
+      signal.removeEventListener('abort', abort);
+      reject(error);
+    });
+    if (signal.aborted) abort();
+  });
+}
+
+export class OAuthDeviceClient {
+  constructor(private readonly config: OAuthDeviceConfig, private readonly redactor?: CredentialRedactor, private readonly fetcher?: typeof fetch) {
+    const deviceUrl = safeEndpoint(config.deviceAuthorizationUrl);
+    const tokenUrl = safeEndpoint(config.tokenUrl);
+    if (config.responseProfile !== undefined && config.responseProfile !== 'kimi-coding' && config.responseProfile !== 'github-copilot' && config.responseProfile !== 'meta') {
+      throw new Error('La configuration OAuth est invalide.');
+    }
+    if (config.responseProfile === 'meta') {
+      const expected = getMetaOAuthConfig();
+      if (deviceUrl !== expected.deviceAuthorizationUrl || tokenUrl !== expected.tokenUrl || config.clientId !== expected.clientId || config.scope !== undefined) throw new Error('Invalid Meta device configuration.');
+    }
+    if (config.responseProfile === 'github-copilot') {
+      const expected = getGitHubCopilotOAuthConfig(config.enterpriseDomain);
+      if (deviceUrl !== expected.deviceAuthorizationUrl || tokenUrl !== expected.tokenUrl
+        || config.clientId !== expected.clientId || config.scope !== expected.scope) {
+        throw new Error('La configuration OAuth GitHub Copilot est invalide.');
+      }
+    }
+    if (config.responseProfile === 'kimi-coding') {
+      const suffix = '/api/oauth/token';
+      if (!tokenUrl.endsWith(suffix)) throw new Error('La configuration OAuth Kimi Coding est invalide.');
+      const expected = getKimiCodingOAuthConfig(tokenUrl.slice(0, -suffix.length));
+      if (config.clientId !== expected.clientId || deviceUrl !== expected.deviceAuthorizationUrl || config.scope !== undefined) {
+        throw new Error('La configuration OAuth Kimi Coding est invalide.');
+      }
+    }
+    if (!config.clientId || Buffer.byteLength(config.clientId) > 4_096 || config.clientId.includes('\0')) {
+      throw new Error('La configuration OAuth contient un identifiant client invalide.');
+    }
+    if (config.scope !== undefined && (Buffer.byteLength(config.scope) > 4_096 || config.scope.includes('\0'))) {
+      throw new Error('La configuration OAuth contient un scope invalide.');
+    }
+  }
+
+  async requestCode(signal?: AbortSignal): Promise<OAuthDevicePrompt> {
+    if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
+    let response: Response;
+    const deadline = AbortSignal.timeout(this.config.responseProfile === 'meta' ? 30_000 : OAUTH_REQUEST_TIMEOUT_MS);
+    const requestSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    try {
+      response = await abortableFetch(safeEndpoint(this.config.deviceAuthorizationUrl), {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+          ...(this.config.responseProfile === 'github-copilot' ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
+        body: new URLSearchParams({ client_id: this.config.clientId, ...(this.config.scope ? { scope: this.config.scope } : {}) }),
+        signal: requestSignal,
+      }, requestSignal, this.fetcher);
+    } catch {
+      throw new Error('OAuth device authorization failed.');
+    }
+    if (!response.ok) {
+      void response.body?.cancel('oauth-device-authorization-failed').catch(() => undefined);
+      throw new Error(`OAuth device authorization failed (${response.status})`);
+    }
+    const data = await boundedJson(response, requestSignal);
+    if (this.config.responseProfile === 'kimi-coding' || this.config.responseProfile === 'meta') this.redactor?.add(typeof data.device_code === 'string' ? data.device_code : undefined);
+    const verificationUri = this.config.responseProfile === 'meta' ? data.verification_uri_complete ?? data.verification_uri : data.verification_uri ?? data.verification_url;
+    const expiresIn = data.expires_in === undefined ? 900 : data.expires_in;
+    const interval = this.config.responseProfile === 'meta'
+      ? typeof data.interval === 'number' && Number.isFinite(data.interval) && data.interval > 0 ? Math.max(1, data.interval) : 5
+      : data.interval === undefined ? 5 : data.interval;
+    if (!validOAuthText(data.device_code, 4_000) || !validOAuthText(data.user_code, 500)
+      || !validOAuthText(verificationUri, 4_096)
+      || (this.config.responseProfile === 'kimi-coding' && (!validOAuthText(data.verification_uri, 4_096)
+        || !validOAuthText(data.verification_uri_complete, 4_096)))
+      || (data.verification_uri_complete !== undefined
+        && !validOAuthText(data.verification_uri_complete, 4_096))
+      || typeof expiresIn !== 'number' || !Number.isFinite(expiresIn) || expiresIn < 1 || expiresIn > 3_600
+      || typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0.001 || interval > (this.config.responseProfile === 'meta' ? 900 : 30)) {
+      throw new Error('La réponse OAuth est invalide.');
+    }
+    return {
+      deviceCode: data.device_code,
+      userCode: data.user_code,
+      verificationUri: safeEndpoint(verificationUri),
+      verificationUriComplete: data.verification_uri_complete === undefined
+        ? undefined : safeEndpoint(data.verification_uri_complete),
+      expiresIn,
+      interval,
+    };
+  }
+
+  async pollCredential(prompt: OAuthDevicePrompt, signal?: AbortSignal): Promise<OAuthDeviceCredential> {
+    if (!prompt || typeof prompt !== 'object' || !validOAuthText(prompt.deviceCode, 4_000)
+      || typeof prompt.expiresIn !== 'number' || !Number.isFinite(prompt.expiresIn)
+      || prompt.expiresIn < 1 || prompt.expiresIn > 3_600
+      || typeof prompt.interval !== 'number' || !Number.isFinite(prompt.interval)
+      || prompt.interval < 0.001 || prompt.interval > (this.config.responseProfile === 'meta' ? 900 : 30)) {
+      throw new Error('La réponse OAuth est invalide.');
+    }
+    const deadline = Date.now() + prompt.expiresIn * 1000;
+    let interval = prompt.interval * 1000;
+    let attempts = 0;
+    while (Date.now() < deadline && attempts++ < MAX_POLL_ATTEMPTS) {
+      if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
+      await oauthDelay(this.config.responseProfile === 'meta' ? Math.min(interval, Math.max(0, deadline - Date.now())) : interval, signal);
+      if (this.config.responseProfile === 'meta' && Date.now() >= deadline) throw new Error('Le code OAuth a expiré.');
+      let response: Response;
+      const requestSignal = this.config.responseProfile === 'meta'
+        ? AbortSignal.any([AbortSignal.timeout(30_000), AbortSignal.timeout(Math.max(1, deadline - Date.now())), ...(signal ? [signal] : [])])
+        : signal ? AbortSignal.any([signal, AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
+      try {
+        response = await abortableFetch(safeEndpoint(this.config.tokenUrl), {
+          method: 'POST',
+          redirect: 'manual',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json',
+            ...(this.config.responseProfile === 'github-copilot' ? { 'User-Agent': 'GitHubCopilotChat/0.35.0' } : {}) },
+          body: new URLSearchParams({
+            client_id: this.config.clientId,
+            device_code: prompt.deviceCode,
+            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+          }),
+          signal: requestSignal,
+        }, requestSignal, this.fetcher);
+      } catch {
+        if (signal?.aborted) throw new Error('Authentification OAuth annulée.');
+        throw new Error('OAuth token exchange failed.');
+      }
+      const data = await boundedJson(response, requestSignal);
+      if (this.config.responseProfile === 'kimi-coding' || this.config.responseProfile === 'meta') {
+        this.redactor?.add(typeof data.access_token === 'string' ? data.access_token : undefined);
+        this.redactor?.add(typeof data.refresh_token === 'string' ? data.refresh_token : undefined);
+      }
+      if (response.ok && typeof data.access_token === 'string' && data.access_token) {
+        if (!validOAuthText(data.access_token, 64 * 1024)
+          || (this.config.responseProfile === 'kimi-coding' && (!validOAuthText(data.refresh_token, 64 * 1024)
+            || typeof data.expires_in !== 'number' || data.expires_in <= 0))
+          || (data.refresh_token !== undefined && !validOAuthText(data.refresh_token, 64 * 1024))
+          || (data.token_type !== undefined && !validOAuthText(data.token_type, 128))
+          || (data.expires_in !== undefined && (typeof data.expires_in !== 'number'
+            || !Number.isFinite(data.expires_in) || data.expires_in < 0
+            || data.expires_in > 365 * 24 * 60 * 60))) {
+          throw new Error('La réponse OAuth est invalide.');
+        }
+        if (this.config.responseProfile === 'meta') {
+          if (data.token_type !== undefined && (typeof data.token_type !== 'string' || data.token_type.toLowerCase() !== 'bearer')) throw new Error('Invalid Meta identity token type.');
+          return refreshMetaApiKey(data.access_token, { provider: 'meta', grantId: randomUUID() }, { signal, redactor: this.redactor, fetcher: this.fetcher });
+        }
+        if (this.config.responseProfile === 'github-copilot') {
+          const exchanged = await exchangeGitHubCopilotToken(data.access_token, {
+            enterpriseDomain: this.config.enterpriseDomain, signal, redactor: this.redactor, fetcher: this.fetcher,
+          });
+          return { accessToken: exchanged.accessToken, refreshToken: exchanged.refreshToken, expiresAt: exchanged.expiresAt,
+            subscription: { provider: 'github-copilot', availableModelIds: exchanged.availableModelIds,
+              ...(exchanged.enterpriseDomain === undefined ? {} : { enterpriseDomain: exchanged.enterpriseDomain }) } };
+        }
+        const expiresIn = data.expires_in as number | undefined;
+        return {
+          accessToken: data.access_token,
+          ...(data.refresh_token === undefined ? {} : { refreshToken: data.refresh_token }),
+          ...(expiresIn === undefined ? {} : { expiresAt: Date.now() + Math.floor(expiresIn * 1_000) }),
+          ...(data.token_type === undefined ? {} : { tokenType: data.token_type }),
+        };
+      }
+      if (data.error === 'slow_down') {
+        interval = this.config.responseProfile === 'meta' && typeof data.interval === 'number' && Number.isFinite(data.interval) && data.interval > 0 && data.interval <= 900
+          ? Math.max(1000, Math.floor(data.interval * 1000)) : Math.min(this.config.responseProfile === 'meta' ? 900_000 : 60_000, interval + 5000);
+        continue;
+      }
+      if (data.error === 'authorization_pending') continue;
+      throw new Error(`OAuth token exchange failed (${response.status}).`);
+    }
+    throw new Error('Le code OAuth a expiré.');
+  }
+
+  async pollToken(prompt: OAuthDevicePrompt, signal?: AbortSignal): Promise<string> {
+    return (await this.pollCredential(prompt, signal)).accessToken;
+  }
+}
+
+// Shared bounded transport/reader, not a source of issuer or endpoint authority.
+export { abortableFetch as fetchOAuthResponse, boundedJson as readOAuthJson, boundedJson as readProviderJson, oauthDelay as waitForOAuth };

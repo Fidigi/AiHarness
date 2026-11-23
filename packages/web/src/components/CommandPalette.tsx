@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../hooks/useI18n';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -16,7 +16,7 @@ interface PaletteEntry {
   run: () => void;
 }
 
-export default function CommandPalette({ onClose }: { onClose: () => void }) {
+export default function CommandPalette({ onClose, leaveRef }: { onClose: () => void; leaveRef: RefObject<((leave: () => void) => void) | null> }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const sessions = useSessionStore(state => state.sessions);
@@ -33,11 +33,21 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     onClose();
     window.setTimeout(action, 0);
   };
-  const create = () => {
+  const leaveSettings = (leave: () => void) => {
+    const id = workspace?.id, cwd = workspace?.cwd;
+    const admit = () => {
+      const current = useSessionStore.getState().workspace;
+      if (current?.id !== id || current?.cwd !== cwd) return;
+      leave();
+    };
+    const guard = leaveRef.current;
+    if (guard) guard(admit); else admit();
+  };
+  const create = () => leaveSettings(() => {
     createSession();
     const id = useSessionStore.getState().activeSessionId;
     if (id) navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
-  };
+  });
   const commands = useMemo<PaletteEntry[]>(() => [
     { id: 'new', group: t('palette.commands'), label: t('shortcuts.newSession'), shortcut: preferences.keybindings.newSession, run: create },
     { id: 'prompt', group: t('palette.commands'), label: t('shortcuts.focusPrompt'), shortcut: preferences.keybindings.focusPrompt,
@@ -49,15 +59,16 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     { id: 'settings', group: t('palette.settings'), label: t('settings.title'), shortcut: preferences.keybindings.openSettings,
       run: () => navigate('/settings') },
     { id: 'appearance', group: t('palette.settings'), label: t('settings.appearance'), run: () => navigate('/settings#appearance') },
+    { id: 'mcp', group: t('palette.settings'), label: t('settings.mcp.title'), run: () => navigate('/settings#mcp') },
     { id: 'skills', group: t('palette.settings'), label: t('settings.skills.title'), run: () => navigate('/settings#skills') },
     { id: 'subagents', group: t('palette.settings'), label: t('subagents.title'), run: () => navigate('/settings#subagents') },
     { id: 'keyboard', group: t('palette.settings'), label: t('settings.shortcuts'), run: () => navigate('/settings#shortcuts') },
-  ], [preferences.keybindings, t, workspace?.cwd]); // Store actions are stable.
+  ], [preferences.keybindings, t, workspace?.id, workspace?.cwd, leaveRef]); // Store actions are stable.
 
   useFocusTrap(true, dialog, onClose);
 
   useEffect(() => {
-    if (!workspace?.trusted || query.trim().length < 1) {
+    if (!(workspace?.operationTrusted ?? workspace?.trusted) || query.trim().length < 1) {
       setFiles([]);
       return;
     }
@@ -66,16 +77,22 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       if (!controller.signal.aborted && result.success && result.data) setFiles(result.data.files);
     }), 120);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace?.cwd, workspace?.trusted]);
+  }, [query, workspace?.cwd, workspace?.operationTrusted, workspace?.trusted]);
 
   const needle = query.trim().toLocaleLowerCase();
   const entries: PaletteEntry[] = [
     ...commands.filter(entry => !needle || `${entry.label} ${entry.detail ?? ''}`.toLocaleLowerCase().includes(needle)),
-    ...sessions.filter(session => !needle || (session.title || '').toLocaleLowerCase().includes(needle)).slice(0, 12).map(session => ({
-      id: `session:${session.id}`, group: t('palette.sessions'), label: session.title || t('sidebar.untitled'),
-      detail: session.messages.at(-1)?.content.slice(0, 80),
-      run: () => navigate(`/chat/${encodeURIComponent(session.id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`),
-    })),
+    ...sessions.filter(session => !needle || (session.title || '').toLocaleLowerCase().includes(needle)).slice(0, 12).map(session => {
+      const id = session.id;
+      return {
+        id: `session:${id}`, group: t('palette.sessions'), label: session.title || t('sidebar.untitled'),
+        detail: session.messages.at(-1)?.content.slice(0, 80),
+        run: () => leaveSettings(() => {
+          if (useSessionStore.getState().sessions.filter(choice => choice.id === id).length !== 1) return;
+          navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(workspace?.cwd ?? '')}`);
+        }),
+      };
+    }),
     ...files.map(file => ({ id: `file:${file}`, group: t('palette.files'), label: file,
       run: () => {
         window.dispatchEvent(new CustomEvent('aih-show-files'));

@@ -3,6 +3,7 @@ import type { ConfigurationScope } from '@ai-harness/core';
 import type { RuntimeServices } from '../runtime/services.js';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
+import { providerOperation } from '../runtime/provider-administration.js';
 
 function scope(value: unknown): ConfigurationScope | undefined {
   return value === 'global' || value === 'project' || value === 'session' ? value : undefined;
@@ -10,10 +11,12 @@ function scope(value: unknown): ConfigurationScope | undefined {
 
 export function createConfigurationRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
-  router.get('/effective', async (request, response, next) => {
+  router.get('/effective', operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
+      await services.configurationStore.load();
       const sessionId = typeof request.query.sessionId === 'string' ? request.query.sessionId : undefined;
       const session = sessionId
         ? services.sessionManager.get(sessionId) ?? await services.sessionManager.loadFromStore(sessionId) ?? undefined
@@ -26,9 +29,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.get('/scope', async (request, response, next) => {
+  router.get('/scope', operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.query.scope);
       if (!selectedScope) {
@@ -36,6 +39,7 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
         return;
       }
       const { configurationStore } = await servicesPromise;
+      await configurationStore.load();
       response.json({
         scope: selectedScope,
         scopeId: typeof request.query.scopeId === 'string' ? request.query.scopeId : undefined,
@@ -47,9 +51,9 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/scope', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/scope', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.body?.scope);
       if (!selectedScope) {
@@ -66,9 +70,38 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.put('/scope', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/defaults', requireCapability('configuration'), operation(async (request, response, next) => {
+    try {
+      const body = request.body as Record<string, unknown> | undefined;
+      const model = body?.kind === 'model';
+      const keys = model ? ['kind', 'provider', 'model', 'projectId'] : ['kind', 'thinking', 'projectId'];
+      if (!body || (body.kind !== 'model' && body.kind !== 'thinking')
+        || Object.keys(body).some(key => !keys.includes(key))
+        || (!model && (typeof body.thinking !== 'string'
+          || !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(body.thinking)))
+        || (body.projectId !== undefined && (typeof body.projectId !== 'string' || body.projectId.length > 2_000))
+        || (model && [body.provider, body.model].some(value => typeof value !== 'string'
+          || !value.trim() || value.length > 500 || /[\u0000-\u001f\u007f]/.test(value)))) {
+        response.status(400).json({ error: 'Invalid new-session default.' });
+        return;
+      }
+      const services = await servicesPromise;
+      const projectId = body.projectId as string | undefined;
+      // Validate the context before writing, and inspect project settings even
+      // when a current session override hides their effective provenance.
+      if (projectId) services.configurationStore.get('project', projectId);
+      const patch = model ? { provider: body.provider, model: body.model } : { thinking: body.thinking };
+      const values = await services.configurationStore.patch('global', patch);
+      const effective = resolveEffectiveConfiguration(services, { projectId });
+      const overridden = Object.keys(patch).filter(key =>
+        ['project', 'environment'].includes(effective.provenance[key as keyof typeof effective.provenance]?.scope ?? ''));
+      response.json({ values, overridden, effective });
+    } catch (error) { next(error); }
+  }));
+
+  router.put('/scope', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const selectedScope = scope(request.body?.scope);
       if (!selectedScope) {
@@ -85,7 +118,7 @@ export function createConfigurationRouter(servicesPromise: Promise<RuntimeServic
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   return router;
 }

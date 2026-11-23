@@ -1,0 +1,3782 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "8e9fd562ef800e77ec18aee132198b53cbb44543c3a8894080966a264b3830d2",
+  "programSha256": "8e5068e40354cd777c6261ff332400a692926fbaf3de94b2cf2be70df5d26948",
+  "pinnedManifestSha256": "d56393e043172cb50cf3af588f78d30aa21077084e90545543a3795daec3f09d",
+  "dependencyManifestSha256": "312276820f0ce96c6595e59ce267f254e0046c2246ee10a5d312e6d881564710",
+  "profiles": 6,
+  "replayProjections": 72,
+  "freshSdkRequests": 78,
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Synthetic reference tool",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "x"
+        ],
+        "properties": {
+          "x": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "syntheticJsonContent": [
+    {
+      "type": "text",
+      "text": "left!"
+    },
+    {
+      "type": "thinking",
+      "thinking": "firstsecond",
+      "signature": "opaque-signature"
+    },
+    {
+      "type": "redacted_thinking",
+      "data": "opaque-redacted"
+    },
+    {
+      "type": "thinking",
+      "thinking": "",
+      "signature": "opaque-empty"
+    },
+    {
+      "type": "text",
+      "text": "right?"
+    },
+    {
+      "type": "tool_use",
+      "id": "call",
+      "name": "echo",
+      "input": {
+        "x": 1
+      }
+    }
+  ],
+  "seedEvents": [
+    {
+      "type": "message_start",
+      "message": {
+        "id": "msg_reference",
+        "type": "message",
+        "role": "assistant",
+        "model": "untrusted-response-alias",
+        "content": [],
+        "stop_reason": null,
+        "stop_sequence": null,
+        "usage": {
+          "input_tokens": 5,
+          "output_tokens": 2,
+          "cache_read_input_tokens": 4,
+          "cache_creation_input_tokens": 3
+        }
+      }
+    },
+    {
+      "type": "content_block_start",
+      "index": 0,
+      "content_block": {
+        "type": "text",
+        "text": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 0,
+      "delta": {
+        "type": "text_delta",
+        "text": "left!"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 0
+    },
+    {
+      "type": "content_block_start",
+      "index": 1,
+      "content_block": {
+        "type": "thinking",
+        "thinking": "",
+        "signature": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 1,
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "first"
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 1,
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": "second"
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 1,
+      "delta": {
+        "type": "signature_delta",
+        "signature": "opaque-"
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 1,
+      "delta": {
+        "type": "signature_delta",
+        "signature": "signature"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 1
+    },
+    {
+      "type": "content_block_start",
+      "index": 2,
+      "content_block": {
+        "type": "redacted_thinking",
+        "data": "opaque-redacted"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 2
+    },
+    {
+      "type": "content_block_start",
+      "index": 3,
+      "content_block": {
+        "type": "thinking",
+        "thinking": "",
+        "signature": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 3,
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 3,
+      "delta": {
+        "type": "thinking_delta",
+        "thinking": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 3,
+      "delta": {
+        "type": "signature_delta",
+        "signature": "opaque-"
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 3,
+      "delta": {
+        "type": "signature_delta",
+        "signature": "empty"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 3
+    },
+    {
+      "type": "content_block_start",
+      "index": 4,
+      "content_block": {
+        "type": "text",
+        "text": ""
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 4,
+      "delta": {
+        "type": "text_delta",
+        "text": "right?"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 4
+    },
+    {
+      "type": "content_block_start",
+      "index": 5,
+      "content_block": {
+        "type": "tool_use",
+        "id": "call",
+        "name": "echo",
+        "input": {}
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 5,
+      "delta": {
+        "type": "input_json_delta",
+        "partial_json": "{\"x\":"
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "index": 5,
+      "delta": {
+        "type": "input_json_delta",
+        "partial_json": "1}"
+      }
+    },
+    {
+      "type": "content_block_stop",
+      "index": 5
+    },
+    {
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "tool_use",
+        "stop_sequence": null
+      },
+      "usage": {
+        "output_tokens": 2
+      }
+    },
+    {
+      "type": "message_stop"
+    }
+  ],
+  "expectedBlocks": [
+    {
+      "type": "text",
+      "text": "left!"
+    },
+    {
+      "type": "reasoning",
+      "text": "firstsecond",
+      "thinkingSignature": "opaque-signature"
+    },
+    {
+      "type": "reasoning",
+      "text": "[Reasoning redacted]",
+      "thinkingSignature": "opaque-redacted",
+      "redacted": true
+    },
+    {
+      "type": "reasoning",
+      "text": "",
+      "thinkingSignature": "opaque-empty"
+    },
+    {
+      "type": "text",
+      "text": "right?"
+    },
+    {
+      "type": "tool_call",
+      "id": "call",
+      "name": "echo",
+      "input": {
+        "x": 1
+      }
+    }
+  ],
+  "rows": [
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "minimax",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M2.7-highspeed",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scope": "minimax-cn",
+      "model": "MiniMax-M3",
+      "api": "anthropic-messages",
+      "cases": [
+        {
+          "case": "same",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "firstsecond",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-provider",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "foreign-model",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "missing-api",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-error",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "failed-aborted",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "unsigned",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-thinking",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": " \t",
+                  "signature": "opaque-signature"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "empty-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        },
+        {
+          "case": "blank-signature",
+          "expectedMessages": [
+            {
+              "role": "user",
+              "content": "probe"
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "left!"
+                },
+                {
+                  "type": "text",
+                  "text": "firstsecond"
+                },
+                {
+                  "type": "redacted_thinking",
+                  "data": "opaque-redacted"
+                },
+                {
+                  "type": "thinking",
+                  "thinking": "",
+                  "signature": "opaque-empty"
+                },
+                {
+                  "type": "text",
+                  "text": "right?"
+                },
+                {
+                  "type": "tool_use",
+                  "id": "call",
+                  "name": "echo",
+                  "input": {
+                    "x": 1
+                  }
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "tool_result",
+                  "tool_use_id": "call",
+                  "content": "result",
+                  "is_error": false
+                }
+              ]
+            },
+            {
+              "role": "user",
+              "content": "continue"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limits": "Raw pinned Messages SDK with genuine HTTP1/TLS and owned trusted CA;synthetic non-cryptographic signatures/redacted data,not MiniMax service/account acceptance. No Core execution. JSON projection,full default/reserve allocation and host/lifecycle qualification remain separate."
+}

@@ -1,0 +1,20 @@
+.settings-locale-boundary {
+  padding: 2rem;
+  color: var(--text-primary);
+}
+.settings-locale-boundary a,
+.settings-locale-boundary button {
+  display: inline-block;
+  background: transparent;
+  font: inherit;
+  margin-right: .5rem;
+  padding: .6rem 1rem;
+  color: inherit;
+  border: 1px solid currentColor;
+  border-radius: .4rem;
+}
+.settings-locale-boundary a:focus-visible,
+.settings-locale-boundary button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}

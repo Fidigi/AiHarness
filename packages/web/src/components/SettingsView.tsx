@@ -2,23 +2,30 @@
 // Settings View Component - Provider Configuration
 // ============================================================
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react';
 import '../settings.css';
+import { createPortal } from 'react-dom';
+import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { generalSettingsPanel, generalSettingsPanels, modelSettingsPanel, modelSettingsPanels, settingsCategories, settingsSectionCategory, type GeneralSettingsPanel, type ModelSettingsPanel, type SettingsCategory } from './settings-categories';
 import { useSessionStore } from '../store/session-store';
 import { useI18n } from '../hooks/useI18n';
+import { SettingsLocaleBoundary } from './SettingsLocaleBoundary';
 import type { ProviderType } from '@ai-harness/core';
 import type { TranslationFunction } from '../i18n/types';
 import {
   getAppUpdateStatus,
-  getChatTransport,
   logoutWeb,
   setAuthToken,
-  setChatTransport,
   setProviderApiKey,
   type AppUpdateStatus,
 } from '../services/api';
 import { SubagentSettings } from './SubagentSettings';
-import { usePreferences } from '../store/preferences';
+import { McpSettings } from './McpSettings';
+import { readPreferences, usePreferences } from '../store/preferences';
+import { isSettingsSection, readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { bindSettingsNavigation } from './settings-navigation';
+import { settingsDraftMessage, SettingsDiscardContext, SettingsDraftContext, useSettingsDraft } from './settings-drafts';
 import { chordFromEvent, defaultKeybindings, shortcutActions, shortcutLabel } from '../services/keyboard';
 import { pushSupported, syncPushSubscription, type NotificationEvent } from '../services/push';
 import {
@@ -29,6 +36,13 @@ import {
   ToolSettingsPanel,
 } from './EcosystemSettings';
 
+import { ResourceBatchReport, ResourceGroupButtons, useResourceBatches } from './ResourceBatchControls';
+import { SkillContentPane } from './SkillContentPane';
+import { skillSettingsMessage } from './skill-settings-messages';
+import { providerCredentialsMessage } from './provider-credentials-messages';
+import { modelCatalogMessage } from './model-catalog-messages';
+import { Icon } from './Icon';
+
 const PluginSettings = lazy(async () => ({
   default: (await import('./PluginSettings')).PluginSettings,
 }));
@@ -37,29 +51,105 @@ type SaveStatus =
   | { key: string; provider?: ProviderType }
   | { detail: string };
 
-function SettingsView() {
+function SettingsView({ entryRelease, entryEpoch, category, generalPanel, modelPanel }: {
+  category: SettingsCategory;
+  generalPanel: GeneralSettingsPanel;
+  modelPanel: ModelSettingsPanel;
+  entryRelease: { readonly current: (() => void) | null };
+  entryEpoch: string;
+}) {
   const providers = useSessionStore(state => state.providers);
   const setProvider = useSessionStore(state => state.setProvider);
   const updateApiKey = useSessionStore(state => state.updateApiKey);
   const setModel = useSessionStore(state => state.setModel);
   const hydrateModelCatalog = useSessionStore(state => state.hydrateModelCatalog);
-  const setModelEnabled = useSessionStore(state => state.setModelEnabled);
-  const setAllModelsEnabled = useSessionStore(state => state.setAllModelsEnabled);
+  const batches = useResourceBatches();
   const skills = useSessionStore(state => state.skills);
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
-  const setSkillModelInvocable = useSessionStore(state => state.setSkillModelInvocable);
   const sessionCount = useSessionStore(state => state.sessions.length);
   const workspaceId = useSessionStore(state => state.workspace?.id);
-  const { t } = useI18n();
+  const workspaceCwd = useSessionStore(state => state.workspace?.cwd);
+  const activeSessionId = useSessionStore(state => state.activeSessionId);
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({});
+  const [providerReload, setProviderReload] = useState(0);
+  const [providerInvalidation, setProviderInvalidation] = useState(0);
+  const providerFormDiscard = useRef<((discard: () => void) => void) | null>(null);
+  const providerChangeOrigin = { workspace: useSessionStore.getState().workspace, activeSessionId, active: providers.active };
+  const { t, locale } = useI18n();
   const [authToken, updateAuthToken] = useState('');
-  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
-  const [transport, updateTransport] = useState<'sse' | 'websocket'>(() => getChatTransport());
+  const authTokenBaseline = useRef('');
+  const [authApplied, setAuthApplied] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<Partial<Record<string, SaveStatus>>>({});
+  const [pendingApiKeys, setPendingApiKeys] = useState<Record<string, number>>({});
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus>();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [modelFilter, setModelFilter] = useState('');
+  const [modelPosition, setModelPosition] = useState(() => readSettingsNavigation(workspaceCwd).positions.model);
+  const [modelOverview, setModelOverview] = useState(!modelPosition?.selection);
+  const [modelMobile, setModelMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const modelNavigation = useRef<HTMLElement>(null);
+  const modelDetailPane = useRef<HTMLDivElement>(null);
+  const modelBack = useRef<HTMLButtonElement>(null);
+  const modelFocus = useRef<'navigation' | 'detail' | null>(null);
+  const modelDetailPrefix = useId();
   const [skillFilter, setSkillFilter] = useState('');
+  const [selectedSkill, setSelectedSkill] = useState<string>();
+  const skillInvoker = useRef<HTMLButtonElement | null>(null);
+  const [skillPosition, setSkillPosition] = useState(() => {
+    const position = readSettingsNavigation(workspaceCwd).positions.skills;
+    return position?.group === 'registry' ? undefined : position;
+  });
+  const [skillOverview, setSkillOverview] = useState(!skillPosition?.selection);
+  const [skillMobile, setSkillMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const skillNavigation = useRef<HTMLElement>(null);
+  const skillDetailPane = useRef<HTMLDivElement>(null);
+  const skillBack = useRef<HTMLButtonElement>(null);
+  const skillFocus = useRef<'navigation' | 'detail' | null>(null);
+  const skillDetailPrefix = useId();
   const [pushStatus, setPushStatus] = useState('');
   const [preferences, setPreferences] = usePreferences();
+  const [credentialSelection, setCredentialSelection] = useState(() => {
+    const position = readSettingsNavigation(workspaceCwd).positions.providers;
+    return position?.group === 'builtin' ? position.selection : undefined;
+  });
+  const [credentialOverview, setCredentialOverview] = useState(!credentialSelection);
+  const [credentialMobile, setCredentialMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const credentialNavigation = useRef<HTMLElement>(null);
+  const credentialDetail = useRef<HTMLDivElement>(null);
+  const credentialBack = useRef<HTMLButtonElement>(null);
+  const credentialFocus = useRef<'navigation' | 'detail' | null>(null);
+  const credentialPrefix = useId();
+  const credentialProviders = Object.keys(providers.available).filter(type => [
+    'openai', 'anthropic', 'google', 'azure', 'bedrock', 'vertex', 'local', 'mock',
+  ].includes(type));
+  const selectedCredential = credentialSelection
+    ? credentialProviders.find(type => type === credentialSelection) : credentialProviders[0];
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && credentialDetail.current?.contains(document.activeElement)) setCredentialOverview(false);
+      setCredentialMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'models' || modelPanel !== 'providers' || !credentialFocus.current) return;
+    const target = credentialFocus.current; credentialFocus.current = null;
+    if (target === 'navigation') {
+      const current = credentialNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? credentialNavigation.current)?.focus();
+    } else if (credentialMobile && !credentialOverview) credentialBack.current?.focus();
+  }, [category, modelPanel, credentialMobile, credentialOverview, selectedCredential]);
+  const selectCredential = (selection: string) => {
+    setCredentialSelection(selection); setCredentialOverview(false);
+    credentialFocus.current = credentialMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, {
+      ...current, section: 'providers', positions: { ...current.positions, providers: { group: 'builtin', selection } },
+    });
+  };
 
   const activeCatalog = providers.catalog?.providers.find(group => group.provider === providers.active);
   const configuredModel = providers.available[providers.active]?.model || '';
@@ -77,16 +167,84 @@ function SettingsView() {
       || model.id.toLocaleLowerCase().includes(normalizedModelFilter)
       || model.name.toLocaleLowerCase().includes(normalizedModelFilter)),
   })).filter(group => group.models.length > 0) ?? [];
+  const modelChoices = visibleModelGroups.flatMap(group => group.models.map(model => ({ model, group: group.provider })));
+  const modelMatches = modelChoices.filter(choice => choice.group === modelPosition?.group && choice.model.key === modelPosition?.selection);
+  const selectedModelMetadata = modelPosition?.selection
+    ? modelMatches.length === 1 ? modelMatches[0] : undefined
+    : modelPosition?.group ? modelChoices.find(choice => choice.group === modelPosition.group) : modelChoices[0];
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && modelDetailPane.current?.contains(document.activeElement)) setModelOverview(false);
+      setModelMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'models' || modelPanel !== 'model' || !modelFocus.current) return;
+    const target = modelFocus.current; modelFocus.current = null;
+    if (target === 'navigation') {
+      const current = modelNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? modelNavigation.current)?.focus();
+    } else if (modelMobile && !modelOverview) modelBack.current?.focus();
+  }, [category, modelPanel, modelMobile, modelOverview, selectedModelMetadata]);
+  const selectModelMetadata = (group: string, selection: string) => {
+    const position = { group, selection };
+    setModelPosition(position); setModelOverview(false); modelFocus.current = modelMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, { ...current, section: 'model', positions: { ...current.positions, model: position } });
+  };
   const normalizedSkillFilter = skillFilter.trim().toLocaleLowerCase();
-  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).map(scope => ({
-    scope,
-    skills: (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
+  const visibleSkillGroups = (['project', 'global', 'path', 'package'] as const).flatMap(scope => {
+    const candidates = (skills.catalog?.skills ?? []).filter(skill => skill.scope === scope && (
       !normalizedSkillFilter
       || skill.name.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.description.toLocaleLowerCase().includes(normalizedSkillFilter)
       || skill.source.toLocaleLowerCase().includes(normalizedSkillFilter)
-    )),
-  })).filter(group => group.skills.length > 0);
+    ));
+    const sources = scope === 'package' || scope === 'path' ? [...new Set(candidates.map(skill => skill.source))] : [''];
+    return sources.map(source => ({ scope, source, skills: candidates.filter(skill => !source || skill.source === source) }));
+  }).filter(group => group.skills.length > 0);
+
+  const skillChoices = visibleSkillGroups.flatMap(group => group.skills.map(skill => ({
+    skill, group: JSON.stringify([group.scope, group.source]),
+  })));
+  const skillMatches = skillChoices.filter(choice => choice.group === skillPosition?.group
+    && choice.skill.key === skillPosition?.selection);
+  const selectedSkillMetadata = skillPosition?.selection
+    ? skillMatches.length === 1 ? skillMatches[0] : undefined
+    : skillPosition?.group ? skillChoices.find(choice => choice.group === skillPosition.group) : skillChoices[0];
+  const skillDetail = visibleSkillGroups.flatMap(group => group.skills).find(skill => skill.key === selectedSkill);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 959px)');
+    const resize = () => {
+      if (query.matches && skillDetailPane.current?.contains(document.activeElement)) setSkillOverview(false);
+      setSkillMobile(query.matches);
+    };
+    query.addEventListener('change', resize);
+    return () => query.removeEventListener('change', resize);
+  }, []);
+  useLayoutEffect(() => {
+    if (category !== 'skills' || !skillFocus.current) return;
+    const target = skillFocus.current; skillFocus.current = null;
+    if (target === 'navigation') {
+      const current = skillNavigation.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (current ?? skillNavigation.current)?.focus();
+    } else if (skillMobile && !skillOverview) skillBack.current?.focus();
+  }, [category, skillMobile, skillOverview, selectedSkillMetadata]);
+
+  const selectSkillMetadata = (group: string, selection: string) => {
+    const position = { group, selection };
+    setSkillPosition(position); setSkillOverview(false);
+    if (selectedSkill !== selection) setSelectedSkill(undefined);
+    skillFocus.current = skillMobile ? 'detail' : null;
+    const current = readSettingsNavigation(workspaceCwd);
+    writeSettingsNavigation(workspaceCwd, {
+      ...current, section: 'skills', positions: { ...current.positions, skills: position },
+    });
+  };
 
   const checkForUpdate = async (refresh = false) => {
     setCheckingUpdate(true);
@@ -100,9 +258,12 @@ function SettingsView() {
   };
 
   useEffect(() => {
-    const target = window.location.hash.slice(1) || preferences.lastSettingsSection;
-    window.setTimeout(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }), 0);
-  }, []); // Restore only on entry; interacting with controls must not move the page.
+    // Preserve the accepted startup task order in this business lifetime: entry
+    // alignment first, then deferred checking UI. The layout owner stays outside.
+    const release = entryRelease.current;
+    const timer = window.setTimeout(() => release?.(), 0);
+    return () => window.clearTimeout(timer);
+  }, [entryRelease, entryEpoch]);
 
   useEffect(() => {
     // Defer the remote release check so settings and the rest of the application render first.
@@ -119,12 +280,30 @@ function SettingsView() {
     return inputs;
   });
 
+  const apiKeyBaseline = useRef(apiKeyInputs);
+  const apiKeyState = useRef(apiKeyInputs);
+  useLayoutEffect(() => { apiKeyState.current = apiKeyInputs; }, [apiKeyInputs]);
+  useSettingsDraft(Object.entries(apiKeyInputs).some(([type, value]) => value !== (apiKeyBaseline.current[type] ?? ''))
+    || authToken !== authTokenBaseline.current);
+
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setProvider(e.target.value as ProviderType);
+    const next = e.target.value as ProviderType;
+    const origin = providerChangeOrigin;
+    const change = () => {
+      const current = useSessionStore.getState();
+      if (current.workspace?.id !== origin.workspace?.id || current.workspace?.cwd !== origin.workspace?.cwd
+        || current.workspace?.trusted !== origin.workspace?.trusted || current.workspace?.operationTrusted !== origin.workspace?.operationTrusted
+        || current.activeSessionId !== origin.activeSessionId || current.providers.active !== origin.active
+        || !Object.hasOwn(current.providers.available, next)) return;
+      setProvider(next);
+    };
+    if (next === providers.active || !providerFormDiscard.current) change();
+    else providerFormDiscard.current(change);
   };
 
   const handleApiKeyChange = (type: string, value: string) => {
     setApikeyInputs(prev => ({ ...prev, [type]: value }));
+    setSaveStatus(previous => { const next = { ...previous }; delete next[type]; return next; });
   };
 
   const notificationCategories = (events = preferences.pushEvents): NotificationEvent[] =>
@@ -144,33 +323,34 @@ function SettingsView() {
       : t('settings.push.inactive'));
   };
 
+  const [vertexCredentialMode, setVertexCredentialMode] = useState<'api-key' | 'bearer'>('bearer');
   const saveApiKey = async (type: string) => {
     const key = apiKeyInputs[type];
     if (key && !key.includes('•')) {
-      const result = await setProviderApiKey(type, key);
-      if (result.success) {
-        updateApiKey(type as ProviderType, 'configured');
-        setApikeyInputs(previous => ({ ...previous, [type]: '••••••••' }));
-        setSaveStatus({
-          key: 'settings.providerConfiguredOnServer',
-          provider: type as ProviderType,
-        });
-      } else {
-        setSaveStatus(result.error
-          ? { detail: result.error }
-          : { key: 'settings.configurationFailed' });
+      setPendingApiKeys(previous => ({ ...previous, [type]: (previous[type] ?? 0) + 1 }));
+      try {
+        const result = await setProviderApiKey(type, key, undefined, type === 'vertex' ? vertexCredentialMode : undefined);
+        if (result.success) {
+          const current = apiKeyState.current[type] === key;
+          updateApiKey(type as ProviderType, 'configured');
+          apiKeyBaseline.current = { ...apiKeyBaseline.current, [type]: '••••••••' };
+          setApikeyInputs(previous => previous[type] === key ? { ...previous, [type]: '••••••••' } : { ...previous });
+          if (current) setSaveStatus(previous => ({ ...previous, [type]: {
+            key: 'settings.providerConfiguredOnServer', provider: type as ProviderType,
+          } }));
+        } else {
+          setSaveStatus(previous => ({ ...previous, [type]: result.error
+            ? { detail: result.error } : { key: 'settings.configurationFailed' } }));
+        }
+      } finally {
+        setPendingApiKeys(previous => ({ ...previous, [type]: previous[type]! - 1 }));
       }
     }
   };
 
   return (
-    <div className="settings-view" onFocusCapture={event => {
-      const section = (event.target as Element).closest<HTMLElement>('.settings-section[id]');
-      if (section?.id && section.id !== preferences.lastSettingsSection) setPreferences({ lastSettingsSection: section.id });
-    }}>
-      <h2>{t('settings.title')}</h2>
-
-      <section className="settings-section" id="authentication">
+    <>
+      <section className="settings-section" id="authentication" hidden={category !== 'general' || generalPanel !== 'authentication'}>
         <h3>{t('settings.serverAuthentication')}</h3>
         <div className="api-key-input-group">
           <input
@@ -178,11 +358,12 @@ function SettingsView() {
             value={authToken}
             placeholder={t('settings.bearerToken')}
             aria-label={t('settings.bearerToken')}
-            onChange={event => updateAuthToken(event.target.value)}
+            onChange={event => { updateAuthToken(event.target.value); setAuthApplied(false); }}
           />
           <button onClick={() => {
             setAuthToken(authToken);
-            setSaveStatus({ key: 'settings.tokenApplied' });
+            authTokenBaseline.current = authToken;
+            setAuthApplied(true);
           }}>
             {t('settings.apply')}
           </button>
@@ -190,17 +371,12 @@ function SettingsView() {
         <button className="logout-button" onClick={() => void logoutWeb().finally(() => {
           window.dispatchEvent(new Event('aih-auth-required'));
         })}>{t('settings.logout')}</button>
-        {saveStatus && (
-          <p>{'detail' in saveStatus
-            ? saveStatus.detail
-            : t(saveStatus.key, saveStatus.provider
-              ? { provider: getTypeLabel(saveStatus.provider, t) }
-              : undefined)}</p>
-        )}
+        {authApplied && <p role="status">{t('settings.tokenApplied')}</p>}
       </section>
 
+      <div hidden={category !== 'models'}>
       {/* AI Provider Configuration */}
-      <section className="settings-section" id="providers">
+      <section className="settings-section" id="providers" hidden={modelPanel !== 'providers'}>
         <h3>{t('settings.aiProvider')}</h3>
         <select
           value={providers.active}
@@ -209,22 +385,42 @@ function SettingsView() {
         >
           {Object.keys(providers.available).map(type => (
             <option key={type} value={type}>
-              {getProviderOptionLabel(type as ProviderType, t)}
+              {providerNames[type] ? `${providerNames[type]} (${type})` : getProviderOptionLabel(type as ProviderType, t)}
             </option>
           ))}
         </select>
 
         {/* API Key Configuration */}
-        <div className="api-key-section">
-          {Object.keys(providers.available).filter(type => [
-            'openai', 'anthropic', 'google', 'azure', 'bedrock', 'vertex', 'local', 'mock',
-          ].includes(type)).map(type => {
+        {credentialSelection && !selectedCredential && <p role="status">{providerCredentialsMessage(locale, 'unavailable')}</p>}
+        <div className="credential-context">
+          <nav ref={credentialNavigation} aria-label={providerCredentialsMessage(locale, 'navigation')} tabIndex={-1}
+            hidden={credentialMobile && !credentialOverview && !!selectedCredential}>
+            {credentialProviders.map(type => <button key={type} type="button" aria-label={getTypeLabel(type as ProviderType, t)}
+              aria-current={selectedCredential === type ? 'true' : undefined}
+              aria-expanded={selectedCredential === type && (!credentialMobile || !credentialOverview)}
+              aria-controls={`${credentialPrefix}-${type}`} aria-describedby={`${credentialPrefix}-${type}-summary`}
+              onClick={() => selectCredential(type)}>
+              <strong>{getTypeLabel(type as ProviderType, t)}</strong><small id={`${credentialPrefix}-${type}-summary`}>{type}</small>
+            </button>)}
+          </nav>
+          <div ref={credentialDetail} className="credential-context-detail" hidden={credentialMobile && (credentialOverview || !selectedCredential)}>
+            <button ref={credentialBack} type="button" className="credential-context-back" hidden={!credentialMobile}
+              onClick={() => { credentialFocus.current = 'navigation'; setCredentialOverview(true); }}>{providerCredentialsMessage(locale, 'back')}</button>
+        <div className="api-key-section" data-settings-group="builtin">
+          {credentialProviders.map(type => {
             const providerType = type as ProviderType;
             const providerLabel = getTypeLabel(providerType, t);
-            const environmentVariable = getTypeEnvVar(providerType);
+            const status = saveStatus[type];
+            const environmentVariable = type === 'vertex' && vertexCredentialMode === 'api-key' ? 'GOOGLE_CLOUD_API_KEY' : getTypeEnvVar(providerType);
             return (
-              <div key={type} className={`api-key-row ${providers.active === type ? 'active' : ''}`}>
+              <div key={type} id={`${credentialPrefix}-${type}`} className={`api-key-row ${providers.active === type ? 'active' : ''}`}
+                data-settings-selection={type} hidden={selectedCredential !== type}>
                 <label>{providerLabel}</label>
+                {type === 'vertex' && <select aria-label={t('settings.vertexCredentialMode')} value={vertexCredentialMode}
+                  onChange={event => setVertexCredentialMode(event.target.value === 'api-key' ? 'api-key' : 'bearer')}>
+                  <option value="bearer">{t('settings.vertexBearerCredential')}</option>
+                  <option value="api-key">{t('settings.vertexCloudCredential')}</option>
+                </select>}
                 <div className="api-key-input-group">
                   <input
                     type="password"
@@ -237,9 +433,17 @@ function SettingsView() {
                   />
                   <button onClick={() => void saveApiKey(type)}>{t('common.save')}</button>
                 </div>
+                {(pendingApiKeys[type] ?? 0) > 0 && <p role="status" className="settings-help">{providerCredentialsMessage(locale, 'saving')}</p>}
+                {status && <p role={'detail' in status || !status.provider ? 'alert' : 'status'}>
+                  {'detail' in status ? status.detail : t(status.key, status.provider
+                    ? { provider: getTypeLabel(status.provider, t) } : undefined)}
+                </p>}
               </div>
             );
           })}
+        </div>
+
+          </div>
         </div>
 
         {/* Active provider status */}
@@ -260,26 +464,16 @@ function SettingsView() {
         </div>
       </section>
 
-      <ProviderLifecycleSettings />
-
-      <section className="settings-section" id="transport">
-        <h3>{t('settings.realtimeTransport')}</h3>
-        <select
-          value={transport}
-          aria-label={t('settings.selectTransport')}
-          onChange={event => {
-            const value = event.target.value as 'sse' | 'websocket';
-            updateTransport(value);
-            setChatTransport(value);
-          }}
-        >
-          <option value="sse">Server-Sent Events (SSE)</option>
-          <option value="websocket">WebSocket</option>
-        </select>
-      </section>
+      <div hidden={modelPanel !== 'provider-lifecycle'}>
+        <ProviderLifecycleSettings key={`${workspaceId}:${activeSessionId}:${providers.active}:${providerInvalidation}`}
+          discardFormRef={providerFormDiscard} presented={category === 'models' && modelPanel === 'provider-lifecycle'}
+          onSelectionInvalidated={() => setProviderInvalidation(value => value + 1)}
+          onProvidersLoaded={items => setProviderNames(Object.fromEntries(items.map(item => [item.id, item.name])))}
+          onCanonicalReload={() => setProviderReload(value => value + 1)} />
+      </div>
 
       {/* Model Selection and server catalogue */}
-      <section className="settings-section" id="model">
+      <section className="settings-section" id="model" hidden={modelPanel !== 'model'}>
         <h3>{t('settings.model')}</h3>
         <select
           aria-label={t('settings.selectModel')}
@@ -302,15 +496,13 @@ function SettingsView() {
                 onChange={event => setModelFilter(event.target.value)} />
             </label>
             <div>
-              <button type="button" disabled={providers.catalogLoading} onClick={() => void hydrateModelCatalog(true)}>
+              <button type="button" disabled={providers.catalogLoading || batches.busy} onClick={() => void hydrateModelCatalog(true)}>
                 {t('settings.modelCatalog.refresh')}
               </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(true)}>
-                {t('settings.modelCatalog.enableAll')}
-              </button>
-              <button type="button" disabled={providers.catalogLoading || !providers.catalog} onClick={() => void setAllModelsEnabled(false)}>
-                {t('settings.modelCatalog.disableAll')}
-              </button>
+              <ResourceGroupButtons group={t('settings.modelCatalog.manage')}
+                rows={visibleModelGroups.flatMap(group => group.models.map(model => ({ key: model.key, enabled: model.enabled })))}
+                disabled={!!providers.catalogLoading || batches.busy}
+                save={changes => batches.save('models', changes)} />
             </div>
           </div>
           {providers.catalog && <p className="model-catalog-meta">
@@ -322,20 +514,48 @@ function SettingsView() {
           {!providers.catalogLoading && providers.catalog && visibleModelGroups.length === 0 && (
             <p>{t('settings.modelCatalog.empty')}</p>
           )}
+          <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.models} error={batches.errors.models}
+            names={new Map(providers.catalog?.providers.flatMap(group => group.models.map(model => [model.key, model.name] as const)))} />
+          {(modelPosition?.group || modelPosition?.selection) && !selectedModelMetadata && !providers.catalogLoading
+            && <p role="status">{modelCatalogMessage(locale, 'unavailable')}</p>}
+          <div className="model-catalog-context">
+            <nav ref={modelNavigation} aria-label={t('settings.modelCatalog.manage')} tabIndex={-1}
+              hidden={modelMobile && !modelOverview && !!selectedModelMetadata}>
+              {visibleModelGroups.map((group, groupIndex) => <div key={group.provider} role="group" aria-label={getTypeLabel(group.provider as ProviderType, t)}>
+                <h4>{getTypeLabel(group.provider as ProviderType, t)}</h4>
+                {group.models.map((model, index) => {
+                  const id = `${modelDetailPrefix}-${groupIndex}-${index}`, current = selectedModelMetadata?.group === group.provider && selectedModelMetadata.model === model;
+                  return <button key={model.key} type="button" disabled={providers.catalogLoading || batches.busy}
+                    aria-current={current ? 'true' : undefined} aria-expanded={current && (!modelMobile || !modelOverview)}
+                    aria-controls={id} onClick={() => selectModelMetadata(group.provider, model.key)}>
+                    <strong>{model.name}</strong><code>{model.id}</code>
+                  </button>;
+                })}
+              </div>)}
+            </nav>
+            <div ref={modelDetailPane} className="model-catalog-detail" hidden={modelMobile && modelOverview}>
+              <button ref={modelBack} type="button" className="model-catalog-back" hidden={!modelMobile || modelOverview || !selectedModelMetadata}
+                onClick={() => { modelFocus.current = 'navigation'; setModelOverview(true); }}>{modelCatalogMessage(locale, 'back')}</button>
           <div className="model-catalog-groups">
-            {visibleModelGroups.map(group => (
-              <fieldset key={group.provider} data-provider={group.provider}>
+            {visibleModelGroups.map((group, groupIndex) => (
+              <fieldset key={group.provider} data-provider={group.provider} data-settings-group={group.provider}
+                hidden={selectedModelMetadata?.group !== group.provider}>
                 <legend>
                   {getTypeLabel(group.provider as ProviderType, t)}
                   <span className={group.configured ? 'status-success' : 'status-warning'}>
                     {group.configured ? t('settings.modelCatalog.configured') : t('settings.modelCatalog.unavailable')}
                   </span>
                 </legend>
-                {group.models.map(model => (
-                  <label key={model.key} className="model-catalog-row">
-                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading}
+                <ResourceGroupButtons group={getTypeLabel(group.provider as ProviderType, t)}
+                  rows={group.models.map(model => ({ key: model.key, enabled: model.enabled }))}
+                  disabled={!!providers.catalogLoading || batches.busy}
+                  save={changes => batches.save('models', changes)} />
+                {group.models.map((model, index) => (
+                  <label key={model.key} id={`${modelDetailPrefix}-${groupIndex}-${index}`} className="model-catalog-row" data-settings-selection={model.key}
+                    hidden={selectedModelMetadata?.model !== model}>
+                    <input type="checkbox" checked={model.enabled} disabled={providers.catalogLoading || batches.busy}
                       aria-label={t('settings.modelCatalog.toggle', { model: model.name, provider: getTypeLabel(group.provider as ProviderType, t) })}
-                      onChange={event => void setModelEnabled(model.key, event.target.checked)} />
+                      onChange={event => void batches.save('models', [{ key: model.key, enabled: event.target.checked }])} />
                     <span className="model-catalog-identity">
                       <strong>{model.name}</strong>
                       <code>{model.id}</code>
@@ -354,13 +574,17 @@ function SettingsView() {
               </fieldset>
             ))}
           </div>
+            </div>
+          </div>
         </details>
       </section>
 
-      <DefaultModelSettings />
-      <CustomModelSettings />
+      <div hidden={modelPanel !== 'custom-models'}>
+        <CustomModelSettings key={`provider-models:${providerReload}`} presented={category === 'models' && modelPanel === 'custom-models'} />
+      </div>
+      </div>
 
-      <section className="settings-section" id="skills">
+      <section className="settings-section" id="skills" hidden={category !== 'skills'}>
         <h3>{t('settings.skills.title')}</h3>
         <p className="settings-help">{t('settings.skills.help')}</p>
         <div className="model-catalog-toolbar">
@@ -370,7 +594,7 @@ function SettingsView() {
               onChange={event => setSkillFilter(event.target.value)} />
           </label>
           <div>
-            <button type="button" disabled={skills.loading} onClick={() => void hydrateSkillCatalog(true)}>
+            <button type="button" disabled={skills.loading || batches.busy} onClick={() => void hydrateSkillCatalog(true)}>
               {t('settings.skills.refresh')}
             </button>
           </div>
@@ -391,51 +615,103 @@ function SettingsView() {
         {skills.loading && <p role="status">{t('common.loading')}…</p>}
         {skills.error && <p role="alert" className="status-warning">{skills.error}</p>}
         {!skills.loading && skills.catalog && visibleSkillGroups.length === 0 && <p>{t('settings.skills.empty')}</p>}
-        <SkillRegistryPanel />
-        <div className="skill-catalog-groups">
-          {visibleSkillGroups.map(group => (
-            <fieldset key={group.scope} data-scope={group.scope}>
-              <legend>{t(`settings.skills.scope.${group.scope}`)}</legend>
-              {group.skills.map(skill => (
-                <label key={skill.key} className="skill-catalog-row">
-                  <input type="checkbox" checked={skill.modelInvocable}
-                    disabled={skills.loading || !skill.trusted}
-                    title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
-                    aria-label={t('settings.skills.toggle', { skill: skill.name })}
-                    onChange={event => void setSkillModelInvocable(skill.key, event.target.checked)} />
-                  <span className="skill-catalog-identity">
+        <SkillRegistryPanel presented={category === 'skills'} />
+        <ResourceBatchReport busy={batches.busy} outcomes={batches.reports.skills} error={batches.errors.skills}
+          names={new Map(skills.catalog?.skills.map(skill => [skill.key, skill.name] as const))} />
+        {!skills.loading && skills.catalog && skillPosition && !selectedSkillMetadata
+          && <p role="status">{skillSettingsMessage(locale, 'unavailable')}</p>}
+        <div className="skill-context">
+          <nav ref={skillNavigation} aria-label={t('settings.skills.title')} tabIndex={-1} hidden={skillMobile && !skillOverview && !!selectedSkillMetadata}>
+            {visibleSkillGroups.map((group, groupIndex) => (
+              <div key={`${group.scope}:${group.source}`} role="group" data-scope={group.scope} data-source={group.source}
+                aria-label={`${t(`settings.skills.scope.${group.scope}`)}${group.source ? ` · ${group.source}` : ''}`}>
+                <h4>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</h4>
+                {group.skills.map((skill, index) => {
+                  const id = `${skillDetailPrefix}-${groupIndex}-${index}`;
+                  const current = selectedSkillMetadata?.skill === skill;
+                  return <button key={skill.key} type="button" disabled={skills.loading || batches.busy}
+                    aria-label={skill.name} aria-current={current ? 'true' : undefined}
+                    aria-expanded={current && (!skillMobile || !skillOverview)} aria-controls={id} aria-describedby={`${id}-summary`}
+                    onClick={() => selectSkillMetadata(JSON.stringify([group.scope, group.source]), skill.key)}>
                     <strong>{skill.name}</strong>
-                    <span>{skill.description}</span>
-                    <code>{skill.filePath}</code>
-                  </span>
-                  <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
-                    {skill.version && <small>v{skill.version}</small>}
-                    <small>{skill.source}</small>
-                    {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
-                  </span>
-                </label>
+                    <small id={`${id}-summary`}>{skillSettingsMessage(locale, skill.modelInvocable ? 'enabled' : 'disabled')}
+                      {!skill.trusted && ` · ${t('settings.skills.untrusted')}`}</small>
+                  </button>;
+                })}
+              </div>
+            ))}
+          </nav>
+          <div ref={skillDetailPane} className="skill-context-detail" hidden={skillMobile && (skillOverview || !selectedSkillMetadata)}>
+            <button ref={skillBack} type="button" className="skill-context-back" hidden={!skillMobile}
+              onClick={() => { skillFocus.current = 'navigation'; setSkillOverview(true); }}>{skillSettingsMessage(locale, 'back')}</button>
+            <div className="skill-catalog-groups">
+              {visibleSkillGroups.map((group, groupIndex) => (
+                <fieldset key={`${group.scope}:${group.source}`} data-scope={group.scope} data-source={group.source}
+                  hidden={JSON.stringify([group.scope, group.source]) !== selectedSkillMetadata?.group}
+                  data-settings-group={JSON.stringify([group.scope, group.source])}>
+                  <legend>{t(`settings.skills.scope.${group.scope}`)}{group.source && ` · ${group.source}`}</legend>
+                  <ResourceGroupButtons group={group.source || t(`settings.skills.scope.${group.scope}`)}
+                    rows={group.skills.map(skill => ({ key: skill.key, enabled: skill.modelInvocable }))}
+                    disabled={!!skills.loading || batches.busy} save={changes => batches.save('skills', changes)} />
+                  {group.skills.map((skill, index) => (
+                    <div key={skill.key} id={`${skillDetailPrefix}-${groupIndex}-${index}`} className="skill-catalog-row"
+                      data-settings-selection={skill.key} hidden={selectedSkillMetadata?.skill !== skill}>
+                      <h4>{skill.name}</h4>
+                      <label>
+                        <input type="checkbox" checked={skill.modelInvocable}
+                          disabled={skills.loading || batches.busy || !skill.trusted}
+                          title={!skill.trusted ? t('settings.skills.requiresTrust') : undefined}
+                          aria-label={t('settings.skills.toggle', { skill: skill.name })}
+                          onChange={event => void batches.save('skills', [{ key: skill.key, enabled: event.target.checked }])} />
+                        <span className="skill-catalog-identity">
+                          <span>{skill.description}</span>
+                          <code>{skill.filePath}</code>
+                        </span>
+                        <span className="model-capabilities" aria-label={t('settings.skills.metadata')}>
+                          {skill.version && <small>v{skill.version}</small>}
+                          <small>{skill.source}</small>
+                          {!skill.trusted && <small className="unavailable">{t('settings.skills.untrusted')}</small>}
+                        </span>
+                      </label>
+                      <button type="button" className="skill-instructions-trigger" disabled={skills.loading || batches.busy || !skill.trusted}
+                        title={t('settings.skills.openInstructions', { skill: skill.name })}
+                        aria-label={t('settings.skills.openInstructions', { skill: skill.name })} aria-expanded={selectedSkill === skill.key}
+                        aria-controls={selectedSkill === skill.key ? 'skill-content-detail' : undefined}
+                        onClick={event => {
+                          skillInvoker.current = event.currentTarget;
+                          setSkillPosition({ group: JSON.stringify([group.scope, group.source]), selection: skill.key });
+                          setSelectedSkill(skill.key);
+                        }}>{t('settings.skills.openInstructions', { skill: skill.name })}</button>
+                    </div>
+                  ))}
+                </fieldset>
               ))}
-            </fieldset>
-          ))}
+            </div>
+            {skillDetail && skillDetail === selectedSkillMetadata?.skill && skills.catalog && <SkillContentPane
+              key={JSON.stringify([skillDetail.key, skills.catalog.cwd, skills.catalog.projectId, skills.catalog.projectTrusted])}
+              skillKey={skillDetail.key} name={skillDetail.name} cwd={skills.catalog.cwd} projectId={skills.catalog.projectId}
+              onClose={() => { setSelectedSkill(undefined); if (skillInvoker.current?.isConnected) skillInvoker.current.focus(); }} />}
+          </div>
         </div>
       </section>
 
-      <ToolSettingsPanel />
+      <div hidden={category !== 'tools'}><ToolSettingsPanel presented={category === 'tools'} /></div>
 
-      <Suspense fallback={(
+      <div hidden={category !== 'plugins'}><Suspense fallback={(
         <section className="settings-section plugin-settings" id="plugins">
           <h3>{t('settings.plugins.title')}</h3>
           <p role="status">{t('common.loading')}…</p>
         </section>
       )}>
-        <PluginSettings key={workspaceId ?? 'default-workspace'} />
-      </Suspense>
+        <PluginSettings key={workspaceId ?? 'default-workspace'} presented={category === 'plugins'} />
+      </Suspense></div>
 
-      <SubagentSettings />
+      <div hidden={category !== 'subagents'}><SubagentSettings presented={category === 'subagents'} /></div>
 
       {/* Appearance */}
-      <section className="settings-section" id="appearance">
+      <section className="settings-section" id="appearance" hidden={category !== 'general' || generalPanel !== 'appearance'}>
         <h3>{t('settings.appearance')}</h3>
+        <p className="settings-help">{t('settings.browserPreferences')}</p>
         <div className="preference-grid">
           <label>{t('settings.theme')}
             <select value={preferences.theme} onChange={event => setPreferences({ theme: event.target.value as typeof preferences.theme })}>
@@ -452,9 +728,32 @@ function SettingsView() {
             <input type="range" min="12" max="24" value={preferences.fontSize}
               onChange={event => setPreferences({ fontSize: Number(event.target.value) })} />
           </label>
-          <label><input type="checkbox" checked={preferences.reasoningOpen}
+        </div>
+      </section>
+
+      <section className="settings-section" id="behavior" hidden={category !== 'general' || generalPanel !== 'behavior'}>
+        <h3>{t('settings.behavior')}</h3>
+        <p className="settings-help">{t('settings.browserPreferences')}</p>
+        <div className="preference-grid">
+          <label>{t('settings.sendMode')}
+            <select value={preferences.sendMode}
+              onChange={event => setPreferences({ sendMode: event.target.value as typeof preferences.sendMode })}>
+              <option value="enter">{t('settings.sendMode.enter')}</option>
+              <option value="mod-enter">{t('settings.sendMode.modEnter')}</option>
+            </select>
+          </label>
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.reasoningOpen}
             onChange={event => setPreferences({ reasoningOpen: event.target.checked })} /> {t('settings.reasoningOpen')}</label>
-          <label><input type="checkbox" checked={preferences.sound}
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.selectionActions}
+            onChange={event => setPreferences({ selectionActions: event.target.checked })} /> {t('settings.selectionActions')}</label>
+        </div>
+      </section>
+      <div hidden={category !== 'general' || generalPanel !== 'behavior'}><DefaultModelSettings key={`provider-defaults:${providerReload}`} /></div>
+
+      <section className="settings-section" id="notifications" hidden={category !== 'general' || generalPanel !== 'notifications'}>
+        <h3>{t('settings.notificationPreferences')}</h3>
+        <div className="preference-grid">
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.sound}
             onChange={event => setPreferences({ sound: event.target.checked })} /> {t('settings.sound')}</label>
           <label>{t('settings.soundVolume')}
             <input type="range" min="0" max="1" step="0.05" value={preferences.soundVolume}
@@ -462,13 +761,13 @@ function SettingsView() {
           </label>
           <fieldset className="preference-events">
             <legend>{t('settings.soundEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.soundEvents[kind]}
                 onChange={event => setPreferences({ soundEvents: { ...preferences.soundEvents, [kind]: event.target.checked } })} />
               {t(`settings.event.${kind}`)}
             </label>)}
           </fieldset>
-          <label><input type="checkbox" checked={preferences.notifications}
+          <label className="preference-toggle"><input type="checkbox" checked={preferences.notifications}
             onChange={async event => {
               const enabled = event.target.checked;
               if (enabled && 'Notification' in window && Notification.permission === 'default') {
@@ -478,7 +777,7 @@ function SettingsView() {
             }} /> {t('settings.notifications')}</label>
           <fieldset className="preference-events notification-event-settings">
             <legend>{t('settings.notificationEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.notificationEvents[kind]}
                 onChange={event => {
                   const next = { ...preferences.notificationEvents, [kind]: event.target.checked };
@@ -487,14 +786,14 @@ function SettingsView() {
               {t(`settings.event.${kind}`)}
             </label>)}
           </fieldset>
-          <label title={pushSupported() ? undefined : t('settings.push.unsupported')}>
+          <label className="preference-toggle" title={pushSupported() ? undefined : t('settings.push.unsupported')}>
             <input className="push-notification-toggle" type="checkbox" checked={preferences.pushNotifications} disabled={!pushSupported()}
               onChange={event => void configurePush(event.target.checked)} />
             {t('settings.push')}
           </label>
           <fieldset className="preference-events push-event-settings">
             <legend>{t('settings.pushEvents')}</legend>
-            {(['completion', 'attention'] as const).map(kind => <label key={kind}>
+            {(['completion', 'attention'] as const).map(kind => <label className="preference-toggle" key={kind}>
               <input type="checkbox" checked={preferences.pushEvents[kind]}
                 onChange={event => {
                   const next = { ...preferences.pushEvents, [kind]: event.target.checked };
@@ -505,12 +804,10 @@ function SettingsView() {
             </label>)}
           </fieldset>
           {pushStatus && <small role="status">{pushStatus}</small>}
-          <label><input type="checkbox" checked={preferences.selectionActions}
-            onChange={event => setPreferences({ selectionActions: event.target.checked })} /> {t('settings.selectionActions')}</label>
         </div>
       </section>
 
-      <section className="settings-section" id="shortcuts">
+      <section className="settings-section" id="shortcuts" hidden={category !== 'general' || generalPanel !== 'behavior'}>
         <h3>{t('settings.shortcuts')}</h3>
         <p className="settings-help">{t('settings.shortcutsHelp')}</p>
         <div className="shortcut-grid">
@@ -537,17 +834,17 @@ function SettingsView() {
         <button onClick={() => setPreferences({ keybindings: { ...defaultKeybindings } })}>{t('settings.shortcutsReset')}</button>
       </section>
 
-      {/* Session Management */}
-      <section className="settings-section" id="sessions">
-        <h3>{t('settings.sessions')}</h3>
-        <p>{t('settings.totalSessions', { count: sessionCount })}</p>
-        <small>{t('settings.sessionsLocation')}</small>
-      </section>
+      <div hidden={category !== 'mcp'}><McpSettings presented={category === 'mcp'} /></div>
 
       {/* About */}
-      <section className="settings-section about" id="about">
+      <section className="settings-section about" id="about" hidden={category !== 'general' || generalPanel !== 'about'}>
         <h3>{t('settings.about')}</h3>
         <p>{t('settings.aboutDescription')}</p>
+        <section className="settings-section" id="sessions">
+          <h4>{t('settings.sessions')}</h4>
+          <p>{t('settings.totalSessions', { count: sessionCount })}</p>
+          <small>{t('settings.sessionsLocation')}</small>
+        </section>
         <div className="version-status" aria-live="polite">
           <dl>
             <dt>{t('settings.webVersion')}</dt><dd>{updateStatus?.webVersion ?? '…'}</dd>
@@ -580,21 +877,21 @@ function SettingsView() {
         </div>
         <div className="about-links">
           <a href="https://github.com/Fidigi/AiHarness#readme" target="_blank" rel="noopener noreferrer">
-            📖 {t('settings.documentation')}
+            <Icon name="file" /> {t('settings.documentation')}
           </a>
           <span>•</span>
           <a href="https://github.com/Fidigi/AiHarness" target="_blank" rel="noopener noreferrer">
-            ⭐ {t('settings.starOnGitHub')}
+            <Icon name="star" /> {t('settings.starOnGitHub')}
           </a>
         </div>
       </section>
-    </div>
+    </>
   );
 }
 
 /** Get the translated short label for a provider type. */
 function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.label.openai',
     anthropic: 'provider.label.anthropic',
     google: 'provider.label.google',
@@ -604,13 +901,14 @@ function getTypeLabel(type: ProviderType, t: TranslationFunction): string {
     local: 'provider.label.local',
     mock: 'provider.label.mock',
     custom: 'provider.label.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get the translated provider selector label. */
 function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): string {
-  const key = {
+  const keys: Partial<Record<ProviderType, string>> = {
     openai: 'provider.option.openai',
     anthropic: 'provider.option.anthropic',
     google: 'provider.option.google',
@@ -620,13 +918,14 @@ function getProviderOptionLabel(type: ProviderType, t: TranslationFunction): str
     local: 'provider.option.local',
     mock: 'provider.option.mock',
     custom: 'provider.option.custom',
-  }[type];
+  };
+  const key = keys[type];
   return key ? t(key) : type;
 }
 
 /** Get environment variable name for provider */
 function getTypeEnvVar(type: ProviderType): string {
-  return {
+  const variables: Partial<Record<ProviderType, string>> = {
     openai: 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
     google: 'GEMINI_API_KEY',
@@ -636,7 +935,8 @@ function getTypeEnvVar(type: ProviderType): string {
     local: '',
     mock: '',
     custom: 'CUSTOM_API_KEY',
-  }[type] || '';
+  };
+  return variables[type] || '';
 }
 
 /** Get model options for a provider. */
@@ -674,4 +974,195 @@ function getModelOptions(
   }
 }
 
-export default SettingsView;
+function SettingsNavigationBoundary({ inactive }: { inactive: boolean }) {
+  const workspace = useSessionStore(state => state.workspace);
+  const root = useRef<HTMLDivElement>(null);
+  const entryRelease = useRef<(() => void) | null>(null);
+  const contextualNavigation = useRef<HTMLElement>(null);
+  const contextBack = useRef<HTMLButtonElement>(null);
+  const contextFocus = useRef(false);
+  const [overview, setOverview] = useState(false);
+  const cwd = workspace?.cwd;
+  const { hash, pathname, search } = useLocation();
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const section = hash.replace(/^#/, '');
+  // Peer storage writes may refresh metadata, never this mounted category choice.
+  const initial = useMemo(() => readSettingsNavigation(cwd, readPreferences().lastSettingsSection), [cwd, hash]);
+  const activeSection = isSettingsSection(section) ? section : initial.section;
+  const category = settingsSectionCategory[activeSection];
+  const panels = category === 'general' ? generalSettingsPanels : category === 'models' ? modelSettingsPanels : [];
+  const panel = category === 'models' ? modelSettingsPanel(activeSection) : generalSettingsPanel(activeSection);
+  const address = (section: string) => `${pathname}${search}#${section}`;
+  const categorySection = (item: typeof settingsCategories[number]) => category === item.id ? activeSection
+    : initial.categories?.[item.id] ?? item.section;
+  const selectSection = (target: string) => {
+    // Give a remembered /settings entry a stable Back target before leaving it.
+    if (!isSettingsSection(section)) navigate(address(activeSection), { replace: true });
+    navigate(address(target));
+  };
+  const selectCategory = (item: typeof settingsCategories[number]) => {
+    if (item.id === category) return;
+    selectSection(categorySection(item));
+  };
+  // Keep navigation/focus ownership across a trust refresh; retire all forms,
+  // pending local results and mounted sections before the replacement commits.
+  const context = JSON.stringify([workspace?.id, cwd, workspace?.trusted, workspace?.operationTrusted]);
+  useLayoutEffect(() => { setOverview(false); }, [context, hash]);
+  useLayoutEffect(() => {
+    if (!contextFocus.current) return;
+    contextFocus.current = false;
+    if (category !== 'general' && category !== 'models') return;
+    if (overview) contextualNavigation.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus();
+    else if (contextBack.current?.offsetParent) contextBack.current.focus();
+  }, [overview, activeSection, category]);
+  useLayoutEffect(() => {
+    if (!root.current) return;
+    const entryReady = new Promise<void>(resolve => { entryRelease.current = resolve; });
+    let local = initial;
+    const dispose = bindSettingsNavigation(root.current, local, {
+      hash, entryReady,
+      save: (section, position) => {
+        const fresh = readSettingsNavigation(cwd);
+        // Registry navigation/toolbar focus is not a new entry selection.
+        const nextPosition = section === 'skills' && position.group === 'registry' && !position.selection
+          && fresh.positions.skills?.group === 'registry' ? { ...fresh.positions.skills, ...position } : position;
+        local = { ...local, section, scopes: fresh.scopes,
+          categories: { ...local.categories, ...fresh.categories, [settingsSectionCategory[section]]: section },
+          positions: { ...local.positions, ...fresh.positions,
+            ...(nextPosition.group || nextPosition.selection ? { [section]: nextPosition } : {}) } };
+        writeSettingsNavigation(cwd, local);
+      },
+    });
+    return () => { entryRelease.current = null; dispose(); };
+  }, [cwd, hash, initial]);
+  return <div className="settings-layout" inert={inactive || undefined}>
+    <nav className="settings-categories" aria-label={t('settings.categories')}>
+      {settingsCategories.map(item => <Link key={item.id} to={address(categorySection(item))} aria-current={category === item.id ? 'page' : undefined}
+        onClick={event => {
+          if (!event.defaultPrevented && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault(); selectCategory(item);
+          }
+        }}>
+        <Icon name={item.icon} />{t(`settings.category.${item.id}`)}
+      </Link>)}
+    </nav>
+    <label className="settings-category-picker">{t('settings.categories')}
+      <select value={category} onChange={event => selectCategory(settingsCategories.find(item => item.id === event.target.value)!)}>
+        {settingsCategories.map(item => <option key={item.id} value={item.id}>{t(`settings.category.${item.id}`)}</option>)}
+      </select>
+    </label>
+    <div className={`settings-content${panels.length && overview ? ' settings-content-overview' : ''}`}>
+      <nav className="settings-context" ref={contextualNavigation} aria-label={t(category === 'models' ? 'settings.modelsNavigation' : 'settings.generalNavigation')} hidden={!panels.length}>
+        {panels.map(item => <Link key={item.section} to={address(item.section)}
+          aria-current={panel === item.section ? 'page' : undefined}
+          onClick={event => {
+            if (!event.defaultPrevented && event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+              event.preventDefault(); contextFocus.current = overview; setOverview(false); selectSection(item.section);
+            }
+          }}>{t(item.label)}</Link>)}
+      </nav>
+      <div className="settings-detail">
+        <button type="button" className="settings-context-back" ref={contextBack} hidden={!panels.length}
+          onClick={() => { contextFocus.current = true; setOverview(true); }}>{t(category === 'models' ? 'settings.modelsBack' : 'settings.generalBack')}</button>
+        <div className="settings-view" ref={root} onFocusCapture={() => setOverview(false)}><SettingsView key={context} category={category}
+          generalPanel={generalSettingsPanel(activeSection)} modelPanel={modelSettingsPanel(activeSection)}
+          entryRelease={entryRelease} entryEpoch={JSON.stringify([cwd, hash])} /></div>
+      </div>
+    </div>
+  </div>;
+}
+
+type SettingsDialogProps = { onClose: () => void; onEscape: (close: () => void) => void; onModalChange: (root: HTMLElement | null) => void; suspended: boolean; leaveRef: Ref<(discard?: () => void) => true> };
+function SettingsDialog({ onClose, onEscape, onModalChange, suspended, leaveRef }: SettingsDialogProps) {
+  const root = useRef<HTMLElement>(null);
+  const confirmation = useRef<HTMLElement>(null);
+  const discardReturn = useRef<HTMLElement>(null);
+  const drafts = useRef(new Set<symbol>());
+  const [pendingDiscard, setPendingDiscard] = useState<{ owner?: symbol; discard: () => void }>();
+  const blocker = useBlocker(({ currentLocation, nextLocation, historyAction }) => historyAction === 'POP'
+    && currentLocation.pathname !== nextLocation.pathname && drafts.current.size > 0);
+  const historyBlocked = blocker.state === 'blocked';
+  const confirmClose = Boolean(pendingDiscard) || historyBlocked;
+  const discardCommands = useMemo(() => ({
+    request: (owner: symbol, discard: () => void, returnTarget?: HTMLElement | null) => {
+      discardReturn.current = returnTarget ?? null;
+      setPendingDiscard({ owner, discard });
+    },
+    retire: (owner: symbol) => setPendingDiscard(pending => pending?.owner === owner ? undefined : pending),
+  }), []);
+  const workspace = useSessionStore(state => state.workspace);
+  const context = JSON.stringify([workspace?.id, workspace?.cwd, workspace?.trusted, workspace?.operationTrusted]);
+  const { t, locale } = useI18n();
+  const navigate = useNavigate();
+  const message = (key: Parameters<typeof settingsDraftMessage>[1]) => settingsDraftMessage(locale, key);
+  const requestDiscard = (discard?: () => void) => {
+    if (!discard) onEscape(() => {});
+    const action = discard ?? (() => {
+      const current = useSessionStore.getState();
+      const id = current.createSession();
+      navigate(`/chat/${encodeURIComponent(id)}?cwd=${encodeURIComponent(current.workspace?.cwd ?? '')}`);
+    });
+    discardReturn.current = null;
+    if (drafts.current.size) setPendingDiscard({ discard: () => {
+      const current = useSessionStore.getState().workspace;
+      if (JSON.stringify([current?.id, current?.cwd, current?.trusted, current?.operationTrusted]) !== context) return;
+      action();
+    } });
+    else action();
+    return true as const;
+  };
+  useImperativeHandle(leaveRef, () => requestDiscard, [requestDiscard]);
+  const requestClose = () => requestDiscard(onClose);
+  const keepEditing = () => { setPendingDiscard(undefined); if (blocker.state === 'blocked') blocker.reset(); };
+  const discard = () => {
+    if (blocker.state === 'blocked') {
+      const current = useSessionStore.getState().workspace;
+      if (JSON.stringify([current?.id, current?.cwd, current?.trusted, current?.operationTrusted]) !== context) { keepEditing(); return; }
+      blocker.proceed();
+    } else pendingDiscard?.discard();
+    setPendingDiscard(undefined);
+  };
+  useLayoutEffect(() => { discardReturn.current = null; keepEditing(); }, [context]);
+  useLayoutEffect(() => {
+    if (historyBlocked) { discardReturn.current = null; setPendingDiscard(undefined); }
+  }, [historyBlocked]);
+  useFocusTrap(!suspended && !confirmClose, root, () => onEscape(requestClose));
+  useFocusTrap(!suspended && confirmClose, confirmation, keepEditing, discardReturn);
+  useLayoutEffect(() => { onModalChange(root.current); return () => onModalChange(null); }, [onModalChange]);
+  useLayoutEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!drafts.current.size) return;
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, []);
+  return createPortal(<div className="modal-backdrop settings-backdrop">
+    <section className="settings-dialog" ref={root} role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} inert={suspended || undefined}>
+      <header className="settings-dialog-header" inert={confirmClose || undefined}><h2 id="settings-title">{t('settings.title')}</h2>
+        <button type="button" data-settings-entry-focus onClick={requestClose} aria-label={t('common.close')}><Icon name="close" /></button>
+      </header>
+      <SettingsDiscardContext.Provider value={discardCommands}>
+        <SettingsDraftContext.Provider value={drafts.current}><SettingsNavigationBoundary inactive={confirmClose} /></SettingsDraftContext.Provider>
+      </SettingsDiscardContext.Provider>
+    {confirmClose && <div className="modal-backdrop settings-discard-backdrop">
+      <section ref={confirmation} className="settings-discard-dialog" role="alertdialog" aria-modal="true" tabIndex={-1}
+        aria-labelledby="settings-discard-title" aria-describedby="settings-discard-description" inert={suspended || undefined}>
+        <h3 id="settings-discard-title">{message('title')}</h3>
+        <p id="settings-discard-description">{message('description')}</p>
+        <footer>
+          <button type="button" data-autofocus onClick={keepEditing}>{message('keep')}</button>
+          <button type="button" onClick={discard}>{message('discard')}</button>
+        </footer>
+      </section>
+    </div>}
+    </section>
+  </div>, document.body);
+}
+
+function LocalizedSettingsView(props: SettingsDialogProps) {
+  return <SettingsLocaleBoundary><SettingsDialog {...props} /></SettingsLocaleBoundary>;
+}
+
+export default LocalizedSettingsView;

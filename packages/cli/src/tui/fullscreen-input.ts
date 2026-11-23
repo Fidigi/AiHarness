@@ -1,13 +1,24 @@
 import readline from 'readline';
+import type { AgentMessageQueueKind } from '@ai-harness/core';
 import type { FullscreenUI } from './fullscreen-ui.js';
+import { EditorState } from './editor-state.js';
+import { EDITOR_ACTION_KEYS, type TerminalActionId } from '../utils/terminal-actions.js';
+import {
+  TerminalEscapeSequence,
+  TERMINAL_ESCAPE_CODE_TIMEOUT_MS,
+} from './terminal-escape.js';
 
 export interface FullscreenInputHandlers {
-  onLine: (line: string) => void | Promise<void>;
+  onLine: (line: string, kind: AgentMessageQueueKind) => void | Promise<void>;
   onInterrupt: () => void;
+  onEscape: () => void;
   onExit: () => void;
   onError?: (error: Error) => void;
   complete?: (input: string) => string[];
   onExternalEditor?: (currentInput: string) => Promise<string | undefined>;
+  /** Return replacement editor text, or undefined when there was nothing queued. */
+  onDequeue?: (currentInput: string) => string | undefined;
+  recordHistory?: () => boolean;
 }
 
 interface KeypressInput {
@@ -24,10 +35,14 @@ interface KeypressInput {
 export class FullscreenInput {
   private value = '';
   private cursor = 0;
+  private readonly editor = new EditorState();
+  private historyDraft = '';
   private readonly history: string[] = [];
   private historyIndex = 0;
   private started = false;
+  private retired = false;
   private processing = Promise.resolve();
+  private readonly escapeSequence: TerminalEscapeSequence;
   private readonly keypressListener: (text: string, key: readline.Key) => void;
 
   constructor(
@@ -35,13 +50,19 @@ export class FullscreenInput {
     private readonly handlers: FullscreenInputHandlers,
     private readonly input: KeypressInput = process.stdin,
   ) {
+    this.escapeSequence = new TerminalEscapeSequence(handlers.onEscape);
     this.keypressListener = (text, key) => this.handleKeypress(text, key);
   }
 
   start(): void {
-    if (this.started) return;
+    if (this.started || this.retired) return;
     this.started = true;
-    readline.emitKeypressEvents(this.input as NodeJS.ReadStream);
+    // The optional interface argument supplies Node's raw Escape decoder timeout;
+    // fullscreen owns line editing, so only the decoder state object is needed.
+    readline.emitKeypressEvents(
+      this.input as NodeJS.ReadStream,
+      { escapeCodeTimeout: TERMINAL_ESCAPE_CODE_TIMEOUT_MS } as unknown as readline.Interface,
+    );
     if (this.input.isTTY && this.input.setRawMode) this.input.setRawMode(true);
     this.input.on('keypress', this.keypressListener);
     this.input.resume();
@@ -49,6 +70,7 @@ export class FullscreenInput {
   }
 
   stop(): void {
+    this.escapeSequence.cancel();
     if (!this.started) return;
     this.started = false;
     this.input.off('keypress', this.keypressListener);
@@ -65,6 +87,7 @@ export class FullscreenInput {
   }
 
   close(): void {
+    this.retired = true;
     this.stop();
     this.ui.leave();
   }
@@ -73,16 +96,67 @@ export class FullscreenInput {
     return this.value;
   }
 
+  getCursor(): number { return this.cursor; }
+
+  replaceValue(value: string, cursor = value.length): void {
+    if (this.retired) return;
+    this.editor.replace(value, cursor);
+    this.applyDraft();
+  }
+
+  suspendDraft(): () => void {
+    this.editor.replace(this.value, this.cursor);
+    const restore = this.editor.suspend();
+    return () => { if (!this.retired) { restore(); this.applyDraft(); } };
+  }
+
+  cancelPendingEscape(): void { this.escapeSequence.cancel(); }
+
+  /** Resolve a split Alt+Enter for binding lookup; native pass-through stays untouched. */
+  keyForBindings(key: readline.Key): readline.Key {
+    return this.escapeSequence.isFollowingEnter(key) ? { ...key, name: 'enter', meta: true } : key;
+  }
+
+  /** Dispatch real native operations without recursively entering the stream gate. */
+  performAction(action: TerminalActionId): boolean {
+    if (this.retired) return false;
+    this.escapeSequence.cancel();
+    if (action === 'app.escape') { this.handlers.onEscape(); return true; }
+    if (action === 'transcript.up') { this.ui.scrollUp(); return true; }
+    if (action === 'transcript.down') { this.ui.scrollDown(); return true; }
+    this.editor.replace(this.value, this.cursor);
+    if (this.editor.perform(action)) { this.applyDraft(); return true; }
+    const key = Object.hasOwn(EDITOR_ACTION_KEYS, action) ? EDITOR_ACTION_KEYS[action] : undefined;
+    if (!key) return false;
+    this.handleKeypress('', key); return true;
+  }
+
   handleKeypress(text: string, key: readline.Key = {}): void {
+    if (this.retired) return;
     if (key.ctrl && key.name === 'c') {
+      this.escapeSequence.cancel();
       this.handlers.onInterrupt();
       return;
     }
 
     if (key.ctrl && key.name === 'd') {
+      this.escapeSequence.cancel();
       if (!this.value) this.handlers.onExit();
       return;
     }
+
+    if (key.ctrl && key.name === 'q') {
+      this.escapeSequence.cancel();
+      this.submit('follow-up');
+      return;
+    }
+
+    if (key.name === 'escape' && !key.ctrl && !key.shift) {
+      this.escapeSequence.deferEscape();
+      return;
+    }
+
+    const escapedEnter = this.escapeSequence.consumeFollowingKey(key);
 
     if (key.ctrl && key.name === 'l') {
       this.ui.render();
@@ -91,24 +165,32 @@ export class FullscreenInput {
 
     if (key.ctrl && key.name === 'g' && this.handlers.onExternalEditor) {
       this.processing = this.processing.then(async () => {
+        if (this.retired) return;
         this.stop();
         try {
           const edited = await this.handlers.onExternalEditor!(this.value);
-          if (edited !== undefined) {
+          if (!this.retired && edited !== undefined) {
             this.value = edited;
             this.cursor = edited.length;
           }
         } catch (error) {
-          this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+          if (!this.retired) this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
         } finally {
-          this.start();
+          if (!this.retired) this.start();
         }
       });
       return;
     }
 
+    if ((key.meta && (key.name === 'return' || key.name === 'enter')) || escapedEnter) {
+      this.submit('follow-up');
+      return;
+    }
+
     if (key.meta && key.name === 'up') {
-      this.ui.scrollUp();
+      const restored = this.handlers.onDequeue?.(this.value);
+      if (restored === undefined) this.ui.scrollUp();
+      else this.replaceValue(restored);
       return;
     }
 
@@ -120,31 +202,20 @@ export class FullscreenInput {
     switch (key.name) {
       case 'return':
       case 'enter':
-        this.submit();
+        this.submit('steer');
         return;
-      case 'backspace':
-        if (this.cursor > 0) {
-          this.value = this.value.slice(0, this.cursor - 1) + this.value.slice(this.cursor);
-          this.cursor--;
-        }
-        break;
-      case 'delete':
-        if (this.cursor < this.value.length) {
-          this.value = this.value.slice(0, this.cursor) + this.value.slice(this.cursor + 1);
-        }
-        break;
-      case 'left':
-        this.cursor = Math.max(0, this.cursor - 1);
-        break;
-      case 'right':
-        this.cursor = Math.min(this.value.length, this.cursor + 1);
-        break;
+      case 'backspace': this.performAction(key.meta ? 'editor.deleteWordLeft' : 'editor.backspace'); return;
+      case 'delete': this.performAction('editor.delete'); return;
+      case 'left': this.performAction(key.ctrl || key.meta ? 'editor.wordLeft' : 'editor.left'); return;
+      case 'right': this.performAction(key.ctrl || key.meta ? 'editor.wordRight' : 'editor.right'); return;
       case 'home':
-        this.cursor = 0;
+        this.cursor = key.ctrl ? 0 : this.value.slice(0, this.cursor).lastIndexOf('\n') + 1;
         break;
-      case 'end':
-        this.cursor = this.value.length;
+      case 'end': {
+        const lineEnd = this.value.indexOf('\n', this.cursor);
+        this.cursor = key.ctrl || lineEnd < 0 ? this.value.length : lineEnd;
         break;
+      }
       case 'up':
         this.navigateHistory(-1);
         break;
@@ -160,35 +231,42 @@ export class FullscreenInput {
           this.cursor = 0;
         } else {
           this.insert(text || 'u');
+          return;
         }
         break;
       default:
-        if (text && !key.ctrl && !key.meta && this.isPrintable(text)) this.insert(text);
+        if (text && !key.ctrl && !key.meta && this.isPrintable(text)) { this.insert(text); return; }
     }
 
     this.ui.setInput(this.value, this.cursor);
   }
 
-  private submit(): void {
+  private submit(kind: AgentMessageQueueKind): void {
     const line = this.value;
-    if (line.trim()) {
+    if (line.trim() && this.handlers.recordHistory?.() !== false) {
       this.history.push(line);
       if (this.history.length > 100) this.history.shift();
     }
     this.historyIndex = this.history.length;
+    this.historyDraft = '';
+    this.editor.reset();
     this.value = '';
     this.cursor = 0;
     this.ui.setInput('', 0);
 
-    this.processing = this.processing
-      .then(() => this.handlers.onLine(line))
-      .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    try {
+      void Promise.resolve(this.handlers.onLine(line, kind))
+        .catch(error => this.handlers.onError?.(error instanceof Error ? error : new Error(String(error))));
+    } catch (error) {
+      this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   private navigateHistory(direction: -1 | 1): void {
     if (this.history.length === 0) return;
+    if (this.historyIndex === this.history.length) this.historyDraft = this.value;
     this.historyIndex = Math.max(0, Math.min(this.history.length, this.historyIndex + direction));
-    this.value = this.historyIndex === this.history.length ? '' : this.history[this.historyIndex];
+    this.value = this.historyIndex === this.history.length ? this.historyDraft : this.history[this.historyIndex];
     this.cursor = this.value.length;
   }
 
@@ -211,10 +289,20 @@ export class FullscreenInput {
     }
   }
 
-  private insert(text: string): void {
-    this.value = this.value.slice(0, this.cursor) + text + this.value.slice(this.cursor);
-    this.cursor += text.length;
+  insertText(text: string): void {
+    if (this.retired) return;
+    this.editor.replace(this.value, this.cursor);
+    this.editor.insert(text);
+    this.applyDraft();
   }
+
+  private applyDraft(): void {
+    const draft = this.editor.snapshot();
+    this.value = draft.value; this.cursor = draft.cursor;
+    this.ui.setInput(this.value, this.cursor);
+  }
+
+  private insert(text: string): void { this.insertText(text); }
 
   private isPrintable(text: string): boolean {
     return [...text].every(character => character >= ' ' && character !== '\u007f');

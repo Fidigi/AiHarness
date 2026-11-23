@@ -1,0 +1,15 @@
+npm notice run ai-harness@0.1.0 npx
+npm notice run 'vitest' run tests/functional-parity/installed-executable.test.ts -t dispatches mixed OpenRouter A/C/I/T through one installed SDK|resolves CLI tool patterns and ordered adjustments|preserves public summary transcripts through installed packages \(fullscreen/private\)
+
+ RUN  v5.0.3 /app
+
+ ✓ tests/functional-parity/installed-executable.test.ts (403 tests | 400 skipped) 71419ms
+   ✓ CLI-RUN-01 genuine locally packed installed executable (364)
+     ✓ resolves CLI tool patterns and ordered adjustments through the installed PATH bin 8099ms
+     ✓ preserves public summary transcripts through installed packages (fullscreen/private) 2153ms
+   ✓ dispatches mixed OpenRouter A/C/I/T through one installed SDK without overlapping cache or authentication 9199ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 400 skipped (403)
+   Start at  18:28:36
+   Duration  73.49s (tests 97%, transform 2%, import 1%)

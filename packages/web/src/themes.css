@@ -1,0 +1,127 @@
+/* Shared semantic colors. System resolves to light/dark in preferences.ts.
+   Alternate themes inherit dark text/status roles, not a second component palette. */
+:root {
+  color-scheme: dark;
+  --surface-canvas: #15171a;
+  --surface-panel: #202327;
+  --surface-raised: #282c32;
+  --surface-input: #17191d;
+  --surface-hover: #303640;
+  --surface-selected: #253d64;
+  --text-primary: #f0f2f5;
+  --text-secondary: #b0bac8;
+  --border-subtle: #414853;
+  --border-control: #7f8b9d;
+  --accent: #2860cf;
+  --on-accent: #ffffff;
+  --text-link: #9fc2ff;
+  --focus-ring: #a4c7ff;
+  --status-success: #83dfaa;
+  --status-warning: #f2cb83;
+  --status-danger: #ffabb5;
+  --surface-success: #183729;
+  --surface-warning: #3a2e19;
+  --surface-danger: #48252d;
+  --syntax-comment: var(--text-secondary);
+  --syntax-string: var(--status-success);
+  --syntax-number: var(--status-warning);
+  --syntax-keyword: var(--text-link);
+  /* Existing command-output colors need readable Light counterparts too. */
+  --ansi-black: #a0aaba;
+  --ansi-red: #ff7b86;
+  --ansi-green: #78d69d;
+  --ansi-yellow: #f5d477;
+  --ansi-blue: #83adff;
+  --ansi-magenta: #d89cff;
+  --ansi-cyan: #73d6e8;
+  --ansi-white: #e8edf8;
+  --ansi-bright-black: #929db5;
+  --ansi-bright-red: #ff9aa3;
+  --ansi-bright-green: #9ae8b7;
+  --ansi-bright-yellow: #ffe69a;
+  --ansi-bright-blue: #a8c5ff;
+  --ansi-bright-magenta: #e8b9ff;
+  --ansi-bright-cyan: #9ce7f2;
+  --ansi-bright-white: #ffffff;
+}
+
+a { color: var(--text-link); }
+input, select, textarea, progress { accent-color: var(--text-link); }
+input::placeholder, textarea::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.syntax-comment { color: var(--syntax-comment); font-style: italic; }
+.syntax-string { color: var(--syntax-string); }
+.syntax-number { color: var(--syntax-number); }
+.syntax-keyword { color: var(--syntax-keyword); font-weight: 600; }
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --surface-canvas: #f4f5f7;
+  --surface-panel: #ffffff;
+  --surface-raised: #f0f2f5;
+  --surface-input: #f8f9fb;
+  --surface-hover: #edf0f5;
+  --surface-selected: #e6edfc;
+  --text-primary: #202630;
+  --text-secondary: #526071;
+  --border-subtle: #d7dce3;
+  --border-control: #788393;
+  --accent: #2458ca;
+  --text-link: #2458ca;
+  --focus-ring: #2458ca;
+  --status-success: #17633d;
+  --status-warning: #805400;
+  --status-danger: #a2263d;
+  --surface-success: #e9f5ed;
+  --surface-warning: #fff4dc;
+  --surface-danger: #fff0f2;
+  --ansi-black: #3c4552;
+  --ansi-red: #a41e31;
+  --ansi-green: #16613b;
+  --ansi-yellow: #785300;
+  --ansi-blue: #2458ca;
+  --ansi-magenta: #76318b;
+  --ansi-cyan: #006575;
+  --ansi-white: #526071;
+  --ansi-bright-black: #526071;
+  --ansi-bright-red: #84273a;
+  --ansi-bright-green: #185d45;
+  --ansi-bright-yellow: #704900;
+  --ansi-bright-blue: #1946a0;
+  --ansi-bright-magenta: #613c82;
+  --ansi-bright-cyan: #00616d;
+  --ansi-bright-white: #202630;
+}
+
+html[data-theme="mist"] {
+  --surface-canvas: #17242c;
+  --surface-panel: #20313b;
+  --surface-raised: #293e49;
+  --surface-input: #192930;
+  --surface-hover: #304753;
+  --surface-selected: #294660;
+  --border-subtle: #4a616d;
+  --border-control: #8a9fa9;
+}
+
+html[data-theme="rose"] {
+  --surface-canvas: #2b1d2a;
+  --surface-panel: #392439;
+  --surface-raised: #422f41;
+  --surface-input: #2d202c;
+  --surface-hover: #4d3549;
+  --surface-selected: #403b62;
+  --border-subtle: #6c5065;
+  --border-control: #ac90a2;
+}
+
+html[data-theme="pine"] {
+  --surface-canvas: #15251f;
+  --surface-panel: #1d342b;
+  --surface-raised: #284035;
+  --surface-input: #172b22;
+  --surface-hover: #304b3e;
+  --surface-selected: #254657;
+  --border-subtle: #476653;
+  --border-control: #88a795;
+}

@@ -1,0 +1,133 @@
+import type { ModelCapabilities, ModelPricing } from '../types/index.js';
+import { MISTRAL_MODELS } from './mistral-metadata.js';
+import type { ImageResizeLimits } from '../media/image-processing.js';
+
+export type PublishedThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const PUBLISHED_THINKING_LEVELS: readonly PublishedThinkingLevel[] = [
+  'off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max',
+];
+
+export interface PublishedModelMetadata {
+  id: string;
+  api?: string;
+  name: string;
+  capabilities: ModelCapabilities;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  pricing?: ModelPricing;
+  /** Model-owned inline image preparation limits, not authenticated access. */
+  inputLimits?: { images?: { resize?: ImageResizeLimits } };
+  /** Conservative provider prompt-cache lifetimes, in seconds. Missing means no warming. */
+  promptCache?: { short?: number; long?: number };
+  /** Per-level overrides; a null map explicitly marks thinking as unsupported. */
+  thinkingLevelMap?: Partial<Record<PublishedThinkingLevel, string | null>> | null;
+}
+
+export interface PricedTokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  /** Observed Anthropic one-hour writes, a subset of cacheWriteTokens. */
+  cacheWrite1hTokens?: number;
+}
+
+const TEXT_TOOLS: ModelCapabilities = { reasoning: false, imageInput: false, toolCalls: true };
+const VISION_TOOLS: ModelCapabilities = { reasoning: false, imageInput: true, toolCalls: true };
+const REASONING_VISION_TOOLS: ModelCapabilities = { reasoning: true, imageInput: true, toolCalls: true };
+
+/** Versioned non-secret metadata shared by CLI and Web catalogues. */
+export const PUBLISHED_MODEL_METADATA_VERSION = 7 as const;
+
+const PUBLISHED_MODELS: Readonly<Record<string, readonly PublishedModelMetadata[]>> = {
+  openai: [
+    { id: 'gpt-4o', name: 'GPT-4o', capabilities: VISION_TOOLS, contextWindow: 128_000, maxOutputTokens: 16_384, pricing: { inputPerMillion: 2.5, outputPerMillion: 10, cacheReadPerMillion: 1.25 }, thinkingLevelMap: null },
+    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 10, outputPerMillion: 30 } },
+    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', capabilities: TEXT_TOOLS, pricing: { inputPerMillion: 0.5, outputPerMillion: 1.5 } },
+    { id: 'gpt-4.1', name: 'GPT-4.1', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 2, outputPerMillion: 8, cacheReadPerMillion: 0.5 } },
+    { id: 'o3', name: 'o3', capabilities: REASONING_VISION_TOOLS, contextWindow: 200_000, maxOutputTokens: 100_000, pricing: { inputPerMillion: 2, outputPerMillion: 8, cacheReadPerMillion: 0.5 }, thinkingLevelMap: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null } },
+    { id: 'o4-mini', name: 'o4-mini', capabilities: REASONING_VISION_TOOLS, contextWindow: 200_000, maxOutputTokens: 100_000, pricing: { inputPerMillion: 1.1, outputPerMillion: 4.4, cacheReadPerMillion: 0.275 }, thinkingLevelMap: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null } },
+  ],
+  anthropic: [
+    { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 15, outputPerMillion: 75 } },
+    { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 3, outputPerMillion: 15 } },
+    { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.25, outputPerMillion: 1.25 } },
+    { id: 'claude-3-7-sonnet-latest', name: 'Claude 3.7 Sonnet', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 } },
+    { id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.8, outputPerMillion: 4, cacheReadPerMillion: 0.08, cacheWritePerMillion: 1 } },
+    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', capabilities: REASONING_VISION_TOOLS, contextWindow: 1_000_000, maxOutputTokens: 128_000, promptCache: { short: 300, long: 3600 }, pricing: { inputPerMillion: 3, outputPerMillion: 15, cacheReadPerMillion: 0.3, cacheWritePerMillion: 3.75 }, thinkingLevelMap: { max: 'max' } },
+  ],
+  google: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheReadPerMillion: 0.125 } },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.1, outputPerMillion: 0.4, cacheReadPerMillion: 0.025 } },
+  ],
+  azure: [
+    { id: 'gpt-4o', name: 'GPT-4o deployment', capabilities: VISION_TOOLS },
+  ],
+  vertex: [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', capabilities: REASONING_VISION_TOOLS, pricing: { inputPerMillion: 1.25, outputPerMillion: 10, cacheReadPerMillion: 0.125 } },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', capabilities: VISION_TOOLS, pricing: { inputPerMillion: 0.1, outputPerMillion: 0.4, cacheReadPerMillion: 0.025 } },
+  ],
+  bedrock: [
+    { id: 'anthropic.claude-3-haiku-20240307-v1:0', name: 'Claude 3 Haiku (Bedrock)', capabilities: VISION_TOOLS },
+  ],
+  local: [
+    { id: 'local-model', name: 'Local server model', capabilities: { reasoning: false, imageInput: false, toolCalls: false } },
+  ],
+  mock: [
+    { id: 'mock-model', name: 'Mock model', capabilities: { reasoning: false, imageInput: false, toolCalls: true } },
+    { id: 'mock-model-v1', name: 'Mock model v1', capabilities: { reasoning: false, imageInput: false, toolCalls: true } },
+  ],
+  mistral: MISTRAL_MODELS.map(model => ({ ...model, api: 'mistral-conversations' })),
+};
+
+function cloneMetadata(model: PublishedModelMetadata): PublishedModelMetadata {
+  return {
+    ...model,
+    capabilities: { ...model.capabilities },
+    ...(model.inputLimits?.images?.resize ? { inputLimits: { images: { resize: { ...model.inputLimits.images.resize } } } } : {}),
+    ...(model.pricing ? { pricing: { ...model.pricing } } : {}),
+    ...(model.promptCache ? { promptCache: { ...model.promptCache } } : {}),
+    ...(model.thinkingLevelMap === undefined
+      ? {}
+      : { thinkingLevelMap: model.thinkingLevelMap === null ? null : { ...model.thinkingLevelMap } }),
+  };
+}
+
+export function getPublishedProviders(): string[] {
+  return Object.keys(PUBLISHED_MODELS);
+}
+
+export function getPublishedModels(provider: string): PublishedModelMetadata[] {
+  return (PUBLISHED_MODELS[provider] ?? []).map(cloneMetadata);
+}
+
+export function getPublishedModelMetadata(provider: string, id: string): PublishedModelMetadata | undefined {
+  const model = PUBLISHED_MODELS[provider]?.find(candidate => candidate.id === id);
+  return model ? cloneMetadata(model) : undefined;
+}
+
+/** Calculate a cost only when versioned pricing exists; unknown models remain unpriced. */
+export function calculatePublishedModelCost(
+  provider: string,
+  id: string,
+  usage: PricedTokenUsage,
+): number | undefined {
+  const pricing = PUBLISHED_MODELS[provider]?.find(candidate => candidate.id === id)?.pricing;
+  return pricing ? calculateModelCost(pricing, usage) : undefined;
+}
+
+/** Price owned physical declarations without inferring an operator alias. */
+export function calculateModelCost(pricing: ModelPricing, usage: PricedTokenUsage): number {
+  const tokens = (value: number | undefined): number => (
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  );
+  const longWrite = Math.min(tokens(usage.cacheWriteTokens), tokens(usage.cacheWrite1hTokens));
+  return (
+    tokens(usage.inputTokens) * (pricing.inputPerMillion ?? 0)
+    + tokens(usage.outputTokens) * (pricing.outputPerMillion ?? 0)
+    + tokens(usage.cacheReadTokens) * (pricing.cacheReadPerMillion ?? 0)
+    + (tokens(usage.cacheWriteTokens) - longWrite) * (pricing.cacheWritePerMillion ?? 0)
+    + longWrite * (pricing.inputPerMillion ?? 0) * 2
+  ) / 1_000_000;
+}

@@ -1,14 +1,17 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
+import { closeSettings, selectPluginPackage, selectSettingsCategory } from './fixtures/settings-navigation';
 
 test.describe('Workspaces et worktrees', () => {
   test('parcourt, annule et restaure un workspace partageable sans créer de session', async ({ page }) => {
     const api = await installMockApi(page, {
+      fileManagerAvailable: true,
       workspaceBrowse: {
         '/workspace/project': {
           cwd: '/workspace/project',
           parent: '/workspace',
           entries: [{ name: 'src', path: '/workspace/project/src', isDirectory: true, isSymbolicLink: false }],
+          truncated: true,
         },
       },
     });
@@ -25,7 +28,21 @@ test.describe('Workspaces et worktrees', () => {
     await path.fill('~/project');
     await picker.getByRole('button', { name: 'Browse' }).click();
     await expect(path).toHaveValue('/workspace/project');
-    await expect(picker.getByRole('button', { name: '📁 src' })).toBeVisible();
+    await expect(picker.getByRole('button', { name: 'src', exact: true })).toBeVisible();
+    await expect(picker.getByText('Only the first 500 entries are shown. Enter a path to continue.')).toBeVisible();
+
+    await picker.getByRole('button', { name: 'New folder' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create a folder' });
+    await expect(createDialog.getByLabel('Folder name')).toBeFocused();
+    await createDialog.getByLabel('Folder name').fill('created-here');
+    await createDialog.getByRole('button', { name: 'Create folder' }).click();
+    await expect(createDialog).toBeHidden();
+    await expect(path).toHaveValue('/workspace/project/created-here');
+    expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/workspaces/browse')?.body)
+      .toEqual({ parent: '/workspace/project', name: 'created-here' });
+
+    await picker.getByRole('button', { name: 'Parent directory' }).click();
+    await expect(path).toHaveValue('/workspace/project');
     await picker.getByRole('button', { name: 'Parent directory' }).click();
     await expect(path).toHaveValue('/workspace');
 
@@ -35,6 +52,10 @@ test.describe('Workspaces et worktrees', () => {
     await expect(page).toHaveURL(/\?cwd=%2Fworkspace%2Fproject$/);
     await expect(page.locator('.workspace-button')).toContainText('project');
     expect(api.requests.some(request => request.method === 'POST' && request.path === '/api/sessions')).toBe(false);
+
+    await page.getByRole('button', { name: 'Open workspace in file manager' }).click();
+    expect(api.requests.find(request => request.method === 'POST' && request.path === '/api/workspaces/file-manager')?.body)
+      .toEqual({ cwd: '/workspace/project' });
 
     await page.locator('.workspace-button').click();
     await expect(page.getByLabel('Recent workspaces')).toContainText('/workspace/project');
@@ -60,13 +81,13 @@ test.describe('Workspaces et worktrees', () => {
       await page.locator('.workspace-button').click();
       const picker = page.locator('.directory-picker');
       if (cwd.endsWith('/project')) {
-        await expect(picker.getByRole('button', { name: '📁 project' })).toBeVisible();
-        await picker.getByRole('button', { name: '📁 project' }).click();
-        await expect(picker.getByRole('button', { name: '📁 project-marker' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project', exact: true })).toBeVisible();
+        await picker.getByRole('button', { name: 'project', exact: true }).click();
+        await expect(picker.getByRole('button', { name: 'project-marker', exact: true })).toBeVisible();
       } else {
-        await expect(picker.getByRole('button', { name: '📁 project-marker' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project-marker', exact: true })).toBeVisible();
         await picker.getByRole('button', { name: 'Parent directory' }).click();
-        await expect(picker.getByRole('button', { name: '📁 project' })).toBeVisible();
+        await expect(picker.getByRole('button', { name: 'project', exact: true })).toBeVisible();
       }
       await expect(picker.getByLabel('Workspace path')).toHaveValue(cwd);
       await picker.getByRole('button', { name: 'Use this workspace' }).click();
@@ -92,7 +113,7 @@ test.describe('Workspaces et worktrees', () => {
   });
 
   test('recharge le catalogue de plugins par workspace sans conserver les packages projet précédents', async ({ page }) => {
-    await installMockApi(page, {
+    const api = await installMockApi(page, {
       workspaceBrowse: {
         '/workspace': { cwd: '/workspace', entries: [{ name: 'project', path: '/workspace/project', isDirectory: true, isSymbolicLink: false }] },
         '/workspace/project': { cwd: '/workspace/project', parent: '/workspace', entries: [] },
@@ -101,23 +122,32 @@ test.describe('Workspaces et worktrees', () => {
     await page.goto('/settings#plugins');
     const plugins = page.locator('#plugins');
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toBeVisible();
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
     await expect(plugins.locator('.plugin-card').filter({ hasText: '@aiharness/review-kit' })).toBeVisible();
+    await selectPluginPackage(page, 'project', 'workspace-kit');
+    await closeSettings(page);
 
     await page.locator('.workspace-button').click();
     const picker = page.locator('.directory-picker');
-    await picker.getByRole('button', { name: '📁 project' }).click();
+    await picker.getByRole('button', { name: 'project', exact: true }).click();
     await picker.getByRole('button', { name: 'Use this workspace' }).click();
     await expect(page).toHaveURL(/cwd=%2Fworkspace%2Fproject/);
     await page.getByRole('button', { name: /Settings/ }).click();
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toHaveCount(0);
+    await selectSettingsCategory(page, 'plugins');
     await expect(plugins.locator('.plugin-card').filter({ hasText: '@aiharness/review-kit' })).toBeVisible();
     await expect(plugins.locator('fieldset[data-scope="standalone"]')).not.toContainText('workspace-banner');
+    await selectPluginPackage(page, 'global', '@aiharness/review-kit');
+    await closeSettings(page);
 
     await page.locator('.workspace-button').click();
     await picker.getByRole('button', { name: 'Parent directory' }).click();
     await picker.getByRole('button', { name: 'Use this workspace' }).click();
     await page.getByRole('button', { name: /Settings/ }).click();
     await expect(plugins.locator('.plugin-card').filter({ hasText: 'workspace-kit' })).toBeVisible();
+    await expect(plugins.getByRole('navigation').getByRole('button', { name: 'workspace-kit', exact: true }))
+      .toHaveAttribute('aria-current', 'true');
+    expect(api.requests.filter(request => request.method !== 'GET' && request.path.startsWith('/api/plugins'))).toEqual([]);
   });
 
   test('bascule, crée et retire des worktrees avec confirmation', async ({ page }) => {
@@ -126,6 +156,7 @@ test.describe('Workspaces et worktrees', () => {
         { path: '/workspace', branch: 'main', bare: false, detached: false },
         { path: '/workspace-existing', branch: 'feature/existing', bare: false, detached: false },
       ],
+      worktreeForceRequired: ['/workspace-existing'],
     });
     await page.goto('/');
 
@@ -143,10 +174,24 @@ test.describe('Workspaces et worktrees', () => {
       .toMatchObject({ cwd: '/workspace-existing', path: '/workspace-new', branch: 'feature/new', createBranch: true });
 
     await page.getByRole('button', { name: 'Create a worktree' }).click();
-    page.once('dialog', dialog => dialog.accept());
+    const confirmations: string[] = [];
+    page.on('dialog', async dialog => {
+      confirmations.push(dialog.message());
+      await dialog.accept();
+    });
     await page.getByRole('button', { name: /feature\/existing/ }).click();
     await expect.poll(() => api.worktrees.some(item => item.path === '/workspace-existing')).toBe(false);
-    expect(api.requests.find(request => request.method === 'DELETE' && request.path === '/api/workspaces/worktrees')?.body)
-      .toMatchObject({ cwd: '/workspace-new', path: '/workspace-existing', confirm: true });
+    const removals = api.requests.filter(request => request.method === 'DELETE' && request.path === '/api/workspaces/worktrees');
+    expect(removals).toHaveLength(2);
+    expect(removals[0]?.body).toMatchObject({
+      cwd: '/workspace-new', path: '/workspace-existing', confirm: true, force: false,
+    });
+    expect(removals[1]?.body).toMatchObject({
+      cwd: '/workspace-new', path: '/workspace-existing', confirm: true, force: true,
+    });
+    expect(confirmations).toEqual([
+      expect.stringContaining('Remove worktree'),
+      expect.stringContaining('Force removal'),
+    ]);
   });
 });

@@ -1,0 +1,5 @@
+
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+
+[WebServer] npm notice run vite
+Error: No such container:path: 312f0538c8bd3283326f96e2566a570abb12ef9e5f749d03d36728e36e719221:/app/test-results/.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   PluginCatalog,
   PluginPackageInfo,
@@ -12,12 +12,18 @@ import {
   getPluginCatalog,
   mutatePlugin,
   reloadPluginResources,
+  setPluginsEnabled,
   type PluginMutationAction,
 } from '../services/api';
 import { useSessionStore } from '../store/session-store';
+import { useSettingsScope } from '../store/use-settings-scope';
+import { settingsAdminMessage } from './settings-admin-messages';
+import { readSettingsNavigation, writeSettingsNavigation } from '../store/settings-navigation';
+import { pluginSettingsMessage } from './plugin-settings-messages';
+import { useSettingsDraft } from './settings-drafts';
 
 function normalizedSource(value: string): string {
-  return value.trim().replace(/^\$?\s*pi\s+install\s+(\S+)\s*$/i, '$1');
+  return value.trim();
 }
 
 function resourceLabel(kind: PluginResourceKind, count: number): string {
@@ -42,9 +48,44 @@ function packageSummary(pkg: PluginPackageInfo): string {
     .join(' · ');
 }
 
-export function PluginSettings() {
-  const { t } = useI18n();
+export function PluginSettings({ presented }: { presented: boolean }) {
+  const { t, locale } = useI18n();
+  const epoch = useRef(0);
   const workspace = useSessionStore(state => state.workspace);
+  const [selection, setSelection] = useState(() => readSettingsNavigation(workspace?.cwd).positions.plugins);
+  const [overview, setOverview] = useState(!selection?.selection);
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 959px)').matches);
+  const navigationRef = useRef<HTMLElement | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const backRef = useRef<HTMLButtonElement | null>(null);
+  const navigationFocus = useRef(false);
+  const detailPrefix = useId();
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 959px)');
+    const changed = () => {
+      if (media.matches && detailRef.current?.contains(document.activeElement)) setOverview(false);
+      setMobile(media.matches);
+    };
+    media.addEventListener('change', changed);
+    return () => media.removeEventListener('change', changed);
+  }, []);
+  useLayoutEffect(() => {
+    if (!navigationFocus.current) return;
+    navigationFocus.current = false;
+    if (!presented) return;
+    if (overview) {
+      const choice = navigationRef.current?.querySelector<HTMLElement>('[aria-current="true"]:not(:disabled)');
+      (choice ?? navigationRef.current)?.focus();
+    } else if (mobile) backRef.current?.focus();
+  }, [mobile, overview, presented, selection]);
+  const selectPackage = (pkg: PluginPackageInfo) => {
+    const next = { group: pkg.scope, selection: pkg.key };
+    setSelection(next);
+    setOverview(false);
+    const current = readSettingsNavigation(workspace?.cwd);
+    writeSettingsNavigation(workspace?.cwd, { ...current, section: 'plugins',
+      positions: { ...current.positions, plugins: next } });
+  };
   const activeSessionId = useSessionStore(state => {
     const session = state.sessions.find(item => item.id === state.activeSessionId);
     return session && !session.draft ? session.id : undefined;
@@ -52,11 +93,15 @@ export function PluginSettings() {
   const hydrateSkillCatalog = useSessionStore(state => state.hydrateSkillCatalog);
   const [catalog, setCatalog] = useState<PluginCatalog>();
   const [source, setSource] = useState('');
-  const [scope, setScope] = useState<PluginScope>('global');
+  useSettingsDraft(source !== '');
+  const [scope, setScope] = useSettingsScope('plugins', 'global');
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string>();
+  const [messageWarning, setMessageWarning] = useState(false);
+  const [batchFailures, setBatchFailures] = useState<Array<{ key: string; label: string; reason: string }>>([]);
+  const [reloadPending, setReloadPending] = useState(false);
   const [updates, setUpdates] = useState<Record<string, PluginUpdateResult>>({});
 
   const context = { cwd: workspace?.cwd, projectId: workspace?.id };
@@ -66,33 +111,58 @@ export function PluginSettings() {
     || pkg.source.toLocaleLowerCase().includes(normalizedFilter)
     || pkg.packageName?.toLocaleLowerCase().includes(normalizedFilter)
     || pkg.description?.toLocaleLowerCase().includes(normalizedFilter)), [catalog?.packages, normalizedFilter]);
+  const groups = (['project', 'global'] as PluginScope[]).map(groupScope => ({
+    scope: groupScope, packages: visiblePackages.filter(pkg => pkg.scope === groupScope),
+  })).filter(group => group.packages.length > 0);
+  const matches = selection?.selection ? visiblePackages.filter(pkg => pkg.scope === selection.group && pkg.key === selection.selection) : [];
+  const selected = selection?.selection ? matches.length === 1 ? matches[0] : undefined : groups[0]?.packages[0];
 
   const load = async (refresh = false) => {
+    const generation = epoch.current;
     setBusy(refresh ? 'refresh' : 'load');
     setError(undefined);
     const result = await getPluginCatalog(context.cwd, context.projectId, refresh);
+    if (generation !== epoch.current) return;
     if (result.success && result.data) setCatalog(result.data);
-    else setError(result.error || t('settings.plugins.loadFailed'));
+    else { setCatalog(undefined); setError(t('settings.plugins.loadFailed')); }
     setBusy(undefined);
   };
 
   useEffect(() => {
+    ++epoch.current;
     setCatalog(undefined);
     setUpdates({});
     setError(undefined);
     setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
+    setReloadPending(false);
     void load();
-  }, [workspace?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { ++epoch.current; };
+  }, [workspace?.id, workspace?.cwd]);
+
+  const reconcileFailure = async (generation: number) => {
+    const canonical = await getPluginCatalog(context.cwd, context.projectId, true);
+    if (generation !== epoch.current) return;
+    const readable = canonical.success && canonical.data;
+    setCatalog(readable || undefined);
+    setError(settingsAdminMessage(locale, readable ? 'saveFailed' : 'readbackFailed'));
+    setReloadPending(true);
+    if (readable) await hydrateSkillCatalog(true);
+  };
 
   const runAction = async (
     action: PluginMutationAction,
     pkg?: PluginPackageInfo,
   ) => {
+    if (pkg) selectPackage(pkg);
     const actionKey = `${action}:${pkg?.key ?? 'all'}`;
-    const previousCatalog = catalog;
+    const generation = epoch.current;
     setBusy(actionKey);
     setError(undefined);
     setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
     if (pkg && (action === 'enable' || action === 'disable')) {
       const enabled = action === 'enable';
       setCatalog(current => current ? {
@@ -107,6 +177,7 @@ export function PluginSettings() {
       ...context,
       ...(pkg ? { key: pkg.key, scope: pkg.scope } : {}),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data);
       if (action === 'remove' || action === 'update') {
@@ -119,38 +190,79 @@ export function PluginSettings() {
       }
       setMessage(t(`settings.plugins.action.${action}`));
       await hydrateSkillCatalog(true);
-    } else {
-      if (pkg && (action === 'enable' || action === 'disable')) setCatalog(previousCatalog);
-      setError(result.error || t('settings.plugins.actionFailed'));
-    }
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
+  };
+
+  const runGroupAction = async (groupScope: PluginScope, enabled: boolean, packages: PluginPackageInfo[]) => {
+    const targets = packages.filter(pkg => pkg.enabled !== enabled);
+    if (targets.length === 0) return;
+    const actionKey = `batch:${groupScope}:${enabled ? 'enable' : 'disable'}`;
+    const generation = epoch.current;
+    setBusy(actionKey);
+    setError(undefined);
+    setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
+    const result = await setPluginsEnabled({
+      ...context,
+      changes: targets.map(pkg => ({ key: pkg.key, scope: pkg.scope, enabled })),
+    });
+    if (generation !== epoch.current) return;
+    if (result.success && result.data) {
+      const changed = result.data.outcomes.filter(outcome => outcome.state === 'changed').length;
+      const unchanged = result.data.outcomes.filter(outcome => outcome.state === 'unchanged').length;
+      const failedOutcomes = result.data.outcomes.filter(outcome => outcome.state === 'failed');
+      const failed = failedOutcomes.length;
+      const labels = new Map(packages.map(pkg => [pkg.key, pkg.packageName || pkg.source]));
+      setCatalog(result.data.catalog);
+      setMessage(t('settings.plugins.batchResult', { changed, unchanged, failed }));
+      setMessageWarning(failed > 0);
+      setBatchFailures(failedOutcomes.map(outcome => ({
+        key: `${outcome.scope}:${outcome.key}`,
+        label: labels.get(outcome.key) ?? outcome.key,
+        reason: t(`settings.plugins.batchFailure.${outcome.code ?? 'unknown'}`),
+      })));
+      setReloadPending(current => current || result.data!.reloadRequired);
+      if (changed > 0) await hydrateSkillCatalog(true);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   const install = async () => {
     const normalized = normalizedSource(source);
-    if (!normalized) return;
+    if (!normalized || !catalog) return;
+    const generation = epoch.current;
     setSource(normalized);
     setBusy('install');
     setError(undefined);
     setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
     const result = await mutatePlugin({ action: 'install', source: normalized, scope, ...context });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data);
-      setSource('');
+      setSource(current => normalizedSource(current) === normalized ? '' : current);
       setMessage(t('settings.plugins.action.install'));
       await hydrateSkillCatalog(true);
-    } else setError(result.error || t('settings.plugins.actionFailed'));
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   const check = async (pkg?: PluginPackageInfo) => {
+    if (pkg) selectPackage(pkg);
+    const generation = epoch.current;
     setBusy(`check:${pkg?.key ?? 'all'}`);
     setError(undefined);
     setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
     const result = await checkPluginUpdates({
       ...context,
       ...(pkg ? { key: pkg.key, scope: pkg.scope } : {}),
     });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setUpdates(current => ({
         ...current,
@@ -162,16 +274,21 @@ export function PluginSettings() {
   };
 
   const reload = async () => {
+    const generation = epoch.current;
     setBusy('reload');
     setError(undefined);
     setMessage(undefined);
+    setMessageWarning(false);
+    setBatchFailures([]);
     const result = await reloadPluginResources({ ...context, ...(activeSessionId ? { sessionId: activeSessionId } : {}) });
+    if (generation !== epoch.current) return;
     if (result.success && result.data) {
       setCatalog(result.data.catalog);
       setMessage(result.data.reload.message);
+      setReloadPending(false);
       await hydrateSkillCatalog(true);
-    } else setError(result.error || t('settings.plugins.reloadFailed'));
-    setBusy(undefined);
+    } else await reconcileFailure(generation);
+    if (generation === epoch.current) setBusy(undefined);
   };
 
   return (
@@ -208,12 +325,12 @@ export function PluginSettings() {
           <select value={scope} aria-label={t('settings.plugins.scope')}
             onChange={event => setScope(event.target.value as PluginScope)}>
             <option value="global">{t('settings.plugins.scope.global')}</option>
-            <option value="project" disabled={catalog ? !catalog.projectTrusted : !workspace?.trusted}>
+            <option value="project" disabled={catalog ? !catalog.projectTrusted : !(workspace?.operationTrusted ?? workspace?.trusted)}>
               {t('settings.plugins.scope.project')}
             </option>
           </select>
         </label>
-        <button type="button" className="primary" disabled={Boolean(busy) || !source.trim()} onClick={() => void install()}>
+        <button type="button" className="primary" disabled={Boolean(busy) || !catalog || !source.trim()} onClick={() => void install()}>
           {busy === 'install' ? t('settings.plugins.installing') : t('settings.plugins.install')}
         </button>
         <small>{t('settings.plugins.sourceHint')}</small>
@@ -237,7 +354,7 @@ export function PluginSettings() {
                 : t('settings.plugins.updateAll', { count: availableUpdates.length })}
             </button>
           )}
-          <button type="button" disabled={Boolean(busy)} onClick={() => void reload()}>
+          <button type="button" disabled={Boolean(busy) || !catalog} onClick={() => void reload()}>
             {busy === 'reload' ? t('settings.plugins.reloading') : t('settings.plugins.reload')}
           </button>
           <button type="button" disabled={Boolean(busy)} onClick={() => void load(true)}>
@@ -248,7 +365,12 @@ export function PluginSettings() {
 
       <div className="plugin-feedback" aria-live="polite">
         {error && <p role="alert" className="status-warning">{error}</p>}
-        {!error && message && <p className="status-success">{message}</p>}
+        {!error && message && <p role={messageWarning ? 'alert' : undefined}
+          className={messageWarning ? 'status-warning' : 'status-success'}>{message}</p>}
+        {!error && batchFailures.length > 0 && <ul className="plugin-batch-failures">
+          {batchFailures.map(failure => <li key={failure.key}><strong>{failure.label}:</strong> {failure.reason}</li>)}
+        </ul>}
+        {reloadPending && <p role="status" className="status-warning">{t('settings.plugins.reloadPending')}</p>}
       </div>
 
       {!catalog && busy === 'load' && <p role="status">{t('common.loading')}…</p>}
@@ -256,18 +378,60 @@ export function PluginSettings() {
         <p className="plugin-empty">{t('settings.plugins.empty')}</p>
       )}
 
-      <div className="plugin-groups">
-        {(['project', 'global'] as PluginScope[]).map(groupScope => {
-          const group = visiblePackages.filter(pkg => pkg.scope === groupScope);
-          if (group.length === 0) return null;
+      {selection?.selection && !selected && catalog && <p role="status" className="settings-help">
+        {pluginSettingsMessage(locale, 'unavailable')}
+      </p>}
+      <div className="plugin-context">
+        <nav ref={navigationRef} tabIndex={-1} aria-label={t('settings.plugins.title')}
+          hidden={mobile && !overview && Boolean(selected)}>
+        {groups.map(({ scope: groupScope, packages: group }) => {
+          const enableCount = group.filter(pkg => !pkg.enabled).length;
+          const disableCount = group.filter(pkg => pkg.enabled).length;
           return (
-            <fieldset key={groupScope} data-scope={groupScope}>
+            <fieldset key={groupScope}>
               <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
-              {group.map(pkg => {
+              <div className="plugin-group-actions" role="group"
+                aria-label={t('settings.plugins.groupActions', { scope: t(`settings.plugins.scope.${groupScope}`) })}>
+                <button type="button" disabled={Boolean(busy) || enableCount === 0}
+                  title={settingsAdminMessage(locale, 'filteredHelp')}
+                  onClick={() => void runGroupAction(groupScope, true, group)}>
+                  {busy === `batch:${groupScope}:enable`
+                    ? t('common.loading')
+                    : t('settings.plugins.enableAll', { count: enableCount })}
+                </button>
+                <button type="button" disabled={Boolean(busy) || disableCount === 0}
+                  title={settingsAdminMessage(locale, 'filteredHelp')}
+                  onClick={() => void runGroupAction(groupScope, false, group)}>
+                  {busy === `batch:${groupScope}:disable`
+                    ? t('common.loading')
+                    : t('settings.plugins.disableAll', { count: disableCount })}
+                </button>
+              </div>
+              {group.map((pkg, index) => <button key={pkg.key} type="button" className="plugin-context-choice" disabled={Boolean(busy)}
+                aria-label={pkg.packageName || pkg.source} aria-current={pkg === selected ? 'true' : undefined}
+                aria-expanded={pkg === selected && (!mobile || !overview)} aria-controls={`${detailPrefix}-${groupScope}-${index}`}
+                aria-describedby={`${detailPrefix}-${groupScope}-${index}-state`}
+                onClick={() => { navigationFocus.current = mobile; selectPackage(pkg); }}>
+                <strong>{pkg.packageName || pkg.source}</strong>
+                <small id={`${detailPrefix}-${groupScope}-${index}-state`}>{pkg.source} · {t(`settings.plugins.status.${pkg.status}`)}</small>
+              </button>)}
+            </fieldset>
+          );
+        })}
+        </nav>
+        <div ref={detailRef} className="plugin-context-detail" hidden={mobile && (overview || !selected)}>
+          <button ref={backRef} type="button" className="plugin-context-back" hidden={!mobile}
+            onClick={() => { navigationFocus.current = true; setOverview(true); }}>{pluginSettingsMessage(locale, 'back')}</button>
+          <div className="plugin-groups">
+          {groups.map(({ scope: groupScope, packages: group }) => (
+            <fieldset key={groupScope} data-scope={groupScope} data-settings-group={groupScope} hidden={selected?.scope !== groupScope}>
+              <legend>{t(`settings.plugins.scope.${groupScope}`)}</legend>
+              {group.map((pkg, index) => {
                 const update = updates[pkg.key];
                 const packageBusy = busy?.endsWith(pkg.key) || false;
                 return (
-                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key}>
+                  <article className={`plugin-card status-${pkg.status}`} key={pkg.key} data-settings-selection={pkg.key}
+                    aria-label={pkg.packageName || pkg.source} id={`${detailPrefix}-${groupScope}-${index}`} hidden={pkg !== selected}>
                     <header>
                       <div className="plugin-identity">
                         <div>
@@ -344,9 +508,12 @@ export function PluginSettings() {
                 );
               })}
             </fieldset>
-          );
-        })}
+          ))}
+          </div>
+        </div>
+      </div>
 
+      <div className="plugin-groups">
         {catalog && catalog.standaloneExtensions.length > 0 && (
           <fieldset data-scope="standalone">
             <legend>{t('settings.plugins.standalone')}</legend>

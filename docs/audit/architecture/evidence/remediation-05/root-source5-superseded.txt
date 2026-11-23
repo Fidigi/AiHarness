@@ -1,0 +1,2 @@
+Superseded source-5 root run: stopped after a new reproduced prototype-owner withdrawal gap required a source correction. This is not a passing gate or a diagnosed application failure. Original partial log and Make exit remain.
+aiharness-test-unit-1794931887209118001

@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import type { SubagentProfile } from '@ai-harness/core';
+import { loadAgentSettings, type SubagentProfile } from '@ai-harness/core';
 import { resolveEffectiveConfiguration } from '../config/effective-configuration.js';
 import { requireCapability } from '../security/request-security.js';
 import type { RuntimeServices } from '../runtime/services.js';
+import { providerOperation } from '../runtime/provider-administration.js';
 
 function optionalString(value: unknown, field: string, max = 4_096): string | undefined {
   if (value === undefined || value === null || value === '') return undefined;
@@ -32,6 +33,8 @@ function context(query: Record<string, unknown>, body?: Record<string, unknown>)
 
 export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>): Router {
   const router = Router();
+  router.use((_request, response, next) => { response.setHeader('Cache-Control', 'no-store'); next(); });
+  const operation = (handler: Parameters<typeof providerOperation>[1]) => providerOperation(servicesPromise, handler);
 
   router.get('/settings', async (request, response, next) => {
     try {
@@ -43,7 +46,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.patch('/settings', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/settings', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.updateSettings(context(request.query, request.body), {
@@ -53,7 +56,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/profiles', async (request, response, next) => {
     try {
@@ -65,7 +68,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.post('/profiles', requireCapability('configuration'), async (request, response, next) => {
+  router.post('/profiles', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.status(201).json(await services.subagentService.createProfile(
@@ -75,9 +78,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.post('/profiles/:profileId/duplicate', requireCapability('configuration'), async (request, response, next) => {
+  router.post('/profiles/:profileId/duplicate', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.status(201).json(await services.subagentService.duplicateProfile(
@@ -86,9 +89,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.patch('/profiles/:profileId', requireCapability('configuration'), async (request, response, next) => {
+  router.patch('/profiles/:profileId', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.updateProfile(
@@ -98,9 +101,9 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
-  router.delete('/profiles/:profileId', requireCapability('configuration'), async (request, response, next) => {
+  router.delete('/profiles/:profileId', requireCapability('configuration'), operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       response.json(await services.subagentService.deleteProfile(
@@ -109,7 +112,7 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/runs', async (request, response, next) => {
     try {
@@ -122,14 +125,14 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
     }
   });
 
-  router.post('/runs', async (request, response, next) => {
+  router.post('/runs', operation(async (request, response, next) => {
     try {
       const services = await servicesPromise;
       const parentSessionId = requiredString(request.body?.parentSessionId, 'parentSessionId', 200);
       const parent = services.sessionManager.get(parentSessionId)
         ?? await services.sessionManager.loadFromStore(parentSessionId);
-      if (!parent) {
-        response.status(404).json({ error: 'Parent session not found' });
+      if (!parent?.cwd) {
+        response.status(404).json({ error: 'Parent session not found or without workspace' });
         return;
       }
       const effective = resolveEffectiveConfiguration(services, {
@@ -137,19 +140,34 @@ export function createSubagentRouter(servicesPromise: Promise<RuntimeServices>):
         sessionId: parent.id,
         session: parent,
       });
+      const agentSettings = await loadAgentSettings({
+        cwd: parent.cwd,
+        projectTrusted: await services.trustManager.isTrusted(parent.cwd),
+      });
       const run = await services.subagentRuntime.start({
         parentSessionId,
         profileId: requiredString(request.body?.profileId, 'profileId', 80),
         task: requiredString(request.body?.task, 'task'),
         provider: requiredString(request.body?.provider, 'provider', 100),
         parentToolPreset: effective.values.toolPreset,
+        parentPolicy: {
+          thinkingBudgets: effective.values.thinkingBudgets ?? agentSettings.settings.thinkingBudgets,
+          allowedTools: effective.values.enabledTools,
+          excludedTools: effective.values.powershellEnabled === true ? [] : ['powershell'],
+          codemode: {
+            enabled: services.codemodeSelfTest?.state === 'passed' ? undefined : false,
+            activation: effective.values.codemodeEnabled ? 'on' : 'automatic',
+            mode: effective.values.codemodeMode, inlineBudget: effective.values.codemodeInlineBudget,
+            limits: effective.values.codemodeLimits,
+          },
+        },
         ...(typeof request.body?.background === 'boolean' ? { background: request.body.background } : {}),
       });
       response.status(202).json(run);
     } catch (error) {
       next(error);
     }
-  });
+  }));
 
   router.get('/runs/:runId', async (request, response, next) => {
     try {

@@ -1,0 +1,33 @@
+# Headed Chromium / Orca tests
+
+Run `make test-accessibility` from a clean, settled checkout. Only Docker is required on the host; no physical display, speaker, personal browser profile or screen-reader installation is used.
+
+## Build and isolation
+
+The command builds `.docker/Dockerfile.test` from the current filtered checkout, then `.docker/Dockerfile.accessibility` using that unique base tag. It never depends on the historical local prototype image. Node/npm remain owned by the shared test Dockerfile; Debian desktop package revisions may evolve, so each run records actual versions and image IDs, not a promise of byte-identical future apt repositories. Installing the desktop tools must not change Chromium's version within that build.
+
+The dedicated image adds Xvfb/Openbox, private D-Bus/AT-SPI, Orca, Speech Dispatcher/espeak-ng, a PulseAudio null sink and native input/capture tools. It runs as UID1201 with no host mounts, exposed ports, privileged mode or runtime network beyond container loopback. Shared memory is1GiB, not a RAM limit. No credentials, personal stores or real-account opt-in exist. All application APIs use the existing synthetic `installMockApi` fixture, with the real compiled Web assets served by an independent loopback Vite preview.
+
+`entrypoint.sh` creates a private runtime directory before D-Bus; `session.sh` checks the display, speech socket, Orca process and AT-SPI bus before running the tests. It records the setup/test phase and tears down its own services, with a bounded TERM/KILL cleanup so an Orca AT-SPI call cannot hang container exit. The supported `orca-customizations.py` hook only makes the original debug file line-buffered; it neither rewrites utterances nor changes speech/event behavior. Native input targets exactly one visible Chromium window; DOM focus alone is not sufficient to establish initial desktop input ownership.
+
+## Scope and tests
+
+[The dedicated configuration](../../tests/desktop-accessibility/playwright.config.ts) is outside `e2e/`, so neither normal headless discovery nor the existing nine-suite dispatcher/CI partitions change. It uses one worker, zero retries and no snapshot updates. Browser contexts are headed, have `viewport:null`, disposable profiles and explicit renderer accessibility. The Playwright no-sandbox default and additional desktop/AT packages are test-environment properties, not production browser/security policy or evidence of repair for earlier native failures.
+
+[The three scenarios](../../tests/desktop-accessibility/settings.spec.ts) cover only the missing boundaries:
+
+1. A disposable control page proves real Orca utterances, subsequent espeak-module synthesis acceptance and browser-native200% zoom. Expected utterances must occur **after** each action's log cursor; an old announcement, queued message or DOM accessibility-tree result cannot pass.
+2. Real desktop Settings at100% exercise the dialog heading through Orca structural navigation, labeled/current categories with actual reader output, native Back/Forward/reload and named Close/Escape dismissal. A full-document Settings entry returns through the selected chat's canonical cwd address; its newer desktop composer autofocus remains authoritative.
+3. Real Settings at native200% exercise category and contextual navigation, assisted native-pointer positioning in the long Defaults form, native draft typing, Keep/Discard, visible confirmation controls, focus restoration, no admitted writes and no browser-storage draft leak. Native pointer input is important: DOM focus alone can leave Orca in browse mode and consume typing. Focused-action queries first wait for Orca's own processed focus (DOM focus can precede the queued AT-SPI event), use Control to stop older long speech, then invoke the documented KP Enter “Where Am I” command. It reports the control, not a promise that a cold lazy-loading dialog's automatic title queue is completely spoken. This is automated interaction/reader evidence, not an unassisted human usability evaluation or a complete Settings/category/locale matrix.
+
+Zoom uses OS Ctrl+0/five Ctrl+Plus inputs, not CSSzoom, viewport resizing, DPR overrides or CDP page scaling. `native-zoom.py` reads Chromium's native AT-SPI chrome while skipping web-document subtrees, requiring its Zoom200% button and open Zoom menu item. Native menu/content screenshots are retained for inspection, not compared to headless golden images. Orca and Speech Dispatcher must both report the fresh expected phrase, including output-module delivery followed by `200 OK SPEAKING`. Small Node controls reject queue-only, previous/different utterance and native-command false-success evidence.
+
+## Results and failure handling
+
+Each invocation creates a new `test-results/desktop-accessibility-<run-id>/` directory; existing results and all source PNGs are untouched. Collection runs on success/failure before deleting only that invocation's named container and two image tags. No golden images are generated or exported.
+
+Artifacts include build/run logs, versions/image IDs, session/run results, Playwright JSON/HTML reports, native PNGs, failure traces, original Orca/Speech Dispatcher logs and a mono PCM loopback WAV with nonzero-sample metadata. Browser profiles are disposable and not exported. `post-discard-focus` records the actual return target, protected by a hard focus assertion. Because navigation can unmount the original composer before the invoker is captured, `body` is not an eligible invoker: the existing App contract falls back to retained `main.main-content`. A newer explicitly focused destination is never overridden. Audio capture proves generated audio, not human listening, intelligibility or physical-speaker behavior.
+
+`session-result.json` distinguishes environment setup from test execution; `run-result.json` preserves typecheck/control/browser raw code and signal, plus controlled recorder shutdown. A case summary cannot override a failed command or post-summary native exit. Missing/empty audio is a failing environment result, not a silent pass; failed tests and remaining unstarted bodies are not certified by artifact collection. Interrupted setup may lack later reports: inspect the original logs and container disposition instead of inventing results.
+
+This opt-in Linux Chromium/Orca suite does **not** qualify NVDA/VoiceOver, physical devices, human usability, real accounts, the whole audit, or historical crash causes. Keep the existing headless/API/CLI evidence separate. Extend these two scenarios only for concrete uncovered behavior; do not add a Cartesian matrix or weaken deadlines, assertions, production limits or native evidence requirements.

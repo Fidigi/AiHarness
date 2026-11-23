@@ -1,0 +1,10 @@
+[WebServer] npm notice run @ai-harness/web@0.1.0 dev
+
+
+[WebServer] npm notice run vite
+
+Running 2 tests using 1 worker
+
+[1/2] [chromium] › e2e/performance.spec.ts:89:3 › Budgets et longues conversations › virtualise une conversation longue et restaure sa vue bornée avant le réseau
+[2/2] [chromium] › e2e/performance.spec.ts:121:3 › Budgets et longues conversations › ne charge le lourd client terminal qu’à sa première ouverture
+  2 passed (6.1s)

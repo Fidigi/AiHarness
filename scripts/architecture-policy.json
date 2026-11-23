@@ -1,0 +1,90 @@
+{
+  "scope": "Exact ratchet, not zero-cycle or whole-platform dead-code certification. Public Core/binary/embedding entry points and computed worker/browser/test entries are excluded in the checker. Existing internal named exports below are retained, not inferred removable from static non-use; the audit authorizes only its reviewed removal list. Every new value cycle/edge, eager replacement of a deferred edge, unused value export or stale exception fails.",
+  "cycles": [
+    {
+      "reason": "Finite question grammar and specialized-operation normalization call each other only during operations; retain the shared concrete policy, not a new dispatcher. Neither edge performs eager cross-module invocation.",
+      "edges": [
+        "packages/core/src/providers/classification-questions.ts -> packages/core/src/providers/specialized-models.ts (eager)",
+        "packages/core/src/providers/specialized-models.ts -> packages/core/src/providers/classification-questions.ts (eager)"
+      ]
+    },
+    {
+      "reason": "Credential service composes native issuer refresh/device functions, which borrow its redactor; device polling selects the actual issuer. Uses are function-scoped, not eager class construction. Preserve exact refresh/redactor/native-owner identities; do not generalize authority or split issuer lifetimes merely to remove a graph component.",
+      "edges": [
+        "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+        "packages/core/src/providers/anthropic-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+        "packages/core/src/providers/credentials.ts -> packages/core/src/providers/anthropic-oauth.ts (eager)",
+        "packages/core/src/providers/credentials.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+        "packages/core/src/providers/credentials.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+        "packages/core/src/providers/credentials.ts -> packages/core/src/providers/xai-oauth.ts (eager)",
+        "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+        "packages/core/src/providers/kimi-coding-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+        "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+        "packages/core/src/providers/meta-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)",
+        "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/kimi-coding-oauth.ts (eager)",
+        "packages/core/src/providers/oauth-device.ts -> packages/core/src/providers/meta-oauth.ts (eager)",
+        "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/credentials.ts (eager)",
+        "packages/core/src/providers/xai-oauth.ts -> packages/core/src/providers/oauth-device.ts (eager)"
+      ]
+    },
+    {
+      "reason": "Concrete codemode/search activation registration is mutually recursive at operation time. Admission/error/provider execution no longer belongs to this SCC. Preserve the one registry and activation ownership; no eager invocation across these declarations.",
+      "edges": [
+        "packages/core/src/tools/codemode.ts -> packages/core/src/tools/tool-search.ts (eager)",
+        "packages/core/src/tools/tool-search.ts -> packages/core/src/tools/codemode.ts (eager)"
+      ]
+    },
+    {
+      "reason": "Intentional deferred imports of the actual public Core namespace preserve extension class/private-owner identity. Replacing either deferred edge with an eager import is forbidden, even with identical module membership.",
+      "edges": [
+        "packages/core/src/extensions/index.ts -> packages/core/src/extensions/module-loader.ts (eager)",
+        "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/native-module-alias.ts (eager)",
+        "packages/core/src/extensions/module-loader.ts -> packages/core/src/extensions/typescript-module.ts (eager)",
+        "packages/core/src/extensions/native-module-alias.ts -> packages/core/src/index.ts (deferred)",
+        "packages/core/src/extensions/typescript-module.ts -> packages/core/src/index.ts (deferred)",
+        "packages/core/src/index.ts -> packages/core/src/extensions/index.ts (eager)"
+      ]
+    },
+    {
+      "reason": "Workspace refresh deliberately borrows the canonical Zustand store only after deferred loading from an initialized store action. Preserve in-flight generations, drafts and v4 preferences; this is not an eager initialization defect.",
+      "edges": [
+        "packages/web/src/store/session-store.ts -> packages/web/src/store/workspace-refresh.ts (deferred)",
+        "packages/web/src/store/workspace-refresh.ts -> packages/web/src/store/session-store.ts (eager)"
+      ]
+    }
+  ],
+  "unused": [
+    { "export": "packages/cli/src/providers/provider-runtime.ts:oauthRefreshConfigFromEnv", "reason": "Existing owner-local issuer-environment decoder; removing its export is additional cleanup outside the reviewed removal list." },
+    { "export": "packages/cli/src/tui/terminal-escape.ts:TERMINAL_ESCAPE_GRACE_MS", "reason": "Existing terminal timing contract; owner-local use retained, not a newly introduced unused export." },
+    { "export": "packages/cli/src/tui/terminal-settings.ts:UNSUPPORTED_CLI_SETTINGS", "reason": "Existing terminal settings classification table; retain the scoped compatibility contract." },
+    { "export": "packages/core/src/agent/interaction-handle.ts:MAX_INTERACTION_BYTES", "reason": "Existing interaction safety ceiling; owner-local use, no removal or limit change approved." },
+    { "export": "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTIONS", "reason": "Existing run interaction count ceiling; owner-local use retained." },
+    { "export": "packages/core/src/agent/interaction-handle.ts:MAX_RUN_INTERACTION_BYTES", "reason": "Existing aggregate interaction byte ceiling; owner-local use retained." },
+    { "export": "packages/core/src/extensions/execution-hooks.ts:EXECUTION_HOOK_NAMES", "reason": "Existing hook registration vocabulary; dynamic/fixture contract is not deletion evidence." },
+    { "export": "packages/core/src/extensions/startup-options.ts:RESERVED_STARTUP_OPTIONS", "reason": "Existing contributed-option collision contract; preserve startup authority checks." },
+    { "export": "packages/core/src/providers/ai-gateways.ts:gatewayOutput", "reason": "Existing owner-local finite output policy; no new gateway refactor/removal authorized." },
+    { "export": "packages/core/src/providers/anthropic-response.ts:anthropicResponseToolInput", "reason": "Existing owner-local response decoder helper; retain without inferring unused implementation." },
+    { "export": "packages/core/src/providers/azure-config.ts:azureIdentifier", "reason": "Existing owner-local Azure identifier validator; no native validation change authorized." },
+    { "export": "packages/core/src/providers/fireworks.ts:fireworksThinking", "reason": "Existing native owner-local thinking policy; no policy removal authorized." },
+    { "export": "packages/core/src/providers/kimi-coding.ts:kimiCodingThinking", "reason": "Existing native owner-local thinking policy; no policy removal authorized." },
+    { "export": "packages/core/src/providers/meta-oauth.ts:META_OAUTH_CLIENT_ID", "reason": "Existing frozen issuer client constant; no issuer-contract removal authorized." },
+    { "export": "packages/core/src/providers/opencode-go.ts:opencodeGoThinking", "reason": "Existing native owner-local thinking policy; no policy removal authorized." },
+    { "export": "packages/core/src/providers/opencode.ts:opencodeThinking", "reason": "Existing native owner-local thinking policy; no policy removal authorized." },
+    { "export": "packages/server/src/api/session-pagination.ts:DEFAULT_MESSAGE_PAGE_SIZE", "reason": "Existing owner-local paging contract; preserve bounded session browsing." },
+    { "export": "packages/server/src/api/session-pagination.ts:boundedMessageLimit", "reason": "Existing owner-local page admission validator; preserve request limits." },
+    { "export": "packages/server/src/config/effective-configuration.ts:DEFAULT_SCOPED_CONFIGURATION", "reason": "Existing scoped default table; preserve precedence/migrations, not a new removal candidate." },
+    { "export": "packages/server/src/runtime/app-update.ts:installedVersions", "reason": "Existing owner-local installed-version helper; removing its export is additional cleanup outside the reviewed removal list." },
+    { "export": "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_MAX_RECORDS", "reason": "Existing owner-local bounded undo contract; preserve admission/retention limits." },
+    { "export": "packages/server/src/runtime/mcp-inventory-service.ts:MCP_UNDO_TTL_MS", "reason": "Existing owner-local undo lifetime contract; no limit removal authorized." },
+    { "export": "packages/web/src/components/ExtensionInteractionBoundary.tsx:interactionLoadingMessages", "reason": "Existing owner-local interaction loading copy; preserve operation-state UI." },
+    { "export": "packages/web/src/components/markdown-semantics.ts:remarkCjkAutolinks", "reason": "Existing owner-local markdown pipeline plugin; no renderer removal authorized." },
+    { "export": "packages/web/src/components/markdown-semantics.ts:remarkCurrencyMath", "reason": "Existing owner-local markdown pipeline plugin; no renderer removal authorized." },
+    { "export": "packages/web/src/components/settings-navigation.ts:settingsPositionTarget", "reason": "Existing owner-local restored-position selector; preserve settings navigation behavior." },
+    { "export": "packages/web/src/hooks/useI18n.tsx:LOCALE_STORAGE_KEY", "reason": "Existing persisted locale key; browser/fixture strings are not static symbol references." },
+    { "export": "packages/web/src/services/mcp-api.ts:MCP_ACTION_TIMEOUT_MS", "reason": "Existing owner-local MCP action deadline; no deadline change authorized." },
+    { "export": "packages/web/src/services/mcp-api.ts:MCP_OAUTH_CLIENT_TIMEOUT_MS", "reason": "Existing owner-local OAuth deadline; preserve cancellation/lifetime behavior." },
+    { "export": "packages/web/src/services/mcp-api.ts:MCP_TEST_CLIENT_TIMEOUT_MS", "reason": "Existing owner-local MCP test deadline; preserve bounded transport behavior." },
+    { "export": "packages/web/src/store/terminal-theme.ts:TERMINAL_THEME_KEY", "reason": "Existing persisted terminal theme key; preserve COMP-03 migrations/storage contracts." },
+    { "export": "packages/web/src/store/terminal-theme.ts:parseTerminalTheme", "reason": "Existing owner-local persisted theme validator; no additional cleanup authorized." }
+  ]
+}

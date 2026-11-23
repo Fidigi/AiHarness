@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SESSION_SCHEMA_VERSION, type Session } from '../types/index.js';
-import { deserializeSession, serializeSession } from './serialization.js';
+import { deserializeSession, serializeSession, serializeSessionForExport, SESSION_EXPORT_CONTINUATION_WARNING } from './serialization.js';
 import { JsonlSessionStore } from './session-manager.js';
 
 const directories: string[] = [];
@@ -35,12 +35,15 @@ function richSession(): Session {
       content: 'Result',
       timestamp: new Date('2026-01-02T03:04:05.000Z'),
       blocks: [
-        { type: 'text', text: 'Result' },
-        { type: 'reasoning', text: 'Private chain summary', durationMs: 42 },
+        { type: 'text', text: 'Result', textSignature: 'opaque-text-signature' },
+        { type: 'reasoning', text: 'Private chain summary', durationMs: 42, thinkingSignature: 'opaque-thinking-signature' },
+        { type: 'reasoning', text: '', redacted: true, thinkingSignature: 'b3BhcXVlLWVuY3J5cHRlZA==' },
         { type: 'image', mediaType: 'image/png', name: 'plot.png', size: 12, url: 'data:image/png;base64,AA==' },
-        { type: 'tool_call', id: 'call-1', name: 'read', input: { path: 'README.md' } },
+        { type: 'tool_call', id: 'call-1', name: 'read', input: { path: 'README.md', signature: 'argument-data' }, thoughtSignature: 'opaque-tool-signature' },
         { type: 'tool_result', toolCallId: 'call-1', name: 'read', content: 'text', truncated: false },
       ],
+      toolCalls: [{ id: 'call-1', name: 'read', input: { signature: 'argument-data' }, thoughtSignature: 'opaque-call-signature' }],
+      metadata: { signature: 'message-data', thinkingSignature: 'not-a-carrier-here' },
       model: 'model-1',
       provider: 'custom',
       usage: { inputTokens: 10, outputTokens: 4, cacheReadTokens: 2, totalTokens: 14, costUsd: .001 },
@@ -99,6 +102,36 @@ describe('versioned session serialization', () => {
     expect(hydrated.createdAt).toBeInstanceOf(Date);
     expect(hydrated.messages[0].timestamp).toEqual(original.messages[0].timestamp);
     expect(hydrated.commands?.[0]).toMatchObject({ command: 'npm test', excludedFromContext: true });
+  });
+
+  it('expurgates only typed continuation fields by default, without changing storage or the source', () => {
+    const original = richSession();
+    const before = JSON.stringify(original);
+    const projected = serializeSessionForExport(original);
+    expect(projected.warning).toBe(SESSION_EXPORT_CONTINUATION_WARNING);
+    expect(projected.session.messages[0].blocks).toEqual([
+      { type: 'text', text: 'Result' },
+      { type: 'reasoning', text: 'Private chain summary', durationMs: 42 },
+      { type: 'reasoning', text: '', redacted: true },
+      { type: 'image', mediaType: 'image/png', name: 'plot.png', size: 12, url: 'data:image/png;base64,AA==' },
+      { type: 'tool_call', id: 'call-1', name: 'read', input: { path: 'README.md', signature: 'argument-data' } },
+      { type: 'tool_result', toolCallId: 'call-1', name: 'read', content: 'text', truncated: false },
+    ]);
+    expect(projected.session.messages[0].toolCalls).toEqual([{ id: 'call-1', name: 'read', input: { signature: 'argument-data' } }]);
+    expect(projected.session.messages[0].metadata).toEqual(original.messages[0].metadata);
+    expect(projected.session.messages[0].content).toBe('Result');
+    expect(projected.session.commands).toEqual(serializeSession(original).commands);
+    expect(serializeSessionForExport(original, { includeOpaqueContinuations: 'true' as never })).toEqual(projected);
+    const complete = serializeSessionForExport(original, { includeOpaqueContinuations: true });
+    expect(complete).toEqual({ session: serializeSession(original) });
+    expect(complete.session.messages[0].blocks).toEqual(original.messages[0].blocks);
+    expect(JSON.stringify(complete)).not.toContain('must-not-leak');
+    expect(serializeSessionForExport(deserializeSession(projected.session)).warning).toBeUndefined();
+    const additive = structuredClone(original);
+    additive.messages[0].blocks!.push(null as never, { type: 'custom', thinkingSignature: 'ordinary-custom-data' } as never);
+    expect(serializeSessionForExport(additive).session.messages[0].blocks?.slice(-2))
+      .toEqual([null, { type: 'custom', thinkingSignature: 'ordinary-custom-data' }]);
+    expect(JSON.stringify(original)).toBe(before);
   });
 
   it('preserves rich data through JSONL and never writes provider secrets', async () => {

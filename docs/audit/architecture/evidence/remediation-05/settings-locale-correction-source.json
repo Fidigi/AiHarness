@@ -1,0 +1,10 @@
+{
+  "baseImage": "sha256:e8fc137c0f3ed488e853b348e599bf6e960b349f28511223ec028d1cff2478ec",
+  "overlay": [
+    {
+      "path": "packages/web/src/components/settings-locale.test.ts",
+      "sha256": "a816c7e284a75364af65a5831ba28ab8d10669c6892cb26bc6a3b72c36b6df31"
+    }
+  ],
+  "scope": "Only explicit COMP-02 historical test projection changed; no production source/build/flags/timeout changes. Existing seven owning tests and Web types pass. Original full-root failure is retained, not converted to a pass."
+}

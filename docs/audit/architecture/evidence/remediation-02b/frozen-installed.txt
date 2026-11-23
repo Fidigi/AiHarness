@@ -1,0 +1,15 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run tests/functional-parity/installed-executable.test.ts -t Core API 2 utility removal|installed RPC input contract
+
+ RUN  v5.0.3 /app
+
+ ✓ tests/functional-parity/installed-executable.test.ts (403 tests | 400 skipped) 53306ms
+   ✓ CLI-RUN-01 genuine locally packed installed executable (364)
+     ✓ enforces the Core API 2 utility removal in installed declarations and runtime 1983ms
+     ✓ enforces the installed RPC input contract (boundary) 422ms
+     ✓ enforces the installed RPC input contract (held-overflow) 410ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 400 skipped (403)
+   Start at  14:17:00
+   Duration  55.14s (tests 97%, transform 2%, import 1%)

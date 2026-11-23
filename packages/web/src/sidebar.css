@@ -1,0 +1,38 @@
+.sidebar:has(.sidebar-files-slot:not(:empty)) { flex-shrink: 0; overflow-y: auto; }
+.sidebar-files-slot:empty { display: none; }
+.sidebar-files-slot:not(:empty) { display: flex; flex: 1; min-height: 160px; border-top: 1px solid var(--border-subtle); }
+.sidebar-files-slot:has(.collapsed) { flex: 0 0 auto; min-height: 44px; }
+.sidebar-files-slot > .workspace-panel-loading { width: 100%; min-width: 0; max-width: none; flex: 1; }
+.sidebar:has(.sidebar-files-slot:not(:empty)) .sidebar-nav { flex: 0 1 auto; min-height: 64px; max-height: 35%; }
+.sidebar:has(.sidebar-files-slot .collapsed) .sidebar-nav { flex: 1; max-height: none; }
+.sidebar-organisation { margin: .4rem .65rem; padding: .4rem; border: 1px solid var(--border-subtle); border-radius: 5px; font-size: .8rem; }
+.sidebar-organisation summary { cursor: pointer; padding: .35rem 0; }
+.sidebar-organisation label { display: flex; align-items: center; gap: .35rem; padding: .3rem 0; }
+.sidebar-organisation button { min-height: 32px; padding: .3rem .45rem; border: 1px solid var(--border-control); border-radius: 4px; color: inherit; background: transparent; cursor: pointer; }
+.sidebar-organisation button:disabled { opacity: .5; cursor: default; }
+.organisation-actions { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: .4rem; }
+.sidebar-projects ul { list-style: none; padding: 0; max-height: 28vh; overflow: auto; }
+.sidebar-projects li { padding: .4rem 0; border-bottom: 1px solid var(--border-subtle); }
+.sidebar-projects a { display: block; color: inherit; overflow-wrap: anywhere; padding: .3rem; }
+.sidebar-projects form { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sidebar-projects input { width: 100%; min-width: 0; padding: .3rem; }
+.sidebar .family-selector { flex: 0 0 24px; min-height: 32px; align-self: center; }
+@media (pointer: coarse) { .sidebar-organisation button, .sidebar-organisation summary { min-height: 44px; } .sidebar .family-selector { min-height: 44px; } }
+.workspace-linked-directories { width: 100%; margin-top: .45rem; padding: .4rem; border: 1px solid var(--border-control); border-radius: 5px; color: var(--text-primary); background: var(--surface-raised); text-align: left; cursor: pointer; }
+.workspace-control { display: flex; align-items: stretch; gap: .35rem; }
+.workspace-file-manager { flex: 0 0 42px; border: 1px solid var(--border-control); border-radius: 7px; color: var(--text-primary); background: var(--surface-raised); cursor: pointer; }
+.workspace-file-manager:disabled { opacity: .55; cursor: wait; }
+.directory-footer-spacer { flex: 1; }
+.directory-truncated { margin: 0 1rem .5rem; color: var(--status-warning); font-size: .78rem; }
+.directory-create-backdrop { z-index: 51; }
+.directory-create-dialog form label { display: grid; gap: .4rem; color: var(--text-secondary); }
+.directory-create-dialog input { width: 100%; margin-top: .3rem; padding: .65rem; border: 1px solid var(--border-control); border-radius: 5px; color: var(--text-primary); background: var(--surface-input); }
+.directory-create-dialog footer { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.25rem; }
+/* Native links retain the Sidebar's existing control presentation. */
+.sidebar-nav a.session-main { display: block; width: 100%; border: 0; border-radius: 4px; color: var(--text-primary); background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.sidebar-nav a.session-main:hover, .sidebar-nav a.session-new-tab:hover { background: var(--surface-hover); }
+.session-actions a.session-new-tab { align-self: center; padding: .35rem; border-radius: 4px; color: var(--text-secondary); text-decoration: none; font: 400 13.3333px Arial, sans-serif; }
+.search-results a.session-search-link { display: block; width: 100%; padding: .55rem; border: 0; border-radius: 4px; color: var(--text-primary); background: transparent; text-align: left; text-decoration: none; font: 400 13.3333px Arial, sans-serif; cursor: pointer; }
+.search-results a.session-search-link:hover, .search-results a.session-search-link:focus-visible { background: var(--surface-hover); }
+.sidebar .search-results small { color: var(--text-secondary); }
+a.workspace-new-tab { display: grid; place-items: center; flex: 0 0 32px; border: 1px solid var(--border-control); border-radius: 7px; color: var(--text-primary); background: var(--surface-raised); text-decoration: none; }

@@ -1,0 +1,26 @@
+{
+  "session": {
+    "id": "invalid-lines",
+    "schemaVersion": 2,
+    "title": "Valid fallback",
+    "messages": [
+      {
+        "id": "valid-legacy",
+        "role": "user",
+        "content": "Valid fallback",
+        "timestamp": "<TIMESTAMP>"
+      }
+    ],
+    "createdAt": "<TIMESTAMP>",
+    "updatedAt": "<TIMESTAMP>"
+  },
+  "rawEntries": [
+    {
+      "id": "valid-legacy",
+      "type": "message",
+      "timestamp": "<TIMESTAMP>",
+      "role": "user",
+      "content": "Valid fallback"
+    }
+  ]
+}

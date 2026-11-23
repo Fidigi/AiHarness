@@ -1,0 +1,23 @@
+import { createHash } from 'node:crypto';
+import { createServer, request } from 'node:http';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, expect, it, vi } from 'vitest';
+import { EncryptedCredentialStore, ProviderCredentialService } from '@ai-harness/core';
+import * as native from './anthropic-login.js';
+const roots: string[] = [];
+afterEach(async () => { vi.unstubAllGlobals(); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+async function fixture() { const root = await mkdtemp(path.join(os.tmpdir(), 'aih-anthropic-login-')); roots.push(root); const service = new ProviderCredentialService({ store: new EncryptedCredentialStore(path.join(root, 'credentials.enc'), 'synthetic-login-master') }); await service.load(); return service; }
+const tokens = () => Response.json({ access_token: 'synthetic-native-access', refresh_token: 'synthetic-native-refresh', expires_in: 3600 });
+it('reserves native Anthropic copy-code publication and prepares hidden input before instructions, emitting a typed issuer credential', async () => {
+  const service = await fixture(); let ready = false, authorization!: URL, release!: (value: string) => void;
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); const body = JSON.parse(String(init?.body)); expect(body).toMatchObject({ grant_type: 'authorization_code', code: 'synthetic-private-code', client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e', redirect_uri: 'https://platform.claude.com/oauth/code/callback', state: authorization.searchParams.get('state') }); expect(createHash('sha256').update(body.code_verifier).digest('base64url')).toBe(authorization.searchParams.get('code_challenge')); return tokens(); }); vi.stubGlobal('fetch', fetcher);
+  const credential = await native.loginAnthropic(service, 'foreign-label', 'copy-code', url => { expect(ready).toBe(true); authorization = new URL(url); release('synthetic-private-code#' + authorization.searchParams.get('state')); }, new AbortController().signal, async () => { ready = true; return new Promise<string>(resolve => { release = resolve; }); }); expect(credential).toMatchObject({ version: 1, type: 'oauth', subscription: { provider: 'anthropic' } }); expect((await service.resolve('foreign-label', { env: {}, subscriptionProvider: 'anthropic' }))?.credential).toMatchObject({ subscription: credential.subscription }); expect(await service.resolve('anthropic', { env: {}, subscriptionProvider: 'anthropic' })).toBeUndefined(); expect(fetcher).toHaveBeenCalledOnce();
+});
+it('owns Anthropic browser fallback only when preferred port is occupied, retaining exact Host/path/state admission', async () => {
+  const occupied = createServer((_req, res) => res.end()); await new Promise<void>(resolve => occupied.listen(53692, '127.0.0.1', resolve)); const service = await fixture(), controller = new AbortController(); let failure: unknown, callback!: URL, state = '';
+  const probe = (value: string, host?: string) => new Promise<number | undefined>((resolve, reject) => { const target = new URL(value); const req = request({ hostname: '127.0.0.1', port: target.port, path: target.pathname + target.search, headers: { host: host ?? 'localhost:' + target.port }, method: 'GET' }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); }); req.on('error', reject); req.end(); });
+  vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => { expect(String(url)).toBe('https://platform.claude.com/v1/oauth/token'); expect(JSON.parse(String(init?.body))).toMatchObject({ redirect_uri: callback.href, state, code: 'synthetic-private-code' }); return tokens(); });
+  try { const credential = await native.loginAnthropic(service, 'anthropic', 'browser', url => { const authorization = new URL(url); callback = new URL(authorization.searchParams.get('redirect_uri')!); state = authorization.searchParams.get('state')!; expect(callback.hostname).toBe('localhost'); expect(callback.port).not.toBe('53692'); expect(callback.pathname).toBe('/callback'); void (async () => { const valid = callback.href + '?code=synthetic-private-code&state=' + state; expect(await probe(valid.replace(state, 'foreign-state'))).toBe(400); expect(await probe(valid, 'foreign.invalid')).toBe(400); expect(await probe(valid)).toBe(200); })().catch(error => { failure = error; controller.abort(); }); }, controller.signal); expect(credential.subscription?.provider).toBe('anthropic'); expect(failure).toBeUndefined(); } finally { controller.abort(); occupied.closeAllConnections(); await new Promise<void>(resolve => occupied.close(() => resolve())); }
+});

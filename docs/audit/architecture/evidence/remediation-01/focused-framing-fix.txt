@@ -1,0 +1,44 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-server.test.ts packages/cli/src/rpc/rpc-input.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 147ms
+ ❯ packages/cli/src/rpc/rpc-input.test.ts (9 tests | 1 failed) 401ms
+   ❯ RPC byte-framed input (9)
+     ✓ preserves fragmented UTF-8, LF/CRLF, empty lines, Unicode separators and final EOF 3ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "" 60ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\n" 63ms
+     ✓ accepts exactly 32 MiB UTF-8 with delimiter "\r\n" 68ms
+     ✓ rejects one extra byte before dispatch, with delimiter "" 21ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\n" 19ms
+     ✓ rejects one extra byte before dispatch, with delimiter "\r\n" 16ms
+     ✓ counts UTF-8 bytes rather than characters and rejects a nonterminal extra CR 29ms
+     × stops pulling at 64 MiB until a handler releases its frame, including a partial frame 120ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/cli/src/rpc/rpc-input.test.ts > RPC byte-framed input > stops pulling at 64 MiB until a handler releases its frame, including a partial frame
+AssertionError: expected 1027 to be 1026 // Object.is equality
+
+- Expected
++ Received
+
+- 1026
++ 1027
+
+ ❯ packages/cli/src/rpc/rpc-input.test.ts:61:36
+     59|     await new Promise(resolve => setTimeout(resolve, 20));
+     60|     expect(settled).toBe(false);
+     61|     expect(read.mock.calls.length).toBe(calls);
+       |                                    ^
+     62|     first.release();
+     63|     first.release(); // Lease release is idempotent.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 15 passed (16)
+   Start at  11:59:35
+   Duration  2.28s (transform 59%, tests 26%, import 15%)

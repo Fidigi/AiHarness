@@ -1,7 +1,8 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from './fixtures/test-budget';
 import { installMockApi, mockSession } from './fixtures/mock-api';
+import { closeSettings } from './fixtures/settings-navigation';
 
-function providerSection(page: import('@playwright/test').Page) {
+function providerSection(page: Page) {
   return page.getByRole('heading', { name: 'AI Provider' }).locator('..');
 }
 
@@ -33,6 +34,35 @@ test.describe('Conversation detached agent', () => {
     expect(api.requests.some(request => request.path === '/api/chat/stream')).toBe(false);
   });
 
+  test('persiste le mode Ctrl/Cmd+Entrée, conserve les retours à la ligne et envoie sans intercepter l’IME', async ({ page }) => {
+    const api = await installMockApi(page);
+    await page.goto('/settings#behavior');
+
+    const sendMode = page.getByRole('combobox', { name: 'Send key' });
+    await sendMode.selectOption('mod-enter');
+    await page.reload();
+    await expect(sendMode).toHaveValue('mod-enter');
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New chat' }).click();
+    const input = page.getByPlaceholder(/Type your message/);
+    await input.fill('First line');
+    await input.press('Enter');
+    await expect(input).toHaveValue('First line\n');
+    expect(api.requests.some(request => request.path === '/api/agent/runs')).toBe(false);
+
+    await input.fill('IME confirmation stays in the composer');
+    await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 229, bubbles: true });
+    await expect(input).toHaveValue('IME confirmation stays in the composer');
+    expect(api.requests.some(request => request.path === '/api/agent/runs')).toBe(false);
+
+    await input.press('Control+Enter');
+    await expect(page).toHaveURL(/\/chat\/e2e-session-1/);
+    await expect(page.locator('.message.user')).toContainText('IME confirmation stays in the composer');
+    expect(api.requests.find(request => request.path === '/api/agent/runs')?.body)
+      .toMatchObject({ input: 'IME confirmation stays in the composer' });
+  });
+
   test('utilise le fournisseur et les réglages choisis sans renvoyer tout l’historique', async ({ page }) => {
     const api = await installMockApi(page, {
       sessions: [mockSession('streamed-session', 'Conversation SSE', [
@@ -47,9 +77,12 @@ test.describe('Conversation detached agent', () => {
         { type: 'message_end', content: 'Bonjour' },
       ],
     });
-    await page.goto('/settings');
-    await providerSection(page).locator('select').selectOption('openai');
-    await page.getByRole('button', { name: 'Conversation SSE' }).click();
+    await page.goto('/settings#providers');
+    await providerSection(page).getByLabel('Select the AI Provider', { exact: true }).selectOption('openai');
+    await closeSettings(page);
+    const conversation = page.getByRole('link', { name: 'Conversation SSE' });
+    await expect(conversation).toHaveAttribute('href', '/chat/streamed-session?cwd=%2Fworkspace');
+    await conversation.click();
     const modelSaved = page.waitForResponse(response => response.request().method() === 'PATCH'
       && response.url().endsWith('/api/sessions/streamed-session'));
     await page.locator('input[list="model-suggestions"]').fill('gpt-4o');
@@ -65,6 +98,23 @@ test.describe('Conversation detached agent', () => {
       sessionId: 'streamed-session', provider: 'openai', input: 'Nouveau message', model: 'gpt-4o',
     });
     expect(start?.body).not.toHaveProperty('messages');
+  });
+
+  test('saves reasoning during streaming without stopping or queueing a new prompt', async ({ page }) => {
+    const api = await installMockApi(page, { sessions: [mockSession('live-thinking', 'Live thinking')], holdAgentRun: true });
+    await page.goto('/chat/live-thinking');
+    await page.getByPlaceholder(/Type your message/).fill('Keep streaming');
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
+    const thinking = page.getByLabel('Thinking level');
+    await expect(thinking).toBeEnabled();
+    await thinking.selectOption('high');
+    await expect.poll(() => api.sessions[0]?.thinking).toBe('high');
+    await thinking.selectOption('auto');
+    await expect.poll(() => api.sessions[0]?.thinking).toBeUndefined();
+    expect(api.requests.filter(request => request.method === 'POST' && request.path === '/api/agent/runs')).toHaveLength(1);
+    expect(api.requests.some(request => /\/(stop|queue)$/.test(request.path))).toBe(false);
+    await expect(page.getByRole('button', { name: 'Stop model', exact: true })).toBeVisible();
   });
 
   test('rend l’héritage explicite, persiste les surcharges puis restaure la portée projet', async ({ page }) => {
@@ -198,15 +248,43 @@ test.describe('Conversation detached agent', () => {
     ]);
     session.autoCompaction = true;
     await installMockApi(page, { sessions: [session], automaticCompaction: true });
-    await page.goto('/chat/automatic-session');
-    await expect(page.getByText('Old context that must disappear')).toBeVisible();
-    await page.getByPlaceholder(/Type your message/).fill('Trigger automatic compaction');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    let connected!: () => void;
+    const firstConnection = new Promise<void>(resolve => { connected = resolve; });
+    let initial = true;
+    await page.route('**/api/agent/sessions/automatic-session/events*', async route => {
+      if (!initial) { await route.fallback(); return; }
+      initial = false;
+      // Capture readiness before the prompt, as a live server would. The finite
+      // mock stream reconnects afterward with canonical running state before it
+      // completes compaction. Generating initial readiness only after Send can
+      // instead make catch-up skip an already-completed historical notification.
+      const body = `event: connection.ready\ndata: ${JSON.stringify({
+        snapshot: { sessionId: session.id, lastSequence: 0 }, reset: false,
+      })}\n\n`;
+      connected();
+      await held;
+      await route.fulfill({ contentType: 'text/event-stream', body });
+    });
+    try {
+      await page.goto('/chat/automatic-session');
+      await expect(page.getByText('Old context that must disappear')).toBeVisible();
+      await firstConnection;
+      const started = page.waitForResponse(response => response.request().method() === 'POST'
+        && response.url().endsWith('/api/agent/runs'));
+      await page.getByPlaceholder(/Type your message/).fill('Trigger automatic compaction');
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await started;
+      release();
 
-    await expect(page.getByRole('status').filter({ hasText: '120 → 40 tokens (80 saved)' })).toBeVisible();
-    await expect(page.getByText('Old context that must disappear')).toBeHidden();
-    await expect(page.locator('.message.user')).toContainText('Trigger automatic compaction');
-    await expect(page.locator('.message.assistant')).toContainText('Mock response');
+      await expect(page.getByRole('status').filter({ hasText: '120 → 40 tokens (80 saved)' })).toBeVisible();
+      await expect(page.getByText('Old context that must disappear')).toBeHidden();
+      await expect(page.locator('.message.user')).toContainText('Trigger automatic compaction');
+      await expect(page.locator('.message.assistant')).toContainText('Mock response');
+    } finally {
+      release();
+    }
   });
 
   test('affiche une erreur d’agent', async ({ page }) => {
@@ -219,6 +297,11 @@ test.describe('Conversation detached agent', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     const notice = page.getByRole('alert').filter({ hasText: 'Provider unavailable' });
     await expect(notice).toBeVisible();
+    const failedState = await page.evaluate(async () => {
+      const response = await fetch('/api/agent/sessions/error-session/state?messageLimit=80');
+      return await response.json() as { run: { phase: string; error?: string } };
+    });
+    expect(failedState.run).toMatchObject({ phase: 'failed', error: 'Provider unavailable' });
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(notice).toBeVisible();
     await notice.hover();
@@ -248,12 +331,12 @@ test.describe('Conversation detached agent', () => {
 
     api.setRunPhase('phase-session', 'tool', {
       activeTool: {
-        id: 'tool-1', name: 'write_file', input: { path: 'src/generated.ts' },
+        id: 'tool-1', name: 'write', input: { path: 'src/generated.ts' },
         startedAt: '2026-10-01T12:00:01.000Z',
       },
     });
     await expect(retry).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: 'Running tool: write_file' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Running tool: write' })).toBeVisible();
     await page.getByRole('button', { name: 'Stop tool' }).click();
     await expect.poll(() => api.requests.some(request => request.method === 'POST' && request.path.endsWith('/stop'))).toBe(true);
     await expect(page.getByRole('button', { name: 'Stop tool' })).toBeHidden();
@@ -310,8 +393,8 @@ test.describe('Conversation detached agent', () => {
       capabilities: {
         systemPrompt: 'Respect the workspace instructions.',
         tools: [
-          { name: 'read_file', description: 'Read a file', parameters: { type: 'object', required: ['path'] }, extensionId: 'workspace' },
-          { name: 'write_file', description: 'Write a file', parameters: { type: 'object', required: ['path', 'content'] }, extensionId: 'workspace' },
+          { name: 'read', description: 'Read a file', parameters: { type: 'object', required: ['path'] }, extensionId: 'builtin:workspace-tools' },
+          { name: 'write', description: 'Write a file', parameters: { type: 'object', required: ['path', 'content'] }, extensionId: 'builtin:workspace-tools' },
         ],
       },
     });
@@ -320,7 +403,7 @@ test.describe('Conversation detached agent', () => {
     const panel = page.locator('.capabilities-panel');
     await expect(panel).toContainText('Respect the workspace instructions.');
     await expect(panel).toContainText('2 active tools');
-    await panel.getByText('read_file', { exact: true }).click();
+    await panel.getByText('read', { exact: true }).click();
     await expect(panel.getByText('Read a file')).toBeVisible();
     await expect(panel.locator('pre').last()).toContainText('required');
 
@@ -547,6 +630,23 @@ test.describe('Conversation detached agent', () => {
     await expect(result).toContainText('complete output');
   });
 
+  test('identifie les appels MCP par serveur et outil dans le transcript', async ({ page }) => {
+    const session = mockSession('mcp-process-session', 'MCP process');
+    session.messages.push({
+      id: 'assistant-mcp', role: 'assistant', content: '', timestamp: '2025-01-01T12:00:01.000Z',
+      blocks: [
+        { type: 'tool_call', id: 'mcp-call', name: 'mcp__docs_server__lookup_item__0123456789', input: { query: 'runtime' } },
+        { type: 'tool_result', toolCallId: 'mcp-call', name: 'mcp__docs_server__lookup_item__0123456789', content: '{"found":true}', isError: false },
+      ],
+    });
+    await installMockApi(page, { sessions: [session] });
+    await page.goto('/chat/mcp-process-session');
+
+    const process = page.getByLabel('Agent process');
+    await expect(process).toContainText('Tool call: MCP docs_server / lookup_item');
+    await expect(process).toContainText('Tool result: MCP docs_server / lookup_item');
+  });
+
   test('charge palette et widgets d’extension puis résout une interaction déclarative', async ({ page }) => {
     const session = mockSession('extension-session', 'Extension interaction');
     const api = await installMockApi(page, {
@@ -593,6 +693,13 @@ test.describe('Conversation detached agent', () => {
       content: `Message ${index + 1} — ${'contenu '.repeat(12)}`,
     }));
     await installMockApi(page, { sessions: [mockSession('long-session', 'Long historique', messages)] });
+    let holdCompletion = false;
+    let releaseCompletion!: () => void;
+    const completion = new Promise<void>(resolve => { releaseCompletion = resolve; });
+    await page.route('**/api/agent/sessions/long-session/events*', async route => {
+      if (holdCompletion) await completion;
+      await route.fallback();
+    });
     await page.goto('/chat/long-session');
     const container = page.locator('.messages-container');
     await expect.poll(() => container.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -603,12 +710,20 @@ test.describe('Conversation detached agent', () => {
     const backToBottom = page.getByRole('button', { name: /Back to bottom/ });
     await expect(backToBottom).toBeVisible();
     await page.getByPlaceholder(/Type your message/).fill('Nouveau message hors écran');
-    await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect.poll(() => page.locator('.message').count()).toBeGreaterThan(70);
-    await expect(backToBottom).toContainText(/\([1-9]\d*\)/);
-    await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeLessThan(100);
-    await backToBottom.click();
-    await expect.poll(() => container.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight < 96)).toBe(true);
+    holdCompletion = true;
+    try {
+      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect.poll(() => page.locator('.message').count()).toBeGreaterThan(70);
+      await expect(backToBottom).toContainText(/\([1-9]\d*\)/);
+      await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeLessThan(100);
+      await backToBottom.click();
+      // Deliver the response after scrolling starts, not before the click by chance.
+      await expect.poll(() => container.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    } finally {
+      releaseCompletion();
+    }
+    await expect(page.locator('.message')).toHaveCount(messages.length + 2);
+    await expect.poll(() => container.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThan(96);
   });
 
   test('suit les agents enfants, signale leur attention et navigue parent/enfant', async ({ page }) => {
@@ -636,8 +751,17 @@ test.describe('Conversation detached agent', () => {
         },
       ],
     });
-    await page.goto('/settings');
-    await expect(page.getByText('Explore child agent completed.')).toBeVisible();
+    await page.goto('/');
+    const notice = page.locator('.status-notice').filter({ hasText: 'Explore child agent completed.' });
+    await expect(notice).toBeVisible();
+    const originalNotice = await notice.elementHandle();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('status')
+      .filter({ hasText: 'Explore child agent completed.' })).toBeVisible();
+    expect(await originalNotice!.evaluate(node => node.isConnected && !!node.closest('.settings-dialog'))).toBe(true);
+    await closeSettings(page);
+    // The same notice DOM and component lifetime survive both host changes.
+    expect(await originalNotice!.evaluate(node => node.isConnected && !node.closest('.settings-dialog'))).toBe(true);
     await page.goto(`/chat/${parent.id}`);
 
     const toggle = page.getByRole('button', { name: 'Open child agents (2)' });
@@ -672,7 +796,7 @@ test.describe('Conversation detached agent', () => {
     session.messages[0]!.blocks = [
       { type: 'reasoning', text: 'Résumé du raisonnement' },
       { type: 'text', text: session.messages[0]!.content },
-      { type: 'tool_call', id: 'tool-1', name: 'write_file', input: { path: 'src/generated.ts', content: 'export {};' } },
+      { type: 'tool_call', id: 'tool-1', name: 'write', input: { path: 'src/generated.ts', content: 'export {};' } },
     ];
     await installMockApi(page, {
       sessions: [session],
@@ -700,7 +824,7 @@ test.describe('Conversation detached agent', () => {
     await expect(page.locator('.message-content script')).toHaveCount(0);
     await expect(page.locator('.message-content')).not.toContainText('alert(1)');
     await expect(page.locator('details.reasoning-block')).toContainText('Résumé du raisonnement');
-    await expect(page.locator('details.tool-block')).toContainText('write_file');
+    await expect(page.locator('details.tool-block')).toContainText('write');
 
     const message = page.locator('.message.assistant');
     await expect(message.locator('time')).toHaveAttribute('datetime', '2025-01-01T12:00:00.000Z');
@@ -711,6 +835,6 @@ test.describe('Conversation detached agent', () => {
     await expect(message.locator('.message-meta').getByRole('button', { name: 'Assistant response copied.' })).toBeVisible();
 
     await message.getByRole('button', { name: 'src/generated.ts' }).click();
-    await expect(page.getByRole('complementary', { name: 'Workspace explorer' })).toContainText('generated.ts');
+    await expect(page.getByRole('complementary', { name: 'File reader' })).toContainText('generated.ts');
   });
 });

@@ -1,0 +1,23 @@
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/server/src/api/configuration-defaults.test.ts
+
+ RUN  v5.0.3 /app
+
+stdout | packages/server/src/api/configuration-defaults.test.ts > independent new-session defaults
+[Server] AiHarness application configured for http://127.0.0.1:0
+[Server] Providers: openai=✗, anthropic=✗, google=✗, azure=✗, vertex=✗, bedrock=✗, local=✗, github-copilot=✗, openai-codex=✗, mock=✓
+
+ ✓ packages/server/src/api/configuration-defaults.test.ts (11 tests) 16354ms
+   ✓ independent new-session defaults (11)
+     ✓ transmits scoped numeric reasoning budgets to detached runs without accepting prompt-body overrides 753ms
+     ✓ owns detached numeric budgets for claude-haiku-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2463ms
+     ✓ owns detached numeric budgets for claude-haiku-4-5-20251001 in the validated workspace, never in prompt maps or opaque cache IDs 2516ms
+     ✓ owns detached numeric budgets for claude-opus-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2517ms
+     ✓ owns detached numeric budgets for claude-opus-4-5-20251101 in the validated workspace, never in prompt maps or opaque cache IDs 2480ms
+     ✓ owns detached numeric budgets for claude-sonnet-4-5 in the validated workspace, never in prompt maps or opaque cache IDs 2548ms
+     ✓ owns detached numeric budgets for claude-sonnet-4-5-20250929 in the validated workspace, never in prompt maps or opaque cache IDs 2554ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  13:24:54
+   Duration  18.14s (tests 90%, transform 7%, import 2%)

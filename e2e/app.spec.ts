@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/test-budget';
 import { installMockApi } from './fixtures/mock-api';
 
 test.describe('Application shell', () => {
@@ -73,8 +73,11 @@ test.describe('Application shell', () => {
     await expect(page.locator('main')).toBeVisible();
   });
 
-  test('demande une approbation explicite avant de faire confiance au projet', async ({ page }) => {
-    const api = await installMockApi(page, { workspaceTrusted: false });
+  test('demande une décision persistée même si le dossier frais paraît fiable', async ({ page }) => {
+    const api = await installMockApi(page, {
+      workspaceTrusted: true,
+      workspaceOperationTrusted: false,
+    });
 
     await page.goto('/');
 

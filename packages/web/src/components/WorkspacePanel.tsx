@@ -1,5 +1,8 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useEscapeLayer } from '../hooks/useEscapeLayer';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import type { FileUploadProgress, WorkspaceFileContent, WorkspaceFileEntry, GitStatusFile } from '../services/api';
 import {
   getFileContent,
@@ -11,90 +14,216 @@ import {
   uploadFiles,
 } from '../services/api';
 import { useI18n } from '../hooks/useI18n';
-import { useSessionStore } from '../store/session-store';
+import { getSessionRecord, useSessionStore } from '../store/session-store';
 import MarkdownContent from './MarkdownContent';
+import { linkedDirectoryMessages } from './linked-directory-messages';
+import LinkedDirectoryBoundary from './LinkedDirectoryBoundary';
+import { useLocation } from 'react-router-dom';
+import DocumentPreview from './DocumentPreview';
+import { parseDelimited, DelimitedPreviewError } from './delimited-preview';
+import { filePreviewMessages } from './file-preview-messages';
+import { Icon } from './Icon';
 
 type Tab = 'files' | 'changes';
 type ViewerTab = 'source' | 'preview' | 'diff';
+type OpenFile = { path: string; mode: ViewerTab };
 
 function quoteMention(path: string): string {
   return path.includes(' ') ? `@"${path}"` : `@${path}`;
 }
 
-function FileNode({ entry, cwd, depth, onOpen, onMention, showHidden }: {
+function FileNode({ entry, cwd, depth, onOpen, onMention, onLinkedDirectory, showHidden, activePath, expandedPaths, onToggle, refreshVersion, onReveal }: {
   entry: WorkspaceFileEntry;
   cwd: string;
   depth: number;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, linkOrigin?: HTMLButtonElement) => void;
   onMention: (path: string) => void;
+  onLinkedDirectory: (path: string) => void;
   showHidden: boolean;
+  activePath: string;
+  expandedPaths: ReadonlySet<string>;
+  onToggle: (path: string) => void;
+  refreshVersion: number;
+  onReveal: (path: string, element: HTMLButtonElement) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { t, locale } = useI18n();
+  const open = expandedPaths.has(entry.path);
+  const visible = !entry.hidden || showHidden;
   const [children, setChildren] = useState<WorkspaceFileEntry[]>();
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  if (entry.hidden && !showHidden) return null;
-  const activate = async () => {
-    if (!entry.isDirectory) {
-      onOpen(entry.path);
-      return;
-    }
-    const next = !open;
-    setOpen(next);
-    if (next && !children) {
-      const result = await listFiles(cwd, entry.path);
+  useEffect(() => {
+    if (!entry.isDirectory || !open || !visible) { setLoading(false); return; }
+    const controller = new AbortController();
+    setLoading(true); setError('');
+    void listFiles(cwd, entry.path, controller.signal).then(result => {
+      if (controller.signal.aborted) return;
+      setLoading(false);
       if (result.success && result.data) setChildren(result.data.entries);
-      else setError(result.error || 'Error');
-    }
-  };
+      else { setChildren(undefined); setError(result.error || t('files.loadFailed')); }
+    });
+    return () => controller.abort();
+  }, [cwd, entry.path, entry.isDirectory, open, visible, refreshVersion]);
+
+  if (!visible) return null;
   return (
     <li className="file-node">
       <div style={{ paddingLeft: `${depth * .8}rem` }}>
-        <button className="file-name" onClick={() => void activate()} title={entry.path}>
-          {entry.isDirectory ? open ? '📂' : '📁' : '📄'} {entry.name}
+        <button ref={element => { if (element) onReveal(entry.path, element); }} className="file-name" onClick={event => entry.isDirectory ? onToggle(entry.path)
+          : onOpen(entry.path, entry.isSymbolicLink ? event.currentTarget : undefined)} title={entry.path}
+          aria-expanded={entry.isDirectory ? open : undefined} aria-busy={entry.isDirectory ? loading : undefined}
+          aria-current={!entry.isDirectory && activePath === entry.path ? 'true' : undefined}>
+          <Icon name={entry.isDirectory ? open ? 'chevron-down' : 'chevron-right' : 'file'} /> {entry.name}
           {entry.gitStatus && <span className={`git-badge ${entry.gitStatus}`} title={entry.gitStatus}>{gitBadge(entry.gitStatus)}</span>}
         </button>
-        {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`Mention ${entry.path}`}>@</button>}
+        {!entry.isDirectory && <button className="file-mention" onClick={() => onMention(entry.path)} aria-label={`${t('files.mention')} ${entry.path}`}>@</button>}
       </div>
-      {error && <small role="alert">{error}</small>}
-      {open && children && <ul>{children.map(child => (
+      {entry.isSymbolicLink && <small className="file-link-reason"><button type="button"
+        onClick={() => onLinkedDirectory(entry.path)}>{linkedDirectoryMessages(locale).review}</button></small>}
+      {entry.isDirectory && open && loading && <small className="file-node-status" role="status">{t('files.loadingDirectory', { name: entry.name })}</small>}
+      {entry.isDirectory && error && <small role="alert">{error}</small>}
+      {entry.isDirectory && open && children && <ul>{children.map(child => (
         <FileNode key={child.path} entry={child} cwd={cwd} depth={depth + 1}
-          onOpen={onOpen} onMention={onMention} showHidden={showHidden} />
+          onOpen={onOpen} onMention={onMention} onLinkedDirectory={onLinkedDirectory} showHidden={showHidden}
+          activePath={activePath} expandedPaths={expandedPaths} onToggle={onToggle} refreshVersion={refreshVersion} onReveal={onReveal} />
       ))}</ul>}
     </li>
   );
 }
 
-function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; onRequestClose?: () => void }) {
+function WorkspacePanel({ isOpen = true, onRequestClose, explorerHost }: { isOpen?: boolean; onRequestClose?: () => void; explorerHost?: HTMLElement | null }) {
   const workspace = useSessionStore(state => state.workspace);
   const activeSessionId = useSessionStore(state => state.activeSessionId);
-  const draft = useSessionStore(state => activeSessionId ? state.drafts[activeSessionId] ?? '' : '');
+  const draft = useSessionStore(state => activeSessionId ? getSessionRecord(state.drafts, activeSessionId) ?? '' : '');
   const setDraft = useSessionStore(state => state.setDraft);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const location = useLocation();
+  const linkedDirectoryNavigation = JSON.stringify([location.key, location.pathname, location.search, location.hash]);
+  const [linkedDirectoryRequest, setLinkedDirectoryRequest] = useState<{ cwd: string; navigation: string; folder: string }>();
+  const linkedDirectoryFolder = linkedDirectoryRequest && workspace?.cwd === linkedDirectoryRequest.cwd
+    && linkedDirectoryNavigation === linkedDirectoryRequest.navigation && isOpen ? linkedDirectoryRequest.folder : undefined;
+  const openLinkedDirectory = (folder: string) => {
+    if (workspace) setLinkedDirectoryRequest({ cwd: workspace.cwd, navigation: linkedDirectoryNavigation, folder });
+  };
+  useEffect(() => { setLinkedDirectoryRequest(undefined); }, [workspace?.cwd, linkedDirectoryNavigation, isOpen]);
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState<Tab>('files');
   const [entries, setEntries] = useState<WorkspaceFileEntry[]>([]);
+  const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(new Set());
+  // Watch ticks retain their bounded root refresh; only explicit Refresh fans out.
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const directoryIntent = useRef(0);
+  const revealRequest = useRef<string | undefined>(undefined);
+  const revealRow = (path: string, element: HTMLButtonElement) => {
+    if (revealRequest.current !== path || !element.getClientRects().length) return;
+    revealRequest.current = undefined;
+    element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  };
+  const toggleDirectory = (path: string) => {
+    directoryIntent.current++; revealRequest.current = undefined;
+    setExpandedPaths(current => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  };
+  const revealFile = (path: string) => {
+    revealRequest.current = path;
+    setExpandedPaths(current => {
+      const next = new Set(current);
+      const parts = path.split('/');
+      for (let length = 1; length < parts.length; length++) next.add(parts.slice(0, length).join('/'));
+      return next;
+    });
+  };
   const [changes, setChanges] = useState<GitStatusFile[]>([]);
   const [gitSummary, setGitSummary] = useState({ repository: true, additions: 0, deletions: 0 });
   const [showHidden, setShowHidden] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<WorkspaceFileContent>();
+  const [openedFiles, setOpenedFiles] = useState<OpenFile[]>([]);
+  const tabsRef = useRef<OpenFile[]>([]);
+  const publishTabs = (files: OpenFile[]) => { tabsRef.current = files; setOpenedFiles(files); };
+  const [activePath, setActivePath] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
+  const explorerRef = useRef<HTMLElement>(null);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const focusAfterExpand = useRef(false);
+  const readerSurface = useRef<HTMLDivElement>(null);
+  const maximizeButton = useRef<HTMLButtonElement>(null);
+  const controlsRef = useRef<HTMLElement>(null);
+  const optionsButton = useRef<HTMLButtonElement>(null);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const [popup, setPopup] = useState<'options' | 'upload'>();
+  const [reading, setReading] = useState(false);
+  const readEpoch = useRef(0);
+  const tabId = useId();
+  const copy = filePreviewMessages(locale);
   const [viewerTab, setViewerTab] = useState<ViewerTab>('source');
   const [diff, setDiff] = useState('');
   const [diffBinary, setDiffBinary] = useState(false);
   const [query, setQuery] = useState('');
-  const [searchResult, setSearchResult] = useState<string[]>([]);
+  const [searchResult, setSearchResult] = useState<{ scope: string; query: string; files: string[]; failed: boolean }>();
   const [viewerWidth, setViewerWidth] = useState(520);
+  const [viewerMaxWidth, setViewerMaxWidth] = useState(() => Math.max(360, Math.min(1200, window.innerWidth * .65)));
+  const visibleViewerWidth = Math.min(viewerWidth, viewerMaxWidth);
   const [viewerExpanded, setViewerExpanded] = useState(false);
   const [targetLine, setTargetLine] = useState<number>();
   const [uploadProgress, setUploadProgress] = useState<FileUploadProgress>();
   const [collision, setCollision] = useState<'reject' | 'rename' | 'overwrite'>('reject');
+  const uploadInput = useRef<HTMLInputElement>(null);
   const uploadAbortRef = useRef<AbortController | undefined>(undefined);
   const openFileAbortRef = useRef<AbortController | undefined>(undefined);
   const refreshAbortRef = useRef<AbortController | undefined>(undefined);
+  const resizeCleanupRef = useRef<(() => void) | undefined>(undefined);
+  const workspaceOperationTrusted = Boolean(workspace
+    && (workspace.operationTrusted ?? workspace.trusted));
+
+  const workspaceScope = JSON.stringify([workspace?.id, workspace?.cwd, workspaceOperationTrusted]);
+  const hasReader = openedFiles.length > 0 && workspaceOperationTrusted;
+  const expanded = viewerExpanded && hasReader && !collapsed;
+  useFocusTrap(expanded, readerSurface, () => setViewerExpanded(false), maximizeButton);
+  useLayoutEffect(() => {
+    if (collapsed) expandButton.current?.focus({ preventScroll: true });
+    else if (focusAfterExpand.current) {
+      focusAfterExpand.current = false;
+      explorerRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button')?.focus({ preventScroll: true });
+    }
+  }, [collapsed]);
+  useLayoutEffect(() => {
+    // Reparenting the tree must not leave the current row outside its new scrollport.
+    revealRequest.current = activePath || undefined;
+    const row = explorerRef.current?.querySelector<HTMLButtonElement>('.file-name[aria-current="true"]');
+    if (row) revealRow(activePath, row);
+  }, [explorerHost]);
+  useEscapeLayer(Boolean(popup), 'menu', () => {
+    (popup === 'upload' ? uploadButton : optionsButton).current?.focus({ preventScroll: true });
+    setPopup(undefined);
+  }, controlsRef);
+  useEffect(() => {
+    if (!popup) return;
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !controlsRef.current?.contains(event.target)) setPopup(undefined);
+    };
+    document.addEventListener('pointerdown', outside, true);
+    return () => document.removeEventListener('pointerdown', outside, true);
+  }, [popup]);
+  useEffect(() => {
+    if (!expanded) return;
+    const restore = () => setViewerExpanded(false);
+    window.addEventListener('aih-open-terminal', restore);
+    window.addEventListener('aih-toggle-terminal', restore);
+    return () => {
+      window.removeEventListener('aih-open-terminal', restore);
+      window.removeEventListener('aih-toggle-terminal', restore);
+    };
+  }, [expanded]);
+  const normalizedQuery = query.trim();
+  const currentSearch = searchResult?.scope === workspaceScope && searchResult.query === normalizedQuery ? searchResult : undefined;
 
   const refresh = async () => {
-    if (!workspace?.trusted) return;
+    if (!workspaceOperationTrusted || !workspace) return;
     refreshAbortRef.current?.abort();
     const controller = new AbortController();
     refreshAbortRef.current = controller;
@@ -114,43 +243,49 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
   };
 
   useEffect(() => {
+    setExpandedPaths(new Set()); revealRequest.current = undefined;
+    setPopup(undefined); setViewerExpanded(false);
     uploadAbortRef.current?.abort();
     openFileAbortRef.current?.abort();
     refreshAbortRef.current?.abort();
     setUploadProgress(undefined);
+    setLinkedDirectoryRequest(undefined);
+    readEpoch.current++;
+    publishTabs([]); setActivePath(''); setReading(false);
     setSelected(undefined);
     setEntries([]);
     setChanges([]);
     setGitSummary({ repository: false, additions: 0, deletions: 0 });
     setDiff('');
     setDiffBinary(false);
-    setSearchResult([]);
+    setSearchResult(undefined);
     setError('');
     void refresh();
     return () => {
+      readEpoch.current++;
+      resizeCleanupRef.current?.();
       uploadAbortRef.current?.abort();
       openFileAbortRef.current?.abort();
       refreshAbortRef.current?.abort();
     };
-  }, [workspace?.cwd, workspace?.trusted]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [workspaceScope]);
 
   useEffect(() => {
-    if (!workspace || query.trim().length < 1) {
-      setSearchResult([]);
-      return;
-    }
-    setSearchResult([]);
+    setSearchResult(undefined);
+    if (!workspace || !workspaceOperationTrusted || !normalizedQuery) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchFiles(workspace.cwd, query.trim(), controller.signal).then(result => {
-        if (!controller.signal.aborted && result.success && result.data) setSearchResult(result.data.files.slice(0, 100));
+      void searchFiles(workspace.cwd, normalizedQuery, controller.signal).then(result => {
+        if (controller.signal.aborted) return;
+        setSearchResult({ scope: workspaceScope, query: normalizedQuery,
+          files: result.success && result.data ? result.data.files.slice(0, 100) : [], failed: !result.success || !result.data });
       });
     }, 180);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, workspace]);
+  }, [normalizedQuery, workspaceScope]);
 
   const uploadSelectedFiles = async (files: File[]) => {
-    if (!workspace || !files.length) return;
+    if (!workspace || !workspaceOperationTrusted || !files.length) return;
     uploadAbortRef.current?.abort();
     const controller = new AbortController();
     uploadAbortRef.current = controller;
@@ -158,22 +293,38 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     const result = await uploadFiles(workspace.cwd, '.', files, {
       collision,
       signal: controller.signal,
-      onProgress: setUploadProgress,
+      onProgress: progress => { if (!controller.signal.aborted && uploadAbortRef.current === controller) setUploadProgress(progress); },
     });
-    if (uploadAbortRef.current === controller) uploadAbortRef.current = undefined;
+    if (controller.signal.aborted || uploadAbortRef.current !== controller) return;
     if (result.success) await refresh();
     else if (!controller.signal.aborted) setError(result.error || t('files.uploadFailed'));
     window.setTimeout(() => {
-      if (!uploadAbortRef.current) setUploadProgress(undefined);
+      if (!controller.signal.aborted && uploadAbortRef.current === controller) {
+        uploadAbortRef.current = undefined; setUploadProgress(undefined);
+      }
     }, 1_200);
   };
 
-  const openFile = async (rawPath: string, targetTab: ViewerTab = 'source', requestedLine?: number) => {
-    if (!workspace) return;
+  const openFile = async (rawPath: string, requestedTab?: ViewerTab, requestedLine?: number, linkOrigin?: HTMLButtonElement, revealInExplorer = false) => {
+    if (!workspace || !workspaceOperationTrusted || rawPath.length > 4096) return;
+    if (revealInExplorer) setCollapsed(false);
+    // New explicit read admission retires old metadata before any response/import await.
+    if (linkOrigin) setLinkedDirectoryRequest(undefined);
     setError('');
     const match = rawPath.match(/^(.*?)(?:#L(\d+))?$/i);
     const filePath = match?.[1] || rawPath;
     const line = requestedLine ?? (match?.[2] ? Number(match[2]) : undefined);
+    const previous = tabsRef.current.find(file => file.path === filePath);
+    if (!previous && tabsRef.current.length >= 8) { setError(copy.limit); return; }
+    if (revealInExplorer) { setTab('files'); setQuery(''); }
+    const targetTab = requestedTab ?? previous?.mode ?? 'source';
+    publishTabs(previous ? tabsRef.current.map(file => file.path === filePath ? { ...file, mode: targetTab } : file)
+      : [...tabsRef.current, { path: filePath, mode: targetTab }]);
+    const generation = ++readEpoch.current;
+    // A delayed read must not undo a newer explicit disclosure action.
+    const directoryGeneration = directoryIntent.current;
+    revealRequest.current = undefined;
+    setActivePath(filePath); setSelected(undefined); setDiff(''); setDiffBinary(false); setReading(true);
     openFileAbortRef.current?.abort();
     const controller = new AbortController();
     openFileAbortRef.current = controller;
@@ -183,16 +334,22 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
       getFileContent(workspace.cwd, filePath, controller.signal),
       targetTab === 'diff' ? getFileDiff(workspace.cwd, filePath, controller.signal) : Promise.resolve(undefined),
     ]);
-    if (controller.signal.aborted || openFileAbortRef.current !== controller) return;
+    if (controller.signal.aborted || openFileAbortRef.current !== controller || generation !== readEpoch.current) return;
     openFileAbortRef.current = undefined;
+    setReading(false);
     if (diffResult) {
       setDiff(diffResult.success && diffResult.data ? diffResult.data.diff : diffResult.error || '');
       setDiffBinary(Boolean(diffResult.success && diffResult.data?.binary));
     }
     if (content.data && (content.success || content.data.tooLarge)) {
       setSelected(content.data);
+      setActivePath(content.data.path);
+      if (directoryGeneration === directoryIntent.current) revealFile(content.data.path);
+      publishTabs(tabsRef.current.map(file => file.path === filePath ? { ...file, path: content.data!.path } : file)
+        .filter((file, index, files) => files.findIndex(other => other.path === file.path) === index));
     } else if (targetTab === 'diff' && diffResult?.success) {
       // Deleted and oversized files can still have a useful Git diff even when source content is unavailable.
+      if (directoryGeneration === directoryIntent.current) revealFile(filePath);
       setSelected({
         path: filePath,
         name: filePath.split('/').pop() || filePath,
@@ -202,30 +359,62 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         binary: Boolean(diffResult.data?.binary),
       });
     } else {
-      setError(content.error || t('files.openFailed'));
+      // First preserve ordinary in-root reads. A refused symbolic-link read only
+      // opens source metadata while this explicit invoker still owns focus/lifetime.
+      if (linkOrigin?.isConnected && document.activeElement === linkOrigin) {
+        openLinkedDirectory(filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '.');
+        return;
+      }
+      setError(copy.readFailed);
     }
+  };
+
+  const closeFile = (filePath: string) => {
+    const index = tabsRef.current.findIndex(file => file.path === filePath);
+    const remaining = tabsRef.current.filter(file => file.path !== filePath);
+    publishTabs(remaining);
+    if (activePath === filePath) {
+      revealRequest.current = undefined;
+      readEpoch.current++; openFileAbortRef.current?.abort();
+      setSelected(undefined); setReading(false); setActivePath(''); setError('');
+      const next = remaining[Math.max(0, index - 1)];
+      if (next) void openFile(next.path);
+    }
+    const generation = readEpoch.current;
+    window.requestAnimationFrame(() => {
+      if (generation !== readEpoch.current || document.activeElement !== document.body) return;
+      const target = panelRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')
+        ?? explorerRef.current?.querySelector<HTMLButtonElement>('.panel-tabs button');
+      target?.focus();
+    });
+  };
+  const selectMode = (mode: ViewerTab) => {
+    setViewerTab(mode);
+    publishTabs(tabsRef.current.map(file => file.path === activePath ? { ...file, mode } : file));
   };
 
   useEffect(() => {
     const openLinkedFile = (event: Event) => {
       const detail = (event as CustomEvent).detail as unknown;
-      if (typeof detail === 'string') void openFile(detail.replace(/^\/+/, ''));
+      if (typeof detail === 'string') void openFile(detail.replace(/^\/+/, ''), undefined, undefined, undefined, true);
       else if (detail && typeof detail === 'object' && 'path' in detail && typeof detail.path === 'string') {
-        void openFile(detail.path.replace(/^\/+/, ''), 'source', 'line' in detail && typeof detail.line === 'number' ? detail.line : undefined);
+        void openFile(detail.path.replace(/^\/+/, ''), 'source', 'line' in detail && typeof detail.line === 'number' ? detail.line : undefined, undefined, true);
       }
     };
     window.addEventListener('aih-open-file', openLinkedFile);
     return () => window.removeEventListener('aih-open-file', openLinkedFile);
-  }, [workspace?.cwd]); // The handler always targets the active workspace.
+  }, [workspace?.cwd, workspaceOperationTrusted]); // The handler always targets the active workspace.
 
   useEffect(() => {
-    if (!selected || !workspace?.trusted) return;
+    if (!selected || !workspace || !workspaceOperationTrusted) return;
     const controller = new AbortController();
     let current = true;
+    const generation = readEpoch.current;
     void (async () => {
       try {
         for await (const event of streamFileChanges(workspace.cwd, selected.path, controller.signal)) {
-          if (!current || event.type === 'connection.ready') continue;
+          if (!current || generation !== readEpoch.current) return;
+          if (event.type === 'connection.ready') continue;
           if (event.type === 'file.unavailable') {
             setError(t('files.watchUnavailable'));
             break;
@@ -234,28 +423,29 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
             getFileContent(workspace.cwd, selected.path, controller.signal),
             getFileDiff(workspace.cwd, selected.path, controller.signal),
           ]);
-          if (!current) return;
+          if (!current || generation !== readEpoch.current) return;
           if (content.success && content.data) setSelected(content.data);
-          else setError(content.error || t('files.openFailed'));
+          else { setSelected(undefined); setError(copy.readFailed); }
           if (nextDiff.success && nextDiff.data) {
             setDiff(nextDiff.data.diff);
             setDiffBinary(nextDiff.data.binary);
           }
           await refresh();
         }
-      } catch (watchError) {
-        if (!controller.signal.aborted) setError(watchError instanceof Error ? watchError.message : t('files.watchUnavailable'));
+      } catch {
+        if (!controller.signal.aborted && generation === readEpoch.current) setError(t('files.watchUnavailable'));
       }
     })();
     return () => {
       current = false;
       controller.abort();
     };
-  }, [selected?.path, workspace?.cwd, workspace?.trusted]); // Watch follows only the currently opened file.
+  }, [selected?.path, workspace?.cwd, workspaceOperationTrusted]); // Watch follows only the currently opened file.
 
   useEffect(() => {
     if (!selected || !targetLine) return;
-    window.setTimeout(() => document.getElementById(`source-line-${targetLine}`)?.scrollIntoView({ block: 'center' }), 0);
+    const timer = window.setTimeout(() => document.getElementById(`source-line-${targetLine}`)?.scrollIntoView({ block: 'center' }), 0);
+    return () => window.clearTimeout(timer);
   }, [selected, targetLine, viewerTab]);
 
   const mention = (filePath: string) => {
@@ -274,15 +464,29 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
   }, [changes]);
 
+  useEffect(() => {
+    const resize = () => setViewerMaxWidth(Math.max(360, Math.min(1200, window.innerWidth * .65,
+      window.innerWidth - (explorerHost?.closest('.sidebar')?.getBoundingClientRect().width ?? 0) - 240)));
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [explorerHost]);
+
+  const resizeViewer = (width: number) => setViewerWidth(Math.max(360, Math.min(viewerMaxWidth, width)));
   const beginResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const move = (pointer: PointerEvent) => setViewerWidth(Math.max(300, Math.min(1200, window.innerWidth - pointer.clientX)));
+    resizeCleanupRef.current?.();
+    const move = (pointer: PointerEvent) => resizeViewer(window.innerWidth - pointer.clientX);
     const finish = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      resizeCleanupRef.current = undefined;
     };
+    resizeCleanupRef.current = finish;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish, { once: true });
+    window.addEventListener('pointercancel', finish, { once: true });
   };
 
   const downloadUrl = useMemo(() => workspace && selected
@@ -290,49 +494,70 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
     : '', [selected, workspace]);
 
   if (!workspace) return null;
-  if (collapsed) return <aside className="workspace-panel collapsed"><button onClick={() => setCollapsed(false)} aria-label={t('files.expand')}>‹</button></aside>;
+  if (collapsed) {
+    const closed = <section role="region" aria-label={t('files.explorer')}
+      className={explorerHost ? 'workspace-explorer collapsed' : 'workspace-panel collapsed panel-open'}>
+      <button ref={expandButton} onClick={() => { focusAfterExpand.current = true; setCollapsed(false); }} aria-label={t('files.expand')}><Icon name="chevron-down" /> <span className="collapsed-label">{t('files.files')}</span></button>
+    </section>;
+    return explorerHost ? createPortal(closed, explorerHost) : closed;
+  }
 
-  return (
-    <aside className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${selected ? 'viewer-open' : ''} ${viewerExpanded ? 'viewer-expanded' : ''}`}
-      style={selected ? { flexBasis: `${viewerWidth}px`, width: `${viewerWidth}px` } : undefined}
-      aria-label={t('files.explorer')}>
-      {selected && <div className="panel-resizer" role="separator" aria-orientation="vertical"
-        aria-label={t('files.resize')} onPointerDown={beginResize} />}
-      <header>
+  const explorer = <section ref={explorerRef} className="workspace-explorer" role="region" aria-label={t('files.explorer')} hidden={expanded}>
+      <header ref={controlsRef} onBlurCapture={event => {
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setPopup(undefined);
+      }}>
         <div className="panel-tabs">
-          <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>{t('files.files')}</button>
-          <button className={tab === 'changes' ? 'active' : ''} onClick={() => setTab('changes')}>
+          <button className={tab === 'files' ? 'active' : ''} aria-pressed={tab === 'files'} onClick={() => setTab('files')}>{t('files.files')}</button>
+          <button className={tab === 'changes' ? 'active' : ''} aria-pressed={tab === 'changes'} onClick={() => setTab('changes')}>
             {t('files.changes')} {changes.length ? `(${changes.length})` : ''}
           </button>
         </div>
         <div className="panel-header-actions">
-          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose} aria-label={t('common.close')}>×</button>}
-          <button onClick={() => window.dispatchEvent(new Event('aih-open-terminal'))} aria-label={t('terminal.openFromFiles')}>⌘</button>
-          <button onClick={() => setCollapsed(true)} aria-label={t('files.collapse')}>›</button>
+          <button disabled={!workspaceOperationTrusted} onClick={() => { setRefreshVersion(value => value + 1); void refresh(); }} aria-label={t('files.refresh')}><Icon name="refresh" /></button>
+          <button ref={uploadButton} disabled={!workspaceOperationTrusted || Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
+            aria-label={t('files.upload')} aria-expanded={popup === 'upload'} aria-controls={popup === 'upload' ? `${tabId}-upload` : undefined}
+            onClick={() => setPopup(popup === 'upload' ? undefined : 'upload')}><Icon name="upload" /></button>
+          <button ref={optionsButton} aria-label={copy.options} aria-expanded={popup === 'options'} aria-controls={popup === 'options' ? `${tabId}-options` : undefined}
+            onClick={() => setPopup(popup === 'options' ? undefined : 'options')}><Icon name="more" /></button>
         </div>
+        {popup === 'options' && <div className="file-tools-popup" id={`${tabId}-options`} role="group" aria-label={copy.options}>
+          <label className="hidden-toggle"><input type="checkbox" checked={showHidden} disabled={!workspaceOperationTrusted}
+            onChange={event => setShowHidden(event.target.checked)} /> {t('files.hidden')}</label>
+          <button className="panel-linked-directories" onClick={() => {
+            // The stable trigger owns the lazy modal, not this retiring menu item.
+            optionsButton.current?.focus({ preventScroll: true }); setPopup(undefined); openLinkedDirectory('.');
+          }}>{linkedDirectoryMessages(locale).title}</button>
+          <button onClick={() => { setPopup(undefined); window.dispatchEvent(new Event('aih-open-terminal')); }}>{t('terminal.openFromFiles')}</button>
+          <button onClick={() => { setPopup(undefined); setLinkedDirectoryRequest(undefined); setCollapsed(true); }}>{t('files.collapse')}</button>
+          {onRequestClose && <button className="workspace-panel-close" onClick={onRequestClose}>{t('common.close')}</button>}
+        </div>}
+        {popup === 'upload' && <div className="file-tools-popup upload-options" id={`${tabId}-upload`} role="group" aria-label={t('files.upload')}>
+          <p>{copy.destination}<code>{workspace.cwd}</code></p>
+          <label>{t('files.collision')}
+            <select value={collision} onChange={event => setCollision(event.target.value as typeof collision)}>
+              <option value="reject">{t('files.collision.reject')}</option>
+              <option value="rename">{t('files.collision.rename')}</option>
+              <option value="overwrite">{t('files.collision.overwrite')}</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => uploadInput.current?.click()}>{copy.chooseFiles}</button>
+        </div>}
       </header>
-
-      {!workspace.trusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
+      <input ref={uploadInput} hidden type="file" multiple disabled={!workspaceOperationTrusted || Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
+        const files = [...(event.target.files ?? [])];
+        uploadButton.current?.focus({ preventScroll: true }); setPopup(undefined);
+        if (files.length) void uploadSelectedFiles(files);
+        event.target.value = '';
+      }} />
+      {linkedDirectoryFolder !== undefined && <LinkedDirectoryBoundary key={JSON.stringify([workspace.cwd, linkedDirectoryNavigation, linkedDirectoryFolder])}
+        cwd={workspace.cwd} initialDirectory={linkedDirectoryFolder} onClose={() => setLinkedDirectoryRequest(undefined)} />}
+      {!workspaceOperationTrusted ? <p className="panel-empty">{t('files.trustRequired')}</p> : (
         <>
           <div className="file-toolbar">
-            <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('files.search')} />
-            <button onClick={() => void refresh()} aria-label={t('files.refresh')}>↻</button>
-            <label title={t('files.upload')} aria-disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}>↑<input
-              type="file" multiple disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')} onChange={event => {
-                const files = [...(event.target.files ?? [])];
-                if (files.length) void uploadSelectedFiles(files);
-                event.target.value = '';
-              }} /></label>
+            <input type="search" value={query} onChange={event => setQuery(event.target.value)}
+              placeholder={t('files.search')} aria-label={t('files.search')} />
+            {query && <button onClick={() => setQuery('')} aria-label={t('files.clearSearch')}><Icon name="close" /></button>}
           </div>
-          <div className="upload-options">
-            <label>{t('files.collision')}
-              <select value={collision} disabled={Boolean(uploadProgress && uploadProgress.phase !== 'complete')}
-                onChange={event => setCollision(event.target.value as typeof collision)}>
-                <option value="reject">{t('files.collision.reject')}</option>
-                <option value="rename">{t('files.collision.rename')}</option>
-                <option value="overwrite">{t('files.collision.overwrite')}</option>
-              </select>
-            </label>
             {uploadProgress && <div className="upload-progress" role="status" aria-live="polite">
               <progress max={Math.max(1, uploadProgress.totalBytes)} value={uploadProgress.loadedBytes}
                 aria-label={t('files.uploadProgress')} />
@@ -343,15 +568,21 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
               })}</span>
               {uploadProgress.phase !== 'complete' && <button onClick={() => uploadAbortRef.current?.abort()}>{t('common.cancel')}</button>}
             </div>}
-          </div>
-          <label className="hidden-toggle"><input type="checkbox" checked={showHidden} onChange={event => setShowHidden(event.target.checked)} /> {t('files.hidden')}</label>
           {error && <p className="panel-error" role="alert">{error}</p>}
           <div className="file-tree">
-            {query ? (
-              <ul>{searchResult.map(file => <li key={file}><button onClick={() => void openFile(file)}>📄 {file}</button><button onClick={() => mention(file)}>@</button></li>)}</ul>
+            {query && !normalizedQuery && <p className="panel-empty" role="status">{t('files.searchWhitespace')}</p>}
+            {normalizedQuery ? !currentSearch ? <p className="panel-empty" role="status">{t('files.searchLoading')}</p>
+              : currentSearch.failed ? <p className="panel-error" role="alert">{t('files.searchFailed')}</p>
+                : !currentSearch.files.length ? <p className="panel-empty" role="status">{t('files.searchEmpty')}</p> : (
+              <ul>{currentSearch.files.map(file => <li key={file}>
+                <button onClick={() => void openFile(file)} aria-current={activePath === file ? 'true' : undefined}><Icon name="file" /> {file}</button>
+                <button onClick={() => mention(file)} aria-label={`${t('files.mention')} ${file}`}>@</button>
+              </li>)}</ul>
             ) : tab === 'files' ? (
               entries.length ? <ul>{entries.map(entry => <FileNode key={entry.path} entry={entry} cwd={workspace.cwd}
-                depth={0} onOpen={openFile} onMention={mention} showHidden={showHidden} />)}</ul>
+                depth={0} onOpen={(path, origin) => void openFile(path, 'source', undefined, origin)} onMention={mention} showHidden={showHidden}
+                activePath={activePath} expandedPaths={expandedPaths} onToggle={toggleDirectory} refreshVersion={refreshVersion} onReveal={revealRow}
+                onLinkedDirectory={path => openLinkedDirectory(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.')} />)}</ul>
                 : <p className="panel-empty">{t('files.empty')}</p>
             ) : gitSummary.repository ? (
               <>
@@ -359,7 +590,7 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
                 {changedGroups.map(([group, files]) => <section className="change-group" key={group}>
                   <h3>{group}</h3>
                   <ul>{files.map(change => <li key={change.path} className="change-row">
-                    <button onClick={() => void openFile(change.path, 'diff')}>
+                    <button onClick={() => void openFile(change.path, 'diff')} aria-current={activePath === change.path ? 'true' : undefined}>
                       <b>{gitBadge(change.status)}</b>
                       <span>{change.path.slice(group === '.' ? 0 : group.length + 1)}</span>
                       {(change.additions !== undefined || change.deletions !== undefined) && (
@@ -375,38 +606,81 @@ function WorkspacePanel({ isOpen = true, onRequestClose }: { isOpen?: boolean; o
         </>
       )}
 
-      {selected && (
-        <section className="file-viewer">
+    </section>;
+
+  return <>
+    {explorerHost && createPortal(explorer, explorerHost)}
+    <div ref={panelRef} className={`workspace-panel ${isOpen ? 'panel-open' : ''} ${hasReader ? 'viewer-open' : ''} ${expanded ? 'viewer-expanded' : ''} ${explorerHost ? 'split' : ''} ${explorerHost && !hasReader ? 'reader-empty' : ''}`}
+      style={hasReader ? { flexBasis: `${visibleViewerWidth}px`, width: `${visibleViewerWidth}px` } : undefined}>
+      {!explorerHost && explorer}
+      <aside className="workspace-reader" aria-label={copy.reader} hidden={!hasReader}>
+      <div ref={readerSurface} className="reader-surface" role={expanded ? 'dialog' : undefined}
+        aria-modal={expanded || undefined} aria-label={expanded ? copy.reader : undefined} tabIndex={expanded ? -1 : undefined}>
+      {selected && !expanded && <div className="panel-resizer" role="separator" aria-orientation="vertical"
+        tabIndex={0} aria-valuemin={360} aria-valuemax={viewerMaxWidth} aria-valuenow={visibleViewerWidth}
+        aria-label={t('files.resize')} onPointerDown={beginResize} onKeyDown={event => {
+          const width = event.key === 'ArrowLeft' ? visibleViewerWidth + 20
+            : event.key === 'ArrowRight' ? visibleViewerWidth - 20
+              : event.key === 'Home' ? 360 : event.key === 'End' ? viewerMaxWidth : undefined;
+          if (width === undefined) return;
+          event.preventDefault(); resizeViewer(width);
+        }} />}
+      {expanded && error && <p className="panel-error" role="alert">{error}</p>}
+      {openedFiles.length > 0 && <div className="open-file-tabs">
+        <div role="tablist" aria-label={copy.tabs}>
+        {openedFiles.map((file, index) => <button key={file.path} role="tab" id={`${tabId}-${index}`} aria-selected={activePath === file.path}
+            aria-controls={`${tabId}-panel`} tabIndex={activePath === file.path ? 0 : -1}
+            title={file.path} onClick={() => void openFile(file.path)} onKeyDown={event => {
+              if (event.key === 'Delete') { event.preventDefault(); closeFile(file.path); return; }
+              const next = event.key === 'ArrowRight' ? (index + 1) % openedFiles.length
+                : event.key === 'ArrowLeft' ? (index + openedFiles.length - 1) % openedFiles.length
+                  : event.key === 'Home' ? 0 : event.key === 'End' ? openedFiles.length - 1 : undefined;
+              if (next === undefined) return;
+              event.preventDefault(); document.getElementById(`${tabId}-${next}`)?.focus();
+              void openFile(openedFiles[next].path);
+            }}>{file.path}</button>)}
+        </div>
+        <button aria-label={`${copy.close} ${activePath}`} onClick={() => closeFile(activePath)}><Icon name="close" /></button>
+      </div>}
+      {!selected && activePath && <section role="tabpanel" id={`${tabId}-panel`}
+        aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
+        {reading && <p className="panel-empty" role="status">{copy.loading}</p>}
+      </section>}
+      {selected && workspaceOperationTrusted && (
+        <section className="file-viewer" role="tabpanel" id={`${tabId}-panel`}
+          aria-labelledby={`${tabId}-${openedFiles.findIndex(file => file.path === activePath)}`}>
           <header>
-            <strong title={selected.path}>{selected.name}</strong>
+            <code className="viewer-path" tabIndex={0}>{selected.path}</code>
             <div>
-              <button onClick={() => setViewerExpanded(value => !value)} aria-pressed={viewerExpanded}
-                aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}>{viewerExpanded ? '↙' : '↗'}</button>
-              <button onClick={() => setSelected(undefined)} aria-label={t('common.close')}>×</button>
+              <button ref={maximizeButton} data-autofocus onClick={() => setViewerExpanded(value => !value)} aria-pressed={expanded}
+                aria-label={viewerExpanded ? t('files.restore') : t('files.maximize')}><Icon name={viewerExpanded ? 'minimize' : 'maximize'} /></button>
+              <button onClick={() => closeFile(selected.path)} aria-label={t('common.close')}><Icon name="close" /></button>
             </div>
           </header>
           <div className="viewer-meta">{selected.language} · {selected.lineCount ?? '—'} {t('files.lines')} · {formatBytes(selected.size)}</div>
           <nav>
-            <button className={viewerTab === 'source' ? 'active' : ''} onClick={() => setViewerTab('source')}>{t('files.source')}</button>
-            <button className={viewerTab === 'preview' ? 'active' : ''} onClick={() => setViewerTab('preview')}>{t('files.preview')}</button>
-            <button className={viewerTab === 'diff' ? 'active' : ''} onClick={() => void openFile(selected.path, 'diff')}>{t('files.diff')}</button>
+            <button className={viewerTab === 'source' ? 'active' : ''} aria-pressed={viewerTab === 'source'} onClick={() => selectMode('source')}>{t('files.source')}</button>
+            <button className={viewerTab === 'preview' ? 'active' : ''} aria-pressed={viewerTab === 'preview'} onClick={() => selectMode('preview')}>{t('files.preview')}</button>
+            <button className={viewerTab === 'diff' ? 'active' : ''} aria-pressed={viewerTab === 'diff'} onClick={() => void openFile(selected.path, 'diff')}>{t('files.diff')}</button>
           </nav>
           <div className="viewer-content">
             {viewerTab === 'diff' ? diffBinary ? <p className="panel-empty">{t('files.binaryDiff')}</p> : <DiffView diff={diff} />
               : selected.tooLarge ? <p className="panel-empty">{t('files.tooLarge')}</p>
-                : viewerTab === 'preview' ? <FilePreview file={selected} downloadUrl={downloadUrl} />
+                : viewerTab === 'preview' ? <FilePreview key={JSON.stringify([selected.path, selected.modifiedAt, selected.size])} file={selected} cwd={workspace.cwd} downloadUrl={downloadUrl} />
                   : selected.binary ? <p className="panel-empty">{t('files.binary')}</p>
                     : <SourceView content={selected.content ?? ''} language={selected.language} targetLine={targetLine} />}
           </div>
           <footer>
             <button onClick={() => mention(selected.path)}>@ {t('files.mention')}</button>
-            <button onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}>{t('chat.copy')}</button>
-            <a href={downloadUrl} download>{t('files.download')}</a>
+            <button disabled={selected.binary || selected.tooLarge} aria-label={t('chat.copy')} onClick={() => void navigator.clipboard?.writeText(selected.content ?? '')}><Icon name="copy" /></button>
+            <a href={downloadUrl} download aria-label={t('files.download')}><Icon name="download" /></a>
           </footer>
         </section>
       )}
-    </aside>
-  );
+      </div>
+      </aside>
+    </div>
+  </>;
 }
 
 function SourceView({ content, language, targetLine }: { content: string; language: string; targetLine?: number }) {
@@ -427,7 +701,21 @@ function DiffView({ diff }: { diff: string }) {
   ))}</pre>;
 }
 
-function FilePreview({ file, downloadUrl }: { file: WorkspaceFileContent; downloadUrl: string }) {
+function FilePreview({ file, cwd, downloadUrl }: { file: WorkspaceFileContent; cwd: string; downloadUrl: string }) {
+  const { locale } = useI18n();
+  const copy = filePreviewMessages(locale);
+  if (/\.(pdf|docx)$/i.test(file.path)) return <DocumentPreview cwd={cwd} path={file.path} />;
+  if (/\.(csv|tsv)$/i.test(file.path) && !file.binary) {
+    try {
+      const rows = parseDelimited(file.content ?? '', /\.tsv$/i.test(file.path) ? '\t' : ',');
+      if (!rows.length) return <p className="panel-empty">{copy.empty}</p>;
+      const columns = Math.max(...rows.map(row => row.length));
+      return <div className="delimited-preview"><table aria-label={copy.table}>
+        <thead><tr>{Array.from({ length: columns }, (_, index) => <th scope="col" key={index}>{rows[0][index] || `#${index + 1}`}</th>)}</tr></thead>
+        <tbody>{rows.slice(1).map((row, index) => <tr key={index}>{Array.from({ length: columns }, (_, column) => <td key={column}>{row[column] ?? ''}</td>)}</tr>)}</tbody>
+      </table></div>;
+    } catch (error) { return <p className="panel-error" role="alert">{error instanceof DelimitedPreviewError && error.reason === 'limit' ? copy.tableLimit : copy.tableInvalid}</p>; }
+  }
   if (/\.(png|jpe?g|gif|webp|svg)$/i.test(file.path)) return <img src={downloadUrl} alt={file.name} />;
   if (/\.(mp3|wav|ogg|m4a)$/i.test(file.path)) return <audio src={downloadUrl} controls />;
   if (/\.(mp4|webm|mov)$/i.test(file.path)) return <video src={downloadUrl} controls />;

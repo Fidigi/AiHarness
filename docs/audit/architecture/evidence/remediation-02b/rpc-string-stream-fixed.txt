@@ -1,0 +1,15 @@
+npm notice run @ai-harness/cli@0.1.0 typecheck
+npm notice run node ../../scripts/run-typescript.mjs --noEmit
+npm notice run ai-harness@0.1.0 test
+npm notice run vitest run packages/cli/src/rpc/rpc-input.test.ts packages/cli/src/rpc/rpc-server.test.ts packages/cli/src/rpc/session-branch-ui.test.ts
+
+ RUN  v5.0.3 /app
+
+ ✓ packages/cli/src/rpc/session-branch-ui.test.ts (7 tests) 416ms
+ ✓ packages/cli/src/rpc/rpc-server.test.ts (7 tests) 142ms
+ ✓ packages/cli/src/rpc/rpc-input.test.ts (12 tests) 491ms
+
+ Test Files  3 passed (3)
+      Tests  26 passed (26)
+   Start at  13:57:50
+   Duration  3.18s (transform 41%, tests 35%, import 24%)

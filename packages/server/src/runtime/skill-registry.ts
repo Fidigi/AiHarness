@@ -69,27 +69,43 @@ async function assertNoSymlink(boundary: string, destination: string): Promise<v
 }
 
 async function boundedResponse(response: Response, maxBytes: number): Promise<string> {
-  if (!response.ok) throw new Error(`Registry request failed (${response.status}).`);
-  const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) throw new Error('Registry response is too large.');
+  if (!response.ok) {
+    void response.body?.cancel('registry-request-failed').catch(() => undefined);
+    throw new Error(`Registry request failed (${response.status}).`);
+  }
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null && (!/^(?:0|[1-9]\d*)$/u.test(contentLength)
+    || Number(contentLength) > maxBytes)) {
+    void response.body?.cancel('registry-response-limit').catch(() => undefined);
+    throw new Error('Registry response is too large.');
+  }
   if (!response.body) return '';
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
+  const timeout = AbortSignal.timeout(15_000);
+  const timedOut = Symbol('timed-out');
+  const timeoutResult = new Promise<typeof timedOut>(resolve => {
+    timeout.addEventListener('abort', () => resolve(timedOut), { once: true });
+  });
   let length = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    length += value.byteLength;
-    if (length > maxBytes) {
-      await reader.cancel();
-      throw new Error('Registry response is too large.');
+  let completed = false;
+  try {
+    while (true) {
+      const item = await Promise.race([reader.read(), timeoutResult]);
+      if (item === timedOut) throw new Error('Registry response timed out.');
+      if (item.done) { completed = true; break; }
+      length += item.value.byteLength;
+      if (length > maxBytes) throw new Error('Registry response is too large.');
+      chunks.push(item.value);
     }
-    chunks.push(value);
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } finally {
+    if (!completed) void reader.cancel('registry-response-abandoned').catch(() => undefined);
+    try { reader.releaseLock(); } catch { /* A hostile pending read may retain the lock. */ }
   }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
 /** Read-only HTTPS registry plus explicit, atomic Agent Skill installs. */

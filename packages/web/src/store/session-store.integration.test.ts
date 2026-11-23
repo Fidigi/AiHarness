@@ -7,8 +7,9 @@ describe('useSessionStore streaming updates', () => {
   });
 
   it('keeps one assistant message while streaming content is updated', () => {
-    useSessionStore.getState().createSession('Streaming');
-    const sessionId = useSessionStore.getState().activeSessionId!;
+    const sessionId = useSessionStore.getState().createSession('Streaming');
+    expect(sessionId).toBe(useSessionStore.getState().activeSessionId);
+    expect(sessionId).toMatch(/^draft:/u);
 
     useSessionStore.getState().upsertAssistantMessage(sessionId, 'stream-1', 'Bon');
     useSessionStore.getState().upsertAssistantMessage(sessionId, 'stream-1', 'Bonjour');
@@ -74,6 +75,25 @@ describe('useSessionStore streaming updates', () => {
     expect(session.messages).toHaveLength(82);
     expect(session.messagePage?.loadedRanges).toEqual([{ start: 18, end: 100 }]);
     expect(session.messagePage).toMatchObject({ hasMoreBefore: true, hasMoreAfter: false, nextBefore: 'message-18' });
+  });
+
+  it('merges cache notice pages without duplicates and clears hidden or replaced anchors', () => {
+    const message = (id: string) => ({ id, role: 'assistant' as const, content: id, timestamp: '2025-01-01T00:00:00.000Z' });
+    const notice = (id: string) => ({ id: `cache-miss:${id}`, kind: 'cache_miss' as const, afterEntryId: id, missedTokens: 50_000 });
+    const page = { start: 1, end: 2, total: 2, hasMoreBefore: true, hasMoreAfter: false, revision: 1 };
+    const tail = { id: 'notices', messages: [message('last')], createdAt: message('').timestamp, updatedAt: message('').timestamp,
+      messagePage: page, cacheNotices: [notice('last')], showCacheMissNotices: true };
+    useSessionStore.getState().syncSession(tail);
+    const older = { ...page, start: 0, end: 1, messages: [message('first')], cacheNotices: [notice('first')], showCacheMissNotices: true };
+    useSessionStore.getState().mergeMessagePage(tail.id, older);
+    useSessionStore.getState().mergeMessagePage(tail.id, older);
+    useSessionStore.getState().syncSession(tail);
+    expect(useSessionStore.getState().sessions[0].cacheNotices?.map(item => item.id).sort()).toEqual(['cache-miss:first', 'cache-miss:last']);
+    useSessionStore.getState().syncSession({ ...tail, cacheNotices: [], showCacheMissNotices: false });
+    expect(useSessionStore.getState().sessions[0].cacheNotices).toEqual([]);
+    useSessionStore.getState().syncSession({ ...tail, messages: [message('replacement')], cacheNotices: [notice('replacement')],
+      messagePage: { ...page, start: 0, end: 1, total: 1, revision: 2 } });
+    expect(useSessionStore.getState().sessions[0].cacheNotices).toEqual([notice('replacement')]);
   });
 
   it('invalidates cached message windows when the server revision changes', () => {

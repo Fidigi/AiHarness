@@ -1,0 +1,2 @@
+{"delta":"parity","id":"bash-contract","type":"bash_execution_update"}
+{"command":"bash","data":{"cancelled":false,"exitCode":0,"output":"parity","truncated":false},"id":"bash-contract","success":true,"type":"response"}

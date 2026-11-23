@@ -19,13 +19,14 @@ describe('ProjectTrustManager', () => {
     await manager.trust(project);
 
     expect(await manager.isTrusted(project)).toBe(true);
-    expect(JSON.parse(await readFile(filePath, 'utf8')).trustedProjects).toContain(path.resolve(project));
+    expect(JSON.parse(await readFile(filePath, 'utf8')).decisions).toMatchObject({ [path.resolve(project)]: true });
     expect((await stat(filePath)).mode & 0o777).toBe(0o600);
 
     const reloaded = new ProjectTrustManager(filePath);
     await reloaded.load();
     expect(await reloaded.isTrusted(project)).toBe(true);
-    await reloaded.untrust(project);
+    await reloaded.refuse(project);
     expect(await reloaded.isTrusted(project)).toBe(false);
+    expect(reloaded.listDecisions()).toContainEqual({ path: path.resolve(project), decision: false });
   });
 });

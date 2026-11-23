@@ -1,0 +1,354 @@
+docker build -f .docker/Dockerfile.test \
+	--target test-runner \
+	-t ai-harness:test-latest-run-1794928621493255383 \
+	.
+#1 [internal] load build definition from Dockerfile.test
+#1 sha256:2f05b43392db0b62f6b8973a679330e5d8250795f3e45cf53c3b8850427acab3
+#1 transferring dockerfile: 2.41kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:24.15.0-bookworm-slim
+#2 sha256:474e51bc321101a059fc1d1d1b7416f0256fa6ceaf2fc5ea158c8d4309f5ab95
+#2 DONE 0.7s
+
+#3 [internal] load .dockerignore
+#3 sha256:70e94f9e75c6d338ac44cc4a12c20571d2130ef6da28fd1d6254c5d3f88a347f
+#3 transferring context: 1.17kB done
+#3 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:f51221c2d0c7b28bb7e488b90e69452f44b2b3994845664f43f3ad0226a856b5
+#12 DONE 0.0s
+
+#18 [base  1/15] FROM docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d
+#18 sha256:d7dc2c1a700a6b001b77996e757322ee31ca4909e052bc2c66d1d0f71b81bed4
+#18 resolve docker.io/library/node:24.15.0-bookworm-slim@sha256:4e6b70dd6cbfc88c8157ba19aa3d9f9cce6ba4703576d55459e45efcbc9c5f5d 0.0s done
+#18 DONE 0.0s
+
+#12 [internal] load build context
+#12 sha256:f51221c2d0c7b28bb7e488b90e69452f44b2b3994845664f43f3ad0226a856b5
+#12 transferring context: 378.79kB 0.1s done
+#12 DONE 0.1s
+
+#14 [base  2/15] RUN npm install --global npm@12.1.0
+#14 sha256:a072c845a7e874e563d9d994d8a539c30590639196a9e0791aec2dc885476c22
+#14 CACHED
+
+#13 [base  3/15] RUN apt-get update && apt-get install -y --no-install-recommends     chromium     fonts-liberation     fonts-noto-cjk     fonts-noto-color-emoji     libasound2     libatk-bridge2.0-0     libatk1.0-0     libc6     libcairo2     libcups2     libdbus-1-3     libexpat1     libfontconfig1     libgbm1     libgcc1     libglib2.0-0     libgtk-3-0     libnspr4     libnss3     libpango-1.0-0     libpangocairo-1.0-0     libstdc++6     libx11-xcb1     libxcb1     libxcomposite1     libxdamage1     libxfixes3     libxi6     libxrandr2     libxrender1     libxss1     libxtst6     ca-certificates     g++     git     make     python3     wget     && rm -rf /var/lib/apt/lists/*
+#13 sha256:fc1b37b5a4174fa175030838671168c707b11c8981c0d5e342a64d6cf412fed5
+#13 CACHED
+
+#11 [base  4/15] COPY .docker/test-fonts.conf /etc/fonts/local.conf
+#11 sha256:0a916e696149cb6457d1080e931af7ab46768909a3961a62ba950ada4b12c689
+#11 CACHED
+
+#17 [base  5/15] WORKDIR /app
+#17 sha256:d408b35e4e1ab5c5c86231279dfbdf8feee4af600802ac0a4a7e2ac6429f2e92
+#17 CACHED
+
+#7 [base  6/15] COPY package.json package-lock.json .npmrc ./
+#7 sha256:496a10a2806cb15c9a2cee22ea635378166e27cb67249d5c7014179608ef1e37
+#7 DONE 0.0s
+
+#8 [base  7/15] COPY packages/core/package.json packages/core/
+#8 sha256:a8140ad1e464ed0e31439158e2bf82865dca19c94dd6f5124ecdf713f10b5058
+#8 DONE 0.0s
+
+#19 [base  8/15] COPY packages/cli/package.json packages/cli/
+#19 sha256:d86e308a8b79db9662827f6dce022206be65b5a3a86e99c6512609fdc8cb3307
+#19 DONE 0.0s
+
+#6 [base  9/15] COPY packages/web/package.json packages/web/
+#6 sha256:97041a4dc23596e08663d8dee6d2b5c7f26e2b86916d46e75009aaf576964cca
+#6 DONE 0.0s
+
+#5 [base 10/15] COPY packages/server/package.json packages/server/
+#5 sha256:f238df480cf45a837fc2fd606f2cb38e702e4191a5d8754c2c45fde8059484a2
+#5 DONE 0.0s
+
+#4 [base 11/15] RUN npm ci
+#4 sha256:1346f3297e4add692ae3a9114d5c82d138edba486a821b5d72a4ed93a87ccc7e
+#4 1.919 npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+#4 2.433 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#4 2.480 npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+#4 3.034 npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+#4 3.059 npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+#4 6.420 npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+#4 33.35
+#4 33.35 added 537 packages, and audited 542 packages in 33s
+#4 33.35
+#4 33.36 223 packages are looking for funding
+#4 33.36   run `npm fund` for details
+#4 33.47
+#4 33.47 23 vulnerabilities (4 low, 11 moderate, 5 high, 3 critical)
+#4 33.47
+#4 33.47 To address issues that do not require attention, run:
+#4 33.47   npm audit fix
+#4 33.47
+#4 33.47 To address all issues (including breaking changes), run:
+#4 33.47   npm audit fix --force
+#4 33.47
+#4 33.47 Run `npm audit` for details.
+#4 33.47 npm warn install-scripts 1 package had install scripts blocked because they are not covered by allowScripts:
+#4 33.47 npm warn install-scripts   sharp@0.34.5 (install: node install/check.js || npm run build)
+#4 33.47 npm warn install-scripts
+#4 33.47 npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+#4 33.47 npm notice
+#4 33.47 npm notice New minor version of npm available! 12.1.0 -> 12.2.2
+#4 33.47 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+#4 33.47 npm notice To update run: npm install -g npm@12.2.2
+#4 33.47 npm notice
+#4 DONE 33.6s
+
+#15 [base 12/15] COPY . .
+#15 sha256:2cedddf64a0fbb9f7a6df05266eb3c212b1e847c8647f137c66d35ff3703a6ec
+#15 DONE 0.7s
+
+#9 [base 13/15] RUN npm run build --workspace @ai-harness/core     && npm run build --workspace @ai-harness/cli     && npm run build --workspace @ai-harness/server     && npm run build --workspace @ai-harness/web
+#9 sha256:93a429a1f38f1c6ae0600a9096b2616c96c4deabfc8067f655e84e32fdfa51ad
+#9 0.205 npm notice run @ai-harness/core@0.1.0 build
+#9 0.205 npm notice run node ../../scripts/run-typescript.mjs
+#9 13.42 npm notice run @ai-harness/cli@0.1.0 build
+#9 13.42 npm notice run node ../../scripts/run-typescript.mjs && node scripts/copy-assets.mjs
+#9 17.86 ✅ CLI assets copied successfully
+#9 17.94 npm notice run @ai-harness/server@0.1.0 build
+#9 17.94 npm notice run node ../../scripts/run-typescript.mjs && node scripts/copy-assets.mjs
+#9 22.39 ✅ ai-harness-web executable prepared
+#9 22.47 npm notice run @ai-harness/web@0.1.0 build
+#9 22.47 npm notice run node scripts/build.mjs
+#9 37.47 vite v8.3.1 building client environment for production...
+#9 37.48 transforming...
+#9 37.72 ✓ 475 modules transformed.
+#9 37.85 rendering chunks...
+#9 38.08 computing gzip size...
+#9 38.09 dist/index.html                                           0.89 kB │ gzip:   0.46 kB
+#9 38.09 dist/assets/KaTeX_Size3-Regular-CTq5MqoE.woff             4.42 kB
+#9 38.09 dist/assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2            4.92 kB
+#9 38.09 dist/assets/KaTeX_Size2-Regular-Dy4dx90m.woff2            5.20 kB
+#9 38.09 dist/assets/KaTeX_Size1-Regular-mCD8mA8B.woff2            5.46 kB
+#9 38.09 dist/assets/KaTeX_Size4-Regular-BF-4gkZK.woff             5.98 kB
+#9 38.09 dist/assets/KaTeX_Size2-Regular-oD1tc_U0.woff             6.18 kB
+#9 38.09 dist/assets/KaTeX_Size1-Regular-C195tn64.woff             6.49 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2      6.90 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2         6.91 kB
+#9 38.09 dist/assets/KaTeX_Size3-Regular-DgpXs0kz.ttf              7.58 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff       7.65 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff          7.71 kB
+#9 38.09 dist/assets/KaTeX_Script-Regular-D3wIWfF6.woff2           9.64 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2       10.34 kB
+#9 38.09 dist/assets/KaTeX_Size4-Regular-DWFBv043.ttf             10.36 kB
+#9 38.09 dist/assets/KaTeX_Script-Regular-D5yQViql.woff           10.58 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2         11.31 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2            11.34 kB
+#9 38.09 dist/assets/KaTeX_Size2-Regular-B7gKUWhC.ttf             11.50 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2        12.02 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2          12.21 kB
+#9 38.09 dist/assets/KaTeX_Size1-Regular-Dbsnue_I.ttf             12.22 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff        12.31 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf       12.34 kB
+#9 38.09 dist/assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf          12.36 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff          13.20 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Bold-BsDP51OF.woff             13.29 kB
+#9 38.09 dist/assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2      13.56 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Italic-DN2j7dab.woff         14.11 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff           14.40 kB
+#9 38.09 dist/assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff       16.02 kB
+#9 38.09 dist/assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2         16.40 kB
+#9 38.09 dist/assets/KaTeX_Math-Italic-t53AETM-.woff2             16.44 kB
+#9 38.09 dist/assets/KaTeX_Script-Regular-C5JkGWo-.ttf            16.64 kB
+#9 38.09 dist/assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2         16.78 kB
+#9 38.09 dist/assets/KaTeX_Main-Italic-NWA7e6Wa.woff2             16.98 kB
+#9 38.09 dist/assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff          18.66 kB
+#9 38.09 dist/assets/KaTeX_Math-Italic-DA0__PXp.woff              18.74 kB
+#9 38.09 dist/assets/KaTeX_Main-BoldItalic-SpSLRI95.woff          19.41 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf         19.43 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Regular-CB_wures.ttf           19.57 kB
+#9 38.09 dist/assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf              19.58 kB
+#9 38.09 dist/assets/KaTeX_Main-Italic-BMLOBm91.woff              19.67 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf          22.36 kB
+#9 38.09 dist/assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf            24.50 kB
+#9 38.09 dist/assets/KaTeX_Main-Bold-Cx986IdX.woff2               25.32 kB
+#9 38.09 dist/assets/KaTeX_Main-Regular-B22Nviop.woff2            26.27 kB
+#9 38.09 dist/assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf        27.55 kB
+#9 38.09 dist/assets/KaTeX_AMS-Regular-BQhdFMY1.woff2             28.07 kB
+#9 38.09 dist/assets/KaTeX_Main-Bold-Jm3AIy58.woff                29.91 kB
+#9 38.09 dist/assets/KaTeX_Main-Regular-Dr94JaBh.woff             30.77 kB
+#9 38.09 dist/assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf           31.19 kB
+#9 38.09 dist/assets/KaTeX_Math-Italic-flOr_0UB.ttf               31.30 kB
+#9 38.09 dist/assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf           32.96 kB
+#9 38.09 dist/assets/KaTeX_AMS-Regular-DMm9YOAa.woff              33.51 kB
+#9 38.09 dist/assets/KaTeX_Main-Italic-3WenGoN9.ttf               33.58 kB
+#9 38.09 dist/assets/KaTeX_Main-Bold-waoOVXN0.ttf                 51.33 kB
+#9 38.09 dist/assets/KaTeX_Main-Regular-ypZvNtVU.ttf              53.58 kB
+#9 38.09 dist/assets/KaTeX_AMS-Regular-DRggAlZN.ttf               63.63 kB
+#9 38.09 dist/assets/pdf.worker.min-CjEcRF4W.mjs               1,264.34 kB
+#9 38.09 dist/assets/ExtensionInteractionDialog-BkTE3gLz.css       0.87 kB │ gzip:   0.42 kB
+#9 38.09 dist/assets/CodemodeCard-DPRsy6d_.css                     0.96 kB │ gzip:   0.46 kB
+#9 38.09 dist/assets/SessionRowCopyMenu-Bu6cdfMU.css               1.06 kB │ gzip:   0.50 kB
+#9 38.09 dist/assets/mobile-keyboard-Biz3w2xO.css                  1.23 kB │ gzip:   0.41 kB
+#9 38.09 dist/assets/ToolProgressCard-CVL-4jww.css                 1.57 kB │ gzip:   0.60 kB
+#9 38.09 dist/assets/LinkedDirectoryModal-CUYT_9Zc.css             3.35 kB │ gzip:   0.99 kB
+#9 38.09 dist/assets/TerminalPanel-BrP-ENHg.css                    3.93 kB │ gzip:   1.01 kB
+#9 38.09 dist/assets/Sidebar-gQbA3UNf.css                          4.49 kB │ gzip:   1.16 kB
+#9 38.09 dist/assets/workspace-panel-BUqCfWGC.css                 10.62 kB │ gzip:   2.76 kB
+#9 38.09 dist/assets/SettingsView-DxmN-lLF.css                    19.06 kB │ gzip:   3.82 kB
+#9 38.09 dist/assets/MarkdownContentRenderer-Ckgt_JB4.css         29.92 kB │ gzip:   8.03 kB
+#9 38.09 dist/assets/index-DzR7s52m.css                           59.21 kB │ gzip:  11.67 kB
+#9 38.09 dist/assets/workspace-refresh-Bov1uzSP.js                 0.75 kB │ gzip:   0.40 kB
+#9 38.09 dist/assets/prepare-image-MdTymuU5.js                     0.87 kB │ gzip:   0.53 kB
+#9 38.09 dist/assets/cache-notice-messages-D9Yoiw2a.js             0.92 kB │ gzip:   0.51 kB
+#9 38.09 dist/assets/rolldown-runtime-Dd_uD5pT.js                  1.10 kB │ gzip:   0.62 kB
+#9 38.09 dist/assets/ToolProgressCard-B_yxTCFL.js                  1.11 kB │ gzip:   0.49 kB
+#9 38.09 dist/assets/CacheNotices-Ccq7mIlr.js                      1.30 kB │ gzip:   0.58 kB
+#9 38.09 dist/assets/SelectionActions-CQg5-5kI.js                  1.85 kB │ gzip:   0.94 kB
+#9 38.09 dist/assets/CodemodeCard-DZQk683s.js                      1.87 kB │ gzip:   0.74 kB
+#9 38.09 dist/assets/terminal-replay-DxFeKilB.js                   2.01 kB │ gzip:   0.91 kB
+#9 38.09 dist/assets/useFocusTrap-4GaAr3lm.js                      2.54 kB │ gzip:   1.10 kB
+#9 38.09 dist/assets/ProcessBlock-D2iumn16.js                      2.67 kB │ gzip:   1.29 kB
+#9 38.09 dist/assets/SubagentPanel-BxcbOTOE.js                     3.74 kB │ gzip:   1.42 kB
+#9 38.09 dist/assets/CommandPalette-ChbstZjv.js                    4.18 kB │ gzip:   1.58 kB
+#9 38.09 dist/assets/SessionRowCopyMenu-D8kypajZ.js                4.37 kB │ gzip:   1.95 kB
+#9 38.09 dist/assets/ExtensionInteractionDialog-CZjqmpKp.js        8.36 kB │ gzip:   2.78 kB
+#9 38.09 dist/assets/LinkedDirectoryBoundary-rHG6tSvw.js           8.85 kB │ gzip:   3.64 kB
+#9 38.09 dist/assets/LinkedDirectoryModal-RWdmXLPE.js              9.16 kB │ gzip:   3.20 kB
+#9 38.09 dist/assets/PluginSettings-CPGvUIyh.js                   12.94 kB │ gzip:   3.72 kB
+#9 38.09 dist/assets/WorkspacePanel-bmw-QrNx.js                   23.04 kB │ gzip:   8.26 kB
+#9 38.09 dist/assets/Sidebar-BnLWWfhk.js                          25.40 kB │ gzip:   7.91 kB
+#9 38.09 dist/assets/settings-locale-C_Gf6y6c.js                  29.74 kB │ gzip:   8.12 kB
+#9 38.09 dist/assets/SettingsView-BbSqm2y6.js                    168.26 kB │ gzip:  43.76 kB
+#9 38.09 dist/assets/TerminalPanel-lXQjc4rY.js                   345.67 kB │ gzip:  88.50 kB
+#9 38.09 dist/assets/PdfPreview-BuDkoQUl.js                      432.23 kB │ gzip: 129.99 kB
+#9 38.09 dist/assets/MarkdownContentRenderer-VJkbtuLG.js         471.79 kB │ gzip: 144.73 kB
+#9 38.09 dist/assets/index-CpvAEkrB.js                           509.74 kB │ gzip: 151.40 kB
+#9 38.09 dist/assets/dist-C0JcN9vC.js                          1,522.92 kB │ gzip: 469.39 kB
+#9 38.09
+#9 38.10 ✓ built in 620ms
+#9 38.23 Bundle budgets OK: entry 147 KiB gzip; eager 159 KiB gzip; 28 JS chunks.
+#9 DONE 38.3s
+
+#16 [base 14/15] RUN node --test .docker/test-build.test.mjs
+#16 sha256:3b6d0d682d3a06bc4a7b16b97965185adaafba0d5624891635adeb6a1ba9d38b
+#16 0.249 ✔ Docker context excludes checkout Git metadata, whether a directory or pointer file (2.730858ms)
+#16 0.485 ✔ test image contains emitted entries and declarations for every process-test dependency (4.139787ms)
+#16 0.485 ✔ emitted Core export and Server configuration module load in Node without TypeScript aliases (231.648436ms)
+#16 0.492 ✔ all workspace and parity typechecks retain arguments without optimizing compiler JIT (6.735564ms)
+#16 0.492 ✔ TypeScript launcher preserves compiler failure evidence and never retries (0.244362ms)
+#16 0.496 ✔ Web build disables optimizing compiler JIT without changing bundler or budget-check flags (1.175858ms)
+#16 0.496 ✔ Web build stops at the first failed phase without retries or lost termination evidence (1.057627ms)
+#16 0.751 ✔ emitted CLI provides inert help from outside the checkout (256.067851ms)
+#16 0.758 ℹ tests 8
+#16 0.758 ℹ suites 0
+#16 0.758 ℹ pass 8
+#16 0.758 ℹ fail 0
+#16 0.758 ℹ cancelled 0
+#16 0.758 ℹ skipped 0
+#16 0.758 ℹ todo 0
+#16 0.758 ℹ duration_ms 538.927618
+#16 DONE 0.8s
+
+#10 [base 15/15] RUN node --test .docker/e2e-suites.test.mjs
+#10 sha256:42fa59ffa938366c7d4c840b1aa7684cfa13373ecdde49560f5b4c7c4e8cbc97
+#10 0.228 ✔ container E2E entry point and preparation inputs survive the Docker build context (6.436192ms)
+#10 0.232 E2E suite: standard
+#10 0.232 E2E suite: interactions
+#10 0.232 E2E suite: locale
+#10 0.232 E2E suite: workspace
+#10 0.232 E2E suite: pane
+#10 0.232 E2E suite: linked
+#10 0.232 E2E suite: title
+#10 0.232 E2E suite: progress
+#10 0.232 E2E suite: demo
+#10 0.232 E2E suite: standard
+#10 0.232 E2E suite: interactions
+#10 0.232 E2E suite: locale
+#10 0.232 E2E suite: workspace
+#10 0.232 E2E suite: pane
+#10 0.232 E2E suite: linked
+#10 0.232 E2E suite: title
+#10 0.232 E2E suite: progress
+#10 0.232 E2E suite: demo
+#10 0.232 E2E suite: standard
+#10 0.232 E2E suite: interactions
+#10 0.232 E2E suite: locale
+#10 0.232 E2E suite: workspace
+#10 0.232 E2E suite: pane
+#10 0.232 E2E suite: linked
+#10 0.232 E2E suite: title
+#10 0.232 E2E suite: progress
+#10 0.232 E2E suite: demo
+#10 0.233 E2E suite: focused
+#10 0.233 E2E suite: standard (shard 1/4)
+#10 0.233 E2E suite: interactions
+#10 0.233 E2E suite: standard (shard 2/4)
+#10 0.234 E2E suite: pane
+#10 0.234 E2E suite: linked
+#10 0.234 E2E suite: standard (shard 3/4)
+#10 0.234 E2E suite: locale
+#10 0.234 E2E suite: workspace
+#10 0.234 E2E suite: title
+#10 0.234 E2E suite: standard (shard 4/4)
+#10 0.234 E2E suite: progress
+#10 0.234 E2E suite: demo
+#10 0.234 E2E suite: standard (shard 4/4)
+#10 0.234 E2E suite: progress
+#10 0.234 E2E suite: demo
+#10 0.234 E2E suite: standard (shard 4/4)
+#10 0.234 E2E suite: progress
+#10 0.234 E2E suite: demo
+#10 0.234 E2E suite: standard (shard 4/4)
+#10 0.234 E2E suite: progress
+#10 0.235 E2E suite: standard (shard 4/4)
+#10 0.235 E2E suite: progress
+#10 0.235 E2E suite: demo
+#10 0.235 ✔ every excluded development file belongs to a mandatory whole-file suite (3.736978ms)
+#10 0.235 ✔ default executes every owning configuration with zero retries, one worker and separate artifacts (0.675265ms)
+#10 0.235 ✔ failed suite remains a failure and does not erase sibling lifetimes (0.2873ms)
+#10 0.235 ✔ demo policy tests precede rebuilding the selected artifact base (0.195204ms)
+#10 0.236 ✔ explicit focused configuration is not replaced by an unrelated suite (0.191473ms)
+#10 0.236 ✔ all-suite flags cannot replace each owning configuration with one filtered suite (0.334849ms)
+#10 0.236 ✔ CI partitions shard standard once each and conserve every dedicated owning suite exactly once (0.725321ms)
+#10 0.236 ✔ CI failures keep remaining owning suites running, including preparation and shard failures (0.336661ms)
+#10 0.236 ✔ CI selectors fail closed before building on malformed, duplicate or filtering arguments (0.513019ms)
+#10 0.236 ✔ CI discovery and reporter flags retain all ownership and demo preparation ordering (0.266725ms)
+#10 0.237 ✔ GitHub matrix matches the dispatcher and retains every result and artifact (1.926665ms)
+#10 0.274 ✔ real dispatcher preserves child termination without leaking command data (signal) (37.14496ms)
+#10 0.317 ✔ real dispatcher preserves child termination without leaking command data (interrupt) (42.010239ms)
+#10 0.354 ✔ real dispatcher preserves child termination without leaking command data (nonzero) (37.695738ms)
+#10 0.396 ✔ real dispatcher preserves child termination without leaking command data (success) (37.8316ms)
+#10 0.419 E2E suite: standard (shard 4/4)
+#10 0.419 E2E suite: progress
+#10 0.419 E2E suite: demo
+#10 0.419 E2E suite: standard (shard 4/4)
+#10 0.419 E2E suite: progress
+#10 0.419 ✔ real dispatcher preserves child termination without leaking command data (spawn-error) (26.375748ms)
+#10 0.419 ✔ process receipts survive build, CI shard and preparation failures without dropping siblings (0.473947ms)
+#10 0.419 ✔ failed build prevents starting tests and is not reported as green (0.099234ms)
+#10 0.425 ℹ tests 19
+#10 0.425 ℹ suites 0
+#10 0.425 ℹ pass 19
+#10 0.425 ℹ fail 0
+#10 0.425 ℹ cancelled 0
+#10 0.425 ℹ skipped 0
+#10 0.425 ℹ todo 0
+#10 0.425 ℹ duration_ms 229.982196
+#10 DONE 0.4s
+
+#20 exporting to image
+#20 sha256:edaa49b8f4e8fed3cb73d72131d6fdd1204a481d9faa0ace2080444f4151104b
+#20 exporting layers
+#20 exporting layers 9.3s done
+#20 exporting manifest sha256:0bac174dff9b682db7e2e1e8848f4fef01b45f9ffc17df3cfba6626cd1c30909 done
+#20 exporting config sha256:0b845409c78417cbe942b5fb253e931cf40f7a6079b3b2bc1164486ef4901711 done
+#20 naming to docker.io/library/ai-harness:test-latest-run-1794928621493255383 done
+#20 unpacking to docker.io/library/ai-harness:test-latest-run-1794928621493255383
+#20 unpacking to docker.io/library/ai-harness:test-latest-run-1794928621493255383 3.6s done
+#20 DONE 13.0s
+docker run --rm --network none \
+	--name aiharness-test-architecture-1794928621493255383 \
+	-e CI=true \
+	ai-harness:test-latest-run-1794928621493255383 \
+	npm run test:architecture
+npm notice run ai-harness@0.1.0 test:architecture
+npm notice run node --test scripts/check-architecture.test.mjs && node scripts/check-architecture.mjs
+Could not find 'scripts/check-architecture.test.mjs'
+make: *** [Makefile:176: test-architecture] Error 1

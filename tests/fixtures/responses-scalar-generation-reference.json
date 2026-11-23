@@ -1,0 +1,3711 @@
+{
+  "pinnedCommit": "06a466935536f8c9bcacb2d5efc0fc021be1bdff",
+  "captureSha256": "637862c5e5ae2ae6c9729d4d8bdf7fc13130f15320fcaacaa680a8c93f782a8a",
+  "catalogueSha256": {
+    "openai": "f4c1ac9f8f84cb9f2a952b0ceec51c90a38b31b4cdf33200e018ece9d408e95f",
+    "azure": "46c4e25b84463c6475e706c581196d2735c35feb9612d2efca0ab932c917d727"
+  },
+  "reusedCaptureRequests": 445,
+  "reusedCaptureModelProjections": 89,
+  "modelProjections": 88,
+  "cases": 176,
+  "rows": [
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4-turbo",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4.1-nano",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-05-13",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-08-06",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-2024-11-20",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-4o-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-nano",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.1",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.2-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-chat-latest",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.3-codex-spark",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-nano",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.4-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.5-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-luna",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-sol",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-5.6-terra",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-astra",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-luna",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6-sol",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-6.1-sol",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-daybreak-red-latest",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "gpt-realtime-2.1",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o1",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o1-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o3-pro",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "openai",
+      "model": "o4-mini",
+      "api": "openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4-turbo",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4.1-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-05-13",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-08-06",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-2024-11-20",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-4o-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.2-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-chat-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.3-codex-spark",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-nano",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.4-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.5-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-luna",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-5.6-terra",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-astra",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-luna",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-6.1-sol",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-blue-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-daybreak-red-latest",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "gpt-realtime-2.1",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o1",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o1-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o3-pro",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "raw-default",
+      "options": {},
+      "fields": {}
+    },
+    {
+      "scope": "azure",
+      "model": "o4-mini",
+      "api": "azure-openai-responses",
+      "sourceCase": "typed-tools-high-temperature",
+      "options": {
+        "maxTokens": 64,
+        "temperature": 0.7,
+        "thinking": "high",
+        "systemPrompt": "guard",
+        "tools": [
+          {
+            "name": "echo",
+            "description": "Echo",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "x"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
+      },
+      "fields": {
+        "max_output_tokens": 64,
+        "temperature": 0.7
+      }
+    }
+  ],
+  "limits": "Scalar max_output_tokens/temperature projections only from previously executed89-projection/445-request source. Raw default absence is separate from simple explicit64/0.7 with high reasoning and tools. This is not a new SDK execution, complete simple defaults/context/output feasibility, generic samplingParams, floor1/max-boundary, full request/tool schema/response/media/replay/host/account/service certificate. Azure C exception excluded; numeric decisions unchanged."
+}

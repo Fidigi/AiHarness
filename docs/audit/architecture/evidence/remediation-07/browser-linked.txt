@@ -1,0 +1,5 @@
+
+Running 43 tests using 1 worker
+···········································
+  43 passed (2.5m)
+::notice title=🎭 Playwright Run Summary::  43 passed (2.5m)
